@@ -440,6 +440,20 @@
       "soloClear": "Show the whole graph",
       "putInChat": "Put in chat input",
       "putCountInChat": "Put {{count}} in chat input"
+    },
+    "refresh": {
+      "action": "Refresh analysis",
+      "title": "Refresh the project analysis?",
+      "description": "ArchGuard will re-analyse the whole project. This can take several minutes, and other tabs or sessions will see it running. The current analysis stays in place until the new one succeeds.",
+      "confirm": "Refresh",
+      "cancel": "Cancel",
+      "close": "Close",
+      "running": "Refreshing analysis…",
+      "runningShort": "Refreshing…",
+      "elapsed": "{{elapsed}} elapsed",
+      "failedTitle": "The analysis could not be refreshed",
+      "failedUnknown": "The analysis failed.",
+      "retry": "Retry"
     }
   },
   "status": {

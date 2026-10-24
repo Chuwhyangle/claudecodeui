@@ -538,6 +538,22 @@ export const api = {
       ...(target.includeToolResults === undefined ? {} : { includeToolResults: target.includeToolResults }),
       ...(target.limit === undefined ? {} : { limit: target.limit }),
     }),
+  /**
+   * Starts the manual ArchGuard re-analysis for one project and answers the
+   * started-or-joined job (`202`) with `{ jobId, coalesced, status }`.
+   *
+   * The body carries `projectId` ONLY: the server resolves the directory itself,
+   * and a concurrent start for the same project root joins the running job
+   * (`coalesced: true`) instead of spawning a second analysis.
+   */
+  architectureRefresh: (projectId: string) =>
+    post('/api/architecture/refresh', { projectId }),
+  /**
+   * The project's current re-analysis status (`idle | running | succeeded |
+   * failed`) — the tab's activation read and its running-state poll.
+   */
+  architectureRefreshStatus: (projectId: string) =>
+    get(`/api/architecture/refresh/status${query({ projectId })}`),
   renameProject: (projectId: string, displayName: string) =>
     put(`/api/projects/${projectId}/rename`, { displayName }),
   restoreProject: (projectId: string) =>

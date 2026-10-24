@@ -432,6 +432,20 @@
       "soloClear": "Tampilkan seluruh grafik",
       "putInChat": "Masukkan ke input chat",
       "putCountInChat": "Masukkan {{count}} ke input chat"
+    },
+    "refresh": {
+      "action": "Segarkan analisis",
+      "title": "Segarkan analisis proyek?",
+      "description": "ArchGuard akan menganalisis ulang seluruh proyek. Ini bisa memakan beberapa menit, dan tab atau sesi lain akan melihat prosesnya. Analisis saat ini tetap dipertahankan sampai yang baru berhasil.",
+      "confirm": "Segarkan",
+      "cancel": "Batal",
+      "close": "Tutup",
+      "running": "Menyegarkan analisis…",
+      "runningShort": "Menyegarkan…",
+      "elapsed": "{{elapsed}} berlalu",
+      "failedTitle": "Analisis tidak dapat disegarkan",
+      "failedUnknown": "Analisis gagal.",
+      "retry": "Coba lagi"
     }
   },
   "status": {

@@ -432,6 +432,20 @@
       "soloClear": "전체 그래프 표시",
       "putInChat": "채팅 입력란에 넣기",
       "putCountInChat": "{{count}}개를 채팅 입력란에 넣기"
+    },
+    "refresh": {
+      "action": "분석 새로 고침",
+      "title": "프로젝트 분석을 새로 고칠까요?",
+      "description": "ArchGuard 가 프로젝트 전체를 다시 분석합니다. 몇 분이 걸릴 수 있으며 다른 탭이나 세션에도 실행 중인 상태가 보입니다. 새 분석이 성공할 때까지 현재 분석은 그대로 유지됩니다.",
+      "confirm": "새로 고침",
+      "cancel": "취소",
+      "close": "닫기",
+      "running": "분석을 새로 고치는 중…",
+      "runningShort": "새로 고치는 중…",
+      "elapsed": "{{elapsed}} 경과",
+      "failedTitle": "분석을 새로 고칠 수 없습니다",
+      "failedUnknown": "분석에 실패했습니다.",
+      "retry": "다시 시도"
     }
   },
   "status": {

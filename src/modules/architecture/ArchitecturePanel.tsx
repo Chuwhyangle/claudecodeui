@@ -9,13 +9,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ArrowLeft, ExternalLink, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
 import { ArchitectureCurationManager, type ArchitectureCurationPage } from '@/modules/architecture/ArchitectureCurationManager';
 import { ArchitectureDock } from '@/modules/architecture/ArchitectureDock';
 import { ArchitectureInspector } from '@/modules/architecture/ArchitectureInspector';
+import { ArchitectureRefreshDialog } from '@/modules/architecture/ArchitectureRefreshDialog';
 import {
   createCurationStore,
   curationStorageKey,
@@ -107,6 +108,10 @@ import {
   type ArchitectureSelection,
   type ArchitectureSelectionScope,
 } from '@/modules/architecture/selectionModel';
+import {
+  formatRefreshElapsed,
+  useArchitectureRefresh,
+} from '@/modules/architecture/useArchitectureRefresh';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 import { useArchitectureFullscreen } from '@/modules/architecture/useArchitectureFullscreen';
 import {
@@ -1506,6 +1511,55 @@ export default function ArchitecturePanel({
   useEffect(() => {
     dispatchSelection({ type: 'sync-scope', scope: selectionScope });
   }, [selectionScope]);
+
+  // ── the manual whole-project re-analysis ──────────────────────────────────
+  // The status is shared server-side, so a tab opened while another session's
+  // job is running shows that run. The dialog is the confirmation step; the
+  // panel owns whether it is open and which control opened it (for focus return).
+  const [refreshDialogOpen, setRefreshDialogOpen] = useState(false);
+  const refreshReturnFocusRef = useRef<HTMLElement | null>(null);
+  // Set when a refresh succeeds, consumed once the refetched reading is on
+  // screen: the new analysis re-lays the graph, so the drawing is fitted again.
+  const pendingRefreshFitRef = useRef(false);
+  const handleRefreshSucceeded = useCallback((): void => {
+    // A new analysis can change entity ids while `(file, name)` stays stable,
+    // so the saved curation must be re-anchored on the NEXT reading.
+    reconciledAnalysisRef.current = null;
+    pendingRefreshFitRef.current = true;
+    // The content-addressed cache is keyed by the manifest, so this is a real
+    // refetch of the refreshed analysis rather than a cache hit.
+    reload();
+  }, [reload]);
+  const refresh = useArchitectureRefresh(projectId, { onSucceeded: handleRefreshSucceeded });
+  const refreshRunning = refresh.status.state === 'running';
+  // A job failure and a transport failure are different faces of the same
+  // dialog; the job's own reason wins when both exist.
+  const refreshFailureReason = refresh.status.state === 'failed'
+    ? refresh.status.error
+    : refresh.requestError;
+  const openRefreshDialog = useCallback((trigger: HTMLElement | null): void => {
+    refreshReturnFocusRef.current = trigger;
+    setRefreshDialogOpen(true);
+  }, []);
+  // A finished job closes the dialog on its own; the footer's updated time (and
+  // a failed job's own reading) are the durable evidence.
+  useEffect(() => {
+    if (refresh.status.state === 'succeeded') setRefreshDialogOpen(false);
+  }, [refresh.status.state]);
+  useEffect(() => {
+    if (!pendingRefreshFitRef.current) return;
+    if (view.status !== 'loaded' || refreshing) return;
+    pendingRefreshFitRef.current = false;
+    // "Fit" after a refresh is the same reading the Fit control means: the
+    // refreshed drawing is fitted even if the reader had zoomed the old one.
+    zoomModeRef.current = 'fit';
+    fitTokenRef.current += 1;
+    setFitRequest({
+      token: fitTokenRef.current,
+      viewportHeight: graphAreaRef.current?.getBoundingClientRect().height ?? 0,
+      force: true,
+    });
+  }, [view, refreshing]);
 
   /**
    * Open or close the dock and freeze aspect re-layout for the transition.
@@ -3475,6 +3529,31 @@ export default function ArchitecturePanel({
           <span data-architecture-generated-at>unknown</span>
         )}
       </span>
+      {/* The manual re-analysis entry. It sits beside the analysis time because
+          that is the reading it changes; while a job runs it shows the elapsed
+          time and is disabled, so a second tab (or a second press) cannot start
+          a duplicate analysis. */}
+      <button
+        type="button"
+        data-architecture-refresh="true"
+        data-architecture-refresh-state={refresh.status.state}
+        aria-label={t('architecture.refresh.action', { defaultValue: 'Refresh analysis' })}
+        title={t('architecture.refresh.action', { defaultValue: 'Refresh analysis' })}
+        disabled={refreshRunning || projectId === null}
+        onClick={(event) => openRefreshDialog(event.currentTarget)}
+        style={compactTargetStyle}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background/90 px-1.5 py-1 text-[11px] text-muted-foreground shadow-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <RefreshCw
+          aria-hidden="true"
+          className={refreshRunning ? 'h-3 w-3 animate-spin' : 'h-3 w-3'}
+        />
+        {refreshRunning && (
+          <span data-architecture-refresh-footer-elapsed="true" className="tabular-nums">
+            {formatRefreshElapsed(refresh.elapsedMs)}
+          </span>
+        )}
+      </button>
       {/* The unresolved toggle is a SIBLING of the truncating source line, not
           its child: inside a `truncate` span its own 352px width was clipped by
           the span's `overflow: hidden`, so a phone showed "Analysis: 14 hours
@@ -3502,27 +3581,49 @@ export default function ArchitecturePanel({
         <span aria-hidden="true">{unresolvedOpen ? ' ▾' : ' ▸'}</span>
       </button>
       {unresolvedOpen && (
-        <ul
-          data-architecture-unresolved-list="true"
-          aria-label={t('architecture.source.listLabel', { defaultValue: 'Unresolved names' })}
-          className="absolute bottom-full left-3 z-30 mb-1 max-h-40 overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
+        <div
+          data-architecture-unresolved-panel="true"
+          className="absolute bottom-full left-3 z-30 mb-1 rounded-md border border-border/60 bg-background/95 shadow-sm"
         >
-          {/* The pill drops the full sentence on the compact tier; the reader
-              still gets it here, above the names it describes. */}
-          {compactToolbar && (
-            <li data-architecture-unresolved-summary="true" className="pb-1 text-muted-foreground">
-              {t('architecture.source.unresolved', {
-                defaultValue: '{{count}} names mentioned in this session were not found in the analysis cache',
-                count: unresolvedCount,
-              })}
-            </li>
+          {/* The names that were not found are the honest-bar reading the manual
+              refresh answers, so its action lives beside them as well as beside
+              the analysis time. It is a SIBLING of the list: the list's items are
+              names only, and a control among them would read as a name. */}
+          {projectId !== null && (
+            <div className="px-2 pb-1 pt-1">
+              <button
+                type="button"
+                data-architecture-refresh-unresolved="true"
+                disabled={refreshRunning}
+                onClick={(event) => openRefreshDialog(event.currentTarget)}
+                className="rounded border border-border/60 px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {t('architecture.refresh.action', { defaultValue: 'Refresh analysis' })}
+              </button>
+            </div>
           )}
-          {unresolvedNames.map((name) => (
-            <li key={name} data-architecture-unresolved-name="true">
-              {name}
-            </li>
-          ))}
-        </ul>
+          <ul
+            data-architecture-unresolved-list="true"
+            aria-label={t('architecture.source.listLabel', { defaultValue: 'Unresolved names' })}
+            className="max-h-40 overflow-y-auto px-2 pb-1"
+          >
+            {/* The pill drops the full sentence on the compact tier; the reader
+                still gets it here, above the names it describes. */}
+            {compactToolbar && (
+              <li data-architecture-unresolved-summary="true" className="pb-1 text-muted-foreground">
+                {t('architecture.source.unresolved', {
+                  defaultValue: '{{count}} names mentioned in this session were not found in the analysis cache',
+                  count: unresolvedCount,
+                })}
+              </li>
+            )}
+            {unresolvedNames.map((name) => (
+              <li key={name} data-architecture-unresolved-name="true">
+                {name}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {/* Scope cleanup: what the server dropped or rewrote before drawing. It
           sits after the analysis/seed line because it explains that line's
@@ -4766,6 +4867,25 @@ export default function ArchitecturePanel({
           onDismiss={dismissCurationToast}
         />
       )}
+
+      {/* The confirmation / running / failure dialog for the manual re-analysis.
+          Escape is captured by the dialog so the chat page's abort never fires;
+          the job itself is server-side and keeps running if the dialog closes. */}
+      <ArchitectureRefreshDialog
+        open={refreshDialogOpen}
+        phase={
+          refresh.status.state === 'running'
+            ? 'running'
+            : refresh.status.state === 'failed'
+              ? 'failed'
+              : 'confirm'
+        }
+        elapsedMs={refresh.elapsedMs}
+        error={refreshFailureReason}
+        onClose={() => setRefreshDialogOpen(false)}
+        onStart={refresh.start}
+        returnFocusRef={refreshReturnFocusRef}
+      />
       </div>
       {/* The provenance/cleanup row is the panel's FOOTER: in the document
           flow BELOW the canvas (and the dock), never a pill over the drawing.

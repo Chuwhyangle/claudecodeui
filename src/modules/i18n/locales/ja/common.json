@@ -432,6 +432,20 @@
       "soloClear": "グラフ全体を表示",
       "putInChat": "チャット入力欄に入れる",
       "putCountInChat": "{{count}} 件をチャット入力欄に入れる"
+    },
+    "refresh": {
+      "action": "分析を更新",
+      "title": "プロジェクトの分析を更新しますか？",
+      "description": "ArchGuard がプロジェクト全体を再分析します。数分かかることがあり、他のタブやセッションにも実行中の表示が出ます。新しい分析が成功するまで、現在の分析はそのまま残ります。",
+      "confirm": "更新",
+      "cancel": "キャンセル",
+      "close": "閉じる",
+      "running": "分析を更新しています…",
+      "runningShort": "更新中…",
+      "elapsed": "経過 {{elapsed}}",
+      "failedTitle": "分析を更新できませんでした",
+      "failedUnknown": "分析に失敗しました。",
+      "retry": "再試行"
     }
   },
   "status": {

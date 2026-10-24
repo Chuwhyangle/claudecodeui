@@ -432,6 +432,20 @@
       "soloClear": "Tüm grafiği göster",
       "putInChat": "Sohbet girişine koy",
       "putCountInChat": "{{count}} öğeyi sohbet girişine koy"
+    },
+    "refresh": {
+      "action": "Analizi yenile",
+      "title": "Proje analizi yenilensin mi?",
+      "description": "ArchGuard tüm projeyi yeniden analiz eder. Bu birkaç dakika sürebilir ve diğer sekmeler veya oturumlar çalışmayı görür. Yeni analiz başarıyla tamamlanana kadar mevcut analiz korunur.",
+      "confirm": "Yenile",
+      "cancel": "İptal",
+      "close": "Kapat",
+      "running": "Analiz yenileniyor…",
+      "runningShort": "Yenileniyor…",
+      "elapsed": "{{elapsed}} geçti",
+      "failedTitle": "Analiz yenilenemedi",
+      "failedUnknown": "Analiz başarısız oldu.",
+      "retry": "Yeniden dene"
     }
   },
   "status": {

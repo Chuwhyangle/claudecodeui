@@ -432,6 +432,20 @@
       "soloClear": "Mostrar todo el gráfico",
       "putInChat": "Poner en la entrada del chat",
       "putCountInChat": "Poner {{count}} en la entrada del chat"
+    },
+    "refresh": {
+      "action": "Actualizar el análisis",
+      "title": "¿Actualizar el análisis del proyecto?",
+      "description": "ArchGuard volverá a analizar todo el proyecto. Puede tardar varios minutos y otras pestañas o sesiones verán el proceso. El análisis actual se mantiene hasta que el nuevo finalice correctamente.",
+      "confirm": "Actualizar",
+      "cancel": "Cancelar",
+      "close": "Cerrar",
+      "running": "Actualizando el análisis…",
+      "runningShort": "Actualizando…",
+      "elapsed": "{{elapsed}} transcurrido",
+      "failedTitle": "No se pudo actualizar el análisis",
+      "failedUnknown": "El análisis falló.",
+      "retry": "Reintentar"
     }
   },
   "status": {

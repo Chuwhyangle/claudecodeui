@@ -174,11 +174,15 @@ export type ArchitectureDrawnPlantUml = {
  * the fit must use, so the renderer answers against the settled box.
  *
  * A renderer re-fits only while it is in Fit mode: a drawing the reader zoomed
- * by hand keeps the scale they chose (see `onZoomModeChange`).
+ * by hand keeps the scale they chose (see `onZoomModeChange`). `force` is the
+ * one exception: a FRESH ANALYSIS replaces the content the reader was looking at,
+ * so the panel asks for a fit even if the old drawing was zoomed. It is absent
+ * for size-change requests, which must never undo a manual zoom.
  */
 export type ArchitectureFitRequest = {
   readonly token: number;
   readonly viewportHeight: number;
+  readonly force?: boolean;
 };
 
 /** What a renderer reports while the pointer is over a node. */

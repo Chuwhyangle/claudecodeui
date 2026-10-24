@@ -6,7 +6,10 @@
  * process's composition root — binds them to the projects repository and the
  * providers module's full-history reader, which keeps
  * `modules/architecture` a leaf in the server import graph (AC-394's ratchet:
- * it may reach `server/shared/**` and itself, nothing else).
+ * it may reach `server/shared/**` and itself, nothing else). The manual
+ * re-analysis job is built HERE from the same injected project lookup; its
+ * settings reader owns the `architecture.refresh` block itself rather than
+ * importing `modules/settings`, for the same leaf rule.
  *
  * Consumers: `server/index.ts`, which mounts the returned router under
  * `/api/architecture` behind `authenticateToken`.
@@ -15,6 +18,7 @@ import type { Router } from 'express';
 
 import type { NormalizedMessage } from '@/shared/types.js';
 
+import { createArchguardRefreshJob } from './refreshJob.js';
 import { createArchitectureRoutes } from './routes.js';
 import { createArchitectureService } from './service.js';
 
@@ -24,6 +28,8 @@ import { createArchitectureService } from './service.js';
  * `resolveProjectPath` is a synchronous lookup (the projects repository's
  * indexed SELECT); `readSessionHistory` is the providers module's FULL history
  * read, so the seed extractor sees the whole transcript rather than one page.
+ * Both the graph service and the refresh job use the project lookup: the
+ * client never supplies a directory.
  */
 export type ArchitectureModuleDeps = {
   readonly resolveProjectPath: (projectId: string) => string | null;
@@ -36,10 +42,19 @@ export type ArchitectureModuleDeps = {
  * Consumers: `server/index.ts` only.
  */
 export function createArchitectureModule(deps: ArchitectureModuleDeps): Router {
+  const refreshJob = createArchguardRefreshJob({
+    resolveProjectPath: deps.resolveProjectPath,
+  });
+  // The server's process-exit hook: a running CLI must not survive the server.
+  // `exit` listeners are synchronous, hence the sync variant; the async
+  // `shutdown` is the criterion's and a graceful shutdown caller's entry.
+  process.once('exit', () => refreshJob.shutdownSync());
+
   return createArchitectureRoutes(
     createArchitectureService({
       resolveProjectPath: deps.resolveProjectPath,
       readSessionHistory: deps.readSessionHistory,
     }),
+    refreshJob,
   );
 }

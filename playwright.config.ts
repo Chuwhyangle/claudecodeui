@@ -537,6 +537,18 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // the same load-slowed fan-in headroom the sibling architecture criteria
   // declare.
   'architecture-fullscreen-fit.spec.ts': 360_000,
+  // The manual re-analysis criterion: three real pages (two concurrent clickers
+  // and a third that mounts mid-run), the confirmation dialog's Cancel/Escape
+  // legs, a real fake-CLI run with its elapsed state, the success refetch
+  // (footer time + unresolved count + auto Fit), a failed run whose artifacts
+  // must stay byte-identical, and a control arm that removes single-flight and
+  // staging. MEASURED 2026-10-25 on this worktree: `2 passed (53.8s)` for the
+  // whole invocation (config evaluation, both webServers' boot, the browser
+  // launch and the fixture included; the two case bodies read 29.4s and 13.9s),
+  // and the `--grep "control arm"` selection `1 passed (24.2s)`. 240_000 clears
+  // the full-file reading ~4.5x, leaving room for a load-slowed fan-in run
+  // without changing what is measured.
+  'architecture-refresh.spec.ts': 240_000,
   // The overlay-layout criterion: the 55-entity L fixture on THREE viewports
   // (PC 1440×765, phone portrait 390×844, landscape 844×390), each zoomed in
   // until the minimap is drawn, then read after a selection and a hover; plus
@@ -2866,6 +2878,13 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // the seeds, and a project that offers the Architecture tab). It writes its
   // own 55-entity `.archguard` tree and measures the overlay's chrome.
   'architecture-fullscreen-fit.spec.ts',
+  // The manual re-analysis criterion: the same fixture home for the same two
+  // reasons (a transcript naming the seeds — one of which must stay UNRESOLVED
+  // until a refresh makes it resolvable — and a project that offers the
+  // Architecture tab). It writes its own two-entity tree. Its refresh CLI, the
+  // counter/control files and the server settings file are wired below, for
+  // this selection only.
+  'architecture-refresh.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second
@@ -2980,6 +2999,167 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
   : null;
+
+/**
+ * The manual re-analysis criterion's server-side wiring: its settings file, the fake CLI,
+ * and the two files the fake CLI reads/writes.
+ *
+ * WHY A FAKE CLI. The real analysis takes ~12 s and reads the whole checkout; a criterion
+ * that ran it would be slow, machine-dependent and would write the operator's artifacts.
+ * The criterion's subject is the ORCHESTRATION (single-flight, staged swap, failure
+ * preservation) and the tab's own state machine, so the CLI is a stand-in that writes the
+ * same `query/` shape and can be told to sleep or fail. The SERVER finds it through
+ * `architecture.refresh.cliPath` in the settings file below — the production knob — not
+ * through a test-only branch in the product code.
+ *
+ * The settings file lives under this run's data directory and is pointed at by
+ * `SERVER_SETTINGS_PATH` for this selection only. The spec rewrites `defect` in it to arm
+ * the control arm; the reader re-reads on mtime, so no server restart is involved.
+ */
+const architectureRefreshSelection = selectedSpecFiles().includes('architecture-refresh.spec.ts');
+const ARCHITECTURE_REFRESH_SETTINGS = path.join(dataDir, 'architecture-refresh-server.settings.json');
+const ARCHITECTURE_REFRESH_FAKE_CLI = path.join(dataDir, 'architecture-refresh-fake-cli.mjs');
+const ARCHITECTURE_REFRESH_COUNTER = path.join(dataDir, 'architecture-refresh-fake-counter.txt');
+const ARCHITECTURE_REFRESH_CONTROL = path.join(dataDir, 'architecture-refresh-fake-control.json');
+const ARCHITECTURE_REFRESH_FAKE_CLI_SOURCE = [
+  "import fs from 'node:fs';",
+  "import path from 'node:path';",
+  '',
+  'const args = process.argv.slice(2);',
+  "const workIndex = args.indexOf('--work-dir');",
+  'if (workIndex < 0) {',
+  "  process.stderr.write('fake archguard: --work-dir is required\\n');",
+  '  process.exit(2);',
+  '}',
+  'const workDir = args[workIndex + 1];',
+  "const sourceIndex = args.indexOf('-s');",
+  "const languageIndex = args.indexOf('--lang');",
+  'const sources = sourceIndex >= 0 && languageIndex > sourceIndex',
+  '  ? args.slice(sourceIndex + 1, languageIndex)',
+  '  : [process.cwd()];',
+  '',
+  'const counterPath = process.env.ARCHGUARD_FAKE_COUNTER || "";',
+  "if (counterPath !== '') fs.appendFileSync(counterPath, String(Date.now()) + '\\n');",
+  '',
+  'let control = { mode: "success", delayMs: 0 };',
+  'try {',
+  '  control = JSON.parse(fs.readFileSync(process.env.ARCHGUARD_FAKE_CONTROL || "", "utf8"));',
+  '} catch {',
+  '  // No control file: behave like a fast successful analysis.',
+  '}',
+  'const rawDelay = Number(control.delayMs);',
+  'const delayMs = Number.isFinite(rawDelay) && rawDelay > 0 ? rawDelay : 0;',
+  '',
+  'const SCOPE = "aaaa0001";',
+  'const ENTITIES = [',
+  '  { id: "src/alpha.ts.Alpha", name: "Alpha", file: "src/alpha.ts", kind: "class", dependsOn: [] },',
+  '  { id: "src/alpha.ts.Beta", name: "Beta", file: "src/alpha.ts", kind: "class", dependsOn: ["src/alpha.ts.Alpha"] },',
+  '  { id: "src/delta.ts.Delta", name: "Delta", file: "src/delta.ts", kind: "interface", dependsOn: ["src/alpha.ts.Alpha"] },',
+  '];',
+  '',
+  'function writeJson(filePath, value) {',
+  '  fs.mkdirSync(path.dirname(filePath), { recursive: true });',
+  '  fs.writeFileSync(filePath, JSON.stringify(value, null, 2) + "\\n", "utf8");',
+  '}',
+  '',
+  'await new Promise((resolve) => setTimeout(resolve, delayMs));',
+  '',
+  'const fileToIds = {};',
+  'const nameToIds = {};',
+  'const idToFile = {};',
+  'const idToName = {};',
+  'const dependencies = {};',
+  'const dependents = {};',
+  'for (const entity of ENTITIES) {',
+  '  (fileToIds[entity.file] = fileToIds[entity.file] || []).push(entity.id);',
+  '  (nameToIds[entity.name] = nameToIds[entity.name] || []).push(entity.id);',
+  '  idToFile[entity.id] = entity.file;',
+  '  idToName[entity.id] = entity.name;',
+  '  dependencies[entity.id] = dependencies[entity.id] || [];',
+  '  dependents[entity.id] = dependents[entity.id] || [];',
+  '}',
+  'for (const entity of ENTITIES) {',
+  '  for (const parent of entity.dependsOn) {',
+  '    dependencies[parent].push(entity.id);',
+  '    dependents[entity.id].push(parent);',
+  '  }',
+  '}',
+  '',
+  'const generatedAt = new Date().toISOString();',
+  'const queryDir = path.join(workDir, "query");',
+  'writeJson(path.join(queryDir, "manifest.json"), {',
+  '  version: "1.0",',
+  '  generatedAt,',
+  '  globalScopeKey: SCOPE,',
+  '  scopes: [{',
+  '    key: SCOPE,',
+  '    label: "src (typescript)",',
+  '    language: "typescript",',
+  '    kind: "parsed",',
+  '    sources,',
+  '  }],',
+  '});',
+  'writeJson(path.join(queryDir, SCOPE, "arch-index.json"), {',
+  '  version: "1.0",',
+  '  language: "typescript",',
+  '  archJsonHash: "fake-" + generatedAt,',
+  '  generatedAt,',
+  '  fileToIds,',
+  '  nameToIds,',
+  '  idToFile,',
+  '  idToName,',
+  '  dependencies,',
+  '  dependents,',
+  '});',
+  'writeJson(path.join(queryDir, SCOPE, "arch.json"), {',
+  '  version: "1.0",',
+  '  language: "typescript",',
+  '  entities: ENTITIES.map((entity) => ({',
+  '    id: entity.id,',
+  '    name: entity.name,',
+  '    type: entity.kind,',
+  '    isAbstract: false,',
+  '    members: [],',
+  '  })),',
+  '});',
+  '',
+  'if (control.mode === "fail") {',
+  '  process.stderr.write("fake archguard: deliberate analysis failure\\n");',
+  '  process.exit(1);',
+  '}',
+  'process.exit(0);',
+  '',
+].join('\n');
+
+if (architectureRefreshSelection && isDataDirOwner) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(ARCHITECTURE_REFRESH_FAKE_CLI, ARCHITECTURE_REFRESH_FAKE_CLI_SOURCE, 'utf8');
+  fs.writeFileSync(
+    ARCHITECTURE_REFRESH_CONTROL,
+    JSON.stringify({ mode: 'success', delayMs: 0 }),
+    'utf8',
+  );
+  fs.writeFileSync(
+    ARCHITECTURE_REFRESH_SETTINGS,
+    `${JSON.stringify({
+      architecture: {
+        refresh: {
+          cliPath: ARCHITECTURE_REFRESH_FAKE_CLI,
+          timeoutMs: 120_000,
+          memoryLimitMb: 0,
+          defect: '',
+        },
+      },
+    }, null, 2)}\n`,
+    'utf8',
+  );
+}
+// Published for the spec: the paths it rewrites between arms. The server reads the SAME
+// paths from its own environment (below), so one file is the single source of truth.
+process.env.QUAY_E2E_ARCHITECTURE_REFRESH_SETTINGS = ARCHITECTURE_REFRESH_SETTINGS;
+process.env.QUAY_E2E_ARCHITECTURE_REFRESH_COUNTER = ARCHITECTURE_REFRESH_COUNTER;
+process.env.QUAY_E2E_ARCHITECTURE_REFRESH_CONTROL = ARCHITECTURE_REFRESH_CONTROL;
+process.env.QUAY_E2E_ARCHITECTURE_REFRESH_CLI = ARCHITECTURE_REFRESH_FAKE_CLI;
 // The criterion that watches the dock degrade needs to see the server's beat and its silence budget
 // inside one gate. Only this selection shortens them, and only on the *server*: the client reads the
 // numbers the server announces in its hello, so the spec itself carries no threshold literal.
@@ -3425,6 +3605,17 @@ export default defineConfig({
         // closed exactly as it does today. See `debugAgentFixtureHome` above.
         ...(debugAgentFixtureHome
           ? { DEBUG_AGENT: '1', DEBUG_AGENT_HOME: debugAgentFixtureHome }
+          : {}),
+        // The manual re-analysis criterion's deployment knobs. `SERVER_SETTINGS_PATH` is
+        // the shipped entry for the server settings file; the two fake-CLI paths travel as
+        // the child's own environment. All three are absent from every other selection, so
+        // no other spec sees a fake ArchGuard CLI or a redirected settings file.
+        ...(architectureRefreshSelection
+          ? {
+              SERVER_SETTINGS_PATH: ARCHITECTURE_REFRESH_SETTINGS,
+              ARCHGUARD_FAKE_COUNTER: ARCHITECTURE_REFRESH_COUNTER,
+              ARCHGUARD_FAKE_CONTROL: ARCHITECTURE_REFRESH_CONTROL,
+            }
           : {}),
         // The turn-run path (SPEC §6) is what stamps a delivery's ORIGIN onto the run's options
         // (`DELIVERY_SOURCE_OPTION`) — and the stream-representation criterion reads exactly that

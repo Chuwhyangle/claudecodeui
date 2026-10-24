@@ -432,6 +432,20 @@
       "soloClear": "顯示整張圖",
       "putInChat": "放入聊天輸入框",
       "putCountInChat": "將 {{count}} 項放入聊天輸入框"
+    },
+    "refresh": {
+      "action": "重新整理分析",
+      "title": "要重新整理整個專案的分析嗎？",
+      "description": "ArchGuard 將重新分析整個專案。這可能需要數分鐘，其他分頁或工作階段也會看到它正在執行。在新分析成功之前，目前的分析會保持不變。",
+      "confirm": "重新整理",
+      "cancel": "取消",
+      "close": "關閉",
+      "running": "正在重新整理分析…",
+      "runningShort": "重新整理中…",
+      "elapsed": "已用 {{elapsed}}",
+      "failedTitle": "分析重新整理失敗",
+      "failedUnknown": "分析失敗。",
+      "retry": "重試"
     }
   },
   "status": {

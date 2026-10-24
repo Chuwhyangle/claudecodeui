@@ -14,14 +14,25 @@
  * middleware translate the service's `AppError`s (404 `PROJECT_NOT_FOUND` /
  * `ARCHGUARD_CACHE_NOT_FOUND`, 400 `INVALID_REQUEST`).
  *
- * Consumers: `server/modules/architecture/module.js` (production composition)
- * and `server/modules/architecture/tests/architecture-routes.test.js`.
+ * The manual re-analysis has its own pair: `POST /api/architecture/refresh` takes
+ * `{ projectId }` and answers 202 with the started-or-joined job (a concurrent
+ * request for the same project root answers `coalesced: true` and the same
+ * `jobId`), and `GET /api/architecture/refresh/status?projectId=…` answers the
+ * current status document. The project is resolved server-side from `projectId`
+ * alone: a path or any other field in the start body is IGNORED rather than
+ * accepted, so a client cannot point the analysis at a directory the server did
+ * not choose.
+ *
+ * Consumers: `server/modules/architecture/module.ts` (production composition)
+ * and `server/modules/architecture/tests/architecture-routes.test.ts`.
  */
 import express, { type Router } from 'express';
 
+import type { ArchitectureRefreshStartResult, ArchitectureRefreshStatus } from '@/shared/types.js';
 import { AppError, asyncHandler } from '@/shared/utils.js';
 
 import { ENTITY_KINDS, RELATION_TYPES, type EntityKind, type RelationType } from './generator.js';
+import type { ArchguardRefreshJob } from './refreshJob.js';
 import type {
   ArchitectureGraphInput,
   ArchitectureMentionsInput,
@@ -265,12 +276,48 @@ function requireCount(body: Record<string, unknown>, name: string): number {
 }
 
 /**
- * Build the router over one service instance.
+ * Read the `/refresh` start body: `{ projectId }` and nothing else.
  *
- * Consumers: `server/modules/architecture/module.js` only; the module's barrel
+ * Extra fields are deliberately ignored rather than rejected — the important
+ * property is that a `path` (or any other directory hint) has no effect: the
+ * service resolves the project root from `projectId` alone.
+ */
+function readRefreshStartInput(body: unknown): { projectId: string } {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    throw invalidRequest('request body must be a JSON object');
+  }
+  const record = body as Record<string, unknown>;
+  return { projectId: requireStringField(record, 'projectId') };
+}
+
+/** Read the `/refresh/status` query string's required `projectId`. */
+function readRefreshStatusInput(query: unknown): { projectId: string } {
+  if (query === null || typeof query !== 'object') {
+    throw invalidRequest('"projectId" is required');
+  }
+  const value = (query as Record<string, unknown>).projectId;
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw invalidRequest('"projectId" must be a non-empty query parameter');
+  }
+  return { projectId: value };
+}
+
+/**
+ * Build the router over one service instance and, when the caller has one, one
+ * refresh job.
+ *
+ * `refreshJob` is optional so the module can be composed without the manual
+ * re-analysis (the route factory's unit criteria mount only the three read
+ * endpoints); omitting it does not register the refresh pair at all, which is a
+ * 404 rather than a made-up job. Production always passes one.
+ *
+ * Consumers: `server/modules/architecture/module.ts` only; the module's barrel
  * exposes the composed module, not this factory.
  */
-export function createArchitectureRoutes(service: ArchitectureService): Router {
+export function createArchitectureRoutes(
+  service: ArchitectureService,
+  refreshJob?: ArchguardRefreshJob,
+): Router {
   const router = express.Router();
 
   router.post(
@@ -299,6 +346,29 @@ export function createArchitectureRoutes(service: ArchitectureService): Router {
       response.json(result);
     }),
   );
+
+  const job = refreshJob;
+  if (job !== undefined) {
+    router.post(
+      '/refresh',
+      asyncHandler(async (request, response) => {
+        const input = readRefreshStartInput(request.body);
+        const result: ArchitectureRefreshStartResult = job.start(input.projectId);
+        // 202: the analysis is accepted and running (or already was). The body is
+        // the job the caller now owns or joined.
+        response.status(202).json(result);
+      }),
+    );
+
+    router.get(
+      '/refresh/status',
+      asyncHandler(async (request, response) => {
+        const input = readRefreshStatusInput(request.query);
+        const result: ArchitectureRefreshStatus = job.status(input.projectId);
+        response.json(result);
+      }),
+    );
+  }
 
   return router;
 }

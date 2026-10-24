@@ -3109,7 +3109,8 @@ export function PlantUmlGraph({
   // overlay swaps the region's `flex-1` for `fixed; inset: 0`). The renderer
   // answers each token once, and only while it is in Fit mode: the overlay must
   // not undo a manual zoom. The token is remembered synchronously so a re-render
-  // carrying the same request cannot fit twice.
+  // carrying the same request cannot fit twice. `force` is the fresh-analysis
+  // case: the content the reader had zoomed is gone, so the panel asks for a fit.
   const fitDiagramRef = useRef(fitDiagram);
   fitDiagramRef.current = fitDiagram;
   const answeredFitTokenRef = useRef<number | null>(null);
@@ -3117,7 +3118,7 @@ export function PlantUmlGraph({
     if (fitRequest === null) return;
     if (answeredFitTokenRef.current === fitRequest.token) return;
     answeredFitTokenRef.current = fitRequest.token;
-    if (zoomRef.current.fit !== 'auto') return;
+    if (zoomRef.current.fit !== 'auto' && fitRequest.force !== true) return;
     fitDiagramRef.current();
   }, [fitRequest]);
 

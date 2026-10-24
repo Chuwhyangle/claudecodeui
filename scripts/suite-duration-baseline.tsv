@@ -642,3 +642,11 @@
 #   (dur=2272ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
 #   coverage floor green now that the tree collects 435 server test files).
 2272	server/modules/quay/tests/counter-voice.test.ts
+#   and the two architecture refresh rows by architecture-archguard-refresh-trigger, measured one
+#   file at a time on 2026-10-25 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/refreshJob.test.ts`
+#   and the same for refreshRoutes.test.ts (dur=12769ms and dur=2520ms; their own new criteria; no
+#   green round contains them yet — the rows also keep the 90% coverage floor green now that the
+#   tree collects 437 server test files).
+12769	server/modules/architecture/tests/refreshJob.test.ts
+2520	server/modules/architecture/tests/refreshRoutes.test.ts

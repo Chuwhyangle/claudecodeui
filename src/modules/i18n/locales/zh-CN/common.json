@@ -432,6 +432,20 @@
       "soloClear": "显示整张图",
       "putInChat": "放入聊天输入框",
       "putCountInChat": "将 {{count}} 项放入聊天输入框"
+    },
+    "refresh": {
+      "action": "刷新分析",
+      "title": "刷新整个项目的分析？",
+      "description": "ArchGuard 将重新分析整个项目。这可能需要几分钟，其他标签页或会话也会看到它正在运行。在新分析成功之前，当前分析保持不变。",
+      "confirm": "刷新",
+      "cancel": "取消",
+      "close": "关闭",
+      "running": "正在刷新分析…",
+      "runningShort": "刷新中…",
+      "elapsed": "已用 {{elapsed}}",
+      "failedTitle": "分析刷新失败",
+      "failedUnknown": "分析失败。",
+      "retry": "重试"
     }
   },
   "status": {

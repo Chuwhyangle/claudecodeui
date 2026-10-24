@@ -432,6 +432,20 @@
       "soloClear": "Gesamtes Diagramm anzeigen",
       "putInChat": "In die Chat-Eingabe setzen",
       "putCountInChat": "{{count}} in die Chat-Eingabe setzen"
+    },
+    "refresh": {
+      "action": "Analyse aktualisieren",
+      "title": "Projektanalyse aktualisieren?",
+      "description": "ArchGuard analysiert das gesamte Projekt neu. Das kann mehrere Minuten dauern, und andere Tabs oder Sitzungen sehen den Lauf. Die aktuelle Analyse bleibt bestehen, bis die neue erfolgreich ist.",
+      "confirm": "Aktualisieren",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "running": "Analyse wird aktualisiert…",
+      "runningShort": "Aktualisiere…",
+      "elapsed": "{{elapsed}} vergangen",
+      "failedTitle": "Die Analyse konnte nicht aktualisiert werden",
+      "failedUnknown": "Die Analyse ist fehlgeschlagen.",
+      "retry": "Erneut versuchen"
     }
   },
   "status": {

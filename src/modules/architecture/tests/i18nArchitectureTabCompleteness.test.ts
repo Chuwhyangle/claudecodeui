@@ -36,6 +36,9 @@ const ARCHITECTURE_SOURCES = [
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureInspector.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureTextPanel.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureSelectionTray.tsx'),
+  // The manual re-analysis confirmation/running/failure dialog: its chrome is
+  // part of the same tab surface, so a missing translation must be red here too.
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureRefreshDialog.tsx'),
 ];
 const TABS_SOURCE = resolve(REPO_ROOT, 'src', 'modules', 'project-workspace', 'WorkspaceTabs.tsx');
 
