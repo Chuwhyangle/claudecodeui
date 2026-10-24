@@ -2,11 +2,11 @@ import fs from 'node:fs';
 
 import { readContextEventStatus } from '@/modules/context-events/index.js';
 import { projectsDb, uiLastOpenedDb } from '@/modules/database/index.js';
-import { loadServerSettings } from '@/modules/settings/index.js';
+import { readInitiativeAuditRatio } from '@/shared/ports/initiative-audit-ratio.port.js';
 
 import { createQuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
 import { createQuayFleetRegistry } from './quay-fleet-registry.js';
-import { createQuayInitiatives } from './quay-initiatives.js';
+import { DEFAULT_INITIATIVE_AUDIT_RATIO, createQuayInitiatives } from './quay-initiatives.js';
 import { QUAY_COMMAND_TIMEOUT_MS, createQuayProcessRunner } from './quay-process.js';
 import { createQuayRouter } from './quay.routes.js';
 import { createQuayService, type QuayFileReader } from './quay.service.js';
@@ -132,16 +132,16 @@ export const quayFleetRegistry = createQuayFleetRegistry({
 });
 
 /**
- * The initiative view / decision queue reading. The sampling ratio is the SERVER settings
- * file's `initiative.auditRatio`, read here at import time (the module is composed at boot and
- * the knob is documented as read-once); a malformed value already fell back inside the loader.
+ * The initiative view / decision queue reading. The spot-check sampling ratio is the SERVER
+ * settings file's `initiative.auditRatio`, which `server/index.ts` reads once at boot and
+ * installs through the shared port — importing the settings module from here would close
+ * `quay -> settings -> mcp-gateway -> quay` and pull this module into AC-394's provider cycle.
+ * The read is lazy because the port is installed after this module evaluates; the service
+ * memoizes the first answer. An uninstalled port keeps the shipped default, exactly what the
+ * settings loader would answer for an unconfigured deployment.
  */
 export const quayInitiatives = createQuayInitiatives({
-  // Lazy, not an import-time read: this module and the settings module are in an import
-  // cycle, so calling the loader while this file evaluates would read the settings module
-  // before its own constants exist. The provider runs on the first initiatives read and the
-  // service memoizes the answer.
-  resolveAuditRatio: () => loadServerSettings().initiative.auditRatio,
+  resolveAuditRatio: () => readInitiativeAuditRatio() ?? DEFAULT_INITIATIVE_AUDIT_RATIO,
 });
 
 /**
