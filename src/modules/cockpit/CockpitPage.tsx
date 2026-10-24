@@ -930,6 +930,22 @@ export default function CockpitPage() {
     );
     const search = new URLSearchParams();
     if (entityCandidate !== undefined) search.set('entity', entityCandidate);
+    // The architecture tile's structural diff travels as package-level deep-link parameters
+    // (`diffPkg` / `diffPkgEdge`), which the tab marks on the drawing. Only well-typed entries
+    // are forwarded: a malformed digest must not break the link.
+    const diffPackages = Array.isArray(digest.diffPackages)
+      ? digest.diffPackages.filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+      : [];
+    for (const packageId of diffPackages) search.append('diffPkg', packageId.trim());
+    const diffPackageEdges = Array.isArray(digest.diffPackageEdges) ? digest.diffPackageEdges : [];
+    for (const edge of diffPackageEdges) {
+      if (edge === null || typeof edge !== 'object') continue;
+      const from = (edge as { from?: unknown }).from;
+      const to = (edge as { to?: unknown }).to;
+      if (typeof from !== 'string' || typeof to !== 'string') continue;
+      if (from.trim() === '' || to.trim() === '') continue;
+      search.append('diffPkgEdge', `${from.trim()}->${to.trim()}`);
+    }
     const suffix = search.toString();
     navigate(
       `/session/${encodeURIComponent(wallArchitectureSessionId)}/architecture${suffix === '' ? '' : `?${suffix}`}`,

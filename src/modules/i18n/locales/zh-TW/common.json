@@ -150,6 +150,7 @@
       }
     },
     "title": "架構",
+    "diffHighlight": "差異醒目提示：{{nodes}} 個目標 · {{edges}} 條關係",
     "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",
     "loading": "正在產生架構圖…",
     "retry": "重試",

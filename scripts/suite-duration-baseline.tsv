@@ -614,4 +614,10 @@
 2058	server/modules/context-events/tests/context-event-writer.test.ts
 1941	server/modules/context-events/tests/utterance-classifier.test.ts
 2012	server/modules/context-events/tests/shadow-predictor.test.ts
+#   and the architecture-delta row by observation-architecture-structural-delta, measured one file
+#   at a time on 2026-10-24 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/architecture-delta.test.ts`
+#   (dur=3405ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
+#   coverage floor green now that the tree collects 428 server test files).
+3405	server/modules/observation/tests/architecture-delta.test.ts
 1877	server/modules/quay/tests/quay-initiatives.test.ts
