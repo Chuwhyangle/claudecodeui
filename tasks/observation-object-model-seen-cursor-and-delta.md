@@ -64,6 +64,8 @@ extra: {}
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.test.ts
 - server/shared/tests/server-import-cycle-budget.baseline.json
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - config/server.settings.example.json
 - src/modules/cockpit/observationUri.ts (new)
 - src/modules/cockpit/tests/observationUri.test.ts (new)
