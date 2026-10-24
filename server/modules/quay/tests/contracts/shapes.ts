@@ -45,7 +45,8 @@ export type Shape =
   | NumberShape
   | BooleanShape
   | ArrayShape
-  | ObjectShape;
+  | ObjectShape
+  | OneOfShape;
 
 type ShapeBase = {
   /** The key may be absent. */
@@ -54,10 +55,16 @@ type ShapeBase = {
   nullable?: boolean;
 };
 
-/** A JSON string, optionally restricted to a closed vocabulary. */
+/** A JSON string, optionally restricted to a closed vocabulary or to a structural pattern. */
 export type StringShape = ShapeBase & {
   type: 'string';
   values?: readonly string[];
+  /**
+   * A structure the string must match (today: a project-scoped `quay://` reference). A plain
+   * `string` declaration would accept `quay://task/x` — the superseded project-less form the
+   * fleet itself refuses — so the shape has to carry the structure, not just the type.
+   */
+  pattern?: RegExp;
 };
 
 /** A JSON number, optionally an integer, optionally restricted to a closed vocabulary. */
@@ -85,6 +92,18 @@ export type ObjectShape = ShapeBase & {
   fields: Readonly<Record<string, Shape>>;
 };
 
+/**
+ * A value accepted by ANY one of `anyOf`.
+ *
+ * The fleet's charter deliberately allows two spellings for `completionCriteria` and
+ * `exitConditions` (a non-empty string, or a list of them), so the declaration has to as well;
+ * picking one spelling would make a legal fleet answer red here.
+ */
+export type OneOfShape = ShapeBase & {
+  type: 'oneOf';
+  anyOf: readonly Shape[];
+};
+
 /** The first mismatch found while validating a document, addressed by JSON path. */
 export type ShapeViolation = {
   /** JSON path of the offending node, e.g. `$.projects[0].root`. */
@@ -98,7 +117,14 @@ function describeShape(shape: Shape): string {
   const vocabulary = 'values' in shape && shape.values !== undefined
     ? ` (${shape.values.join('|')})`
     : '';
-  const base = shape.type === 'array' ? `array<${describeShape(shape.items)}>` : `${shape.type}${vocabulary}`;
+  const pattern = shape.type === 'string' && shape.pattern !== undefined
+    ? ` matching ${shape.pattern}`
+    : '';
+  const base = shape.type === 'array'
+    ? `array<${describeShape(shape.items)}>`
+    : shape.type === 'oneOf'
+      ? `one of [${shape.anyOf.map((candidate) => describeShape(candidate)).join(' | ')}]`
+      : `${shape.type}${vocabulary}${pattern}`;
   return shape.nullable === true ? `${base} | null` : base;
 }
 
@@ -136,6 +162,9 @@ export function validateShape(value: unknown, shape: Shape, path = '$'): ShapeVi
       }
       if (shape.values !== undefined && !shape.values.includes(value)) {
         return { path, message: `${path} is ${JSON.stringify(value)} (expected one of ${shape.values.join('|')})` };
+      }
+      if (shape.pattern !== undefined && !shape.pattern.test(value)) {
+        return { path, message: `${path} is ${JSON.stringify(value)} (expected a string matching ${shape.pattern})` };
       }
       return null;
     }
@@ -181,6 +210,12 @@ export function validateShape(value: unknown, shape: Shape, path = '$'): ShapeVi
       }
       return null;
     }
+    case 'oneOf': {
+      for (const candidate of shape.anyOf) {
+        if (validateShape(value, candidate, path) === null) return null;
+      }
+      return { path, message: `${path} is ${describeValue(value)} (expected ${describeShape(shape)})` };
+    }
   }
 }
 
@@ -196,6 +231,13 @@ export type FleetCliContractContext = {
   taskId: string;
   /** The session id a `set` invocation pins; a literal UUID is not required by the fleet. */
   sessionId: string;
+  /**
+   * An initiative the read verbs address. Resolved from the operator's real home at test time;
+   * when that home has none, the test seeds a temporary home instead (see the test file).
+   */
+  initiativeSlug: string;
+  /** A valid charter, as the JSON text `initiative create --charter` accepts verbatim. */
+  initiativeCharter: string;
 };
 
 /**
@@ -348,6 +390,208 @@ export const INTERFACE_SESSION_WRITE_SHAPE: Shape = {
     project: { type: 'string' },
     interfaceSessionId: { type: 'string', nullable: true },
     changed: { type: 'boolean', optional: true },
+  },
+};
+
+//----------------- initiative (fleet-initiative-store-and-cli) ------------
+
+/**
+ * A project-scoped `quay://` reference: `quay://<project>/<type>/<id>`.
+ *
+ * The project segment is the whole point. The fleet refuses `quay://task/<id>` as
+ * `missing-project-segment` — and the cockpit must never render a reference it could not resolve
+ * back to a project. A `type: 'string'` declaration would happily accept that superseded form, so
+ * the edge shape below carries this pattern instead.
+ */
+export const QUAY_PROJECT_SCOPED_URI =
+  /^quay:\/\/[A-Za-z0-9][A-Za-z0-9._-]*\/(?:task|goal|ledger|board)\/[A-Za-z0-9][A-Za-z0-9._:#+-]*$/;
+
+/** The charter's six fields. Two of them accept the fleet's string-or-list spelling. */
+export const INITIATIVE_CHARTER_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    intent: { type: 'string' },
+    projects: { type: 'array', items: { type: 'string' } },
+    completionCriteria: {
+      type: 'oneOf',
+      anyOf: [
+        { type: 'string' },
+        { type: 'array', items: { type: 'string' } },
+      ],
+    },
+    grantScope: {
+      type: 'object',
+      fields: {
+        mayDecide: { type: 'array', items: { type: 'string' } },
+        mustEscalate: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    exitConditions: {
+      type: 'oneOf',
+      anyOf: [
+        { type: 'string' },
+        { type: 'array', items: { type: 'string' } },
+      ],
+    },
+    expiresAt: { type: 'string' },
+  },
+};
+
+/** One member project: its refs into that project's store, plus the free-text liaison. */
+export const INITIATIVE_MEMBER_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    project: { type: 'string' },
+    taskRefs: { type: 'array', items: { type: 'string' } },
+    goalRefs: { type: 'array', items: { type: 'string' } },
+    liaison: { type: 'string', optional: true },
+  },
+};
+
+/** A dependency edge. Both endpoints must carry a project segment; `kind` is a closed set. */
+export const INITIATIVE_EDGE_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    from: { type: 'string', pattern: QUAY_PROJECT_SCOPED_URI },
+    to: { type: 'string', pattern: QUAY_PROJECT_SCOPED_URI },
+    kind: { type: 'string', values: ['blocks', 'contract', 'release'] },
+  },
+};
+
+/** The stored initiative document both `show` and `list` print. */
+export const INITIATIVE_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    slug: { type: 'string' },
+    charter: INITIATIVE_CHARTER_SHAPE,
+    members: { type: 'array', items: INITIATIVE_MEMBER_SHAPE },
+    edges: { type: 'array', items: INITIATIVE_EDGE_SHAPE },
+    status: { type: 'string', values: ['active', 'closed'] },
+  },
+};
+
+/**
+ * The epistemology tag a decision carries.
+ *
+ * Today's producers derive only two of them (`--by human` ⇒ `fact`, a liaison self-decision ⇒
+ * `inference`); the cockpit's decision queue is written against the four-value vocabulary, so the
+ * declaration pins that vocabulary while the producers catch up. An unknown tag is a red, not a
+ * value the consumer has to guess about.
+ */
+export const DECISION_KINDS = ['fact', 'inference', 'experience', 'llm'] as const;
+
+/** One decision-ledger row. `area` is present only on a liaison decision. */
+export const INITIATIVE_DECISION_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    at: { type: 'string' },
+    initiative: { type: 'string' },
+    by: { type: 'string' },
+    question: { type: 'string' },
+    options: { type: 'array', items: { type: 'string' } },
+    chosen: { type: 'string' },
+    rationale: { type: 'string' },
+    refs: { type: 'array', items: { type: 'string' } },
+    kind: { type: 'string', values: DECISION_KINDS },
+    area: { type: 'string', optional: true },
+  },
+};
+
+/** `initiative show <slug> --json` — the initiative plus its decision rows and ledger reading. */
+export const INITIATIVE_SHOW_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    ok: { type: 'boolean', values: [true] },
+    initiative: INITIATIVE_SHAPE,
+    decisions: { type: 'array', items: INITIATIVE_DECISION_SHAPE },
+    ledger: {
+      type: 'object',
+      fields: {
+        byteLength: { type: 'number', integer: true },
+        corruptLines: { type: 'number', integer: true },
+      },
+    },
+  },
+};
+
+/** `initiative list --json` — active initiatives by default, with a count for the queue badge. */
+export const INITIATIVE_LIST_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    ok: { type: 'boolean', values: [true] },
+    initiatives: { type: 'array', items: INITIATIVE_SHAPE },
+    count: { type: 'number', integer: true },
+  },
+};
+
+/** `initiative create <slug> --charter <json> --json` — the stored initiative, members/edges empty. */
+export const INITIATIVE_CREATE_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    ok: { type: 'boolean', values: [true] },
+    initiative: INITIATIVE_SHAPE,
+  },
+};
+
+/** `initiative decide <slug> → --json` — the appended row plus the attention cases it closed. */
+export const INITIATIVE_DECIDE_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    ok: { type: 'boolean', values: [true] },
+    decision: INITIATIVE_DECISION_SHAPE,
+    attentionClosed: { type: 'array', items: { type: 'object', fields: {} } },
+  },
+};
+
+//----------------- liveness (fleet-liveness-read-port) ------------
+
+/** The three-state liveness vocabulary every layer uses. */
+export const LIVENESS_STATES = ['ok', 'stale', 'unknown'] as const;
+
+/**
+ * `quay-fleet liveness --json` — the cockpit wall's read-only liveness projection.
+ *
+ * Three-valued on purpose: `null` fields mean "no reading could be taken" and are DIFFERENT from
+ * a reading that says `stale`. The declaration keeps every nullable field nullable so the cockpit
+ * can keep saying 「查不到」 instead of inventing a value.
+ */
+export const LIVENESS_SHAPE: Shape = {
+  type: 'object',
+  fields: {
+    at: { type: 'string' },
+    fleet: {
+      type: 'object',
+      fields: {
+        state: { type: 'string', values: LIVENESS_STATES },
+        alive: { type: 'boolean', nullable: true },
+        tick: { type: 'number', integer: true, nullable: true },
+        lastTickAt: { type: 'string', nullable: true },
+        ageSec: { type: 'number', nullable: true },
+        source: { type: 'string' },
+      },
+    },
+    projects: {
+      type: 'array',
+      items: {
+        type: 'object',
+        fields: {
+          projectId: { type: 'string' },
+          state: { type: 'string', values: LIVENESS_STATES },
+          driver: {
+            type: 'object',
+            fields: {
+              state: { type: 'string', values: LIVENESS_STATES },
+              lastHeartbeatAt: { type: 'string', nullable: true },
+              ageSec: { type: 'number', nullable: true },
+              source: { type: 'string' },
+            },
+          },
+          lastGateAt: { type: 'string', nullable: true },
+          halted: { type: 'boolean' },
+          source: { type: 'string' },
+        },
+      },
+    },
   },
 };
 
@@ -580,6 +824,27 @@ export const FLEET_CLI_CONTRACTS: readonly FleetCliContract[] = [
     shape: INTERFACE_SESSION_GET_SHAPE,
   },
   {
+    id: 'initiative-list',
+    consumer: 'cockpit-initiative-view-and-decision-queue (initiative list)',
+    writes: false,
+    argv: () => ['initiative', 'list', '--json'],
+    shape: INITIATIVE_LIST_SHAPE,
+  },
+  {
+    id: 'initiative-show',
+    consumer: 'cockpit-initiative-view-and-decision-queue (initiative detail + decision queue)',
+    writes: false,
+    argv: (context) => ['initiative', 'show', context.initiativeSlug, '--json'],
+    shape: INITIATIVE_SHOW_SHAPE,
+  },
+  {
+    id: 'liveness',
+    consumer: 'cockpit observation wall (per-layer liveness projection)',
+    writes: false,
+    argv: () => ['liveness', '--json'],
+    shape: LIVENESS_SHAPE,
+  },
+  {
     id: 'status',
     consumer: 'cockpit / operator status reading',
     writes: false,
@@ -599,5 +864,28 @@ export const FLEET_CLI_CONTRACTS: readonly FleetCliContract[] = [
     writes: true,
     argv: (context) => ['registry', 'interface-session', 'clear', context.project, '--json'],
     shape: INTERFACE_SESSION_WRITE_SHAPE,
+  },
+  // Order inside the writing test matters here: `decide` addresses the initiative `create` made.
+  {
+    id: 'initiative-create',
+    consumer: 'cockpit-initiative-view-and-decision-queue (initiative create)',
+    writes: true,
+    argv: (context) => ['initiative', 'create', context.initiativeSlug, '--charter', context.initiativeCharter, '--json'],
+    shape: INITIATIVE_CREATE_SHAPE,
+  },
+  {
+    id: 'initiative-decide',
+    consumer: 'cockpit-initiative-view-and-decision-queue (decision queue → decide)',
+    writes: true,
+    argv: (context) => [
+      'initiative', 'decide', context.initiativeSlug,
+      '--question', 'contract probe: does the write path answer with its own row?',
+      '--options', 'yes,no',
+      '--chosen', 'yes',
+      '--rationale', 'contract probe decision — written only against a temporary home',
+      '--by', 'human',
+      '--json',
+    ],
+    shape: INITIATIVE_DECIDE_SHAPE,
   },
 ];
