@@ -193,6 +193,13 @@ const CYCLE_GROUPS: readonly string[][] = [
  * module, and it sits in no SCC — `modules/database` never points back at it. Registering the
  * directory is what lets `server/index.ts` mount its router without the new-directory leaf rule
  * reading the mandated composition-root inbound edge as a stray.
+ * A SIXTH ENTRY WAS ADDED, by `liaison-delivery-by-initiative-and-project` (2026-10-24), under
+ * the same escape hatch: `modules/liaison` is the M3 liaison-delivery mechanism's single feature
+ * directory. It imports node builtins, `server/shared/**` and itself only — the fleet CLI
+ * runner, the host registry's liveness read and the session send service are all injected by
+ * `server/index.ts` — and it sits in no SCC. Its one inbound edge is the composition root's
+ * mount, which is the sanctioned shape; registering the directory is what keeps the
+ * new-directory leaf rule from reading that edge as a stray.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -209,6 +216,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/debug-agent',
   'modules/file-tree',
   'modules/git',
+  'modules/liaison',
   'modules/logging',
   'modules/mcp-gateway',
   'modules/notifications',

@@ -6,7 +6,7 @@
     "static": 1301,
     "dynamic": 3
   },
-  "nodeCount": 52,
+  "nodeCount": 53,
   "directoryManifest": [
     ".",
     "modules/architecture",
@@ -22,6 +22,7 @@
     "modules/debug-agent",
     "modules/file-tree",
     "modules/git",
+    "modules/liaison",
     "modules/logging",
     "modules/mcp-gateway",
     "modules/notifications",
