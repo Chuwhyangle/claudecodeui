@@ -1,7 +1,7 @@
 ---
 id: cockpit-deeplink-lost-to-stale-hub-view
 title: 驾驶舱深链被中枢的陈旧视图吞掉：显式 ?view= 导航必须胜过中枢持久视图，仅裸 /cockpit 与重连才采纳中枢视图
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
