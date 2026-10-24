@@ -31,6 +31,7 @@ import {
   createReplySuggestionsUsageLog,
   eventRecord,
   shownRecord,
+  type ReplySuggestionsEventInput,
   type ReplySuggestionsServed,
   type ReplySuggestionsUsageLog,
   type ReplySuggestionsUsageRecord,
@@ -52,40 +53,16 @@ export type ReplySuggestionsInput = {
   expand?: boolean;
 };
 
-/**
- * What an expansion draw was anchored on: `seed` is the reply the person picked
- * (variants of it), `focus` is the quoted passage with no reply written yet.
- *
- * This file is the server end of the wire contract: the composer's
- * `src/shared/types.ts` mirrors this union and `src/shared/tests/replySuggestionsTypeSync.test.ts`
- * reds the moment either end gains or loses a member.
- *
- * Consumers: `reply-suggestions-usage-log.ts` (record fields),
- * `reply-suggestions-draw.ts`, `reply-suggestions-prompts.ts` and
- * `reply-suggestions.routes.ts`.
- */
+/** The expansion anchor: `seed` is the picked reply being varied, `focus` is the
+ * quoted passage. The server end of the wire contract mirrored in
+ * `src/shared/types.ts` and guarded by
+ * `src/shared/tests/replySuggestionsTypeSync.test.ts`; consumers: the ledger rows,
+ * `reply-suggestions-draw.ts`, `reply-suggestions-prompts.ts` and `reply-suggestions.routes.ts`. */
 export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
 
-/**
- * The pointer-click events the composer reports on `/events`.
- *
- * Declared here as the server end of the wire contract (the client mirror and
- * the drift test are named on `ReplySuggestionsExpansionSource` above).
- *
- * Consumers: `reply-suggestions-usage-log.ts` (record fields) and
- * `reply-suggestions.routes.ts`.
- */
+/** The pointer-click events the composer reports; consumers: the ledger rows and
+ * `reply-suggestions.routes.ts`. */
 export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
-
-/** One `/events` posting; `source` is present only for an expansion chip.
- * Consumers: `reply-suggestions.routes.ts` (its parsed event shape). */
-export type ReplySuggestionsEventInput = {
-  sessionId: string;
-  draw: number;
-  event: ReplySuggestionsEventName;
-  index?: number;
-  source?: ReplySuggestionsExpansionSource;
-};
 
 /** The reading `GET /status` exposes — no paths and no key.
  * Consumers: `reply-suggestions.routes.ts` and the settings criterion. */

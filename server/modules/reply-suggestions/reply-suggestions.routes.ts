@@ -26,12 +26,12 @@ import express, { type Router } from 'express';
 import { AppError, asyncHandler } from '@/shared/utils.js';
 
 import type {
-  ReplySuggestionsEventInput,
   ReplySuggestionsEventName,
   ReplySuggestionsExpansionSource,
   ReplySuggestionsInput,
   ReplySuggestionsService,
 } from './reply-suggestions.service.js';
+import type { ReplySuggestionsEventInput } from './reply-suggestions-usage-log.js';
 
 const EVENT_NAMES: readonly ReplySuggestionsEventName[] = ['picked', 'cleared', 'redrawn', 'sent'];
 const EXPANSION_SOURCES: readonly ReplySuggestionsExpansionSource[] = ['seed', 'focus'];

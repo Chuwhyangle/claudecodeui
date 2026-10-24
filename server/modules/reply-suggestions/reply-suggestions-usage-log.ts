@@ -74,6 +74,18 @@ type ReplySuggestionsEventRecord = {
   source?: ReplySuggestionsExpansionSource;
 };
 
+/** One `/events` posting — the input half of the row above; `source` is present
+ * only for an expansion chip.
+ * Consumers: `reply-suggestions.routes.ts` (its parsed event shape) and
+ * `reply-suggestions.service.ts` (`recordEvent`). */
+export type ReplySuggestionsEventInput = {
+  sessionId: string;
+  draw: number;
+  event: ReplySuggestionsEventName;
+  index?: number;
+  source?: ReplySuggestionsExpansionSource;
+};
+
 /**
  * The discriminated union every ledger line is one of.
  *
