@@ -31,12 +31,12 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/sidebar/tests/SidebarModeSwitch.test.tsx` exit 0——侧边栏头部的模式切换位于设置按钮之前；两段都是带 href 的链接且 href 经 basename 生成（basename 为 `/ccui` 时 href 以 `/ccui/cockpit` 开头）；当前模式段带 `aria-current`；选中已登记项目时驾驶舱段的 href 指向该项目的 board 视图（用 fleet 项目 id）；收起态与手机抽屉中都渲染该控件。
-- [ ] AC2: 同一测试文件——徽标：fleet-summary 桩合计 needs-human 为 3 时显示「3」及对应 aria-label；为 0 时不渲染数字；`fleet.state` 为 missing 时渲染灰点且 tooltip 含原因；页面隐藏时不轮询（假定时器计数）。
-- [ ] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——驾驶舱页头渲染同一模式切换控件且当前段为驾驶舱；会话段 href 为进入前记下的会话路由，无记录时为首页。
-- [ ] AC4: `npx vitest run src/modules/sidebar/tests/SidebarProjectItem.test.tsx` exit 0（不存在则新建）——已登记项目的行内操作含「在驾驶舱中查看」且链接到其 board 视图；未登记项目不含该项。
-- [ ] AC5: `npx vitest run src/modules/command-palette/tests` 中相关用例——命令面板含「打开驾驶舱」「在新窗口打开驾驶舱」两条命令；既有用例不弱化。
-- [ ] AC6: `npm run typecheck` 通过；文案覆盖 12 个 locale（扩展既有 i18n 完整性测试）。
+- [x] AC1: `npx vitest run src/modules/sidebar/tests/SidebarModeSwitch.test.tsx` exit 0——侧边栏头部的模式切换位于设置按钮之前；两段都是带 href 的链接且 href 经 basename 生成（basename 为 `/ccui` 时 href 以 `/ccui/cockpit` 开头）；当前模式段带 `aria-current`；选中已登记项目时驾驶舱段的 href 指向该项目的 board 视图（用 fleet 项目 id）；收起态与手机抽屉中都渲染该控件。
+- [x] AC2: 同一测试文件——徽标：fleet-summary 桩合计 needs-human 为 3 时显示「3」及对应 aria-label；为 0 时不渲染数字；`fleet.state` 为 missing 时渲染灰点且 tooltip 含原因；页面隐藏时不轮询（假定时器计数）。
+- [x] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——驾驶舱页头渲染同一模式切换控件且当前段为驾驶舱；会话段 href 为进入前记下的会话路由，无记录时为首页。
+- [x] AC4: `npx vitest run src/modules/sidebar/tests/SidebarProjectItem.test.tsx` exit 0（不存在则新建）——已登记项目的行内操作含「在驾驶舱中查看」且链接到其 board 视图；未登记项目不含该项。
+- [x] AC5: `npx vitest run src/modules/command-palette/tests` 中相关用例——命令面板含「打开驾驶舱」「在新窗口打开驾驶舱」两条命令；既有用例不弱化。
+- [x] AC6: `npm run typecheck` 通过；文案覆盖 12 个 locale（扩展既有 i18n 完整性测试）。
 
 ## DoD
 
