@@ -41,6 +41,10 @@ depends_on:
 - 贴出三个仓库的真实扫描结果摘要（每类候选数 + 3 条最有把握的候选及证据），并人工核对其中至少 5 条是否属实。
 - 设计文档需用户审阅；裁定动词与落地路径以用户意见为准。
 
+## Notes
+
+fleet 侧的数据（每项目 `.quay/gate-events.jsonl`、`~/.quay-fleet/decisions.jsonl`）不要直接读文件：按「CloudCLI 不读 fleet 内部状态文件」的原则，启动本任务时先请 quay-fleet 暴露只读动词（例如基于这两个账本的 `inventory --json`），口径定了再由 fleet 立读口。各项目自己仓库里的文件（如 quay 的闸定义、文档）可以直接扫描。
+
 ## Touches
 
 - scripts/contraction-candidates/scan.mjs
