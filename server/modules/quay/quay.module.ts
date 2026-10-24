@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+import { readContextEventStatus } from '@/modules/context-events/index.js';
 import { projectsDb, uiLastOpenedDb } from '@/modules/database/index.js';
 
 import { createQuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
@@ -112,6 +113,10 @@ export const quayService = createQuayService({
   snapshotTtlMs: SNAPSHOT_TTL_MS,
   commandTimeoutMs: QUAY_COMMAND_TIMEOUT_MS,
   fleetProjectIdResolver: quayFleetProjectIds,
+  // The context-event stream's state rides beside the fleet reading: both answer
+  // "is this host recording anything?", and a reader should not have to call two
+  // endpoints to find out.
+  readContextEventsStatus: () => readContextEventStatus(),
 });
 
 /**

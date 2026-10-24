@@ -200,6 +200,12 @@ const CYCLE_GROUPS: readonly string[][] = [
  * `server/index.ts` — and it sits in no SCC. Its one inbound edge is the composition root's
  * mount, which is the sanctioned shape; registering the directory is what keeps the
  * new-directory leaf rule from reading that edge as a stray.
+ * A SEVENTH ENTRY WAS ADDED, by `context-event-stream-and-shadow-predictor` (2026-10-24), under
+ * the same escape hatch: `modules/context-events` is the context-ledger feature directory. It
+ * imports node builtins and itself only; the fleet installation (for the schema document), the
+ * chat-control/cockpit recording seams and the reply-suggestions ledger tap are all wired by
+ * `server/index.ts`. `modules/quay/quay.module.ts` reads its status for the fleet-summary
+ * response, which is the one known inbound edge registering this directory sanctions.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -210,6 +216,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/browser-use',
   'modules/cli',
   'modules/commands',
+  'modules/context-events',
   'modules/database',
   'modules/database/core',
   'modules/database/repositories',

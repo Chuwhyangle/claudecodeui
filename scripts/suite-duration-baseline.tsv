@@ -605,3 +605,7 @@
 3622	server/modules/observation/tests/session-digest.test.ts
 1917	server/modules/observation/tests/view-events.test.ts
 3232	server/modules/observation/tests/blind-spots.test.ts
+7495	server/modules/context-events/tests/production-wiring.test.ts
+2058	server/modules/context-events/tests/context-event-writer.test.ts
+1941	server/modules/context-events/tests/utterance-classifier.test.ts
+2012	server/modules/context-events/tests/shadow-predictor.test.ts

@@ -6,7 +6,7 @@
     "static": 1301,
     "dynamic": 3
   },
-  "nodeCount": 53,
+  "nodeCount": 54,
   "directoryManifest": [
     ".",
     "modules/architecture",
@@ -16,6 +16,7 @@
     "modules/browser-use",
     "modules/cli",
     "modules/commands",
+    "modules/context-events",
     "modules/database",
     "modules/database/core",
     "modules/database/repositories",
