@@ -27,7 +27,11 @@ export const REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH = 5;
  *   conversation re-arms it.
  * - Disabled is silent. `/status` answers `enabled: false` for every install that
  *   has not opted in, and a failed draw falls back to the habit chips: nothing here
- *   throws into the composer or draws an error.
+ *   throws into the composer or draws an error. The one exception is the Suggest
+ *   control itself: it reports a failed redraw through `redraw`'s `false`, so a
+ *   press with no answer is not mistaken for a press that did nothing.
+ * - Absent when there is nothing to draw from. A conversation with no assistant
+ *   message reads as `enabled: false`; the control is not offered as a no-op.
  * - The ledger is a readout. `picked` / `cleared` / `redrawn` / `sent` posts are
  *   fire-and-forget, and a refused write never changes the surface.
  *
@@ -60,7 +64,11 @@ type UseReplySuggestionsOptions = {
 };
 
 export type UseReplySuggestionsResult = {
-  /** Whether the feature is on. False until `/status` answers, so no draw is ever a guess. */
+  /**
+   * Whether the Suggest control should be drawn: the feature is on AND there is
+   * an assistant message to draw replies from. A new conversation has nothing to
+   * suggest from, so the control is absent rather than a silent no-op.
+   */
   enabled: boolean;
   /** The full public reading, for the expandable strip's own limits. */
   status: ReplySuggestionsStatus | null;
@@ -70,8 +78,12 @@ export type UseReplySuggestionsResult = {
   draw: number | null;
   /** A draw is in flight: the Suggest button is disabled and shows its progress state. */
   loading: boolean;
-  /** Asks for a completely new batch (with `focus` when a selection exists). */
-  redraw: () => void;
+  /**
+   * Asks for a completely new batch (with `focus` when a selection exists).
+   * Resolves true only when a fresh batch was applied, so the button can show a
+   * short failure state instead of being a silent no-op when the request fails.
+   */
+  redraw: () => Promise<boolean>;
   /** Reports one ledger event; failures are swallowed. `source` marks an expansion pick. */
   reportEvent: (event: ReplySuggestionsEventName, index?: number, source?: ReplySuggestionsExpansionSource) => void;
   /** True when the settings say `expansion: "vary"` and the feature is otherwise on. */
@@ -361,9 +373,9 @@ export function useReplySuggestions({
     })();
   }, [sessionId]);
 
-  const redraw = useCallback(() => {
+  const redraw = useCallback(async (): Promise<boolean> => {
     if (!statusRef.current?.enabled || !sessionId || loadingRef.current) {
-      return;
+      return false;
     }
     // A fresh model batch answers the same message, not the draft: an expansion
     // chain anchored on the old pick no longer describes anything on screen.
@@ -371,35 +383,38 @@ export function useReplySuggestions({
     loadingRef.current = true;
     setLoading(true);
     const trimmedFocus = focus?.trim() ?? '';
-    void (async () => {
-      try {
-        const response = await api.replySuggestions.suggest({
-          sessionId,
-          redraw: true,
-          ...(trimmedFocus ? { focus: trimmedFocus } : {}),
-        });
-        if (!response.ok) {
-          return;
-        }
-        const body = (await response.json()) as unknown;
-        if (sessionRef.current !== sessionId) {
-          return;
-        }
-        applyDraw(body);
-        reportEvent('redrawn');
-      } catch {
-        // A failed redraw keeps the previous batch on screen; the button simply recovers.
-      } finally {
-        loadingRef.current = false;
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+    try {
+      const response = await api.replySuggestions.suggest({
+        sessionId,
+        redraw: true,
+        ...(trimmedFocus ? { focus: trimmedFocus } : {}),
+      });
+      if (!response.ok) {
+        return false;
       }
-    })();
+      const body = (await response.json()) as unknown;
+      if (sessionRef.current !== sessionId) {
+        return false;
+      }
+      applyDraw(body);
+      reportEvent('redrawn');
+      return true;
+    } catch {
+      // A failed redraw keeps the previous batch on screen; the button shows its
+      // short failure state on the `false` this returns.
+      return false;
+    } finally {
+      loadingRef.current = false;
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
   }, [applyDraw, clearExpansion, focus, reportEvent, sessionId]);
 
   return {
-    enabled: status?.enabled === true,
+    // A conversation with no assistant message has nothing to suggest from: the
+    // control is absent rather than a silent no-op, matching the disabled case.
+    enabled: status?.enabled === true && lastAssistantMessageId !== null,
     status,
     chips,
     draw,

@@ -822,6 +822,59 @@ describe('merged strip at the component surface', () => {
   });
 });
 
+describe('the second-line preview follows the hovered or selected chip', () => {
+  const previewOf = (view: ReturnType<typeof render>) => view.container.querySelector('[data-suggestion-preview]');
+  const element = (props: Partial<React.ComponentProps<typeof InputSuggestionChips>> = {}) => React.createElement(
+    InputSuggestionChips,
+    {
+      listId: 'chip-list',
+      chips: mergedChips(),
+      selectedIndex: null,
+      ...props,
+    },
+  );
+
+  it('(a) a hovered quoted chip previews the first line it will fill', () => {
+    const view = renderMergedChips();
+    const quoted = view.getAllByRole('option')[0];
+
+    fireEvent.mouseEnter(quoted);
+
+    const preview = previewOf(view);
+    assert.ok(preview, 'hovering a chip must produce the second-line preview');
+    assert.equal(preview.textContent, '> 选中的原文');
+    assert.equal(preview.getAttribute('data-suggestion-preview'), 'quoted');
+  });
+
+  it('(b) a keyboard-selected model chip previews its own complete text', () => {
+    const view = renderMergedChips({ selectedIndex: 1 });
+
+    const preview = previewOf(view);
+    assert.ok(preview);
+    assert.equal(preview.textContent, '模型答复一');
+    assert.equal(preview.getAttribute('data-suggestion-preview'), 'model');
+  });
+
+  it('(c) with no hover and no selection the first model chip is the preview, and none without a model chip', () => {
+    const withModel = renderMergedChips();
+    assert.equal(previewOf(withModel)?.textContent, '模型答复一');
+
+    const habitsOnly = renderMergedChips({ chips: buildSuggestionChips({ habitChips: ['习惯一'] }) });
+    assert.equal(previewOf(habitsOnly) === null, true, 'a habit chip is never the fallback preview');
+  });
+
+  it('(d) moving the selection from the quoted chip to a model chip and back moves the preview', () => {
+    const view = render(element({ selectedIndex: 0 }));
+    assert.equal(previewOf(view)?.textContent, '> 选中的原文');
+
+    view.rerender(element({ selectedIndex: 1 }));
+    assert.equal(previewOf(view)?.textContent, '模型答复一');
+
+    view.rerender(element({ selectedIndex: 0 }));
+    assert.equal(previewOf(view)?.textContent, '> 选中的原文');
+  });
+});
+
 type MergedArgs = ReturnType<typeof baseSuggestionArgs> & {
   modelChips?: string[];
   quotedText?: string | null;
