@@ -469,6 +469,51 @@ export function measureViewportSize(container: HTMLElement): SvgViewportSize | n
 }
 
 /**
+ * The host's FULL box, padding included.
+ *
+ * `clientWidth`/`clientHeight` already cover padding, which is exactly the
+ * reading the fullscreen Fit needs: the overlay's available area is the whole
+ * viewport-sized host less its measured chrome, and the non-fullscreen
+ * reserved margin (the host's `p-3`/`p-1`) must not be subtracted from it.
+ * `measureViewportSize` is the content-box reading the ordinary layout uses.
+ */
+export function measureHostSize(host: HTMLElement): SvgViewportSize | null {
+  if (host.clientWidth > 0 && host.clientHeight > 0) {
+    return { width: host.clientWidth, height: host.clientHeight };
+  }
+  const rect = host.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 ? { width: rect.width, height: rect.height } : null;
+}
+
+/** The four CSS padding insets that make a host's content box equal `area`. */
+export type SvgFitAreaInsets = {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+};
+
+/**
+ * Translate a Fit area measured inside `host` into the host's padding.
+ *
+ * Writing these insets as the host's padding makes the flex centring, the
+ * scroll extent and `measureViewportSize` all agree with the overlay-free
+ * rectangle the solve used. With no overlays the area IS the host, so every
+ * inset is 0 — the fullscreen canvas reserves no margin of its own.
+ */
+export function fitAreaInsets(
+  host: SvgViewportSize,
+  area: { readonly left: number; readonly top: number; readonly width: number; readonly height: number },
+): SvgFitAreaInsets {
+  return {
+    top: Math.max(0, area.top),
+    right: Math.max(0, host.width - (area.left + area.width)),
+    bottom: Math.max(0, host.height - (area.top + area.height)),
+    left: Math.max(0, area.left),
+  };
+}
+
+/**
  * The imperative handle `PlantUmlGraph` keeps across renders. Every method that
  * changes the scale returns the scale actually applied; `attach` must be called
  * after each render because the renderer replaces the `<svg>` wholesale.
