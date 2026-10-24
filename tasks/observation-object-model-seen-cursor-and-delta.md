@@ -45,22 +45,22 @@ extra: {}
 
 ## Touches
 
-- server/modules/observation/index.ts
-- server/modules/observation/observation.module.ts
-- server/modules/observation/observation-store.ts
-- server/modules/observation/observation.routes.ts
-- server/modules/observation/observation-uri.ts
-- server/modules/observation/tests/observation-store.test.ts
-- server/modules/observation/tests/observation-routes.test.ts
-- server/modules/observation/producer-liveness.ts
-- server/modules/observation/tests/producer-liveness.test.ts
+- server/modules/observation/index.ts (new)
+- server/modules/observation/observation.module.ts (new)
+- server/modules/observation/observation-store.ts (new)
+- server/modules/observation/observation.routes.ts (new)
+- server/modules/observation/observation-uri.ts (new)
+- server/modules/observation/tests/observation-store.test.ts (new)
+- server/modules/observation/tests/observation-routes.test.ts (new)
+- server/modules/observation/producer-liveness.ts (new)
+- server/modules/observation/tests/producer-liveness.test.ts (new)
 - server/modules/database/migrations.ts
 - server/modules/database/schema.ts
-- server/modules/database/repositories/observation.repository.ts
+- server/modules/database/repositories/observation.repository.ts (new)
 - server/modules/cockpit/cockpit-hub.service.ts
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.test.ts
 - config/server.settings.example.json
-- src/modules/cockpit/observationUri.ts
-- src/modules/cockpit/tests/observationUri.test.ts
+- src/modules/cockpit/observationUri.ts (new)
+- src/modules/cockpit/tests/observationUri.test.ts (new)
 - tasks/observation-object-model-seen-cursor-and-delta.md
