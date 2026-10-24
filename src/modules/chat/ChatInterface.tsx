@@ -59,8 +59,15 @@ import {
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/transcript/chatExport';
+import {
+  findLatestReplyItems,
+  resolveReplyReference,
+} from '@/modules/chat/utils/transcript/replyItems';
 
 import { useRegisterTranscriptExport } from '@/shared/context/TranscriptExportContext';
+
+/** Stable empty list for a draft that points at no reply items. */
+const NO_REPLY_ORDINALS: readonly number[] = [];
 
 /**
  * A request id for a control frame.
@@ -810,6 +817,35 @@ function ChatInterface({
   });
 
   /**
+   * What the draft points at in the latest assistant reply.
+   *
+   * One derivation for both surfaces: the composer's preview line and the
+   * transcript's item highlight read this same reference, so they cannot
+   * disagree about which point 「1–2」 means. `findLatestReplyItems` answers
+   * null when the last reply has no numbered structure — the preview then says
+   * nothing rather than reaching back to an older reply.
+   */
+  const latestReplyItems = useMemo(
+    () => findLatestReplyItems(visibleMessages),
+    [visibleMessages],
+  );
+  const replyReference = useMemo(
+    () =>
+      latestReplyItems && input.trim()
+        ? resolveReplyReference(input, latestReplyItems.items)
+        : null,
+    [latestReplyItems, input],
+  );
+  /** The ordinals the draft names, for the transcript's highlight. */
+  const highlightedReplyOrdinals = useMemo(
+    () =>
+      replyReference && replyReference.kind === 'items'
+        ? replyReference.ordinals
+        : NO_REPLY_ORDINALS,
+    [replyReference],
+  );
+
+  /**
    * Leaves Live Voice, carrying what was heard but never delivered into the composer's draft.
    *
    * The words the model heard and never had sent to Claude go nowhere when the mode ends — the
@@ -1161,6 +1197,7 @@ function ChatInterface({
             onWithdrawResidentCommand={handleWithdrawResidentCommand}
             onEditMessage={supportsMessageEditing && !isProcessing ? beginEditMessage : undefined}
             onForkFromMessage={supportsSessionForking ? handleForkFromMessage : undefined}
+            highlightedReplyOrdinals={highlightedReplyOrdinals}
           />
         </MarkdownWorkspaceContext.Provider>
 
@@ -1337,6 +1374,8 @@ function ChatInterface({
           inputSuggestionListId={inputSuggestionListId}
           onAcceptInputSuggestion={acceptInputSuggestion}
           suggestionChips={suggestionChips}
+          replyReference={replyReference}
+          replyItems={latestReplyItems?.items}
           onAcceptModelSuggestion={acceptModelSuggestion}
           onAcceptQuotedSuggestion={acceptQuotedSuggestion}
           replySuggestionsEnabled={replySuggestionsEnabled}

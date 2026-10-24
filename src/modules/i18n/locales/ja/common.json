@@ -811,5 +811,12 @@
     "echoUnmatched": "「{{text}}」を実行できませんでした。",
     "echoUnmatchedNext": "プロジェクト名、「二番目」、「戻る」、「すべてのプロジェクト」を試してください。",
     "echoConfirm": "「{{text}}」を送信する前に確認してください。"
+  },
+  "replyReference": {
+    "item": "{{label}}「{{excerpt}}」",
+    "itemsRange": "{{from}}–{{to}} 番目",
+    "itemsList": "{{list}} 番目",
+    "wholeReply": "返信全体",
+    "mismatch": "最新の返信は {{count}} 項目しかありません"
   }
 }

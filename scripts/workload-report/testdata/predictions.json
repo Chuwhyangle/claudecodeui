@@ -1,0 +1,20 @@
+[
+  {
+    "id": "P1-cockpit-preview-share",
+    "metric": "cockpit_preview_share",
+    "direction": "up",
+    "threshold": 0.05
+  },
+  {
+    "id": "P1-observation-switch-share",
+    "metric": "observation_switch_share",
+    "direction": "down",
+    "threshold": 0.05
+  },
+  {
+    "id": "P2-progress-check-share",
+    "metric": "progress_check_share",
+    "direction": "down",
+    "threshold": 0.05
+  }
+]
