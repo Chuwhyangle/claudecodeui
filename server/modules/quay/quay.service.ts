@@ -274,6 +274,22 @@ export type QuayFleetProjectSummary = {
  * It deliberately carries no goal, in-flight or gantt section — those stay on the
  * lazy Tier-2 snapshot, which is only read when a project is opened.
  */
+/**
+ * The context-event stream's state, reported beside the fleet's own availability.
+ *
+ * Declared structurally here rather than imported from `modules/context-events`:
+ * the quay module must not acquire an inbound dependency on the stream module,
+ * and this reading is a plain value. The composition root binds the two.
+ */
+export type QuayContextEventsStatus = {
+  state: 'ok' | 'schema-unavailable';
+  reason: string | null;
+  schemaPath: string | null;
+  eventsDir: string;
+  writes: number;
+  rejected: number;
+};
+
 export type QuayFleetSummary = {
   projects: QuayFleetProjectSummary[];
   /**
@@ -290,6 +306,14 @@ export type QuayFleetSummary = {
   ttlPerProjectMs: number;
   /** `true` only when every project in the response came from the TTL cache. */
   cached: boolean;
+  /**
+   * The context-event writer's state ("the reading beside fleet-summary"), or
+   * `null` when the composition does not bind the stream at all. `schema-
+   * unavailable` is the honest state on a host whose fleet release predates the
+   * schema — the stream is then writing zero events, which is exactly what this
+   * field must say.
+   */
+  contextEvents: QuayContextEventsStatus | null;
 };
 
 
@@ -896,6 +920,12 @@ type QuayServiceDependencies = {
    * rather than guessing an identity.
    */
   fleetProjectIdResolver?: QuayFleetProjectIdResolver | null;
+  /**
+   * The context-event stream's current state, read beside the fleet reading in
+   * `getFleetSummary`. OPTIONAL so a criterion composing this service stays
+   * untouched; absent means the response says `contextEvents: null`.
+   */
+  readContextEventsStatus?: () => QuayContextEventsStatus;
 };
 
 type QuaySnapshotOptions = {
@@ -2262,6 +2292,9 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       generatedAt: new Date(dependencies.now()).toISOString(),
       ttlPerProjectMs: QUAY_FLEET_SUMMARY_TTL_MS,
       cached: projects.length > 0 && projects.every((project) => project.cached),
+      // Read after the fan-out, so the status is a fresh reading of the same
+      // request rather than a value captured at construction.
+      contextEvents: dependencies.readContextEventsStatus?.() ?? null,
     };
   };
 

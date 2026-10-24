@@ -26,7 +26,13 @@ export type {
   ReplySuggestionsProtocol,
   ReplySuggestionsSettingsSource,
 } from './reply-suggestions-settings.js';
-// consumer: server/modules/observation/session-digest-llm.ts (one usage record per digest
-// call, written to the same locally-owned JSONL ledger the chips use)
-export { createReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js';
-export type { ReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js';
+// consumer: server/index.ts (installs the context-event tap on the usage ledger); the
+// observation digest tier and the context-events wiring criterion share the same ledger.
+export {
+  createReplySuggestionsUsageLog,
+  setReplySuggestionsUsageObserver,
+} from './reply-suggestions-usage-log.js';
+export type {
+  ReplySuggestionsUsageLog,
+  ReplySuggestionsUsageRecord,
+} from './reply-suggestions-usage-log.js';
