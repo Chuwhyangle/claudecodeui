@@ -49,6 +49,8 @@ import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import ComposerPermissionMenu from '@/modules/chat/composer/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
+import { InlineQuoteChip } from '@/modules/chat/composer/InlineQuoteChip';
+import { useInlineQuoteChip } from '@/modules/chat/hooks/useInlineQuoteChip';
 import ReplyReferencePreview from '@/modules/chat/composer/ReplyReferencePreview';
 import { suggestionOptionId, truncateSuggestionLabel } from '@/modules/chat/utils/inputSuggestions';
 import type { ReplyItem, ReplyReference } from '@/modules/chat/utils/transcript/replyItems';
@@ -61,22 +63,6 @@ const LIVE_VOICE_NOTICE_MS = 4000;
 
 /** How long a failed Suggest draw keeps its visible failure reading before recovering. */
 const REPLY_SUGGEST_FAILURE_DISPLAY_MS = 3000;
-
-/**
- * The row a non-empty box reserves under the chip strip.
- *
- * The strip is an absolute overlay (`top-0`, `py-2`) holding 24px chips, and the
- * preview line below them ends at 44px. A 48px flow spacer (`h-12`) starts the
- * textarea below both. A spacer rather than textarea padding: the textarea's
- * auto-grow height is computed from `scrollHeight` when its value changes, which
- * is BEFORE this state's class lands — padding applied after that measurement
- * left the box too short and the browser scrolled the text back under the strip.
- * The overlay gets the same 48px (`pt-12`) so a dictation wash stays on the words
- * it covers. Both are applied only while text is present; the empty-box layout,
- * which the strip was designed for, keeps its original padding.
- */
-const CHIP_ROW_CLEARANCE_SPACER_CLASS = 'h-12';
-const CHIP_ROW_CLEARANCE_PADDING_CLASS = 'pt-12';
 
 /**
  * The viewport width, in CSS pixels, below which the compact footer drops the clear control.
@@ -636,6 +622,26 @@ export default function ChatComposer({
     && voiceRange.end <= input.length
     ? voiceRange
     : null;
+
+  // The quoted chip while the box holds text: it is drawn in the text flow at the
+  // caret instead of the chip row above the box. The chip row already exists only
+  // while a live selection draws it, so the chip's presence IS the selection's.
+  const composerBodyRef = useRef<HTMLDivElement>(null);
+  const inputMirrorRef = useRef<HTMLDivElement>(null);
+  const quotedChip = chipStrip?.chips.find((chip) => chip.source === 'quoted') ?? null;
+  const inlineQuoteChip = useInlineQuoteChip({
+    input,
+    chip: quotedChip,
+    // A listen owns the box: the chip row is the right shape there, and the
+    // provisional wash must keep its own layout. Any non-idle listen ends the
+    // inline mode at once — waiting for the first committed range would leave
+    // the chip in the flow while the microphone is already live.
+    enabled: voiceState === 'idle',
+    textareaRef,
+    mirrorRef: inputMirrorRef,
+    bodyRef: composerBodyRef,
+  });
+  const inlineChipActive = inlineQuoteChip.active;
   // Starting the next recording is the user answering the last failure, so it dismisses the notice.
   // Wrapped here rather than inside the button because the failing attempt's message is the
   // composer's state: the button renders what it is handed and owns no memory of the last failure.
@@ -680,10 +686,6 @@ export default function ChatComposer({
   // placeholder is blank so the two are not drawn over each other; the chips
   // themselves are absolutely positioned and add no row. One listbox carries all
   // three sources, so the strip reads a single prop.
-  // The strip overlays the box. It only needs clearance while the box holds text:
-  // the quoted chip is the one chip allowed then, and without room made for the
-  // row it covers the first line of the quote. The empty-box layout is unchanged.
-  const chipRowOverText = showSuggestionChips && input !== '';
   const canQueueDraft = isLoading && Boolean(input.trim() || attachedFiles.length > 0);
   // The same button press, two different outcomes. For a per-run session the text waits in this
   // client's queue until the turn ends, which is why the button becomes a queue arrow and the hint
@@ -1012,30 +1014,55 @@ export default function ChatComposer({
             which would put the floor back. The body still stacks its own children — the textarea,
             and the replay row when the tier moves it in here.
           */}
-          <PromptInputBody className={areToolsInline ? 'flex min-w-0 flex-col' : undefined}>
-            {chipRowOverText && (
-              // A flow row, not textarea padding: see CHIP_ROW_CLEARANCE_SPACER_CLASS.
-              // It is what keeps the first line of a filled quote out from under the strip.
-              <div
-                data-slot="chip-row-clearance"
-                aria-hidden="true"
-                className={CHIP_ROW_CLEARANCE_SPACER_CLASS}
-              />
-            )}
+          <PromptInputBody
+            ref={composerBodyRef}
+            className={areToolsInline ? 'flex min-w-0 flex-col' : undefined}
+          >
+            {/*
+              The overlay is the textarea's own text, drawn transparently, so it can carry a
+              background the textarea itself cannot — except while the quoted chip is in the
+              text flow: then the mirror IS the visible text layer and the textarea's own text is
+              hidden, because only this layer can render an element that pushes the following
+              text aside. The chip's placeholder sits between the two halves at the caret, and
+              the scrollbar compensation keeps both layers wrapping at the same width.
+            */}
             <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
-              <div className={cn(
-                'chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-sm leading-6 text-transparent',
-                // Mirrors the spacer so a dictation wash lands on the words it covers.
-                chipRowOverText && CHIP_ROW_CLEARANCE_PADDING_CLASS,
-              )}>
-                {/*
-                  The overlay is the textarea's own text, drawn transparently, so it can carry a
-                  background the textarea itself cannot. The provisional span splits it into the
-                  user's own draft, the words this listen committed, and the draft after them — the
-                  middle one gets the low-contrast wash, and `box-decoration-clone` keeps it on every
-                  line a wrapped dictation covers.
-                */}
-                {provisionalVoiceRange ? (
+              <div
+                ref={inputMirrorRef}
+                className={cn(
+                  'chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-sm leading-6',
+                  inlineChipActive ? 'text-foreground' : 'text-transparent',
+                )}
+                style={inlineChipActive && inlineQuoteChip.scrollbarWidth > 0
+                  ? { paddingRight: `calc(1rem + ${inlineQuoteChip.scrollbarWidth}px)` }
+                  : undefined}
+              >
+                {inlineChipActive ? (
+                  <>
+                    {renderInputWithMentions(inlineQuoteChip.before)}
+                    <span
+                      data-slot="inline-quote-chip-spacer"
+                      ref={inlineQuoteChip.spacerRef}
+                      aria-hidden="true"
+                      // Inline-block: it participates in the text flow and, when the line has
+                      // no room left, wraps to the next line as one unit. The height matches
+                      // the line box so the placeholder never grows the line it sits on; the
+                      // real button is drawn over this box.
+                      className="inline-block align-top"
+                      style={{
+                        width: inlineQuoteChip.spacerWidth > 0 ? inlineQuoteChip.spacerWidth : undefined,
+                        height: '1.5rem',
+                      }}
+                    />
+                    {renderInputWithMentions(inlineQuoteChip.after)}
+                  </>
+                ) : provisionalVoiceRange ? (
+                  /*
+                    The provisional span splits it into the user's own draft, the words this
+                    listen committed, and the draft after them — the middle one gets the
+                    low-contrast wash, and `box-decoration-clone` keeps it on every line a
+                    wrapped dictation covers.
+                  */
                   <>
                     {renderInputWithMentions(input.slice(0, provisionalVoiceRange.start))}
                     <span
@@ -1058,13 +1085,19 @@ export default function ChatComposer({
               onClick={onTextareaClick}
               onKeyDown={onTextareaKeyDown}
               onPaste={onTextareaPaste}
-              onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
+              onScroll={(event) => {
+                onTextareaScrollSync(event.target as HTMLTextAreaElement);
+                inlineQuoteChip.reposition();
+              }}
               onFocus={() => onInputFocusChange?.(true)}
               onBlur={() => onInputFocusChange?.(false)}
               onInput={onTextareaInput}
+              // Marks the one mode in which the textarea's own text is hidden and the
+              // mirror layer carries it instead (see `useInlineQuoteChip`).
+              data-inline-chip-mode={inlineChipActive ? 'true' : undefined}
               placeholder={showSuggestionChips ? '' : placeholder}
               aria-activedescendant={
-                showSuggestionChips && chipStripSelectedIndex !== null
+                showSuggestionChips && !inlineChipActive && chipStripSelectedIndex !== null
                   ? suggestionOptionId(chipStripListId, chipStripSelectedIndex)
                   : undefined
               }
@@ -1082,7 +1115,24 @@ export default function ChatComposer({
               // can be sent until the job is stopped.
               disabled={isOccupied}
             />
-            {showSuggestionChips && chipStrip && (
+            {/*
+              The real chip for the inline mode. The mirror layer above is
+              `aria-hidden`; this button is what assistive tech and the pointer
+              reach, drawn over the placeholder's box.
+            */}
+            {inlineChipActive && quotedChip && chipStrip && (
+              <InlineQuoteChip
+                chip={quotedChip}
+                chipRef={inlineQuoteChip.chipRef}
+                position={inlineQuoteChip.position}
+                onAccept={chipStrip.onAccept}
+              />
+            )}
+            {/* The strip is an EMPTY-box affordance. A non-empty box draws its quoted
+                chip in the text flow instead; when the inline mode cannot run (a listen
+                owns the box, or one just committed text) the strip must not fall back
+                over the words — there is no reserved row for it any more. */}
+            {showSuggestionChips && chipStrip && !inlineChipActive && input === '' && (
               <InputSuggestionChips
                 listId={chipStripListId}
                 chips={chipStrip.chips}

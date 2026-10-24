@@ -29,6 +29,24 @@ import type { Project, ProjectSession } from '@/shared/types';
  */
 const SAFARI_IME_RACE_WINDOW_MS = 30;
 
+/** One line's worth of pixels; a box never shrinks below a single line. */
+const MIN_TEXTAREA_HEIGHT_PX = 22;
+
+/**
+ * Writes the box's natural (content-driven) height onto the element.
+ *
+ * `height: auto` first, because a textarea's `scrollHeight` includes any height
+ * already written to it; then the measured value. Shared with the inline quote
+ * chip, which takes the box out of this rule while the chip is in flow and has
+ * to hand it back to the same one when the chip leaves.
+ */
+export function applyNaturalTextareaHeight(target: HTMLTextAreaElement): number {
+  target.style.height = 'auto';
+  const nextHeight = Math.max(MIN_TEXTAREA_HEIGHT_PX, target.scrollHeight);
+  target.style.height = `${nextHeight}px`;
+  return nextHeight;
+}
+
 type UseTextareaInteractionStateArgs = {
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
@@ -173,9 +191,7 @@ export function useTextareaInteractionState({
   }, []);
 
   const resizeTextarea = useCallback((target: HTMLTextAreaElement) => {
-    target.style.height = 'auto';
-    const nextHeight = Math.max(22, target.scrollHeight);
-    target.style.height = `${nextHeight}px`;
+    const nextHeight = applyNaturalTextareaHeight(target);
 
     let lineHeight = textareaLineHeightRef.current;
     if (!lineHeight) {

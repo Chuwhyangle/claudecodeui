@@ -282,18 +282,17 @@ describe('composer wiring', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The strip is an overlay: a non-empty box must not have its first line under it
+// A quoted chip over a non-empty box lives IN the text flow, not in the strip
 // ---------------------------------------------------------------------------
 
 /**
- * The flow row the composer reserves so the first text line starts below the
- * strip. A spacer rather than textarea padding: the textarea's auto-grow height
- * is measured before a padding class can land, so padding left the box short and
- * the browser scrolled the text back under the chips. A spacer is applied before
- * that measurement and cannot be undone by it.
+ * The chip that used to sit in the strip above a filled box now has its own mode:
+ * the mirror layer becomes the visible text layer, the chip is an inline-block
+ * placeholder in that text, and a real button is drawn over the placeholder. The
+ * strip above the box is drawn only when the box is empty.
  */
-const CLEARANCE_SELECTOR = '[data-slot="chip-row-clearance"]';
-const CLEARANCE_HEIGHT_CLASS = /(^|\s)h-12(\s|$)/u;
+const INLINE_CHIP_SELECTOR = '[data-slot="inline-quote-chip"]';
+const INLINE_SPACER_SELECTOR = '[data-slot="inline-quote-chip-spacer"]';
 
 const quotedChips = () => buildSuggestionChips({ quotedText: '选中的原文' });
 
@@ -306,16 +305,21 @@ const renderComposerOverStrip = (overrides: Record<string, unknown> = {}) => ren
   } as unknown as React.ComponentProps<typeof ChatComposer>,
 ));
 
-describe('chip row clearance over a non-empty box', () => {
-  it('(a) reserves the chip row above the text while a quoted chip shows', () => {
+describe('a quoted chip over a non-empty box', () => {
+  it('(a) draws it in the text flow: a real button over the mirror placeholder', () => {
     const view = renderComposerOverStrip({ input: '选中的原文\n\n' });
 
     const textarea = view.container.querySelector('textarea');
     assert.ok(textarea, 'the composer must render a textarea');
-    const spacer = view.container.querySelector<HTMLElement>(CLEARANCE_SELECTOR);
-    assert.ok(spacer, 'the box must reserve a row for the strip while text is present');
-    assert.match(spacer.className, CLEARANCE_HEIGHT_CLASS, 'the reserved row is 48px, clearing the 40px chips and the 44px preview');
-    assert.ok(view.getByRole('listbox'), 'a live selection still draws the quoted chip over a non-empty box');
+    const button = view.container.querySelector<HTMLElement>(INLINE_CHIP_SELECTOR);
+    assert.ok(button, 'the quoted chip is drawn in the text flow while the box holds text');
+    assert.equal(button.getAttribute('data-chip-source'), 'quoted');
+    assert.ok(
+      view.container.querySelector(INLINE_SPACER_SELECTOR),
+      'the mirror layer carries the placeholder the button is drawn over',
+    );
+    assert.equal(textarea.getAttribute('data-inline-chip-mode'), 'true');
+    assert.equal(view.queryByRole('listbox') === null, true, 'the strip has nothing left to draw');
   });
 
   it('(b) leaves the empty-box layout unchanged', () => {
@@ -326,12 +330,18 @@ describe('chip row clearance over a non-empty box', () => {
 
     const textarea = view.container.querySelector('textarea');
     assert.ok(textarea);
-    assert.equal(view.container.querySelector(CLEARANCE_SELECTOR) === null, true, 'the empty box reserves no row');
+    assert.equal(
+      view.container.querySelector(INLINE_CHIP_SELECTOR) === null,
+      true,
+      'the empty box has no inline chip',
+    );
+    assert.ok(view.getByRole('listbox'), 'the empty box keeps the chip row');
   });
 
-  it('(c) a chip over a filled box keeps the row and the text clearance', () => {
+  it('(c) moves from the chip row into the text flow as the box gains text', () => {
     const view = renderComposerOverStrip({ input: '' });
-    assert.equal(view.container.querySelector(CLEARANCE_SELECTOR) === null, true);
+    assert.ok(view.getByRole('listbox'));
+    assert.equal(view.container.querySelector(INLINE_CHIP_SELECTOR) === null, true);
 
     view.rerender(React.createElement(ChatComposer, {
       ...composerBaseProps(),
@@ -339,9 +349,31 @@ describe('chip row clearance over a non-empty box', () => {
       chipStrip: baseChipStrip({ chips: quotedChips() }),
     } as unknown as React.ComponentProps<typeof ChatComposer>));
 
-    const spacer = view.container.querySelector(CLEARANCE_SELECTOR);
-    assert.ok(spacer, 'the filled quote gets the reserved row');
-    assert.match(spacer.className, CLEARANCE_HEIGHT_CLASS);
-    assert.ok(view.getByRole('listbox'), 'the strip keeps its reserved row while a chip shows');
+    assert.ok(view.container.querySelector(INLINE_CHIP_SELECTOR), 'the filled quote moves into the text flow');
+    assert.equal(view.queryByRole('listbox') === null, true, 'nothing remains in the strip');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Deleting the reserved 48px row must not change the empty-box layout at all
+// ---------------------------------------------------------------------------
+
+describe('empty-box layout', () => {
+  it('keeps the textarea and mirror class lists byte-for-byte unchanged', () => {
+    const view = renderComposerOverStrip({ input: '' });
+
+    const textarea = view.container.querySelector('textarea');
+    assert.ok(textarea);
+    const mirror = view.container.querySelector('div.chat-input-placeholder');
+    assert.ok(mirror);
+
+    assert.equal(
+      textarea.className,
+      'chat-input-placeholder block max-h-[40vh] w-full resize-none overflow-y-auto bg-transparent px-4 py-2 text-sm leading-6 text-foreground placeholder-muted-foreground/50 focus:outline-none sm:max-h-[min(300px,45vh)]',
+    );
+    assert.equal(
+      mirror.className,
+      'chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-sm leading-6 text-transparent',
+    );
   });
 });
