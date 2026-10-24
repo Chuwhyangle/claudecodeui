@@ -111,3 +111,11 @@ extra: {}
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/quay-pulse-strip-compact-health-view.md
+
+## Blocker
+
+**2026-10-24T14:36:52.346Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=92400 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792852106563
+- run_id：wk-prod-anchor
+- session_id：f3822078-3a84-4016-9b96-21d79e88bb7e
