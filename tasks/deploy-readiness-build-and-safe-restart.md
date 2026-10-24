@@ -1,0 +1,78 @@
+---
+id: deploy-readiness-build-and-safe-restart
+title: 委托阶梯第一次晋级：部署就绪读数 + 一键「构建并安全重启」（需确认）+ 重启后自动核验
+status: todo
+labels:
+  - cockpit
+  - ops
+  - delegation
+parent: null
+children: []
+extra: {}
+---
+## Proposal
+
+决策出处：`docs/proposals/context-layers-and-delegation-ladder.md` 的 P2「第一次晋级」，用户 2026-10-24 确认立项。探针显示「构建 / 重启」占用户全部话语的 10%（116 个会话、1982 条中有 198 条），而且常常连发两次（重启后再问「重启成功了吗」）；「当前运行的版本包括驾驶舱的变更吗」「实际接线可用了吗」也是同一类问题。根因是系统看不到自己的部署状态，于是人只能一遍遍地问、再手动去做。本任务把这一类操作从「你自己做」升到「系统做、你确认」。
+
+现状实读（2026-10-24）：
+- `/health` 已经返回 `buildSha` / `builtAt`（`server/index.ts`，来源是构建时写入的 `dist-server/build-info.json`）。
+- `scripts/check-deploy-freshness.mjs` 只是手动运行的检测器，判断运行中的构建落后某个 ref 多少。
+- `scripts/restart-server-detached.sh` 是安全重启：在独立的 transient unit 里执行，所有前置检查都在 stop 之前完成，启动失败会重试一次，并给出明确的结论。
+- 前端 `dist/` 没有构建指纹，只有服务端有。
+
+方案：
+1. **部署就绪读数**（服务端新服务 `server/modules/system/deploy-readiness.service.ts`）：比较三个 sha——运行中的服务端（BUILD_INFO）、磁盘上已构建的产物（`dist-server/build-info.json` 以及新增的 `dist/build-info.json`）、检出的 HEAD。从中得出状态：`fresh` / `pending-build`（N 个提交触及 `src/` 或 `server/`，列出提交标题和它们对应的任务 id）/ `built-pending-restart` / `building` / `restarting` / `unknown`（例如开发模式没有指纹）。只读，有短 TTL 缓存。
+2. **前端构建指纹**：新增 `scripts/write-client-build-info.mjs`，作为 `build:client` 的最后一步写入 `dist/build-info.json`（gitSha、builtAt），格式与服务端一致。
+3. **一个动作：「构建并安全重启」**（`POST /api/system/deploy`，需要认证）：先在独立的 transient unit 中执行 `npm run build`，避免和服务进程同处一个 cgroup；成功后调用 `scripts/restart-server-detached.sh --delay 5`。构建失败时**不重启**，失败原因（哪一步、最后若干行输出）写回读数里。重启前把「期望的目标 sha」记到一个本地状态文件。
+4. **重启后自动核验**：新进程启动后读取该状态文件，逐项核对——运行中的 buildSha 是否等于目标 sha、fleet 握手状态（`fleet-summary` 的 `fleet.state`）、几个关键路由（`/`、`/cockpit`、`/api/quay/fleet-summary`）是否返回 200——然后把结果写进读数（`lastDeploy: {targetSha, ok, checks[], at}`）。不再需要人问「重启成功了吗」。
+5. **界面**：
+   - 驾驶舱常驻一条部署状态：「N 个变更待生效 · [构建并重启]」/「已构建，待重启」/「构建中…」/「最近一次部署：abc123 · 核验通过 · 2 分钟前」。
+   - 点击后弹出确认面板，列出将生效的提交与任务，并提示「重启期间页面会断开数秒」；**必须确认才执行**（离散确认，不接受语音的「是」）。
+   - 会话页顶部在状态不是 fresh 时显示同一条的紧凑版。
+6. 事件留出接缝：构建完成、重启完成、核验结果都通过一个可注入的回调发出（默认什么也不做），之后统一接入主机级上下文事件流。
+
+## AC
+
+- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/system/tests/deploy-readiness.test.ts` exit 0——用桩 git 和桩指纹：三个 sha 相等 ⇒ fresh；HEAD 领先且有提交触及 `src/` 或 `server/` ⇒ pending-build，并列出这些提交；只触及 `docs/` 或 `tasks/` ⇒ fresh；已构建产物的 sha 等于 HEAD 但运行中的不等 ⇒ built-pending-restart；没有指纹 ⇒ unknown。
+- [ ] AC2: 同一测试文件——`POST /api/system/deploy`：构建桩失败 ⇒ 重启桩调用 0 次，读数里带失败步骤和输出尾部；构建成功 ⇒ 重启桩恰好调用 1 次，参数含 `--delay`；未认证 ⇒ 401。
+- [ ] AC3: 同一测试文件——启动核验：状态文件里的目标 sha 等于运行中的 sha 且各检查项为 200 ⇒ `lastDeploy.ok === true`；sha 不等 ⇒ ok 为 false，并在 checks 中指明是哪一项；没有状态文件 ⇒ 不产生 lastDeploy。
+- [ ] AC4: `node --test scripts/write-client-build-info.test.mjs` exit 0——在临时目录里写出的 `build-info.json` 字段与服务端格式一致。
+- [ ] AC5: `npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` exit 0——各状态的文案和按钮正确；点击「构建并重启」只打开确认面板，确认之前 deploy 请求为 0 次，确认后恰好 1 次；fresh 状态下会话页不显示紧凑条。
+- [ ] AC6: 文案覆盖 12 个 locale；`npm run typecheck` 通过。
+
+## DoD
+
+- **MCP 浏览器（或独立 Playwright）实际操作 + 截图（必做）**：在隔离实例（复制的数据库、独立端口，关闭 residentRestore）上截图 pending-build、确认面板、核验结果三种状态；隔离实例的重启使用桩，不碰 :3001。截图存 `tmp/` 并在任务中贴出。
+- 在真实 :3001 上只读取部署就绪读数（不执行 deploy），贴出读数并与 `scripts/check-deploy-freshness.mjs` 的结论对照。
+- 真实 :3001 上的第一次「构建并重启」由用户在界面上亲手点击触发；执行者如实写明这一步留给用户（待外部）
+
+## Touches
+
+- server/modules/system/deploy-readiness.service.ts (new)
+- server/modules/system/tests/deploy-readiness.test.ts (new)
+- server/modules/system/system.routes.ts
+- server/modules/system/system.service.ts
+- server/modules/system/system.module.ts
+- server/index.ts
+- scripts/write-client-build-info.mjs (new)
+- scripts/write-client-build-info.test.mjs (new)
+- package.json
+- src/modules/cockpit/DeployReadiness.tsx (new)
+- src/modules/cockpit/tests/DeployReadiness.test.tsx (new)
+- src/modules/cockpit/CockpitPage.tsx
+- src/modules/cockpit/index.ts
+- src/modules/chat/ChatInterface.tsx
+- src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
+- src/modules/i18n/locales/de/common.json
+- src/modules/i18n/locales/en/common.json
+- src/modules/i18n/locales/es/common.json
+- src/modules/i18n/locales/fr/common.json
+- src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/it/common.json
+- src/modules/i18n/locales/ja/common.json
+- src/modules/i18n/locales/ko/common.json
+- src/modules/i18n/locales/ru/common.json
+- src/modules/i18n/locales/tr/common.json
+- src/modules/i18n/locales/zh-CN/common.json
+- src/modules/i18n/locales/zh-TW/common.json
+- tasks/deploy-readiness-build-and-safe-restart.md
