@@ -1,7 +1,7 @@
 ---
 id: deploy-readiness-build-and-safe-restart
 title: 委托阶梯第一次晋级：部署就绪读数 + 一键「构建并安全重启」（需确认）+ 重启后自动核验
-status: todo
+status: ready
 labels:
   - cockpit
   - ops
