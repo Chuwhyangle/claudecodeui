@@ -38,6 +38,8 @@ extra: {}
 - server/modules/quay/quay.routes.ts
 - server/modules/quay/tests/counter-voice.test.ts
 - config/server.settings.example.json
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
 - src/modules/cockpit/DecisionQueue.tsx
 - src/modules/cockpit/tests/DecisionQueue.test.tsx
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
