@@ -39,6 +39,7 @@ import {
 
 import {
   FLEET_CLI_CONTRACTS,
+  INITIATIVE_SHOW_SHAPE,
   validateShape,
   WALL_RESOLVE_SHAPE,
   type FleetCliContract,
@@ -66,6 +67,22 @@ const PROBE_SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
 /** The project id used when the real registry has no usable row (a temporary home is seeded). */
 const FALLBACK_PROJECT_ID = 'claudecodeui';
+
+/** The initiative the WRITING contracts create (and then decide) inside a temporary home. */
+const PROBE_INITIATIVE_SLUG = 'contract-probe-initiative';
+
+/**
+ * A charter the fleet accepts verbatim, passed as one argv element (execFile, no shell).
+ * `create` only ever runs against a temporary home, so this never lands in the operator's store.
+ */
+const PROBE_INITIATIVE_CHARTER = JSON.stringify({
+  intent: 'contract probe: exercise the initiative CLI shapes',
+  projects: [FALLBACK_PROJECT_ID],
+  completionCriteria: 'the create/decide answers validate against the declarations',
+  grantScope: { mayDecide: ['task-split'], mustEscalate: ['release'] },
+  exitConditions: 'the probe home is removed at the end of the run',
+  expiresAt: '2026-12-31',
+});
 
 /** The fleet home the operator configured; `QUAY_FLEET_HOME` wins over the default. */
 const REAL_FLEET_HOME = process.env.QUAY_FLEET_HOME?.trim() || path.join(os.homedir(), '.quay-fleet');
@@ -206,6 +223,80 @@ function stampRealRegistry(): RegistryStamp {
   }
 }
 
+//----------------- whole-home stamp (AC3) ------------
+
+/** One regular file's identity for AC3: its mtime alone would miss a same-timestamp rewrite. */
+type HomeFileStamp = { mtimeMs: number; size: number };
+
+/**
+ * The files the RESIDENT fleet service rewrites on its own schedule.
+ *
+ * AC3 says the home's files must not move during the run. Taken literally that is a race with the
+ * service: it rewrites `heartbeat.json` and its ledgers every 60s tick, so a literal whole-home
+ * assertion would red roughly once every dozen runs without anything in this suite being wrong.
+ * The guard therefore EXEMPTS exactly these service-owned files and requires every other file —
+ * including `registry.json`, `initiatives.json` and the decision ledger — to stay identical.
+ * `ledgers/` and `acceptance-windows/` are wholly service/operator written, so they are matched by
+ * prefix; the initiative decision ledger is checked separately below.
+ */
+const RESIDENT_SERVICE_FILES = new Set([
+  'attention.json',
+  'bridge-deliveries.v0.json',
+  'decisions.jsonl',
+  'events.jsonl',
+  'filter-state.json',
+  'heartbeat.json',
+  'inbox.lock',
+  'last-snapshot.json',
+  'needs-human-autoresume-log.jsonl',
+  'needs-human-autoresume-resume-cap.json',
+  'notification-bridge.v0.json',
+  'notification-pipeline.v0.json',
+  'outbox.jsonl',
+  'phases.jsonl',
+  'receipts.jsonl',
+  'resolution-cases.jsonl',
+  'service.out',
+  'service.pid',
+  'state.json',
+  'wake-state.json',
+]);
+
+function isResidentServiceFile(file: string): boolean {
+  return RESIDENT_SERVICE_FILES.has(file)
+    || file.startsWith('ledgers/')
+    || file.startsWith('acceptance-windows/');
+}
+
+/** Every regular file under the fleet home, keyed by relative path. */
+function stampFleetHome(home: string): Map<string, HomeFileStamp> {
+  const stamps = new Map<string, HomeFileStamp>();
+  const walk = (directory: string, prefix: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const relative = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute, relative);
+      } else if (entry.isFile()) {
+        try {
+          const stat = fs.statSync(absolute);
+          stamps.set(relative, { mtimeMs: stat.mtimeMs, size: stat.size });
+        } catch {
+          // Vanished between readdir and stat — simply not stamped.
+        }
+      }
+    }
+  };
+  walk(home, '');
+  return stamps;
+}
+
 /** The project row a read contract addresses; `root` must exist because `wall summary` opens it. */
 type RegistryRow = { id: string; root: string };
 
@@ -222,6 +313,18 @@ function isUsableRegistryRow(value: unknown): value is RegistryRow {
   }
 }
 
+/** The first slug in an `initiative list --json` document, or `null` when it lists none. */
+function firstInitiativeSlug(document: Record<string, unknown> | null): string | null {
+  const rows = document?.initiatives;
+  if (!Array.isArray(rows)) return null;
+  for (const row of rows) {
+    if (row === null || typeof row !== 'object') continue;
+    const slug = (row as { slug?: unknown }).slug;
+    if (typeof slug === 'string' && slug !== '') return slug;
+  }
+  return null;
+}
+
 /** Where the read contracts point: the operator's real registry when it has a usable row. */
 type ReadContext = {
   context: FleetCliContractContext;
@@ -230,33 +333,56 @@ type ReadContext = {
 
 async function resolveReadContext(binPath: string): Promise<ReadContext> {
   const env = { ...process.env };
-  const listed = await runFleet(binPath, ['registry', 'list', '--json'], env);
-  if (listed.ok) {
-    const document = parseJsonDocument(listed.stdout);
-    const rows = document?.projects;
-    if (Array.isArray(rows)) {
-      const row = rows.find(isUsableRegistryRow);
-      if (row !== undefined) {
-        return {
-          context: { project: row.id, projectRoot: row.root, taskId: PROBE_TASK_ID, sessionId: PROBE_SESSION_ID },
-          env,
-        };
-      }
-    }
+
+  // The read contracts address BOTH a project (registry row) and an initiative (slug). Each is a
+  // reading of the operator's home; the shapes can only be exercised when both exist there.
+  const [listed, initiatives] = await Promise.all([
+    runFleet(binPath, ['registry', 'list', '--json'], env),
+    runFleet(binPath, ['initiative', 'list', '--json'], env),
+  ]);
+  const rows = listed.ok ? parseJsonDocument(listed.stdout)?.projects : undefined;
+  const row = Array.isArray(rows) ? rows.find(isUsableRegistryRow) : undefined;
+  const slug = initiatives.ok ? firstInitiativeSlug(parseJsonDocument(initiatives.stdout)) : null;
+
+  if (row !== undefined && slug !== null) {
+    return {
+      context: {
+        project: row.id,
+        projectRoot: row.root,
+        taskId: PROBE_TASK_ID,
+        sessionId: PROBE_SESSION_ID,
+        initiativeSlug: slug,
+        initiativeCharter: PROBE_INITIATIVE_CHARTER,
+      },
+      env,
+    };
   }
 
-  // No real registry row this test may address: seed a temporary one so the SHAPES are still
-  // exercised. The temporary home is what the read verbs then read; nothing of the operator's
-  // home is involved.
+  // No usable real registry row or no real initiative: seed a temporary home with BOTH so the
+  // SHAPES are still exercised with the same verbs. Nothing of the operator's home is written.
   const home = createTemporaryFleetHome(FALLBACK_PROJECT_ID);
+  const temporaryEnv: NodeJS.ProcessEnv = { ...process.env, QUAY_FLEET_HOME: home };
+  const seeded = await runFleet(
+    binPath,
+    ['initiative', 'create', PROBE_INITIATIVE_SLUG, '--charter', PROBE_INITIATIVE_CHARTER, '--json'],
+    temporaryEnv,
+  );
+  assert.equal(
+    seeded.ok,
+    true,
+    `could not seed an initiative in ${home}; the initiative read contexts cannot be exercised — `
+    + `${seeded.error ?? seeded.stderr.trim()}`,
+  );
   return {
     context: {
       project: FALLBACK_PROJECT_ID,
       projectRoot: REPO_ROOT,
       taskId: PROBE_TASK_ID,
       sessionId: PROBE_SESSION_ID,
+      initiativeSlug: PROBE_INITIATIVE_SLUG,
+      initiativeCharter: PROBE_INITIATIVE_CHARTER,
     },
-    env: { ...process.env, QUAY_FLEET_HOME: home },
+    env: temporaryEnv,
   };
 }
 
@@ -267,6 +393,9 @@ const binPath = location.binPath;
 
 /** Captured BEFORE any fleet invocation so the AC4 guard covers the whole run. */
 const registryStampBefore = stampRealRegistry();
+
+/** Captured at the same moment; AC3 compares the whole real home against this at the end. */
+const fleetHomeStampBefore = stampFleetHome(REAL_FLEET_HOME);
 
 after(() => {
   for (const home of temporaryHomes) {
@@ -346,7 +475,9 @@ if (binPath === null) {
   test('writing contracts run only against a temporary fleet home', { skip: handshakeOk ? false : handshakeSkip }, async (t) => {
     const home = createTemporaryFleetHome(readContext.context.project);
     const env: NodeJS.ProcessEnv = { ...process.env, QUAY_FLEET_HOME: home };
-    const context = readContext.context;
+    // The temporary home is empty, so the writing contracts address the probe initiative `create`
+    // stores there — never the operator's real slug.
+    const context: FleetCliContractContext = { ...readContext.context, initiativeSlug: PROBE_INITIATIVE_SLUG };
 
     for (const contract of writeContracts) {
       assertTemporaryHome(contract, env);
@@ -374,6 +505,22 @@ if (binPath === null) {
         assert.equal(document?.interfaceSessionId, null, `${contract.id}: clear must leave nothing pinned`);
       }
 
+      // The initiative write shapes are allowed to be permissive about members/edges; these are
+      // the verb's own guarantees (a fresh initiative is empty, and `--by human` derives `fact`).
+      if (contract.id === 'initiative-create') {
+        const initiative = document?.initiative as Record<string, unknown> | undefined;
+        assert.equal(initiative?.slug, PROBE_INITIATIVE_SLUG, `${contract.id}: the answer must name the created slug`);
+        assert.equal(initiative?.status, 'active', `${contract.id}: a fresh initiative is active`);
+        assert.deepEqual(initiative?.members, [], `${contract.id}: a fresh initiative has no members`);
+        assert.deepEqual(initiative?.edges, [], `${contract.id}: a fresh initiative has no edges`);
+      }
+      if (contract.id === 'initiative-decide') {
+        const decision = document?.decision as Record<string, unknown> | undefined;
+        assert.equal(decision?.by, 'human', `${contract.id}: --by human must be read back`);
+        assert.equal(decision?.kind, 'fact', `${contract.id}: --by human derives kind:fact`);
+        assert.equal(decision?.chosen, 'yes', `${contract.id}: the chosen option must be read back`);
+      }
+
       t.diagnostic(`contract ${contract.id}: quay-fleet ${argv.join(' ')} — shape ok on temporary home`);
     }
 
@@ -386,6 +533,22 @@ if (binPath === null) {
     const getDocument = parseJsonDocument(getResult.stdout);
     assertShape('registry-interface-session-get (temporary home)', getDocument, getContract.shape);
     assert.equal(getDocument?.interfaceSessionId, null, 'clear must be visible through get');
+
+    // …and the initiative half through `show`: create + decide must be readable back as one
+    // initiative with exactly the one decision the writing contract appended.
+    const showContract = readContracts.find((contract) => contract.id === 'initiative-show');
+    assert.ok(showContract !== undefined, 'the initiative-show contract must be declared');
+    const showResult = await runFleet(binPath, showContract.argv(context), env);
+    assert.equal(showResult.ok, true, `post-write initiative show failed: ${showResult.error ?? showResult.stderr.trim()}`);
+    const showDocument = parseJsonDocument(showResult.stdout);
+    assertShape('initiative-show (temporary home)', showDocument, showContract.shape);
+    const shownInitiative = showDocument?.initiative as Record<string, unknown> | undefined;
+    assert.equal(shownInitiative?.slug, PROBE_INITIATIVE_SLUG, 'create must be visible through show');
+    assert.equal(
+      Array.isArray(showDocument?.decisions) ? showDocument.decisions.length : 0,
+      1,
+      'the probe decision must be visible through show',
+    );
   });
 
   test('control arm: a declaration with a renamed required field reds and names the field', async () => {
@@ -423,6 +586,72 @@ if (binPath === null) {
     assert.match(reading.reason ?? '', new RegExp(mismatchedWallUri), 'the reason must carry the mismatched value');
   });
 
+  test('control arm: an edge with no project segment reds and names the edge URI', async (t) => {
+    const contract = readContracts.find((candidate) => candidate.id === 'initiative-show');
+    assert.ok(contract !== undefined, 'the initiative-show contract must be declared');
+    const argv = contract.argv(readContext.context);
+    const result = await runFleet(binPath, argv, readContext.env);
+    assert.equal(result.ok, true, `initiative show failed: ${result.error ?? result.stderr.trim()}`);
+    const document = parseJsonDocument(result.stdout);
+    assert.notEqual(document, null, 'initiative show did not print a JSON object');
+
+    const initiative = (document?.initiative ?? {}) as Record<string, unknown>;
+    const edges = Array.isArray(initiative.edges) ? (initiative.edges as Record<string, unknown>[]) : [];
+    // In-test construction only: one edge rewritten to the superseded project-less form. When the
+    // addressed home has no edges, a minimal one is supplied so the check is never vacuous.
+    const probeEdge = edges[0] ?? {
+      from: 'quay://probe-project/task/probe',
+      to: 'quay://probe-project/task/other',
+      kind: 'blocks',
+    };
+    const mutated = {
+      ...document,
+      initiative: { ...initiative, edges: [{ ...probeEdge, from: 'quay://task/x' }, ...edges.slice(1)] },
+    };
+    const violation = validateShape(mutated, INITIATIVE_SHOW_SHAPE);
+    assert.notEqual(violation, null, 'an edge whose from lost its project segment must red');
+    assert.match(
+      violation?.path ?? '',
+      /initiative\.edges\[0\]\.from/,
+      `the violation must NAME the edge URI, got ${violation?.path}: ${violation?.message}`,
+    );
+    t.diagnostic(`control arm reds as required: ${violation?.path}: ${violation?.message}`);
+  });
+
+  test('control arm: an unknown decision kind reds and names the path', async (t) => {
+    const contract = readContracts.find((candidate) => candidate.id === 'initiative-show');
+    assert.ok(contract !== undefined, 'the initiative-show contract must be declared');
+    const argv = contract.argv(readContext.context);
+    const result = await runFleet(binPath, argv, readContext.env);
+    assert.equal(result.ok, true, `initiative show failed: ${result.error ?? result.stderr.trim()}`);
+    const document = parseJsonDocument(result.stdout);
+    assert.notEqual(document, null, 'initiative show did not print a JSON object');
+
+    const decisions = Array.isArray(document?.decisions) ? (document?.decisions as Record<string, unknown>[]) : [];
+    // As above: a real row when the home has one, otherwise a minimal valid row, then one field
+    // mutated in-test. The shipping declaration is never touched.
+    const probeDecision = decisions[0] ?? {
+      at: new Date().toISOString(),
+      initiative: readContext.context.initiativeSlug,
+      by: 'human',
+      question: 'probe?',
+      options: ['yes', 'no'],
+      chosen: 'yes',
+      rationale: 'probe',
+      refs: [],
+      kind: 'fact',
+    };
+    const mutated = { ...document, decisions: [{ ...probeDecision, kind: 'vibes' }, ...decisions.slice(1)] };
+    const violation = validateShape(mutated, INITIATIVE_SHOW_SHAPE);
+    assert.notEqual(violation, null, 'an unknown decision kind must red');
+    assert.match(
+      violation?.path ?? '',
+      /decisions\[0\]\.kind/,
+      `the violation must NAME the decision kind, got ${violation?.path}: ${violation?.message}`,
+    );
+    t.diagnostic(`control arm reds as required: ${violation?.path}: ${violation?.message}`);
+  });
+
   test('AC4: the operator fleet home registry is untouched by the run', () => {
     const after = stampRealRegistry();
     assert.deepEqual(
@@ -431,5 +660,40 @@ if (binPath === null) {
       `the real fleet home's registry.json changed during the contract run — writing contracts must only run `
       + `against a temporary QUAY_FLEET_HOME. before=${JSON.stringify(registryStampBefore)} after=${JSON.stringify(after)}`,
     );
+  });
+
+  test('AC3: the operator fleet home is untouched by the run (resident-service files excepted)', (t) => {
+    const after = stampFleetHome(REAL_FLEET_HOME);
+    const moved: string[] = [];
+    for (const [file, stamp] of after) {
+      const before = fleetHomeStampBefore.get(file);
+      if (before === undefined || before.mtimeMs !== stamp.mtimeMs || before.size !== stamp.size) {
+        moved.push(file);
+      }
+    }
+    for (const file of fleetHomeStampBefore.keys()) {
+      if (!after.has(file)) moved.push(`${file} (removed)`);
+    }
+    const unexplained = moved.filter((file) => !isResidentServiceFile(file));
+
+    t.diagnostic(moved.length === 0
+      ? `no file under ${REAL_FLEET_HOME} moved during the run`
+      : `moved during the run (resident-service files are exempt): ${moved.join(', ')}`);
+    assert.deepEqual(
+      unexplained,
+      [],
+      `files under ${REAL_FLEET_HOME} moved during the contract run and are not written by the resident `
+      + `fleet service: ${unexplained.join(', ')}`,
+    );
+
+    // The three files a contract verb could have written must be untouched in the LITERAL sense —
+    // even though no non-writing verb in this suite is supposed to write anything at all.
+    for (const file of ['registry.json', 'initiatives.json', 'ledgers/initiative-decisions.jsonl']) {
+      assert.deepEqual(
+        after.get(file),
+        fleetHomeStampBefore.get(file),
+        `${file} changed during the contract run`,
+      );
+    }
   });
 }

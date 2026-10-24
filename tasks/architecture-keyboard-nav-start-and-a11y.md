@@ -1,7 +1,7 @@
 ---
 id: architecture-keyboard-nav-start-and-a11y
 title: 架构图键盘导航起点与无障碍：起点取视口中心最近实体，aria-live 只播报名称与种类，焦点环与选中样式区分
-status: todo
+status: ready
 labels:
   - feature
 parent: null
