@@ -43,3 +43,11 @@ depends_on:
 - server/modules/observation/index.ts
 - server/modules/websocket/services/chat-run-registry.service.ts
 - tasks/observation-session-digest-deterministic.md
+
+## Blocker
+
+**2026-10-24T09:43:56.514Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=89531 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792834643520
+- run_id：wk-prod-anchor
+- session_id：afb6aeed-de44-4404-8bbf-5294bcf04c35
