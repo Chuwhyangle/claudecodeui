@@ -44,11 +44,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 已知缺陷用例存在：`npx vitest run src/modules/chat/tests/sessionStoreTruncate.test.tsx` 退出码 **0**；输出含该 `KNOWN GAP` 用例且被 vitest 计为 expected failure（`it.fails`），不是 skip/todo。
-- [ ] AC2 红态是断言而不是 setup 错误：临时把该用例的 `it.fails` 改为 `it` 后运行，失败断言逐字给出 `actual` 为两条相同 edited 文本（例如 `['... corrected', '... corrected']`），退出码 1；`git checkout -- src/modules/chat/tests/sessionStoreTruncate.test.tsx` 或等价还原后回到 `it.fails`，文件退出码 0。完成记录贴出 red 的 `actual` 与命令。
-- [ ] AC3 正控制各自独立可反红：(a) 窗口原点不变的 refresh 退休 replacement；(b) 两次真实同文发送、只有一条 persisted echo 时，未配对的第二条本地行保留。两条在同一文件里是独立用例，均可单独失败。
-- [ ] AC4 零生产改动：`git diff --stat -- src server e2e playwright.config.ts` 为空；改动只落在 `## Touches` 列出的测试/文档/任务文件。
-- [ ] AC5 `npm run typecheck` 退出码 0。
+- [x] AC1 已知缺陷用例存在：`npx vitest run src/modules/chat/tests/sessionStoreTruncate.test.tsx` 退出码 **0**；输出含该 `KNOWN GAP` 用例且被 vitest 计为 expected failure（`it.fails`），不是 skip/todo。
+- [x] AC2 红态是断言而不是 setup 错误：临时把该用例的 `it.fails` 改为 `it` 后运行，失败断言逐字给出 `actual` 为两条相同 edited 文本（例如 `['... corrected', '... corrected']`），退出码 1；`git checkout -- src/modules/chat/tests/sessionStoreTruncate.test.tsx` 或等价还原后回到 `it.fails`，文件退出码 0。完成记录贴出 red 的 `actual` 与命令。
+- [x] AC3 正控制各自独立可反红：(a) 窗口原点不变的 refresh 退休 replacement；(b) 两次真实同文发送、只有一条 persisted echo 时，未配对的第二条本地行保留。两条在同一文件里是独立用例，均可单独失败。
+- [x] AC4 零生产改动：`git diff --stat -- src server e2e playwright.config.ts` 为空；改动只落在 `## Touches` 列出的测试/文档/任务文件。
+- [x] AC5 `npm run typecheck` 退出码 0。
 
 ## DoD
 
@@ -59,3 +59,21 @@ extra:
 - src/modules/chat/tests/sessionStoreTruncate.test.tsx
 - docs/proposals/transcript-authored-message-identity.md
 - tasks/gap-edit-replacement-window-shift-red.md
+
+## 完成记录
+
+- AC1：`cd <worktree> && npx vitest run src/modules/chat/tests/sessionStoreTruncate.test.tsx` → `Tests 11 passed (11)`，退出码 **0**；其中 `replacement rows across a sliding history window > KNOWN GAP: a shifted window draws the edited user row twice` 由 `it.fails` 计为 expected failure（不是 skip/todo）。
+- AC2：临时把该用例的 `it.fails` 改为 `it` 后同一命令退出码 **1**，失败断言为 `assert.deepEqual(drawnEditedRows(view), [EDITED_TEXT])`，逐字 `actual`：
+  ```
+  [
+    'last prompt, corrected',
+    'last prompt, corrected'
+  ]
+  ```
+  随后还原为 `it.fails`，同一命令回到 11 passed、退出码 0。
+- AC3 反红证明（临时消融，均已 `git checkout --` 还原，worktree 只余测试改动）：
+  - 关闭退休（`removeOptimisticUserEchoes` 提前 `return realtimeMessages`）→ 正控制 (a)(b) 两条同时红；`KNOWN GAP` 仍为 expected failure；
+  - 去掉 `findServerEchoForLocalUser` 的 `claimedServerIds` 一对一护栏 → 仅 (b) 红，(a) 仍绿。两条正控制互相独立、且各自确实能反红。
+- AC4：`git diff --name-only develop -- src server e2e playwright.config.ts` 只列出 `src/modules/chat/tests/sessionStoreTruncate.test.tsx`（Touches 内测试文件）；排除该测试目录后为空，无任何生产代码改动。
+- AC5：`npm run typecheck` 退出码 **0**。
+- 交付前：`git merge --no-edit develop` 无冲突；anti-drift Touches check 输出 `ANTI-DRIFT OK`、退出码 0。
