@@ -615,3 +615,4 @@
 1941	server/modules/context-events/tests/utterance-classifier.test.ts
 2012	server/modules/context-events/tests/shadow-predictor.test.ts
 1877	server/modules/quay/tests/quay-initiatives.test.ts
+1850	server/modules/system/tests/deploy-readiness.test.ts
