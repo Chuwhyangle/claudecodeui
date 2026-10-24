@@ -81,3 +81,11 @@ depends_on:
 
 
 2026-10-24 用户确认：由 observation-wall-ui（观察墙 T5）取代；其中在新模型下仍成立的条目已并入该任务。
+
+## Blocker
+
+**2026-10-24T08:23:49.377Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/6，剩余未勾 6）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：5b85b31c-d209-4a9c-8243-341ef7e60acd
