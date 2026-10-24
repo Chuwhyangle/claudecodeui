@@ -1,7 +1,7 @@
 ---
 id: gap-edit-replacement-window-shift-red
 title: 编辑重发的 replacement 行在窗口平移后重复：先落 store 级已知缺陷用例（窗口原点≠0 + 正控制）
-status: ready
+status: done
 labels:
   - gap
 parent: null
