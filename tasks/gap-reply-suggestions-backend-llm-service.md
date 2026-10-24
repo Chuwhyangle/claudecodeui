@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-backend-llm-service
 title: 回复建议后端模块：独立配置文件、Anthropic/OpenAI 两种协议直连 LLM 网关、建议接口、去重、限流、熔断与本机使用记录
-status: ready
+status: done
 labels:
   - gap
 parent: null
