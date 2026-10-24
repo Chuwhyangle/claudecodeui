@@ -427,8 +427,11 @@ const DIFF_HIGHLIGHT_STYLE = `
 /**
  * Whether a drawn package id is the declared package (or lives inside it).
  *
- * A drawing's `data-package-id` can be scope-prefixed while the snapshot's package ids are
- * project-relative, so the match is boundary-tolerant rather than exact.
+ * The two sides spell a package from different roots on purpose: the snapshot's ids are
+ * project-relative (`server/modules/observation`), while the drawing publishes the scope's own
+ * path (`modules/observation`, sometimes with the opaque scope key in front). Neither side is
+ * wrong, so the match accepts a suffix on EITHER side at a path boundary rather than an exact
+ * string — anything looser would mark a neighbour.
  */
 function packageMatches(candidate: string | null, wanted: string): boolean {
   if (candidate === null) return false;
@@ -437,14 +440,28 @@ function packageMatches(candidate: string | null, wanted: string): boolean {
   if (normalizedCandidate === '' || normalizedWanted === '') return false;
   return normalizedCandidate === normalizedWanted
     || normalizedCandidate.endsWith(`/${normalizedWanted}`)
-    || normalizedCandidate.startsWith(`${normalizedWanted}/`);
+    || normalizedCandidate.startsWith(`${normalizedWanted}/`)
+    || normalizedWanted.endsWith(`/${normalizedCandidate}`);
 }
 
 /** The package a drawn node id belongs to, as the drawing published it. */
 function drawnPackageOf(host: HTMLElement, nodeId: string): string | null {
   const element = nodeElement(host, nodeId);
   const published = element === null ? null : normalizedPackageId(element.getAttribute('data-package-id'));
-  return published ?? (nodeId === '' ? null : packageIdOfNodeId(nodeId));
+  return published ?? packageOfDrawnId(nodeId);
+}
+
+/**
+ * The package a drawn id names, for a node that carries no `data-package-id`.
+ *
+ * A collapsed overview draws PACKAGE boxes (`grp::server/modules/observation`) rather than files;
+ * that box IS the package, so its whole id is the package id. Everything else is a file/entity id
+ * and its directory is the package.
+ */
+function packageOfDrawnId(nodeId: string): string | null {
+  if (nodeId === '') return null;
+  if (nodeId.startsWith(GROUP_PREFIX)) return normalizedPackageId(nodeId.slice(GROUP_PREFIX.length));
+  return packageIdOfNodeId(nodeId);
 }
 
 /** Removes every diff marker from a drawing (a fresh SVG never carries any). */
@@ -471,7 +488,7 @@ function applyDiffStyles(host: HTMLElement, highlight: ArchitectureDiffHighlight
   for (const element of host.querySelectorAll('.uml-node[data-entity-id]')) {
     const id = element.getAttribute('data-entity-id') ?? '';
     const packageId = normalizedPackageId(element.getAttribute('data-package-id'))
-      ?? (id === '' ? null : packageIdOfNodeId(id));
+      ?? packageOfDrawnId(id);
     const marked = exactNodeIds.has(id)
       || packageIds.some((wanted) => packageMatches(packageId, wanted));
     if (!marked) continue;
@@ -975,14 +992,6 @@ export function PlantUmlGraph({
     else if (relationList.length === 0) clearHighlight(host);
   }, [selectedNodeId, selectedRelation, selectedNodeIds, selectedRelations]);
 
-  // Repaint the structural diff whenever the panel hands a new set in. The draw effect applies
-  // the same markers to a fresh SVG; this covers a highlight arriving without a re-layout.
-  useEffect(() => {
-    diffHighlightRef.current = diffHighlight;
-    const host = hostRef.current;
-    if (host !== null) applyDiffStyles(host, diffHighlight);
-  }, [diffHighlight]);
-
   // Tell the panel which slice is on screen. The export menu rebuilds exactly
   // this view; a remount (session/scope change resets `view`) reports the
   // overview again, so the panel never exports a stale drill-down.
@@ -1266,6 +1275,15 @@ export function PlantUmlGraph({
   // Bumped whenever the semantic pass rewrites the geometry, so the minimap
   // re-reads its boxes instead of blitting the previous scale's bitmap.
   const [drawnRevision, setDrawnRevision] = useState(0);
+
+  // Repaint the structural diff whenever the panel hands a new set in, and after every draw:
+  // the two subgraphs (and the drill-down views) each rewrite the SVG, and a marker applied to
+  // the previous drawing is gone with it.
+  useEffect(() => {
+    diffHighlightRef.current = diffHighlight;
+    const host = hostRef.current;
+    if (host !== null) applyDiffStyles(host, diffHighlight);
+  }, [diffHighlight, drawnRevision]);
   // Whether the portrait phone's zoom cluster is open. Why state: the tier
   // ships ONE 44px button by default (its drawing owns the height), and the
   // reader's open is what reveals the ±/Fit row. Not persisted: the compact
