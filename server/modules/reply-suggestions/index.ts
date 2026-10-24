@@ -16,29 +16,17 @@ export type { ReplySuggestionsModuleDeps } from './reply-suggestions.module.js';
 export type { LastAssistantMessage } from './reply-suggestions.service.js';
 // consumer: server/modules/observation/session-digest-llm.ts (the completion call and its
 // request/answer types; the client keeps the key out of every error it throws)
-export { completeReplySuggestions, replySuggestionsEndpoint, ReplySuggestionsClientError } from './reply-suggestions-client.js';
-export type {
-  ReplySuggestionsClientConfig,
-  ReplySuggestionsClientErrorCategory,
-  ReplySuggestionsCompletion,
-  ReplySuggestionsCompletionRequest,
-} from './reply-suggestions-client.js';
+export { completeReplySuggestions } from './reply-suggestions-client.js';
+export type { ReplySuggestionsCompletion, ReplySuggestionsCompletionRequest } from './reply-suggestions-client.js';
 // consumer: server/modules/observation/session-digest-llm-settings.ts (the gateway reading it
 // merges under its own `observation.sessionDigest` block)
-export { createReplySuggestionsSettingsSource, REPLY_SUGGESTIONS_SETTINGS_PATH_ENV } from './reply-suggestions-settings.js';
+export { createReplySuggestionsSettingsSource } from './reply-suggestions-settings.js';
 export type {
   ReplySuggestionsAuthScheme,
   ReplySuggestionsProtocol,
-  ReplySuggestionsSettings,
   ReplySuggestionsSettingsSource,
 } from './reply-suggestions-settings.js';
 // consumer: server/modules/observation/session-digest-llm.ts (one usage record per digest
 // call, written to the same locally-owned JSONL ledger the chips use)
-export {
-  createReplySuggestionsUsageLog,
-  REPLY_SUGGESTIONS_USAGE_LOG_MAX_BYTES,
-} from './reply-suggestions-usage-log.js';
-export type {
-  ReplySuggestionsUsageLog,
-  ReplySuggestionsUsageRecord,
-} from './reply-suggestions-usage-log.js';
+export { createReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js';
+export type { ReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js';
