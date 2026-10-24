@@ -5,14 +5,14 @@
  * stay stored as resident, but nothing is serving them until the next
  * `chat.send` lazily opens one — which leaves cross-session peer addressing
  * (`SendMessage` by `peerName`) pointing at a session nobody is serving. The
- * pass under test brings the most recently active ones back at boot, off by
- * default.
+ * pass under test brings the most recently active ones back at boot, on by
+ * default (an operator opts out from the settings file).
  *
  * The claim has three parts, read in order:
  *
  *   (1) the configuration face: the generic SERVER-level settings file decides
- *       the switch — `residentRestore.enabled` is off unless the file sets it
- *       true — and a malformed `max` / `maxAgeMs` (or a file that cannot be
+ *       the switch — `residentRestore.enabled` is on unless the file sets it
+ *       false — and a malformed `max` / `maxAgeMs` (or a file that cannot be
  *       read) falls back to the shipped default with the reason in `problems`
  *       instead of throwing, because a knob that could throw would take the
  *       whole boot down. `SERVER_SETTINGS_PATH` names the file; there are no
@@ -167,7 +167,7 @@ test('AC1: the settings file decides the switch; malformed values fall back with
   // The shipped defaults, and the one equality that keeps the window honest: it
   // is the resident idle ceiling itself, so "alive before the restart" cannot
   // drift from the lifetime policy.
-  assert.equal(DEFAULT_RESIDENT_RESTORE_ENABLED, false);
+  assert.equal(DEFAULT_RESIDENT_RESTORE_ENABLED, true);
   assert.equal(DEFAULT_RESIDENT_RESTORE_MAX, 16);
   assert.equal(DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS, 24 * HOUR_MS);
   assert.equal(DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS, 86_400_000);
@@ -182,7 +182,7 @@ test('AC1: the settings file decides the switch; malformed values fall back with
       maxAgeMs: DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
     };
 
-    // (a) Nothing configured: the shipped defaults, off, and NOT a problem —
+    // (a) Nothing configured: the shipped defaults, on, and NOT a problem —
     // an absent user copy is the normal state, not a bad configuration.
     const shipped = loadServerSettings({ env: {}, defaultPath: absentUserCopy });
     console.log(`restore-settings shipped=${JSON.stringify(shipped)}`);
@@ -190,7 +190,7 @@ test('AC1: the settings file decides the switch; malformed values fall back with
     assert.equal(shipped.source, 'default');
     assert.deepEqual(shipped.problems, []);
 
-    // (b) The file's `residentRestore.enabled` is what turns the pass on; the
+    // (b) The file's `residentRestore.enabled` is what decides the pass; the
     // two numeric keys are read from the same block.
     const enabledPath = path.join(tempDirectory, 'enabled.json');
     await writeFile(
@@ -203,7 +203,21 @@ test('AC1: the settings file decides the switch; malformed values fall back with
     assert.equal(enabled.source, 'file');
     assert.deepEqual(enabled.problems, []);
 
-    // (c) Unknown keys — top-level and inside the block — are ignored: a file
+    // (c) The opt-out: `enabled: false` turns off a pass that ships on, and the
+    // reading is explicit — not a fallback. Without this case "on by default"
+    // would be a claim nothing could refute from the file's side.
+    const optedOutPath = path.join(tempDirectory, 'opted-out.json');
+    await writeFile(
+      optedOutPath,
+      JSON.stringify({ residentRestore: { enabled: false, max: 4, maxAgeMs: 60_000 } }),
+    );
+    const optedOut = loadServerSettings({ settingsPath: optedOutPath });
+    console.log(`restore-settings opted-out=${JSON.stringify(optedOut)}`);
+    assert.deepEqual(optedOut.residentRestore, { enabled: false, max: 4, maxAgeMs: 60_000 });
+    assert.equal(optedOut.source, 'file');
+    assert.deepEqual(optedOut.problems, []);
+
+    // (d) Unknown keys — top-level and inside the block — are ignored: a file
     // written for a newer build must not stop this one from booting.
     const unknownPath = path.join(tempDirectory, 'unknown.json');
     await writeFile(
@@ -215,7 +229,7 @@ test('AC1: the settings file decides the switch; malformed values fall back with
     assert.equal(unknown.residentRestore.max, DEFAULT_RESIDENT_RESTORE_MAX);
     assert.deepEqual(unknown.problems, []);
 
-    // (d) Malformed values fall back FIELD BY FIELD and are reported: a typo in
+    // (e) Malformed values fall back FIELD BY FIELD and are reported: a typo in
     // `max` must not silently turn off a pass the operator explicitly enabled.
     const malformedPath = path.join(tempDirectory, 'malformed.json');
     await writeFile(
@@ -238,7 +252,7 @@ test('AC1: the settings file decides the switch; malformed values fall back with
     assert.deepEqual(block.residentRestore, shippedPolicy);
     assert.deepEqual(block.problems, ['`residentRestore` must be a JSON object']);
 
-    // (e) SERVER_SETTINGS_PATH is the escape hatch: it names the file the
+    // (f) SERVER_SETTINGS_PATH is the escape hatch: it names the file the
     // reading consults, and an EXPLICITLY named file that cannot be read is a
     // problem (unlike the absent user copy above).
     const viaEnv = loadServerSettings({

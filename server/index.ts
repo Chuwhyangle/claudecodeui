@@ -2371,8 +2371,8 @@ async function startServer() {
         // path escape hatch only — `SERVER_SETTINGS_PATH` names another file —
         // and the shipped user copy is ~/.config/claudecodeui/server.settings.json.
         // Every knob is optional; a malformed one falls back to its shipped
-        // default and reports the reason, which is logged here. Off unless the
-        // file says `residentRestore.enabled: true`, and scheduled rather than
+        // default and reports the reason, which is logged here. On unless the
+        // file says `residentRestore.enabled: false`, and scheduled rather than
         // awaited so a slow provider cannot hold up `listen`.
         const serverSettings = loadServerSettings();
         for (const problem of serverSettings.problems) {
@@ -2508,8 +2508,8 @@ const RESIDENT_RESTORE_STARTUP_DELAY_MS = 2_000;
  * sessions stay dormant until the next `chat.send` lazily opens one — which
  * leaves cross-session peer addressing (`SendMessage` by `peerName`) pointing at
  * a session nobody is serving. This pass brings the most recently active resident
- * sessions back at boot. It is opt-in — the server settings file's
- * `residentRestore.enabled`, shipped `false` — and fire-and-forget: the sessions
+ * sessions back at boot. It is on by default — the server settings file's
+ * `residentRestore.enabled: false` turns it off — and fire-and-forget: the sessions
  * module owns the policy (window, ceiling, budget, per-session isolation) and
  * this function supplies its configured window and ceiling plus the two seams
  * the module cannot reach — the session store's candidate reader and the

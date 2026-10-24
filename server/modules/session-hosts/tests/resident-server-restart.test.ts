@@ -921,6 +921,16 @@ test('a stopped or killed server leaves no resident process behind, and the next
   // read-only 90 KB and makes the CLI start the way it does for a real user.
   await fsp.mkdir(path.join(tempRoot, 'home'), { recursive: true });
   await fsp.mkdir(path.join(tempRoot, 'claude-config'), { recursive: true });
+  // The shipped restore default is ON, and this criterion measures the start-up sweep and the
+  // "stored resident, not running" reading after a restart. A boot that restored the resident
+  // rows would start a host for each of them and change what leg 4 observes, so the temporary
+  // HOME carries an explicit opt-out. The pass itself is measured by the sibling
+  // resident-restore.service criterion.
+  await fsp.mkdir(path.join(tempRoot, 'home', '.config', 'claudecodeui'), { recursive: true });
+  await fsp.writeFile(
+    path.join(tempRoot, 'home', '.config', 'claudecodeui', 'server.settings.json'),
+    JSON.stringify({ residentRestore: { enabled: false } }),
+  );
   try {
     await fsp.copyFile(path.join(os.homedir(), '.claude.json'), path.join(tempRoot, 'home', '.claude.json'));
   } catch {
@@ -1204,6 +1214,15 @@ test('a stopped or killed server leaves no resident process behind, and the next
     secondChat.close();
 
     // ---- leg 4: after the restart the session is still resident, and not running ----
+    //
+    // The opt-out in the temporary HOME is what keeps this reading honest: a boot that ran the
+    // restore pass would log its summary line and start hosts, so "not running" would be an
+    // accident of timing rather than a reading of the stored state.
+    assert.equal(
+      third.logText().includes('[resident-restore]'),
+      false,
+      'the restarted server ran the resident restore pass despite the test HOME opting out',
+    );
     const listing = await readHosts(third.port, thirdToken);
     const residentState = sessionStateOf(listing, residentSession);
     const orphanState = sessionStateOf(listing, orphanableSession);

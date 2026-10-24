@@ -6,15 +6,19 @@ import type { HostDriverResolver, ResidentSessionStarter } from './session-hosts
 /**
  * Whether the shipped configuration restores resident sessions at start-up.
  *
- * Off: a restore pass launches one provider process per session, and an operator
- * should opt into that trade rather than discover it after a restart. The switch
- * is the `residentRestore.enabled` key of the generic server settings file
- * (`server/modules/settings/server-settings.ts`); this module owns the default,
- * the settings loader reads it, and `server/index.ts` branches on that reading.
- * There is no per-key environment variable for it. Pinned by this module's
- * restore criterion.
+ * On: a restart drops every resident process the previous server held, which
+ * leaves the sessions dormant until the next `chat.send` lazily opens one — and
+ * leaves cross-session peer addressing pointing at nobody. Bringing the recently
+ * active ones back at boot is the behaviour an operator expects after a restart.
+ * The switch is the `residentRestore.enabled` key of the generic server settings
+ * file (`server/modules/settings/server-settings.ts`); this module owns the
+ * default, the settings loader reads it, and `server/index.ts` branches on that
+ * reading. A deployment that does not want the launch burst (one provider
+ * process per restored session) writes `enabled: false` in that file. There is
+ * no per-key environment variable for it. Pinned by this module's restore
+ * criterion.
  */
-export const DEFAULT_RESIDENT_RESTORE_ENABLED = false;
+export const DEFAULT_RESIDENT_RESTORE_ENABLED = true;
 
 /**
  * The shipped ceiling on sessions per restore pass.

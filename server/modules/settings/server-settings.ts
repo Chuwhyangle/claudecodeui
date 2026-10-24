@@ -62,8 +62,9 @@ function defaultServerSettingsPath(): string {
 /**
  * The start-up resident-session restore pass's policy, as read from this file.
  *
- * `enabled` is the opt-in switch (shipped off: a restore pass launches one provider process
- * per session, so an operator opts into that trade). `max` is the per-pass ceiling. `maxAgeMs`
+ * `enabled` is the switch, shipped on: the pass brings the recently active resident sessions
+ * back at boot, launching one provider process per session, and an operator who does not want
+ * that launch burst writes `false`. `max` is the per-pass ceiling. `maxAgeMs`
  * is the activity window, and its shipped default is the resident idle ceiling itself, so
  * "alive before the restart" cannot drift from the lifetime policy. Consumed by
  * `server/index.ts`, which hands the block to the restore pass, and by the resident-restore

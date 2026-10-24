@@ -1,9 +1,9 @@
 {
   "_comment": "Template for the SERVER-level settings file. The server reads ~/.config/claudecodeui/server.settings.json once at start-up; SERVER_SETTINGS_PATH points it at another file (the only environment entry — there are no per-key environment variables). Unknown keys, including the ones beginning with an underscore here, are ignored, and every key is optional: an omitted key keeps the shipped default.",
   "residentRestore": {
-    "enabled": false,
+    "enabled": true,
     "max": 16,
     "maxAgeMs": 86400000
   },
-  "_residentRestore": "Bring the most recently active resident sessions back after a restart, instead of waiting for the next send to open one lazily. `enabled` ships false: a restore pass launches one provider process per session, so it is opt-in. `max` is the per-pass ceiling (16 sessions). `maxAgeMs` is the activity window; its default 86400000 (24 h) is the same ceiling an idle resident host is closed at, so a session that was already dead before the restart is not brought back. A malformed value falls back to its default and is reported in the server log. The pass runs after the orphan-scope sweep, never before it."
+  "_residentRestore": "Bring the most recently active resident sessions back after a restart, instead of waiting for the next send to open one lazily. `enabled` ships true: the pass launches one provider process per session, and an operator who does not want that launch burst writes `false` to opt out. `max` is the per-pass ceiling (16 sessions). `maxAgeMs` is the activity window; its default 86400000 (24 h) is the same ceiling an idle resident host is closed at, so a session that was already dead before the restart is not brought back. A malformed value falls back to its default and is reported in the server log. The pass runs after the orphan-scope sweep, never before it."
 }
