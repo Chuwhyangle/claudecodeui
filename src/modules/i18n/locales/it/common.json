@@ -784,6 +784,8 @@
     "observationDaysAgo": "{{n}} g fa",
     "observationRevision": "revisione {{revision}}",
     "observationPreviewLabel": "Anteprima dell’osservazione",
+    "observationBlindSpots": "Questa vista non vede:",
+    "observationOpenQuay": "Apri il pannello Quay",
     "observationLater": "Più tardi",
     "observationRecentTurn": "Ultimo turno",
     "observationChanges": "Modifiche",

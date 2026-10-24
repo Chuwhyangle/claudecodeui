@@ -754,6 +754,8 @@
     "observationDaysAgo": "{{n}} дн назад",
     "observationRevision": "ревизия {{revision}}",
     "observationPreviewLabel": "Просмотр наблюдения",
+    "observationBlindSpots": "Это представление не видит:",
+    "observationOpenQuay": "Открыть панель Quay",
     "observationLater": "Позже",
     "observationRecentTurn": "Последний ход",
     "observationChanges": "Изменения",

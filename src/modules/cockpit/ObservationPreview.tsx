@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { cn } from '@/shared/utils';
 import type {
@@ -6,6 +7,8 @@ import type {
   ObservationWallEntry,
 } from '@/modules/cockpit/hooks/useObservationWall';
 import { observationLiveness } from '@/modules/cockpit/ObservationTile';
+import { cockpitViewPath } from '@/modules/cockpit/cockpitView';
+import { parseObservationUri } from '@/modules/cockpit/observationUri';
 
 /**
  * The stage's in-place preview of one observed object.
@@ -100,6 +103,7 @@ export default function ObservationPreview({
   architectureUnavailableReason = null,
 }: ObservationPreviewProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { object } = entry;
   const state = object.status.state;
   const digest = object.digest;
@@ -110,6 +114,40 @@ export default function ObservationPreview({
   const tests = sessionTests(digest);
   const layers = projectLayers(digest);
   const diffs = architectureDiffs(entry);
+  // The producer's declaration is the whole point of the section: the defaults the store filled
+  // guarantee it is non-empty, and a malformed/legacy payload renders no list rather than an
+  // invented sentence.
+  const blindSpots = stringList(object.blindSpots);
+
+  /** The one door back to the material this projection compressed, per kind. */
+  const rawMaterialLabelKey =
+    object.kind === 'session'
+      ? 'cockpit.observationOpenSession'
+      : object.kind === 'project'
+        ? 'cockpit.observationOpenQuay'
+        : 'cockpit.observationOpenArchitecture';
+  const rawMaterialDisabled =
+    object.kind === 'session'
+      ? onOpenSession === undefined
+      : object.kind === 'architecture'
+        ? onOpenArchitecture === undefined
+        : false;
+  const openRawMaterial = () => {
+    if (object.kind === 'session') {
+      onOpenSession?.();
+      return;
+    }
+    if (object.kind === 'architecture') {
+      onOpenArchitecture?.();
+      return;
+    }
+    // A project object is addressed as `quay://<fleetProjectId>/board`; the cockpit's board view
+    // is where the Quay panel for that project is drawn.
+    const parsed = parseObservationUri(object.uri);
+    if (parsed !== null && parsed.kind === 'project') {
+      navigate(cockpitViewPath({ type: 'board', project: parsed.id }));
+    }
+  };
 
   return (
     <section
@@ -254,37 +292,51 @@ export default function ObservationPreview({
               </ul>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onOpenArchitecture}
-              disabled={onOpenArchitecture === undefined}
-              title={architectureUnavailableReason ?? undefined}
-              className="min-h-11 rounded border border-border/60 px-2 text-xs text-foreground hover:bg-accent disabled:opacity-50 sm:min-h-0 sm:py-0.5"
-              data-testid="observation-preview-open-architecture"
-            >
-              {t('cockpit.observationOpenArchitecture')}
-            </button>
-            {architectureUnavailableReason !== null && (
-              <span className="text-xs text-muted-foreground" data-testid="observation-preview-architecture-reason">
-                {architectureUnavailableReason}
-              </span>
-            )}
-          </div>
         </div>
       )}
 
-      <footer className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-        {object.kind === 'session' && onOpenSession !== undefined && (
+      {/*
+        THE LAST THING THE PREVIEW SAYS IS WHAT IT CANNOT SEE. Every tile is a projection; a
+        detail that only repeats the readings would let the reader mistake the compression for
+        the whole record. The declaration is followed immediately by the one door back to the
+        material it compressed — the session, the Quay panel, or the architecture tab.
+      */}
+      <section
+        className="mt-3 border-t border-border/40 pt-2"
+        aria-label={t('cockpit.observationBlindSpots')}
+        data-testid="observation-preview-blind-spots"
+      >
+        <p className="text-xs font-medium text-muted-foreground">{t('cockpit.observationBlindSpots')}</p>
+        <ul
+          className="mt-0.5 list-disc pl-5 text-xs text-foreground"
+          data-testid="observation-preview-blind-spot-list"
+        >
+          {blindSpots.map((spot, index) => (
+            <li key={`${index}-${spot}`} data-testid="observation-preview-blind-spot">
+              {spot}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={onOpenSession}
-            className="min-h-11 rounded border border-border/60 px-2 text-xs text-foreground hover:bg-accent sm:min-h-0 sm:py-0.5"
-            data-testid="observation-preview-open-session"
+            onClick={openRawMaterial}
+            disabled={rawMaterialDisabled}
+            className="min-h-11 rounded border border-border/60 px-2 text-xs text-foreground hover:bg-accent disabled:opacity-50 sm:min-h-0 sm:py-0.5"
+            data-testid="observation-preview-raw-material"
+            data-raw-material-kind={object.kind}
           >
-            {t('cockpit.observationOpenSession')}
+            {t(rawMaterialLabelKey)}
           </button>
-        )}
+          {object.kind === 'architecture' && architectureUnavailableReason !== null && (
+            <span className="text-xs text-muted-foreground" data-testid="observation-preview-architecture-reason">
+              {architectureUnavailableReason}
+            </span>
+          )}
+        </div>
+      </section>
+
+      <footer className="mt-auto flex flex-wrap items-center gap-2 pt-3">
         <button
           type="button"
           onClick={onTogglePin}
