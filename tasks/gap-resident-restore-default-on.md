@@ -26,12 +26,12 @@ extra:
 
 ## AC
 
-- [ ] `grep -n "DEFAULT_RESIDENT_RESTORE_ENABLED" server/modules/settings/server-settings.ts` 命中且该常量赋值为 `true`。
-- [ ] `grep -n '"enabled"' config/server.settings.example.json` 命中 `"enabled": true`。
-- [ ] `resident-restore.service.test.ts` 改后通过（缺省 `enabled===true`；文件 `enabled:false` 关闭；非法值回落缺省）：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0。
-- [ ] `resident-server-restart.test.ts` 改后通过（默认 on 下该判据的测量仍有效——显式关 restore 或改断言）：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0。
-- [ ] `npm run typecheck` exit 0；`npx oxlint server/modules/settings/server-settings.ts server/modules/session-hosts/tests/resident-restore.service.test.ts server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0。
-- [ ] 全量无新增红：fan-in 门通过（`quay task check`）。
+- [x] `grep -n "DEFAULT_RESIDENT_RESTORE_ENABLED" server/modules/settings/server-settings.ts` 命中且该常量赋值为 `true`。
+- [x] `grep -n '"enabled"' config/server.settings.example.json` 命中 `"enabled": true`。
+- [x] `resident-restore.service.test.ts` 改后通过（缺省 `enabled===true`；文件 `enabled:false` 关闭；非法值回落缺省）：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0。
+- [x] `resident-server-restart.test.ts` 改后通过（默认 on 下该判据的测量仍有效——显式关 restore 或改断言）：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0。
+- [x] `npm run typecheck` exit 0；`npx oxlint server/modules/settings/server-settings.ts server/modules/session-hosts/tests/resident-restore.service.test.ts server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0。
+- [x] 全量无新增红：fan-in 门通过（`quay task check`）。
 
 ## DoD
 
@@ -40,7 +40,9 @@ extra:
 
 ## Touches
 
+- server/modules/session-hosts/resident-restore.service.ts
 - server/modules/settings/server-settings.ts
+- server/index.ts
 - config/server.settings.example.json
 - server/modules/session-hosts/tests/resident-restore.service.test.ts
 - server/modules/session-hosts/tests/resident-server-restart.test.ts
