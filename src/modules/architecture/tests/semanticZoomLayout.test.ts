@@ -21,10 +21,16 @@ import {
 } from '@/modules/architecture/semanticZoomLayout';
 import {
   readSemanticDrawingGeometry,
+  type SemanticEdgeGeometry,
   type SemanticNodeGeometry,
   type SemanticPackageGeometry,
 } from '@/modules/architecture/semanticZoomRead';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
+import {
+  planCompactFrameHeight,
+  planRectsIntersect,
+  SEMANTIC_STRETCH_LIMIT,
+} from '@/modules/architecture/semanticZoomPlan';
 import { TWENTY_SIX_PACKAGE_HIERARCHY } from '@/modules/architecture/tests/layoutFixtures';
 
 /**
@@ -826,5 +832,328 @@ describe('solveFitScale: the largest monotone scale whose mapped content fits', 
       solution.layout.content.width > 300 + 0.5,
       'the truth is stated: the drawing does not fit',
     );
+  });
+});
+
+/* ── the member-hidden vertical compaction: the class body no longer reserves rows ─────────── */
+
+/** One hand-built class node: a column cell with `memberCount` member rows. */
+function compactNode(
+  id: string,
+  rect: SemanticRect,
+  memberCount: number,
+): SemanticNodeGeometry {
+  const members = Array.from({ length: memberCount }, (_unused, index) => ({
+    text: index < memberCount - 1 ? `field${index}: string` : `run${index}()`,
+    compartment: index < memberCount - 1 ? 'attr' as const : 'op' as const,
+  }));
+  return {
+    id,
+    rect,
+    // A short label keeps the planned title one line, so the comparison below
+    // is about the member rows and nothing else.
+    label: id,
+    kind: 'class',
+    stereotype: null,
+    members,
+    memberTotal: members.length,
+    seed: false,
+    mentionTier: null,
+    titleHeight: 15,
+    attributesHeight: 80,
+    operationsHeight: 20,
+    ruleCount: 2,
+    titleRuleY: rect.y + 15,
+  };
+}
+
+/** The compact height a hidden-member frame may occupy, by the plan's own reserve. */
+function compactBound(node: SemanticNodeLayoutLike): number {
+  return planCompactFrameHeight({
+    kind: node.plan.kind,
+    hasAttributes: node.plan.hasAttributes,
+    titleHeight: node.plan.reservedTitleHeight,
+  });
+}
+
+type SemanticNodeLayoutLike = SemanticZoomLayout['nodes'][number];
+
+/** Whether `point` sits ON `rect`'s perimeter (within `eps`). */
+function onRectBoundary(rect: SemanticRect, point: { x: number; y: number }, eps = 0.75): boolean {
+  const inside = point.x >= rect.x - eps && point.x <= rect.x + rect.width + eps
+    && point.y >= rect.y - eps && point.y <= rect.y + rect.height + eps;
+  if (!inside) return false;
+  const distance = Math.min(
+    Math.abs(point.x - rect.x),
+    Math.abs(point.x - (rect.x + rect.width)),
+    Math.abs(point.y - rect.y),
+    Math.abs(point.y - (rect.y + rect.height)),
+  );
+  return distance <= eps;
+}
+
+describe('the member-hidden vertical compaction (axis solver × planMemberRows)', () => {
+  test('in the B/A transition band a hidden-member class frame is title + divider tall', () => {
+    // The tier switch happens at the 1.8× budget; the transition band is the
+    // last 10 % before it (ratio ≥ 1.62). At this scale tier A still wins on the
+    // real fixture, and every class box hides its member text.
+    const scale = 0.35;
+    const layout = solveSemanticZoom(geometry, { scale, forceTier: 'A', viewport: null });
+    assert.ok(
+      layout.ratio >= SEMANTIC_STRETCH_LIMIT * 0.9 && layout.ratio <= SEMANTIC_STRETCH_LIMIT + 1e-9,
+      `the fixture must be inside the transition band: ratio ${layout.ratio}`,
+    );
+    let checked = 0;
+    for (const node of layout.nodes) {
+      if (node.hidden || node.showMembers) continue;
+      if (node.plan.kind !== 'class') continue;
+      checked += 1;
+      assert.ok(
+        node.cell.height <= compactBound(node) + 0.5,
+        `${node.id}: hidden-member frame is ${node.cell.height} high, compact bound ${compactBound(node)}`,
+      );
+      assert.ok(
+        node.drawn.height <= compactBound(node) + 0.5,
+        `${node.id}: drawn frame is ${node.drawn.height} high, compact bound ${compactBound(node)}`,
+      );
+    }
+    assert.ok(checked > 0, 'the band exercised hidden-member class frames');
+  });
+
+  test('a class with member rows is exactly as tall as the same class without them', () => {
+    const memberRect: SemanticRect = { x: 0, y: 0, width: 120, height: 140 };
+    const bareRect: SemanticRect = { x: 0, y: 200, width: 120, height: 140 };
+    const withMembers = compactNode('with-members', memberRect, 6);
+    const without = compactNode('without-members', bareRect, 0);
+    const drawing: SemanticDrawingGeometry = {
+      width: 200,
+      height: 400,
+      nodes: [withMembers, without],
+      packages: [],
+      edges: [],
+    };
+    const cases: { scale: number; forceTier: 'A' | 'B' }[] = [
+      // Tier A hides the rows once fewer than two fit (140 × 0.35 leaves none).
+      { scale: 0.35, forceTier: 'A' },
+      // Tier B never draws member text, at any scale — including one at which
+      // the rows WOULD have fit at tier A. The compaction must follow the tier's
+      // draw decision, not the row count alone.
+      { scale: 0.85, forceTier: 'B' },
+      // Tier B at scales where the rows also do not fit geometrically.
+      { scale: 0.35, forceTier: 'B' },
+      { scale: 0.5, forceTier: 'B' },
+    ];
+    for (const { scale, forceTier } of cases) {
+      const layout = solveSemanticZoom(drawing, { scale, forceTier, viewport: null });
+      const rich = layout.nodes.find((node) => node.id === 'with-members');
+      const bare = layout.nodes.find((node) => node.id === 'without-members');
+      assert.ok(rich !== undefined && bare !== undefined);
+      assert.equal(rich.showMembers, false, `${scale}/${forceTier}: the rows do not fit`);
+      assert.equal(bare.showMembers, false);
+      assert.ok(
+        Math.abs(rich.cell.height - bare.cell.height) < 0.5,
+        `${scale}/${forceTier}: member rows still reserve space: `
+          + `${rich.cell.height} vs memberless ${bare.cell.height}`,
+      );
+    }
+  });
+
+  test('a class that DOES render its rows keeps the full mapped height', () => {
+    // A tall box at 90 % leaves room for many rows at the floor font, so the
+    // member text is drawn and the compaction must not touch the frame.
+    const tall = compactNode('tall', { x: 0, y: 0, width: 220, height: 240 }, 6);
+    const drawing: SemanticDrawingGeometry = { width: 300, height: 300, nodes: [tall], packages: [], edges: [] };
+    const layout = solveSemanticZoom(drawing, { scale: 0.9, forceTier: 'A', viewport: null });
+    const node = layout.nodes[0];
+    assert.equal(node.showMembers, true, 'the fixture must genuinely draw member rows');
+    assert.ok(node.memberRows !== null && node.memberRows.rows.length >= 2);
+    assert.ok(Math.abs(node.cell.height - 240 * 0.9) < 1e-6, `full height kept: ${node.cell.height}`);
+    assert.ok(Math.abs(node.sourceCell.height - node.cell.height) < 1e-6, 'nothing was compacted');
+    assert.ok(Math.abs(node.drawn.height - node.cell.height) < 1e-6);
+  });
+
+  test('compaction tightens the column without ever letting neighbours overlap', () => {
+    const drawing: SemanticDrawingGeometry = {
+      width: 200,
+      height: 500,
+      nodes: [
+        compactNode('a', { x: 0, y: 0, width: 120, height: 140 }, 6),
+        compactNode('b', { x: 0, y: 180, width: 120, height: 60 }, 2),
+        compactNode('c', { x: 0, y: 280, width: 120, height: 140 }, 6),
+      ],
+      packages: [],
+      edges: [],
+    };
+    const layout = solveSemanticZoom(drawing, { scale: 0.3, forceTier: 'B', viewport: null });
+    assert.equal(layout.nodes.length, 3);
+    const sourceTotal = layout.nodes.reduce((sum, node) => sum + node.sourceCell.height, 0);
+    const cellTotal = layout.nodes.reduce((sum, node) => sum + node.cell.height, 0);
+    assert.ok(cellTotal < sourceTotal, `the body really was reclaimed: ${cellTotal} < ${sourceTotal}`);
+    for (let left = 0; left < layout.nodes.length; left += 1) {
+      for (let right = left + 1; right < layout.nodes.length; right += 1) {
+        const a = layout.nodes[left].cell;
+        const b = layout.nodes[right].cell;
+        // Tolerate a 0.5px touch: expand each rect by that much before asking.
+        const overlaps = planRectsIntersect(
+          { x: a.x - 0.5, y: a.y - 0.5, w: a.width + 1, h: a.height + 1 },
+          { x: b.x - 0.5, y: b.y - 0.5, w: b.width + 1, h: b.height + 1 },
+        );
+        assert.ok(!overlaps, `${layout.nodes[left].id} and ${layout.nodes[right].id} overlap`);
+      }
+    }
+  });
+
+  test('an edge endpoint stays on the boundary of the compacted frame', () => {
+    const edges: SemanticEdgeGeometry[] = [{
+      source: 'a',
+      target: 'b',
+      // The renderer attaches to the SOURCE rects' edges: a's bottom, b's top.
+      points: [{ x: 60, y: 140 }, { x: 60, y: 200 }],
+      bundleSize: 1,
+    }];
+    const drawing: SemanticDrawingGeometry = {
+      width: 200,
+      height: 400,
+      nodes: [
+        compactNode('a', { x: 0, y: 0, width: 120, height: 140 }, 6),
+        compactNode('b', { x: 0, y: 200, width: 120, height: 140 }, 6),
+      ],
+      packages: [],
+      edges,
+    };
+    const layout = solveSemanticZoom(drawing, { scale: 0.3, forceTier: 'B', viewport: null });
+    const edge = layout.edges[0];
+    assert.ok(edge !== undefined);
+    const a = layout.nodes.find((node) => node.id === 'a');
+    const b = layout.nodes.find((node) => node.id === 'b');
+    assert.ok(a !== undefined && b !== undefined);
+    assert.ok(a.cell.height < a.sourceCell.height, 'the frame was actually compacted');
+    assert.ok(
+      onRectBoundary(a.drawn, edge.points[0]),
+      `source endpoint ${JSON.stringify(edge.points[0])} is off ${JSON.stringify(a.drawn)}`,
+    );
+    assert.ok(
+      onRectBoundary(b.drawn, edge.points[edge.points.length - 1]),
+      `target endpoint ${JSON.stringify(edge.points[edge.points.length - 1])} is off ${JSON.stringify(b.drawn)}`,
+    );
+  });
+
+  test('the compacted layout is a pure function of its inputs', () => {
+    const digest = (layout: SemanticZoomLayout): unknown => ({
+      tier: layout.tier,
+      ratio: layout.ratio,
+      nodes: layout.nodes.map((node) => ({
+        id: node.id,
+        cell: node.cell,
+        sourceCell: node.sourceCell,
+        drawn: node.drawn,
+        showMembers: node.showMembers,
+      })),
+      content: layout.content,
+    });
+    const first = solveSemanticZoom(geometry, { scale: 0.35, forceTier: 'A', viewport: null });
+    const second = solveSemanticZoom(geometry, { scale: 0.35, forceTier: 'A', viewport: null });
+    assert.deepEqual(digest(first), digest(second));
+  });
+});
+
+describe('Fit after the member-hidden compaction', () => {
+  /** The drawn content boundary, expanded by the canvas' fixed margin. */
+  function boundaryOf(layout: SemanticZoomLayout): SemanticRect {
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    const add = (x: number, y: number): void => {
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    };
+    for (const entry of layout.packages) {
+      add(entry.frame.x, entry.frame.y);
+      add(entry.frame.x + entry.frame.width, entry.frame.y + entry.frame.height);
+    }
+    for (const node of layout.nodes) {
+      add(node.sourceCell.x, node.sourceCell.y);
+      add(node.sourceCell.x + node.sourceCell.width, node.sourceCell.y + node.sourceCell.height);
+    }
+    for (const edge of layout.edges) {
+      for (const point of edge.points) add(point.x, point.y);
+    }
+    return {
+      x: minX - SEMANTIC_CONTENT_MARGIN_PX,
+      y: minY - SEMANTIC_CONTENT_MARGIN_PX,
+      width: maxX - minX + 2 * SEMANTIC_CONTENT_MARGIN_PX,
+      height: maxY - minY + 2 * SEMANTIC_CONTENT_MARGIN_PX,
+    };
+  }
+
+  test('a compacted drawing fits at a scale the full-body content could not reach', () => {
+    // Twenty member-rich class boxes (4 × 5) with eight-plus rows each: the
+    // fitted layout on a 480×320 canvas lands at a tier-A scale where every
+    // member block is hidden, so the frame heights are driven by the body.
+    const nodes: SemanticNodeGeometry[] = [];
+    const edges: SemanticEdgeGeometry[] = [];
+    const COLUMNS = 4;
+    const ROWS = 5;
+    const BOX_WIDTH = 140;
+    const BOX_HEIGHT = 160;
+    for (let row = 0; row < ROWS; row += 1) {
+      for (let column = 0; column < COLUMNS; column += 1) {
+        const index = row * COLUMNS + column;
+        const rect = {
+          x: column * (BOX_WIDTH + 30),
+          y: row * (BOX_HEIGHT + 20),
+          width: BOX_WIDTH,
+          height: BOX_HEIGHT,
+        };
+        nodes.push(compactNode(`fit-${index}`, rect, 8 + (index % 5)));
+        if (column > 0) {
+          edges.push({
+            source: `fit-${index}`,
+            target: `fit-${index - 1}`,
+            points: [
+              { x: rect.x, y: rect.y + BOX_HEIGHT / 2 },
+              { x: rect.x - 30, y: rect.y + BOX_HEIGHT / 2 },
+            ],
+            bundleSize: 1,
+          });
+        }
+      }
+    }
+    const drawing: SemanticDrawingGeometry = {
+      width: COLUMNS * (BOX_WIDTH + 30),
+      height: ROWS * (BOX_HEIGHT + 20),
+      nodes,
+      packages: [],
+      edges,
+    };
+    const canvas = { width: 480, height: 320 };
+    const fit = solveFitScale(drawing, { viewport: canvas });
+    assert.equal(fit.fits, true);
+
+    let compacted = 0;
+    for (const node of fit.layout.nodes) {
+      if (!node.hidden && !node.showMembers && node.cell.height < node.sourceCell.height - 0.5) compacted += 1;
+    }
+    assert.ok(compacted > 0, 'the fitted drawing must actually carry compacted class bodies');
+
+    // The pre-change engine kept every class body at its SOURCE height. Measured
+    // at the SAME scale, that drawing's boundary is strictly taller; the fit
+    // solve therefore could not have chosen this scale before the compaction.
+    const before = boundaryOf(fit.layout);
+    assert.ok(
+      before.height > fit.layout.content.height + 0.5 || before.width > fit.layout.content.width + 0.5,
+      `the full-body boundary must be larger: ${JSON.stringify(before)} vs ${JSON.stringify(fit.layout.content)}`,
+    );
+
+    // The binding dimension is filled — Fit spent the reclaimed height instead
+    // of leaving a margin (the exact regression "Fit gets smaller" describes).
+    const filled = Math.max(
+      fit.layout.content.width / canvas.width,
+      fit.layout.content.height / canvas.height,
+    );
+    assert.ok(filled >= 0.9, `Fit must fill the canvas' binding dimension; filled ${filled}`);
   });
 });

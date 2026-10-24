@@ -22,6 +22,31 @@ export const SEMANTIC_MIN_FONT_PX = 10;
 /** The minimum on-screen font size on a coarse pointer (the design's phone floor). */
 export const SEMANTIC_MIN_FONT_MOBILE_PX = 11;
 
+/**
+ * The scale at and above which the axis map is exactly the renderer's own
+ * layout times that scale. Kept here (not in the layout module) because the
+ * member-hidden compaction below is stated relative to the same threshold: a
+ * frame's body may only be reclaimed once the map has left the identity band.
+ */
+export const SEMANTIC_IDENTITY_SCALE = 0.9;
+
+/**
+ * How far below {@link SEMANTIC_IDENTITY_SCALE} the member-hidden compaction
+ * ramps. At 90 % of the identity threshold (0.81) a text-hidden frame has lost
+ * its whole body; above that the loss fades to zero at the threshold itself.
+ * The 10 % band is what makes the transition continuous instead of a visible
+ * jump the moment a tier starts hiding member text.
+ */
+export const MEMBER_COMPACTION_FADE_RATIO = 0.9;
+
+/**
+ * The fewest visible member rows a frame must fit before ANY member text is
+ * drawn. One lonely row above a rule reads as a stray label rather than a
+ * compartment, so the whole block is hidden instead — and the frame then
+ * reclaims the rows' space (see {@link planMemberFrameHeight}).
+ */
+export const MEMBER_ROWS_VISIBLE_MIN = 2;
+
 /** The widest a class box may grow to fit its name; past this the name falls back. */
 export const CLASS_NAME_MAX_WIDTH_PX = 130;
 /** Horizontal breathing room inside a class box (5px a side). */
@@ -99,6 +124,13 @@ export type PlannedEntityContent = {
   readonly minWidth: number;
   readonly minHeight: number;
   readonly titleHeight: number;
+  /**
+   * The worst title compartment the draw-time name form can pick: two lines for
+   * any name that did not plan as a single line. The frame's compact height
+   * uses THIS band, because a wide mapped box may re-plan the name onto two
+   * lines after the solver ran.
+   */
+  readonly reservedTitleHeight: number;
   readonly hasAttributes: boolean;
   readonly hasOperations: boolean;
   /** How many horizontal compartment rules the frame always draws. */
@@ -326,10 +358,71 @@ export function planEntityContent(
     minWidth: Math.max(name.minWidth, stereotypeWidth, CLASS_HIDDEN_WIDTH_PX),
     minHeight: Math.max(minHeight, CLASS_HIDDEN_HEIGHT_PX),
     titleHeight,
+    reservedTitleHeight: minTitleHeight,
     hasAttributes,
     hasOperations,
     ruleCount,
   };
+}
+
+/**
+ * The height of a frame that draws NO member text: its title band plus the one
+ * divider band the UML form keeps (a class frame always keeps its compartment
+ * rules, even when the rows are hidden).
+ *
+ * This is the height the axis solver feeds for a member-hidden entity, so the
+ * frame's body no longer reserves room for rows nothing draws.
+ */
+export function planCompactFrameHeight(args: {
+  readonly kind: PlannedEntityContent['kind'];
+  readonly hasAttributes: boolean;
+  /** The title compartment's height in the same units (tier-dependent). */
+  readonly titleHeight: number;
+}): number {
+  const body = args.kind === 'interface' && !args.hasAttributes ? 7 : 13;
+  return args.titleHeight + body;
+}
+
+/**
+ * How much of a hidden-member frame's body the current scale reclaims: 0 at
+ * {@link SEMANTIC_IDENTITY_SCALE} (the renderer's own layout owns the frame)
+ * and 1 at {@link MEMBER_COMPACTION_FADE_RATIO} of it and below.
+ *
+ * Monotone non-increasing in the scale and continuous, so shrinking past the
+ * threshold never produces a jump: a frame that hid its members keeps losing
+ * body smoothly until the body is gone.
+ */
+export function semanticMemberCompaction(scale: number): number {
+  if (!Number.isFinite(scale)) return 0;
+  const identity = SEMANTIC_IDENTITY_SCALE;
+  const floor = identity * MEMBER_COMPACTION_FADE_RATIO;
+  return Math.min(1, Math.max(0, (identity - scale) / (identity - floor)));
+}
+
+/**
+ * The vertical length one entity contributes to the axis solver.
+ *
+ * Member text visible → the renderer's own height, untouched. Member text
+ * hidden → the height shrinks toward the compact frame as the scale leaves the
+ * identity band; the solver then places every later breakpoint from THIS
+ * length, so the space the hidden rows would have occupied is reclaimed by the
+ * whole column rather than left as a blank body. The result never grows past
+ * `fullHeight` (a frame already shorter than its title + rule is left alone).
+ */
+export function planMemberFrameHeight(args: {
+  /** The renderer's own (unmapped) height for the entity. */
+  readonly fullHeight: number;
+  /** {@link planCompactFrameHeight} for the same entity. */
+  readonly compactHeight: number;
+  /** The member-row plan at the current scale — its `visible` decides. */
+  readonly rows: Pick<PlannedMemberRows, 'visible'>;
+  /** {@link semanticMemberCompaction} at the current scale (0..1). */
+  readonly compaction: number;
+}): number {
+  if (args.rows.visible) return args.fullHeight;
+  const compact = Math.min(args.fullHeight, args.compactHeight);
+  const compaction = Math.min(1, Math.max(0, args.compaction));
+  return args.fullHeight - compaction * (args.fullHeight - compact);
 }
 
 /** Padding the member-based compartment rule keeps from the last member line. */
@@ -464,6 +557,13 @@ export function planEdgeOpacity(visibleEdges: number): number {
 export type PlannedMemberRows = {
   /** Visible MEMBER rows, attributes first then operations (drawing order). */
   readonly rows: readonly string[];
+  /**
+   * Whether ANY member text is rendered: at least {@link MEMBER_ROWS_VISIBLE_MIN}
+   * rows fit. This is the verdict the axis solver reads to decide between the
+   * full height and the compact one — it is stated by the same function that
+   * decides the rows, so the two can never disagree.
+   */
+  readonly visible: boolean;
   /** Each visible row's compartment, parallel to `rows`. */
   readonly compartments: readonly ('attr' | 'op')[];
   /** How many visible rows are attributes (the compartment rule goes after them). */
@@ -518,6 +618,7 @@ export function planMemberRows(args: {
   const room = Math.floor((args.height - args.titleHeight - 10) / lineHeight);
   const empty: PlannedMemberRows = {
     rows: [],
+    visible: false,
     compartments: [],
     attrCount: 0,
     moreLabel: null,
@@ -554,6 +655,7 @@ export function planMemberRows(args: {
     // last visible row; keep the invariant that it is counted in the block.
     return {
       rows: shown.map((member) => member.text),
+      visible: shown.length >= MEMBER_ROWS_VISIBLE_MIN,
       compartments: shown.map((member) => member.compartment),
       attrCount,
       moreLabel,
@@ -564,6 +666,7 @@ export function planMemberRows(args: {
   }
   return {
     rows: shown.map((member) => member.text),
+    visible: shown.length >= MEMBER_ROWS_VISIBLE_MIN,
     compartments: shown.map((member) => member.compartment),
     attrCount,
     moreLabel,

@@ -1764,12 +1764,14 @@ app.use(
 // The observation wall (observation-object-model-seen-cursor-and-delta). The module is a leaf:
 // it reads and writes through the database barrel and knows nothing about websockets, so the
 // composition root binds its push seam to the cockpit hub — the same per-user socket fan-out
-// the cockpit already uses. The block cap is the server settings file's `observation.wallLimit`.
+// the cockpit already uses. The block cap is the server settings file's `observation.wallLimit`;
+// the UI view-event log's switch and path are `observation.viewEvents` (local file, never the DB).
 app.use(
     '/api/observation',
     authenticateToken,
     createObservationModule({
         wallLimit: serverSettings.observation.wallLimit,
+        viewEvents: serverSettings.observation.viewEvents,
         publish: (userId, frame) => cockpitHub.broadcast(userId, frame),
     }),
 );

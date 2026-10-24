@@ -1,7 +1,7 @@
 ---
 id: observation-p0-view-instrumentation-and-weekly-report
 title: 观察墙 T0：本地查看事件埋点（会话/tab 打开、停留、来源）+ 负载周报脚本入库
-status: ready
+status: done
 labels:
   - cockpit
   - observation
@@ -54,11 +54,3 @@ extra: {}
 - scripts/workload-report/README.md (new)
 - scripts/workload-report/testdata/sample.jsonl (new)
 - tasks/observation-p0-view-instrumentation-and-weekly-report.md
-
-## Blocker
-
-**2026-10-24T09:24:40.575Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=85984 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792833510853
-- run_id：wk-prod-anchor
-- session_id：ef3993c4-4c77-4e62-b65e-80111dfe7b72

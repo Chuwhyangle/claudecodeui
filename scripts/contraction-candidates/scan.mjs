@@ -386,7 +386,7 @@ async function scanGateEvents(root, sinceMs, windowDays, skipped, maxPerKind) {
   return candidates;
 }
 
-function scanLedgers(root, refs, sinceMs, windowDays, skipped, maxPerKind) {
+function scanLedgers(root, refs, sinceMs, windowDays, skipped, _maxPerKind) {
   const candidates = [];
   const files = listQuayFiles(root, /\.jsonl$/, { exclude: /^gate-events\.jsonl$/, cap: MAX_LEDGER_FILES });
   let sampled = 0;
@@ -648,7 +648,7 @@ function collectDirCode(dir) {
   return [...walkFiles(dir)].filter((f) => CODE_EXTS.has(path.extname(f).toLowerCase()));
 }
 
-function scanMetaMechanismRatio(root, windowDays, skipped, maxPerKind) {
+function scanMetaMechanismRatio(root, windowDays, skipped, _maxPerKind) {
   const candidates = [];
   const governance = [];
   for (const rel of GOVERNANCE_DIRS) governance.push(...collectDirCode(path.join(root, rel)));

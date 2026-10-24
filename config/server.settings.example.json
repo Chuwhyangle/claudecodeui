@@ -7,7 +7,12 @@
   },
   "_residentRestore": "Bring the most recently active resident sessions back after a restart, instead of waiting for the next send to open one lazily. `enabled` ships true: the pass launches one provider process per session, and an operator who does not want that launch burst writes `false` to opt out. `max` is the per-pass ceiling (16 sessions). `maxAgeMs` is the activity window; its default 86400000 (24 h) is the same ceiling an idle resident host is closed at, so a session that was already dead before the restart is not brought back. A malformed value falls back to its default and is reported in the server log. The pass runs after the orphan-scope sweep, never before it.",
   "observation": {
-    "wallLimit": 12
+    "wallLimit": 12,
+    "viewEvents": {
+      "enabled": true,
+      "path": "~/.cloudcli/ui-view-events.jsonl"
+    }
   },
-  "_observation": "The observation wall's block cap. At most `wallLimit` observed objects are shown; the rest are folded and the response carries `collapsedCount`. The observation layer's own 「观察层自身」 entry is not part of this cap — a quiet wall must still admit when its producers are stale or red. A malformed value (anything but a positive integer) falls back to the shipped 12 and is reported in the server log."
+  "_observation": "The observation wall's block cap. At most `wallLimit` observed objects are shown; the rest are folded and the response carries `collapsedCount`. The observation layer's own 「观察层自身」 entry is not part of this cap — a quiet wall must still admit when its producers are stale or red. A malformed value (anything but a positive integer) falls back to the shipped 12 and is reported in the server log.",
+  "_viewEvents": "The local UI view-event log the browser posts to `/api/observation/view-events`: session/tab opens, dwell and where the reader came from. `enabled` ships true; with it false the endpoint answers 204 and writes nothing. `path` is appended one JSON object per line and never leaves this machine — it is not a database table and does not sync across devices. Omit the block to keep both defaults. A malformed value falls back field by field and is reported in the server log."
 }

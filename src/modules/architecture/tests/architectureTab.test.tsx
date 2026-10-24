@@ -6841,3 +6841,156 @@ test('the layout and zoom readouts state the chosen direction and its reason', a
   assert.equal(zoomReadout.getAttribute('data-architecture-layout-direction'), direction);
   assert.equal(zoomReadout.getAttribute('data-architecture-layout-direction-reason'), reason);
 });
+
+/**
+ * The 55-entity "L" session graph, in the shape the real Architecture tab draws
+ * it: every entity carries a full member list, five directories hold them and a
+ * dependency chain links them. The boxes the renderer draws are therefore tall
+ * — the state in which the old engine left a blank class body at the sparse
+ * tiers while still charging the diagram for its height.
+ */
+const VERTICAL_COMPACTION_RESULT: ArchitectureGraphResult = (() => {
+  const ENTITY_COUNT = 55;
+  const nodes = Array.from({ length: ENTITY_COUNT }, (_unused, index) => {
+    const directory = `src/modules/m${index % 5}`;
+    const members = Array.from({ length: 8 + (index % 5) }, (_row, row) => ({
+      name: `member${row}`,
+      kind: row < 6 ? 'field' as const : 'method' as const,
+      visibility: row === 0 ? 'private' as const : 'public' as const,
+      signature: row < 6 ? `field${row}: string` : `method${row}(value: number): Promise<void>`,
+    }));
+    return {
+      id: `${directory}/File${index}.ts.Entity${index}`,
+      label: `Entity${index}`,
+      distance: index % 4,
+      kind: index % 9 === 0 ? 'interface' as const : 'class' as const,
+      members,
+    };
+  });
+  const edges = nodes.slice(1).map((node, index) => ({
+    from: node.id,
+    to: nodes[index].id,
+    relationType: 'dependency',
+  }));
+  return {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: {
+      file: { nodes, edges },
+      entity: { nodes, edges },
+    },
+    stats: {
+      ...RESULT.stats,
+      entityNodes: nodes.length,
+      entityEdges: edges.length,
+      entityTotal: nodes.length,
+      entityTruncated: false,
+      fileNodes: nodes.length,
+      fileEdges: edges.length,
+      fileTruncated: false,
+      nodeCount: nodes.length * 2,
+      edgeCount: edges.length * 2,
+      seedFiles: 1,
+      seedIdentifiers: nodes.length,
+      truncated: false,
+    },
+    provenance: RESULT.provenance,
+  };
+})();
+
+/**
+ * Every drawn class group and its geometry: the frame the rewrite painted, the
+ * renderer's own (source) height published as `data-h`, and whether member text
+ * is present.
+ */
+function drawnClassFrames(host: HTMLElement): {
+  id: string;
+  drawnHeight: number;
+  sourceHeight: number;
+  hasMemberText: boolean;
+}[] {
+  const frames: { id: string; drawnHeight: number; sourceHeight: number; hasMemberText: boolean }[] = [];
+  for (const group of host.querySelectorAll('.uml-node[data-entity-id]')) {
+    if ((group as HTMLElement).style.display === 'none') continue;
+    const rect = group.querySelector('rect');
+    const drawnHeight = Number(rect?.getAttribute('height') ?? 0);
+    if (!(drawnHeight > 0)) continue;
+    frames.push({
+      id: group.getAttribute('data-entity-id') ?? '',
+      drawnHeight,
+      sourceHeight: Number(group.getAttribute('data-h') ?? 0),
+      hasMemberText: group.querySelector('[data-architecture-node-member]') !== null,
+    });
+  }
+  return frames;
+}
+
+test('the 55-entity graph in tier B drops the member rows from the class bodies', async () => {
+  rememberShowAllFilter();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(VERTICAL_COMPACTION_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await screen.findByTestId('plantuml-host');
+  // A canvas on which Fit's solved scale lands inside tier B: tier A still
+  // needs more room than the canvas gives at 900×580, while the package-only
+  // tier is not yet reached (see the calibration in Evidence).
+  sizeHost(host, 640, 400);
+  await waitFor(() => assert.ok(host.querySelector('svg')));
+  triggerResize();
+  await waitFor(() => assert.ok(host.querySelector('svg')?.getAttribute('data-architecture-semantic') !== null));
+  const root = graphRoot();
+  fireEvent.click(root.querySelector('[data-architecture-zoom-fit]') as Element);
+  await waitFor(() => {
+    assert.equal(
+      host.querySelector('svg')?.getAttribute('data-architecture-semantic'),
+      'B',
+      'the fixture must reach the tier that hides member text',
+    );
+  });
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null);
+  const fitScale = Number(root.getAttribute('data-architecture-zoom-scale'));
+  const semanticScale = Number(svg.getAttribute('data-architecture-semantic-scale'));
+  assert.ok(Number.isFinite(fitScale) && fitScale >= MIN_ZOOM_SCALE, `Fit solved ${fitScale}`);
+  assert.ok(Math.abs(fitScale - semanticScale) < 1e-9, 'the readout states the scale the semantic solve used');
+
+  const frames = drawnClassFrames(host);
+  assert.ok(frames.length >= 40, `the fixture must draw its entities; drew ${frames.length}`);
+  const withoutMembers = frames.filter((frame) => !frame.hasMemberText);
+  assert.ok(withoutMembers.length >= 40, 'tier B draws no member text at all');
+  // Before the compaction the frame was charged the renderer's full height; the
+  // drawn frame is now strictly shorter for every box whose member block does
+  // not fit, and never grows.
+  let reclaimed = 0;
+  for (const frame of withoutMembers) {
+    assert.ok(frame.sourceHeight > 0, `${frame.id} must publish its source height`);
+    assert.ok(
+      frame.drawnHeight <= frame.sourceHeight + 0.5,
+      `${frame.id}: drawn frame ${frame.drawnHeight} must not exceed the source ${frame.sourceHeight}`,
+    );
+    if (frame.drawnHeight < frame.sourceHeight - 1) reclaimed += 1;
+  }
+  assert.ok(reclaimed >= 40, `only ${reclaimed} class bodies reclaimed their member rows`);
+
+  // The compact frame is title + divider, not the full member list: every box is
+  // a thin band regardless of how many rows it carried.
+  for (const frame of withoutMembers) {
+    assert.ok(
+      frame.drawnHeight <= 40,
+      `${frame.id}: compact class frame is ${frame.drawnHeight} high, expected the title+divider band`,
+    );
+  }
+
+  // Fit spent the reclaimed space: the compacted drawing fills the canvas'
+  // binding dimension, and the full-body drawing would have overflowed it at
+  // this same scale — so the pre-compaction engine could not have chosen this
+  // scale. (The engine-level case `semanticZoomLayout.test.ts` states the
+  // inequality directly.)
+  const contentBox = svgViewBoxSize(svg);
+  const filled = Math.max(contentBox.width / host.clientWidth, contentBox.height / host.clientHeight);
+  assert.ok(filled >= 0.9, `Fit must fill the canvas; filled ${filled}`);
+  const maxExtension = Math.max(...withoutMembers.map((frame) => frame.sourceHeight * semanticScale - frame.drawnHeight));
+  assert.ok(maxExtension > 1, `the member block was a real height (extension ${maxExtension})`);
+  assert.ok(
+    contentBox.height + maxExtension > host.clientHeight + 0.5,
+    'the full-body drawing would overflow this canvas at the fitted scale',
+  );
+});
