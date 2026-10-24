@@ -1,7 +1,7 @@
 ---
 id: observation-object-model-seen-cursor-and-delta
 title: 观察墙 T1：观察层——ObservedObject / SeenCursor / 差量 API / 经驾驶舱中枢推送，定义 cloudcli:// URI
-status: ready
+status: done
 labels:
   - cockpit
   - observation

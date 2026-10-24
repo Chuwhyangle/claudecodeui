@@ -36,6 +36,17 @@ export type {
 // connected-apps row, and (via `listByUser`) the per-user read there.
 export { oauthGrantsDb } from '@/modules/database/repositories/oauth-grants.db.js';
 export type { InsertOAuthGrantInput, OAuthGrantRow } from '@/modules/database/repositories/oauth-grants.db.js';
+// observationDb: used by the observation module to persist observed objects, their revision
+// log, per-user seen cursors and watch entries, and producer heartbeats.
+export { observationDb } from '@/modules/database/repositories/observation.repository.js';
+export type {
+  AppendObservedRevisionInput,
+  ObservationProducerHeartbeatRow,
+  ObservationSeenCursorRow,
+  ObservationWatchEntryRow,
+  ObservedObjectRow,
+  ObservedRevisionRow,
+} from '@/modules/database/repositories/observation.repository.js';
 export { notificationChannelEndpointsDb } from '@/modules/database/repositories/notification-channel-endpoints.js';
 export { notificationPreferencesDb } from '@/modules/database/repositories/notification-preferences.js';
 // providerModelsDb: used by Providers to persist user-managed custom model rows.

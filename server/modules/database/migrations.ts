@@ -13,6 +13,11 @@ import {
   OAUTH_CLIENTS_TABLE_SCHEMA_SQL,
   OAUTH_CODE_REDEMPTIONS_TABLE_SCHEMA_SQL,
   OAUTH_GRANTS_TABLE_SCHEMA_SQL,
+  OBSERVED_OBJECTS_TABLE_SCHEMA_SQL,
+  OBSERVED_REVISIONS_TABLE_SCHEMA_SQL,
+  OBSERVATION_PRODUCER_HEARTBEATS_TABLE_SCHEMA_SQL,
+  OBSERVATION_SEEN_CURSORS_TABLE_SCHEMA_SQL,
+  OBSERVATION_WATCH_ENTRIES_TABLE_SCHEMA_SQL,
   PROJECTS_TABLE_SCHEMA_SQL,
   PROVIDER_MODELS_TABLE_SCHEMA_SQL,
   PUSH_SUBSCRIPTIONS_TABLE_SCHEMA_SQL,
@@ -1041,6 +1046,17 @@ export const runMigrations = (db: Database) => {
     // no place among the ordered rebuilds below and is created here beside the
     // other standalone feature tables.
     db.exec(VOICE_USER_IDENTIFIERS_TABLE_SCHEMA_SQL);
+
+    // The observation layer (observation-object-model-seen-cursor-and-delta): the unified
+    // observed-object model, the append-only revision log, the cross-device seen cursor, the
+    // per-user watch list, and the producer heartbeats the wall's own liveness reading uses.
+    // Each is `CREATE TABLE IF NOT EXISTS`, so a second startup is a no-op and an install that
+    // predates the layer gains the tables in place.
+    db.exec(OBSERVED_OBJECTS_TABLE_SCHEMA_SQL);
+    db.exec(OBSERVED_REVISIONS_TABLE_SCHEMA_SQL);
+    db.exec(OBSERVATION_SEEN_CURSORS_TABLE_SCHEMA_SQL);
+    db.exec(OBSERVATION_WATCH_ENTRIES_TABLE_SCHEMA_SQL);
+    db.exec(OBSERVATION_PRODUCER_HEARTBEATS_TABLE_SCHEMA_SQL);
 
     db.exec(PROJECTS_TABLE_SCHEMA_SQL);
     rebuildProjectsTableWithPrimaryKeySchema(db);

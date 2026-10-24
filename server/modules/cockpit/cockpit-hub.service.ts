@@ -87,6 +87,13 @@ export type CockpitHub = {
   disconnect(connection: RealtimeClientConnection): void;
   /** The current state for one user, or null before anything has connected. */
   getState(userId: string | number | null): CockpitState | null;
+  /**
+   * Pushes one frame to every connection the user has announced, without touching cockpit
+   * state. The observation layer's `observation.update` frames ride this seam, so a state
+   * change reaches both of the user's devices over the sockets already open for the cockpit.
+   * Consumed by `server/index.ts`, which binds it to the observation module's `publish`.
+   */
+  broadcast(userId: string, frame: unknown): void;
 };
 
 /** A bounded identifier: the same ceiling the UI-client registry applies to client text. */
@@ -268,6 +275,16 @@ export function createCockpitHub(deps: CockpitHubDeps = {}): CockpitHub {
     getState(userId) {
       const key = userKey(userId);
       return key === null ? null : states.get(key) ?? null;
+    },
+
+    broadcast(userId, frame) {
+      const key = userKey(userId);
+      if (key === null) return;
+      for (const [connection, participant] of participants) {
+        if (participant.userId === key) {
+          write(connection, frame);
+        }
+      }
     },
   };
 }
