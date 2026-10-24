@@ -867,6 +867,8 @@
     "observationDaysAgo": "{{n}} hr lalu",
     "observationRevision": "revisi {{revision}}",
     "observationPreviewLabel": "Pratinjau observasi",
+    "observationBlindSpots": "Tampilan ini tidak dapat melihat:",
+    "observationOpenQuay": "Buka panel Quay",
     "observationLater": "Nanti saja",
     "observationRecentTurn": "Giliran terakhir",
     "observationChanges": "Perubahan",

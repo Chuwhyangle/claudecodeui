@@ -784,6 +784,8 @@
     "observationDaysAgo": "{{n}} gün önce",
     "observationRevision": "revizyon {{revision}}",
     "observationPreviewLabel": "Gözlem önizlemesi",
+    "observationBlindSpots": "Bu görünüm göremez:",
+    "observationOpenQuay": "Quay panelini aç",
     "observationLater": "Daha sonra",
     "observationRecentTurn": "Son tur",
     "observationChanges": "Değişiklikler",

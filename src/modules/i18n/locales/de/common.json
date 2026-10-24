@@ -754,6 +754,8 @@
     "observationDaysAgo": "vor {{n}} T.",
     "observationRevision": "Revision {{revision}}",
     "observationPreviewLabel": "Beobachtungsvorschau",
+    "observationBlindSpots": "Diese Ansicht kann nicht sehen:",
+    "observationOpenQuay": "Quay-Panel öffnen",
     "observationLater": "Später",
     "observationRecentTurn": "Letzte Runde",
     "observationChanges": "Änderungen",

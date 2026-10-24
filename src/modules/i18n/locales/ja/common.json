@@ -784,6 +784,8 @@
     "observationDaysAgo": "{{n}} 日前",
     "observationRevision": "リビジョン {{revision}}",
     "observationPreviewLabel": "観測プレビュー",
+    "observationBlindSpots": "このビューに見えないもの：",
+    "observationOpenQuay": "Quay パネルを開く",
     "observationLater": "後で見る",
     "observationRecentTurn": "最新のターン",
     "observationChanges": "変更",

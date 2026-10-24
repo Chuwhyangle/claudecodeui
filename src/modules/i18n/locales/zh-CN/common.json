@@ -784,6 +784,8 @@
     "observationDaysAgo": "{{n}} 天前",
     "observationRevision": "修订 {{revision}}",
     "observationPreviewLabel": "观察预览",
+    "observationBlindSpots": "这个视图看不见：",
+    "observationOpenQuay": "打开 Quay 面板",
     "observationLater": "稍后再看",
     "observationRecentTurn": "最近一轮",
     "observationChanges": "改动",
