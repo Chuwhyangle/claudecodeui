@@ -254,6 +254,21 @@ function fleetSegmentForView(
   return resolveCockpitProject(projects, view.project)?.fleetProjectId ?? null;
 }
 
+/**
+ * True when the URL spells a view explicitly (`?view=fleet`, `?view=board&project=…`).
+ *
+ * THIS IS THE DIFFERENCE BETWEEN A NAVIGATION AND A LANDING. A bare `/cockpit` is where the
+ * person happens to arrive; a `view` parameter was put there by someone — a sidebar mode switch,
+ * a project row's 「在驾驶舱中查看」, a pasted link — and states what they asked to see. The hub's
+ * held view must not override the latter (that is the stale-hub bug this page used to have),
+ * while it still owns the former (the cross-device "another display drove it" semantics).
+ */
+function hasExplicitCockpitView(search: string): boolean {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const value = params.get('view');
+  return value !== null && value.trim() !== '';
+}
+
 /** Rendered by `App` for the `/cockpit` route. */
 export default function CockpitPage() {
   const { t } = useTranslation();
@@ -314,6 +329,28 @@ export default function CockpitPage() {
   // A deep link (`?view=board&project=…`) is restored into the hub ONCE, after the fleet reads,
   // because the fleet registry id that addresses the hub is only known then.
   const seededRef = useRef(false);
+  // Whether the page was opened on an explicit view. Captured at mount: the URL changes as the
+  // page mirrors the hub later, and the entry decision must keep reading the ORIGINAL address.
+  const initialViewExplicitRef = useRef(hasExplicitCockpitView(location.search));
+  // Who wins the view on entry: `pending` until the roster can translate a deep link, then
+  // `url` (a deliberate navigation was opened) or `hub` (a bare `/cockpit` adopts what the hub
+  // holds). A reconnection moves it back to `hub` — see the reconnect effect below.
+  const viewDirectionRef = useRef<'pending' | 'url' | 'hub'>('pending');
+  // The hub revision at the moment the entry URL chose its view. A frame the hub broadcast
+  // BEFORE that moment describes where the hub was, not where this page asked to go; it must
+  // not rewrite the URL. Frames after it are the hub acknowledging the entry (or another
+  // display genuinely driving the cockpit) and are mirrored normally.
+  const urlDirectionRevRef = useRef(0);
+  // Wakes the mirror effect for decisions that are not a hub revision: the entry direction
+  // being settled, and a reconnection adopting the hub again.
+  const [viewReconcileNonce, setViewReconcileNonce] = useState(0);
+  // Connection edge tracking: the FIRST connect is not a reconnection (a deep link must
+  // survive the socket coming up after mount); only a later false→true adopts the hub.
+  const connectedRef = useRef(hub.connected);
+  const everConnectedRef = useRef(hub.connected);
+  // Set on a reconnection so the mirror effect follows the hub even when its view key is
+  // unchanged (the transport, not the view, is what changed).
+  const forceHubMirrorRef = useRef(false);
   // The echo arm: true between submitting a phrase and the hub answering it, so an unrelated
   // hub frame cannot be reported as "your input did". `echoSubmitRevRef` is the hub revision
   // the phrase was sent at, so a repeat of the SAME view still produces a done echo.
@@ -489,19 +526,53 @@ export default function CockpitPage() {
     [focusables, hubState.focusUri],
   );
 
-  // Restore a deep-linked BOARD into the hub once the fleet roster can translate it, so a
-  // key/utterance that follows addresses the board the person opened.
+  // Decide who owns the view on entry, once the fleet roster can translate a deep link.
+  //
+  // THE ORDER IS THE WHOLE POINT. A URL that spells a view explicitly is a deliberate
+  // navigation and WINS over whatever the hub held from another display: the page keeps the URL
+  // it was asked to show and tells the hub (`setView`), so the other displays follow. Only a
+  // bare `/cockpit` adopts the hub's held view — that is where "another display drove it" still
+  // means something. Before this decision the mirror effect stays out of the way, so a stale
+  // `?view=board&project=A` frame cannot erase a `?view=board&project=B` link.
   useEffect(() => {
-    if (seededRef.current || fleet.status !== 'loaded') return;
+    // While the roster is still loading, a fleet id in the URL has no translation yet — and a
+    // gateway error must not leave the direction permanently undecided, so only `loading` waits.
+    if (seededRef.current || fleet.status === 'loading') return;
     seededRef.current = true;
-    if (urlView.type !== 'board') return;
-    // The hub already has a view (another display drove it): the URL is stale, the hub wins.
-    if (hubState.rev !== 0 || hubState.view.type !== 'fleet') return;
+    urlDirectionRevRef.current = hubState.rev;
+    setViewReconcileNonce((nonce) => nonce + 1);
+    if (!initialViewExplicitRef.current) {
+      viewDirectionRef.current = 'hub';
+      return;
+    }
+    viewDirectionRef.current = 'url';
+    // The hub has no wall stage — the wall and 「全部项目」 are both its `fleet`. Saying so
+    // explicitly is also what moves a board held by another display back to the fleet.
+    if (urlView.type !== 'board') {
+      hub.dispatch({ type: 'setView', view: { type: 'fleet' } });
+      return;
+    }
     const segment = fleetSegmentForView(projects, urlView);
+    // An unregistered project has no hub address; the URL still wins, but there is nothing to
+    // tell the hub (the page's own board is the only place it exists).
     if (segment !== null) {
       hub.dispatch({ type: 'setView', view: { type: 'board', project: segment } });
     }
-  }, [fleet.status, hub, hubState.rev, hubState.view, projects, urlView]);
+  }, [fleet.status, hub, hubState.rev, projects, urlView]);
+
+  // A reconnection is not a navigation: the display comes back and follows the hub again, even
+  // when the URL still spells the view it was opened with. The FIRST connection is exempt —
+  // the socket coming up after mount must not undo a deep link.
+  useEffect(() => {
+    const wasConnected = connectedRef.current;
+    const hadConnectedBefore = everConnectedRef.current;
+    connectedRef.current = hub.connected;
+    if (hub.connected) everConnectedRef.current = true;
+    if (wasConnected || !hub.connected || !hadConnectedBefore || !seededRef.current) return;
+    viewDirectionRef.current = 'hub';
+    forceHubMirrorRef.current = true;
+    setViewReconcileNonce((nonce) => nonce + 1);
+  }, [hub.connected]);
 
   // The display's report: exactly what this page is drawing, published to the hub so the input
   // pack is built from the screen the person is looking at. Serialized as the effect key so a
@@ -548,15 +619,38 @@ export default function CockpitPage() {
     reportVisible(visibleReportRef.current);
   }, [fleet.status, hub.connected, hubDescribesView, reportVisible, visibleReportKey]);
 
-  // A hub-originated board intent becomes a browser navigation (PUSH), so 「后退」 returns to
-  // the view the person came from. Wall/「全部项目」 are page-local views: the hub never needs to
-  // name them, and turning every key press into a history entry would be noise.
+  // A hub-originated view becomes a browser navigation (PUSH), so 「后退」 returns to the view
+  // the person came from. Wall/「全部项目」 are page-local views: the hub never needs to name them,
+  // and turning every key press into a history entry would be noise.
+  //
+  // NOTHING HERE RUNS BEFORE THE ENTRY DIRECTION IS DECIDED (`pending`): until the roster has
+  // translated a deep link, the only frames in hand describe where the HUB was, and mirroring
+  // them is exactly how a `?view=board&project=B` link used to land on A and stay there.
   const lastHubViewRef = useRef<string>('fleet');
   useEffect(() => {
     if (hubState.rev === 0) return;
+    if (viewDirectionRef.current === 'pending') return;
     const key =
       hubState.view.type === 'board' ? `board:${hubState.view.project.toLowerCase()}` : 'fleet';
-    if (lastHubViewRef.current === key) return;
+    const forced = forceHubMirrorRef.current;
+    forceHubMirrorRef.current = false;
+    // The URL was a deliberate navigation on entry. Only frames the hub broadcast AFTER that
+    // decision can speak for it: the hub agreeing with the URL is our `setView` acknowledged
+    // (ordinary mirroring resumes), and anything else is a later push from another display.
+    if (viewDirectionRef.current === 'url' && !forced) {
+      if (hubState.rev <= urlDirectionRevRef.current) return;
+      const hubMatchesUrl =
+        hubState.view.type === 'fleet'
+          ? urlView.type !== 'board'
+          : urlView.type === 'board' &&
+            (fleetSegmentForView(projects, urlView) ?? urlView.project).toLowerCase() ===
+              hubState.view.project.toLowerCase();
+      viewDirectionRef.current = 'hub';
+      lastHubViewRef.current = key;
+      if (hubMatchesUrl) return;
+    } else if (!forced && lastHubViewRef.current === key) {
+      return;
+    }
     lastHubViewRef.current = key;
     if (hubState.view.type === 'board') {
       const target = cockpitViewForHubView(projects, hubState.view);
@@ -572,7 +666,15 @@ export default function CockpitPage() {
     if (urlView.type === 'board') {
       navigate(withDebugQuery(cockpitViewPath({ type: 'wall' }), location.search));
     }
-  }, [hubState.rev, hubState.view, location.search, navigate, projects, urlView.type]);
+  }, [
+    hubState.rev,
+    hubState.view,
+    location.search,
+    navigate,
+    projects,
+    urlView,
+    viewReconcileNonce,
+  ]);
 
   // A URL stored by an older cockpit carries the CloudCLI project id. Once the roster can
   // translate it, rewrite it to the fleet registry id with REPLACE — the same view, spelled in
@@ -1019,6 +1121,9 @@ export default function CockpitPage() {
       data-cockpit-timings={JSON.stringify(timings)}
       data-cockpit-hub-rev={hubState.rev}
       data-cockpit-hub-view={JSON.stringify(hubState.view)}
+      // The transport reading, beside the state it delivers: a display that has lost the hub is
+      // a diagnosable state for the scenario runner, not something to infer from a frozen rev.
+      data-cockpit-hub-connected={hub.connected ? 'true' : 'false'}
       data-cockpit-focus-uri={focusObject?.uri ?? undefined}
       data-cockpit-debug={debug ? 'true' : undefined}
     >
