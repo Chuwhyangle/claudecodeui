@@ -145,6 +145,7 @@ function builtInSystemPrompt(maxChipChars: number): string {
   return [
     '你在为用户起草聊天输入框里可直接发送的回复。用户刚看完助手最后一条消息，要从中挑一条。',
     '给出 3 条互不相同的完整回复：第 1 条用「；」分隔、简要回答所有待答点，助手给了推荐就采纳；',
+    '单个要点时不要以分隔符结尾。',
     '第 2、3 条是真正的备选（不同的决定，或更短的确认），不是第 1 条的改写。',
     `用用户的语言和简短风格，每条不超过 ${maxChipChars} 个字符。`,
     '不得编造消息里没有的事实、数字或测量值：可以替人做决定，不可以编造事实。',
@@ -261,12 +262,29 @@ function buildExpansionPrompt(options: {
 }
 
 /**
+ * Separator marks the prompt asks the model to put between answers to several
+ * points. At the END of a chip they are noise: a chip is a complete reply, and a
+ * trailing `；` reads as an unfinished sentence. Only these marks are stripped —
+ * sentence endings (`。？！`) and closing brackets/quotes are part of the text.
+ *
+ * Consumers: `reply-suggestions.service.ts` (`parseSuggestionChips`) only.
+ */
+const TRAILING_SEPARATOR_MARKS = /[；;，,、]+$/u;
+
+/** Drops separator marks at the very end of a chip; idempotent and safe on empty strings. */
+function stripTrailingSeparatorMarks(text: string): string {
+  return text.replace(TRAILING_SEPARATOR_MARKS, '').trimEnd();
+}
+
+/**
  * Parse the model's answer into a raw chip list.
  *
  * Accepts `{"chips": [...]}`, a bare array and either wrapped in a ``` fence.
  * Every element must be a string; anything else refuses the WHOLE answer (it is
- * an upstream-shape failure, mapped to 502 by the caller). Empty strings are
- * dropped; clipping and exact de-duplication happen in `selectChips`.
+ * an upstream-shape failure, mapped to 502 by the caller). Trailing separator
+ * marks are stripped here, before exact de-duplication in `selectChips`, so
+ * `甲；` and `甲` are the same chip. A chip that was only separator marks becomes
+ * empty and is dropped, never passed on as an empty string.
  *
  * Consumers: `reply-suggestions.service.ts` (both the first and the supplement
  * call) and the service criterion.
@@ -306,7 +324,9 @@ export function parseSuggestionChips(text: string): string[] {
   if (chips.some((chip) => typeof chip !== 'string')) {
     throw new ReplySuggestionsClientError('shape', 'the model answer contained a non-string chip');
   }
-  return (chips as string[]).map((chip) => chip.trim()).filter((chip) => chip !== '');
+  return (chips as string[])
+    .map((chip) => stripTrailingSeparatorMarks(chip.trim()))
+    .filter((chip) => chip !== '');
 }
 
 /**

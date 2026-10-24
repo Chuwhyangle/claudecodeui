@@ -38,6 +38,23 @@ type InputSuggestionChipsProps = {
   showPreview?: boolean;
 };
 
+/**
+ * The second line's reading for one chip.
+ *
+ * A quoted chip fills a `> …` block, so its preview shows that block's first
+ * line rather than the raw passage: the marker and the line break are part of
+ * what a click actually writes, and the preview's own `truncate` class shortens
+ * a long line. Model and habit chips fill their own text, so their preview is
+ * that complete text.
+ */
+function previewTextFor(chip: SuggestionChip): string {
+  if (chip.source !== 'quoted') {
+    return chip.text;
+  }
+  const firstLine = chip.text.split(/\r?\n/u)[0] ?? '';
+  return `> ${firstLine}`;
+}
+
 /** Touch devices have no hover, so a preview would only be a flash before the fill. */
 function isCoarsePointer(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -100,10 +117,14 @@ export function InputSuggestionChips({
   }
 
   const previewEnabled = showPreview ?? !isCoarsePointer();
+  // The chip the pointer is over wins, then the keyboard selection. Only when
+  // neither exists does the preview fall back to the first model chip; the
+  // quoted chip is never a fallback because it is not a reply to send.
+  const activeIndex = hoveredIndex ?? selectedIndex;
   const previewChip = previewEnabled
-    ? resolved[hoveredIndex ?? selectedIndex ?? -1]
-      ?? resolved.find((chip) => chip.source === 'model')
-      ?? null
+    ? (activeIndex === null
+      ? resolved.find((chip) => chip.source === 'model') ?? null
+      : resolved[activeIndex] ?? null)
     : null;
 
   const accept = (chip: SuggestionChip, index: number) => {
@@ -189,13 +210,14 @@ export function InputSuggestionChips({
       {previewChip && (
         // The textarea's second line: the complete text of the hovered or
         // keyboard-selected chip, or the first model chip when neither exists.
-        // Never a hit target — the chips above keep the pointer.
+        // A quoted chip previews the first line it will fill (`> …`). Never a
+        // hit target — the chips above keep the pointer.
         <span
           data-suggestion-preview={previewChip.source}
           aria-label={t('input.suggestions.previewHint', { defaultValue: 'Full suggestion' })}
           className="pointer-events-none absolute left-4 right-4 top-7 truncate text-xs text-muted-foreground/70"
         >
-          {previewChip.text}
+          {previewTextFor(previewChip)}
         </span>
       )}
     </div>
