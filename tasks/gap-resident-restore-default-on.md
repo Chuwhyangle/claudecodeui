@@ -1,7 +1,7 @@
 ---
 id: gap-resident-restore-default-on
 title: resident 恢复默认开启：residentRestore.enabled 出厂缺省翻 true（同步改判据）
-status: ready
+status: done
 labels:
   - gap
 parent: null
