@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
-import { useReplySuggestions, resetReplySuggestionsBatchCache } from '@/modules/chat/hooks/useReplySuggestions';
+import { useReplySuggestions } from '@/modules/chat/hooks/useReplySuggestions';
+import { resetReplySuggestionsBatchCache } from '@/modules/chat/utils/replySuggestionsController';
 
 /**
  * The model-chip hook, one leg per rule the proposal states.
@@ -30,7 +31,8 @@ vi.mock('@/shared/api', () => ({
   },
 }));
 
-const okJson = (data: unknown) => Promise.resolve({ ok: true, status: 200, json: async () => data });
+/** The API layer owns parsing; these mocks hand the controller its typed readings. */
+const respond = (value: unknown) => Promise.resolve(value);
 
 const STATUS_ON = { enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120 };
 const STATUS_OFF = { enabled: false, expansion: 'off', maxChips: 3, maxChipChars: 120 };
@@ -69,9 +71,12 @@ beforeEach(() => {
   // The batch table lives at module scope so it survives a remount; every test
   // must start with an empty page.
   resetReplySuggestionsBatchCache();
-  apiMocks.status.mockReset().mockImplementation(() => okJson(STATUS_ON));
-  apiMocks.suggest.mockReset().mockImplementation(() => okJson({ chips: ['答复一', '答复二'], draw: 7 }));
-  apiMocks.event.mockReset().mockImplementation(() => Promise.resolve({ ok: true, status: 204 }));
+  apiMocks.status.mockReset().mockImplementation(() => Promise.resolve(STATUS_ON));
+  apiMocks.suggest.mockReset().mockImplementation(() => Promise.resolve({
+    chips: ['答复一', '答复二'],
+    draw: 7,
+  }));
+  apiMocks.event.mockReset().mockImplementation(() => Promise.resolve(true));
 });
 
 afterEach(() => {
@@ -80,20 +85,20 @@ afterEach(() => {
 
 describe('useReplySuggestions', () => {
   it('(a) sends no draw and reports the feature off when /status says disabled', async () => {
-    apiMocks.status.mockImplementation(() => okJson(STATUS_OFF));
+    apiMocks.status.mockImplementation(() => respond(STATUS_OFF));
     const { result } = renderReply();
 
     await flush();
 
     assert.equal(result.current.enabled, false, 'the button must not be drawn');
-    assert.equal(result.current.chips.length, 0);
+    assert.equal(result.current.firstDraw.chips.length, 0);
     assert.equal(apiMocks.suggest.mock.calls.length, 0, 'a disabled feature must not draw');
   });
 
   it('(b) draws once for one assistant message, across re-renders and an empty<->draft cycle', async () => {
     const { result, rerender } = renderReply();
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['答复一', '答复二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['答复一', '答复二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 1);
 
     // A re-render with the same message id: not a second draw.
@@ -107,7 +112,7 @@ describe('useReplySuggestions', () => {
     rerender(baseArgs({ active: true }));
     await flush();
     assert.equal(apiMocks.suggest.mock.calls.length, 1, 'clearing the box must not draw again');
-    assert.deepEqual(result.current.chips, ['答复一', '答复二']);
+    assert.deepEqual(result.current.firstDraw.chips, ['答复一', '答复二']);
   });
 
   it('(c) draws again when the assistant message id changes', async () => {
@@ -115,9 +120,9 @@ describe('useReplySuggestions', () => {
     await settle(result);
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
 
-    apiMocks.suggest.mockImplementation(() => okJson({ chips: ['新答复'], draw: 8 }));
+    apiMocks.suggest.mockImplementation(() => respond({ chips: ['新答复'], draw: 8 }));
     rerender(baseArgs({ lastAssistantMessageId: 'assistant-2' }));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['新答复']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['新答复']));
     assert.equal(apiMocks.suggest.mock.calls.length, 2, 'a new answer is a new draw');
   });
 
@@ -127,24 +132,24 @@ describe('useReplySuggestions', () => {
     await settle(result);
     await flush();
 
-    assert.deepEqual(result.current.chips, [], 'a failed draw leaves only the habit chips to the strip');
+    assert.deepEqual(result.current.firstDraw.chips, [], 'a failed draw leaves only the habit chips to the strip');
     assert.equal(result.current.enabled, true, 'the button stays available for a retry');
   });
 
   it('(e) the Suggest action sends redraw:true and replaces the batch instead of appending', async () => {
     const { result } = renderReply();
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['答复一', '答复二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['答复一', '答复二']));
 
-    apiMocks.suggest.mockImplementation(() => okJson({ chips: ['新一', '新二', '新三'], draw: 9 }));
+    apiMocks.suggest.mockImplementation(() => respond({ chips: ['新一', '新二', '新三'], draw: 9 }));
     act(() => {
-      result.current.redraw();
+      result.current.firstDraw.redraw();
     });
-    await waitFor(() => assert.deepEqual(result.current.chips, ['新一', '新二', '新三']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['新一', '新二', '新三']));
 
     const redrawCall = apiMocks.suggest.mock.calls.at(-1)?.[0] as Record<string, unknown>;
     assert.equal(redrawCall.redraw, true);
-    assert.equal(result.current.draw, 9);
+    assert.equal(result.current.firstDraw.draw, 9);
   });
 
   it('(f) carries the quoted selection as focus on a redraw', async () => {
@@ -152,7 +157,7 @@ describe('useReplySuggestions', () => {
     await settle(result);
 
     act(() => {
-      result.current.redraw();
+      result.current.firstDraw.redraw();
     });
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 2));
     const body = apiMocks.suggest.mock.calls.at(-1)?.[0] as Record<string, unknown>;
@@ -169,26 +174,26 @@ describe('useReplySuggestions', () => {
     }));
 
     act(() => {
-      result.current.redraw();
+      result.current.firstDraw.redraw();
     });
-    assert.equal(result.current.loading, true, 'the button is disabled while the draw is in flight');
+    assert.equal(result.current.firstDraw.loading, true, 'the button is disabled while the draw is in flight');
 
     await act(async () => {
-      resolveDraw?.(await okJson({ chips: ['答复'], draw: 10 }));
+      resolveDraw?.(await respond({ chips: ['答复'], draw: 10 }));
     });
-    await waitFor(() => assert.equal(result.current.loading, false));
+    await waitFor(() => assert.equal(result.current.firstDraw.loading, false));
   });
 
   it('(h) reports picked, redrawn and sent once each, and swallows a refused ledger write', async () => {
     const { result } = renderReply();
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['答复一', '答复二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['答复一', '答复二']));
 
     apiMocks.event.mockImplementation(() => Promise.reject(new Error('ledger refused')));
 
     act(() => {
       result.current.reportEvent('picked', 1);
-      result.current.redraw();
+      result.current.firstDraw.redraw();
     });
     await waitFor(() => assert.equal(apiMocks.event.mock.calls.length, 2));
     act(() => {
@@ -221,29 +226,27 @@ describe('useReplySuggestions', () => {
     await settle(result);
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
 
-    apiMocks.suggest.mockImplementationOnce(
-      () => Promise.resolve({ ok: false, status: 502, json: async () => ({}) }),
-    );
+    apiMocks.suggest.mockImplementationOnce(() => Promise.resolve(null));
     let refused: boolean | undefined;
     await act(async () => {
-      refused = await result.current.redraw();
+      refused = await result.current.firstDraw.redraw();
     });
     assert.equal(refused, false, 'a non-ok answer is a failed draw');
 
     apiMocks.suggest.mockImplementationOnce(() => Promise.reject(new Error('gateway down')));
     let thrown: boolean | undefined;
     await act(async () => {
-      thrown = await result.current.redraw();
+      thrown = await result.current.firstDraw.redraw();
     });
     assert.equal(thrown, false, 'a thrown request is a failed draw');
 
-    apiMocks.suggest.mockImplementationOnce(() => okJson({ chips: ['新答复'], draw: 11 }));
+    apiMocks.suggest.mockImplementationOnce(() => respond({ chips: ['新答复'], draw: 11 }));
     let applied: boolean | undefined;
     await act(async () => {
-      applied = await result.current.redraw();
+      applied = await result.current.firstDraw.redraw();
     });
     assert.equal(applied, true, 'an applied batch is a success');
-    assert.deepEqual(result.current.chips, ['新答复']);
+    assert.deepEqual(result.current.firstDraw.chips, ['新答复']);
   });
 });
 
@@ -257,21 +260,21 @@ const expansionCalls = () => apiMocks.suggest.mock.calls
 
 describe('useReplySuggestions expansion', () => {
   beforeEach(() => {
-    apiMocks.status.mockImplementation(() => okJson(STATUS_VARY));
+    apiMocks.status.mockImplementation(() => respond(STATUS_VARY));
   });
 
   it('(a) has no expansion request while the settings say expansion off', async () => {
-    apiMocks.status.mockImplementation(() => okJson(STATUS_ON));
+    apiMocks.status.mockImplementation(() => respond(STATUS_ON));
     const { result } = renderReply();
     await settle(result);
 
     act(() => {
-      result.current.requestExpansion({ seed: '一条已选定的回复' });
+      result.current.expansion.request({ seed: '一条已选定的回复' });
     });
     await flush();
 
-    assert.equal(result.current.expansionEnabled, false);
-    assert.equal(result.current.expansionChips.length, 0);
+    assert.equal(result.current.expansion.enabled, false);
+    assert.equal(result.current.expansion.chips.length, 0);
     assert.equal(expansionCalls().length, 0, 'expansion off must not reach the server');
   });
 
@@ -280,56 +283,56 @@ describe('useReplySuggestions expansion', () => {
     await settle(result);
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
 
-    apiMocks.suggest.mockImplementation(() => okJson({ chips: ['变体一', '变体二'], draw: 12 }));
+    apiMocks.suggest.mockImplementation(() => respond({ chips: ['变体一', '变体二'], draw: 12 }));
     act(() => {
-      result.current.requestExpansion({ seed: '  已选定的回复  ' });
+      result.current.expansion.request({ seed: '  已选定的回复  ' });
     });
-    await waitFor(() => assert.deepEqual(result.current.expansionChips, ['变体一', '变体二']));
+    await waitFor(() => assert.deepEqual(result.current.expansion.chips, ['变体一', '变体二']));
 
     const calls = expansionCalls();
     assert.equal(calls.length, 1, 'one pick is one request');
     assert.equal(calls[0].seed, '已选定的回复', 'the seed is trimmed');
-    assert.equal(result.current.expansionSource, 'seed');
-    assert.equal(result.current.expansionDepth, 1);
-    assert.equal(result.current.draw, 12, 'the chips carry the expansion draw id');
+    assert.equal(result.current.expansion.source, 'seed');
+    assert.equal(result.current.expansion.depth, 1);
+    assert.equal(result.current.firstDraw.draw, 12, 'the chips carry the expansion draw id');
   });
 
   it('(c) sends a focus-anchored request when the seed is empty', async () => {
     const { result } = renderReply();
     await settle(result);
-    apiMocks.suggest.mockImplementation(() => okJson({ chips: ['回应一'], draw: 13 }));
+    apiMocks.suggest.mockImplementation(() => respond({ chips: ['回应一'], draw: 13 }));
 
     act(() => {
-      result.current.requestExpansion({ focus: '  被引用的原文  ', seed: '' });
+      result.current.expansion.request({ focus: '  被引用的原文  ', seed: '' });
     });
-    await waitFor(() => assert.deepEqual(result.current.expansionChips, ['回应一']));
+    await waitFor(() => assert.deepEqual(result.current.expansion.chips, ['回应一']));
 
     const calls = expansionCalls();
     assert.equal(calls.length, 1);
     assert.equal(calls[0].focus, '被引用的原文');
     assert.equal('seed' in calls[0], false, 'an empty seed is not sent');
-    assert.equal(result.current.expansionSource, 'focus');
+    assert.equal(result.current.expansion.source, 'focus');
   });
 
   it('(d) stops at five expansion requests in one chain', async () => {
     const { result } = renderReply();
     await settle(result);
-    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => okJson({
+    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => respond({
       chips: [`变体-${String(body.seed ?? '')}`, '另一条'],
       draw: 20,
     }));
 
     for (let depth = 1; depth <= 5; depth += 1) {
       act(() => {
-        result.current.requestExpansion({ seed: `seed-${depth}` });
+        result.current.expansion.request({ seed: `seed-${depth}` });
       });
-      await waitFor(() => assert.equal(result.current.expansionDepth, depth));
+      await waitFor(() => assert.equal(result.current.expansion.depth, depth));
     }
     assert.equal(expansionCalls().length, 5);
-    assert.equal(result.current.canExpand, false);
+    assert.equal(result.current.expansion.canExpand, false);
 
     act(() => {
-      result.current.requestExpansion({ seed: 'seed-6' });
+      result.current.expansion.request({ seed: 'seed-6' });
     });
     await flush();
     assert.equal(expansionCalls().length, 5, 'depth 5 is the cap');
@@ -339,27 +342,27 @@ describe('useReplySuggestions expansion', () => {
     const { result } = renderReply();
     await settle(result);
     act(() => {
-      result.current.requestExpansion({ seed: '已选定的回复' });
+      result.current.expansion.request({ seed: '已选定的回复' });
     });
-    await waitFor(() => assert.equal(result.current.expansionChips.length, 2));
+    await waitFor(() => assert.equal(result.current.expansion.chips.length, 2));
 
     act(() => {
-      result.current.clearExpansion();
+      result.current.expansion.clear();
     });
     await flush();
 
-    assert.deepEqual(result.current.expansionChips, []);
-    assert.equal(result.current.expansionSource, null);
-    assert.equal(result.current.expansionDepth, 0);
+    assert.deepEqual(result.current.expansion.chips, []);
+    assert.equal(result.current.expansion.source, null);
+    assert.equal(result.current.expansion.depth, 0);
   });
 
   it('(f) a session switch drops an expansion chain, and picked events carry the source', async () => {
     const { result, rerender } = renderReply();
     await settle(result);
     act(() => {
-      result.current.requestExpansion({ seed: '已选定的回复' });
+      result.current.expansion.request({ seed: '已选定的回复' });
     });
-    await waitFor(() => assert.equal(result.current.expansionChips.length, 2));
+    await waitFor(() => assert.equal(result.current.expansion.chips.length, 2));
 
     act(() => {
       result.current.reportEvent('picked', 0, 'seed');
@@ -370,8 +373,8 @@ describe('useReplySuggestions expansion', () => {
 
     rerender(baseArgs({ sessionId: 'session-b' }));
     await flush();
-    assert.deepEqual(result.current.expansionChips, [], 'another conversation owns another draft');
-    assert.equal(result.current.expansionDepth, 0);
+    assert.deepEqual(result.current.expansion.chips, [], 'another conversation owns another draft');
+    assert.equal(result.current.expansion.depth, 0);
   });
 });
 
@@ -387,24 +390,24 @@ describe('useReplySuggestions batch cache', () => {
   const perSession = () => apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => {
     const session = String(body.sessionId);
     if (body.redraw === true) {
-      return okJson({ chips: [`${session}-重抽一`, `${session}-重抽二`], draw: 9 });
+      return respond({ chips: [`${session}-重抽一`, `${session}-重抽二`], draw: 9 });
     }
-    return okJson({ chips: [`${session}-一`, `${session}-二`], draw: 7 });
+    return respond({ chips: [`${session}-一`, `${session}-二`], draw: 7 });
   });
 
   it('(a) switching to another conversation and back restores the batch without a request', async () => {
     perSession();
     const { result, rerender } = renderReply();
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 1);
 
     rerender(baseArgs({ sessionId: 'session-b', lastAssistantMessageId: 'assistant-b' }));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-b-一', 'session-b-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-b-一', 'session-b-二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 2);
 
     rerender(baseArgs({ sessionId: 'session-a', lastAssistantMessageId: 'assistant-1' }));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 2, 'switching back must not draw again');
     assert.deepEqual(drawnSessions(), ['session-a', 'session-b']);
   });
@@ -413,19 +416,19 @@ describe('useReplySuggestions batch cache', () => {
     perSession();
     const { result, rerender } = renderReply();
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
 
     await act(async () => {
-      assert.equal(await result.current.redraw(), true);
+      assert.equal(await result.current.firstDraw.redraw(), true);
     });
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-重抽一', 'session-a-重抽二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-重抽一', 'session-a-重抽二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 2);
 
     rerender(baseArgs({ sessionId: 'session-b', lastAssistantMessageId: 'assistant-b' }));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-b-一', 'session-b-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-b-一', 'session-b-二']));
 
     rerender(baseArgs({ sessionId: 'session-a', lastAssistantMessageId: 'assistant-1' }));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-重抽一', 'session-a-重抽二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-重抽一', 'session-a-重抽二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 3, 'the restore is the only thing that happened');
   });
 
@@ -433,54 +436,54 @@ describe('useReplySuggestions batch cache', () => {
     perSession();
     const { result, rerender } = renderReply();
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
 
     rerender(baseArgs({ lastAssistantMessageId: 'assistant-2' }));
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 2));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
   });
 
   it('(d) unmounting and remounting the same conversation makes no request', async () => {
     perSession();
     const first = renderReply();
     await settle(first.result);
-    await waitFor(() => assert.deepEqual(first.result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(first.result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 1);
 
     first.unmount();
 
     const second = renderReply();
     await settle(second.result);
-    await waitFor(() => assert.deepEqual(second.result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(second.result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 1, 'the remount restores the remembered batch');
   });
 
   it('(e) the table keeps 20 keys; the least-recently-used one is drawn again when returned to', async () => {
-    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => okJson({
+    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => respond({
       chips: [`chip-${String(body.sessionId)}`],
       draw: 1,
     }));
     const { result, rerender } = renderReply({ sessionId: 's-0', lastAssistantMessageId: 'm-0' });
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['chip-s-0']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['chip-s-0']));
 
     for (let index = 1; index <= 20; index += 1) {
       rerender(baseArgs({ sessionId: `s-${index}`, lastAssistantMessageId: `m-${index}` }));
-      await waitFor(() => assert.deepEqual(result.current.chips, [`chip-s-${index}`]));
+      await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, [`chip-s-${index}`]));
     }
     assert.equal(apiMocks.suggest.mock.calls.length, 21);
 
     // 21 keys for a 20-key table: the first one has been evicted.
     rerender(baseArgs({ sessionId: 's-0', lastAssistantMessageId: 'm-0' }));
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 22));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['chip-s-0']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['chip-s-0']));
   });
 
   it('(f) a conversation switch whose message id arrives one render early draws nothing', async () => {
     perSession();
     const { result, rerender } = renderReply();
     await settle(result);
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-a-一', 'session-a-二']));
     assert.equal(apiMocks.suggest.mock.calls.length, 1);
 
     // The real page hands the incoming conversation's message id to the composer
@@ -488,7 +491,7 @@ describe('useReplySuggestions batch cache', () => {
     // for "the assistant answered again".
     rerender(baseArgs({ sessionId: 'session-a', lastAssistantMessageId: 'assistant-b' }));
     rerender(baseArgs({ sessionId: 'session-b', lastAssistantMessageId: 'assistant-b' }));
-    await waitFor(() => assert.deepEqual(result.current.chips, ['session-b-一', 'session-b-二']));
+    await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['session-b-一', 'session-b-二']));
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     assert.equal(apiMocks.suggest.mock.calls.length, 2, 'only the two real first draws, no outgoing-session request');

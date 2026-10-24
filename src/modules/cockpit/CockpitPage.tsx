@@ -931,6 +931,22 @@ export default function CockpitPage() {
     );
     const search = new URLSearchParams();
     if (entityCandidate !== undefined) search.set('entity', entityCandidate);
+    // The architecture tile's structural diff travels as package-level deep-link parameters
+    // (`diffPkg` / `diffPkgEdge`), which the tab marks on the drawing. Only well-typed entries
+    // are forwarded: a malformed digest must not break the link.
+    const diffPackages = Array.isArray(digest.diffPackages)
+      ? digest.diffPackages.filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+      : [];
+    for (const packageId of diffPackages) search.append('diffPkg', packageId.trim());
+    const diffPackageEdges = Array.isArray(digest.diffPackageEdges) ? digest.diffPackageEdges : [];
+    for (const edge of diffPackageEdges) {
+      if (edge === null || typeof edge !== 'object') continue;
+      const from = (edge as { from?: unknown }).from;
+      const to = (edge as { to?: unknown }).to;
+      if (typeof from !== 'string' || typeof to !== 'string') continue;
+      if (from.trim() === '' || to.trim() === '') continue;
+      search.append('diffPkgEdge', `${from.trim()}->${to.trim()}`);
+    }
     const suffix = search.toString();
     navigate(
       `/session/${encodeURIComponent(wallArchitectureSessionId)}/architecture${suffix === '' ? '' : `?${suffix}`}`,
@@ -1276,6 +1292,13 @@ export default function CockpitPage() {
   // The status bar names what the person calls the object, never its storage address. On the
   // wall that is the tile's title; on a board it is the task id, or the ordinal when the object
   // is not a task. The raw `quay://` / `cloudcli://` handle lives behind `?debug=1` only.
+  // The fleet tile a person sees ringed for attention. The ring is a NEEDS-YOU marker, not the
+  // keyboard focus ring, so the footer names it separately; otherwise a fleet whose display has
+  // not (yet) reported a focusable set reads 「Focus: none」 while a tile is visibly ringed.
+  const attentionProject =
+    view.type === 'fleet'
+      ? (orderedProjects.find((project) => project.tasks.needsHuman > 0) ?? null)
+      : null;
   const focusedHumanLabel =
     focusObject === null
       ? null
@@ -1597,7 +1620,7 @@ export default function CockpitPage() {
         )}
       </div>
 
-      <footer className="shrink-0 border-t border-border/40 bg-background px-4 py-2" data-testid="cockpit-status">
+      <footer className="relative shrink-0 border-t border-border/40 bg-background px-4 py-2" data-testid="cockpit-status">
         <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {/*
             The status bar says only what a person can read: the focused object's NAME, never its
@@ -1606,8 +1629,19 @@ export default function CockpitPage() {
           */}
           <span data-testid="cockpit-focus">
             {t('cockpit.focus')}: {focusedHumanLabel ?? t('cockpit.noFocus')}
+            {/* A fleet tile's readable name is its ordinal AND its project; naming only the
+                ordinal leaves 「Focus: ①」 as vague as 「none」. */}
+            {view.type === 'fleet' && focusedProjectName !== null && ` · ${focusedProjectName}`}
           </span>
-          {focusObject !== null && focusedProjectName !== null && (
+          {view.type === 'fleet' && focusObject === null && attentionProject !== null && (
+            <span
+              className="font-medium text-amber-700 dark:text-amber-300"
+              data-testid="cockpit-fleet-attention"
+            >
+              {t('cockpit.fleetNeedsYou', { name: attentionProject.name })}
+            </span>
+          )}
+          {focusObject !== null && focusedProjectName !== null && view.type !== 'fleet' && (
             <span data-testid="cockpit-focus-name">
               {focusedHumanLabel} · {focusedProjectName}
             </span>
@@ -1659,14 +1693,17 @@ export default function CockpitPage() {
           )}
         </div>
 
-        {/* Every input gets an echo; done/refused fade after a few seconds, confirmation waits. */}
+        {/* Every input gets an echo; done/refused fade after a few seconds, confirmation waits.
+            THE ECHO IS AN OVERLAY, NOT A FOOTER ROW: an in-flow banner grew the footer, shrank
+            the stage and clipped its last line on every submit. Anchored to the footer's top
+            edge, it draws over the stage without changing either one's size. */}
         {echo !== null && (
           <div
             role="status"
             className={
               echo.kind === 'refused'
-                ? 'mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-200'
-                : 'mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 bg-muted/40 px-2 py-1 text-xs text-foreground'
+                ? 'cockpit-echo-overlay absolute bottom-full left-0 right-0 z-10 mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-800 shadow-sm dark:text-amber-200'
+                : 'cockpit-echo-overlay absolute bottom-full left-0 right-0 z-10 mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 bg-muted px-2 py-1 text-xs text-foreground shadow-sm'
             }
             data-testid="cockpit-echo"
             data-echo-kind={echo.kind}

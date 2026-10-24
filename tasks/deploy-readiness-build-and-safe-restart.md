@@ -96,3 +96,27 @@ extra: {}
   - `tmp/deploy-verify/4-verification-result.png` — 真实启动核验（新进程读到状态文件后记录）：日志 `deploy: boot verification passed`，条上显示「Last deploy adf07bc · verified · just now」。
 - 真实 `:3001` 只读读数（不执行 deploy）：running/built sha = `2d995e88`，HEAD = `0bf6356`，`status: pending-build`，34 个触及 `src/`/`server/` 的待构建提交；`dist/build-info.json` 尚无指纹（新脚本随下次构建落地）。对照 `scripts/check-deploy-freshness.mjs --ref HEAD`：`STALE, behindBy 225` —— 结论一致（检测器数全部提交，本读数只列会触发构建的 source 提交）。原始读数见 `tmp/deploy-verify/real-readiness.json`。
 - 待外部：真实 `:3001` 上的第一次「构建并重启」由用户在界面上亲手点击触发；执行者未在 `:3001` 执行 deploy。
+
+## Blocker
+
+**2026-10-24T12:47:11.868Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging scripts/suite-duration-baseline.tsv
+Auto-merging server/shared/tests/quay-test-script.test.ts
+CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
+Auto-merging src/modules/cockpit/CockpitPage.tsx
+Auto-merging src/modules/i18n/locales/de/common.json
+Auto-merging src/modules/i18n/locales/en/common.json
+Auto-merging src/modules/i18n/locales/es/common.json
+Auto-merging src/modules/i18n/locales/fr/common.json
+Auto-merging src/modules/i18n/locales/id/common.json
+Auto-merging src/modules/i18n/locales/it/common.json
+Auto-merging src/modules/i18n/locales/ja/common.json
+Auto-merging src/modules/i18n/locales/ko/common.json
+Auto-merging src/modules/i18n/locales/ru/common.json
+Auto-merging src/modules/i18n/locales/tr/common.json
+Auto-merging src/modules/i18n/locales/zh-CN/common.json
+Auto-merging src/modules/i18n/locales/zh-TW/common.json
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：6980a9fd-0e42-497a-9fad-e83ee8d573bf

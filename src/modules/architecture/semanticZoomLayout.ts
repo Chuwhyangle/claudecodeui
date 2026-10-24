@@ -135,6 +135,93 @@ export const MAX_FIT_SCALE = 1.5;
  */
 export const FIT_SOLVE_MAX_ITERATIONS = 14;
 
+/**
+ * A rectangle the fullscreen canvas draws OVER its host (the toolbar/readout
+ * band, a corner slot, the selection tray, the inspector drawer), in the host's
+ * own border-box coordinates.
+ *
+ * Consumers: `PlantUmlGraph.tsx` measures these from the live DOM and hands
+ * them to {@link solveFitArea}; `tests/semanticZoomLayout.test.ts` pins the
+ * subtraction rule.
+ */
+export type FitOverlayRect = {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+/** The rectangle a Fit solve may draw in: the host less its measured overlays. */
+export type FitAreaRect = FitOverlayRect;
+
+/**
+ * The fullscreen Fit area: the host rectangle less the bands its overlays cover.
+ *
+ * The non-fullscreen layout reserves a constant margin around the drawing; on
+ * the overlay there is no such margin to inherit — the canvas IS the viewport,
+ * and the only ground it loses is the chrome actually painted over it. So each
+ * measured overlay removes its own band instead of a fixed inset.
+ *
+ * Which band? Removing an overlay from one of the four host edges always
+ * excludes it from the answer (the removed band runs the whole length of that
+ * edge), but the four choices cost different amounts of drawing room. A
+ * bottom-right minimap costs 60 px if removed on the right and 200 px if
+ * removed at the bottom, so the cheap edge wins and everything beside the
+ * minimap stays available. A full-width toolbar costs its own height at the top
+ * and the whole host at either side, so the top band wins — the rule reduces to
+ * "reserve the toolbar's band" without special-casing it. Chrome is measured
+ * with its real inset (the corner slot sits 12 px inside the edges), which is
+ * why edge CONTACT is not part of the test.
+ *
+ * An empty overlay list answers the host unchanged, and a degenerate host
+ * answers a zero rectangle — the canvas is never invented a size it does not
+ * have.
+ */
+export function solveFitArea(
+  host: { readonly width: number; readonly height: number },
+  overlays: readonly FitOverlayRect[],
+): FitAreaRect {
+  const width = Math.max(0, host.width);
+  const height = Math.max(0, host.height);
+  if (!(width > 0) || !(height > 0)) return { left: 0, top: 0, width, height };
+  let left = 0;
+  let right = width;
+  let top = 0;
+  let bottom = height;
+  for (const overlay of overlays) {
+    if (!(overlay.width > 0) || !(overlay.height > 0)) continue;
+    const overlayLeft = Math.max(0, Math.min(width, overlay.left));
+    const overlayRight = Math.max(0, Math.min(width, overlay.left + overlay.width));
+    const overlayTop = Math.max(0, Math.min(height, overlay.top));
+    const overlayBottom = Math.max(0, Math.min(height, overlay.top + overlay.height));
+    if (overlayRight <= overlayLeft || overlayBottom <= overlayTop) continue;
+    // What each of the four edge bands would cost (the band always spans the
+    // host edge to the overlay's far side, so the overlay cannot survive it).
+    const costs = {
+      top: overlayBottom,
+      right: width - overlayLeft,
+      bottom: height - overlayTop,
+      left: overlayRight,
+    };
+    const cheapest = (Object.keys(costs) as (keyof typeof costs)[])
+      .reduce((best, edge) => (costs[edge] < costs[best] ? edge : best), 'top' as keyof typeof costs);
+    if (cheapest === 'top') top = Math.max(top, overlayBottom);
+    else if (cheapest === 'right') right = Math.min(right, overlayLeft);
+    else if (cheapest === 'bottom') bottom = Math.min(bottom, overlayTop);
+    else left = Math.max(left, overlayRight);
+  }
+  // Later bands may have crossed an earlier one (an overlay wider than the
+  // host): the answer is a real rectangle, never a negative one.
+  left = Math.min(left, right);
+  top = Math.min(top, bottom);
+  return {
+    left,
+    top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
 /** The two fixed evaluations every Fit solve makes before bisecting. */
 const FIT_SOLVE_FIXED_EVALUATIONS = 2;
 
@@ -318,7 +405,80 @@ export type SemanticZoomOptions = {
    * once the floor fails.
    */
   readonly autoFold?: boolean;
+  /**
+   * At the FLOOR scale, select the richest tier whose mapped content fits the
+   * canvas instead of the first tier inside the stretch budget.
+   *
+   * The budget answers "has this zoom stretched the drawing more than 1.8×?",
+   * which is the right question for a manual zoom. It is the wrong question for
+   * Fit: a large drawing's tier A/B is far over the budget at every scale small
+   * enough to fit, so the budget hands out the sparse tier early — the L
+   * fixture at 844×390 was locked at tier C (19 %, two thirds of the canvas)
+   * that way. The mapped content is monotone non-decreasing in the scale, so a
+   * tier that fits anywhere fits at the FLOOR; choosing the richest tier that
+   * fits the floor therefore chooses the richest tier Fit can show at all, and
+   * the solver then maximises the scale inside that one tier. The floor-font
+   * rule is unchanged: every tier is planned at the minimum readable font, so a
+   * sparser tier never buys sharpness with illegibility.
+   */
+  readonly fitWithinViewport?: boolean;
+  /**
+   * The scale {@link SemanticZoomOptions.fitWithinViewport} probes the tiers
+   * at (the Fit solver's lower bound). Defaults to the manual floor when the
+   * fit option is on and this is absent.
+   */
+  readonly fitFloorScale?: number;
 };
+
+/**
+ * One tier's mapped content boundary, at the scale it was evaluated at.
+ *
+ * Used ONLY to choose a tier during Fit. The final layout re-derives the same
+ * boundary in {@link solveSemanticZoom}, and `layoutFits` judges that one, so
+ * an approximation here can never let an overflowing drawing through.
+ */
+function evaluationContent(
+  geometry: SemanticDrawingGeometry,
+  evaluation: TierEvaluation,
+): SemanticRect {
+  const drawnEdges = evaluation.tier === 'C'
+    ? []
+    : geometry.edges.filter(
+        (edge) => evaluation.layoutsById.has(edge.source) && evaluation.layoutsById.has(edge.target),
+      );
+  const edgePoints = drawnEdges.flatMap((edge) => [
+    ...edge.points.map((point) => ({ x: evaluation.x.map(point.x), y: evaluation.y.map(point.y) })),
+    ...(edge.arrowPoints ?? []).map((point) => ({ x: evaluation.x.map(point.x), y: evaluation.y.map(point.y) })),
+  ]);
+  return contentBoundaryOf(
+    [...evaluation.packages.map((entry) => entry.frame), ...evaluation.nodes.map((entry) => entry.cell)],
+    edgePoints,
+  );
+}
+
+/** Whether one tier's mapped content fits `viewport`. */
+function evaluationFits(
+  geometry: SemanticDrawingGeometry,
+  evaluation: TierEvaluation,
+  viewport: { readonly width: number; readonly height: number },
+): boolean {
+  const content = evaluationContent(geometry, evaluation);
+  return content.width <= viewport.width + 0.5 && content.height <= viewport.height + 0.5;
+}
+
+/**
+ * Whether a tier actually draws something.
+ *
+ * Tier `C` hides every class box; on a drawing with NO packages it therefore
+ * has empty content, and empty content "fits" every canvas. That is fine for
+ * the stretch budget (a manual zoom still lands on the package tier) but fatal
+ * for Fit: an empty tier would win the ceiling evaluation and the solve would
+ * answer MAX_FIT_SCALE with a blank drawing. Fit only considers tiers that
+ * paint something; `D` (the fold) is its explicit answer to "nothing fits".
+ */
+function evaluationDrawsSomething(evaluation: TierEvaluation): boolean {
+  return evaluation.nodes.length > 0 || evaluation.packages.length > 0;
+}
 
 /** What one Fit solve returns. */
 export type SemanticFitSolution = {
@@ -1198,13 +1358,30 @@ export function solveSemanticZoom(
   const tree = buildSemanticPackageTree(geometry);
   const evaluations = evaluateSemanticTiers(geometry, options);
   const forced = options.forceTier !== null && options.forceTier !== undefined;
+  const viewport = options.viewport ?? null;
+  // The Fit solver asks the FLOOR evaluation which tier this canvas can show;
+  // every later evaluation is handed that tier as `forceTier`. Only the floor
+  // probe itself runs the content-fit selection.
+  const floorProbe = options.fitWithinViewport === true && viewport !== null
+    && scale <= (options.fitFloorScale ?? MIN_ZOOM_SCALE) + 1e-9;
   const chosen = forced
     ? evaluations[0]
-    : selectSemanticTier(evaluations, {
-        limit,
-        previousTier: options.previousTier ?? null,
-        deadzone: options.deadzone,
-      });
+    : floorProbe
+      // The richest tier the canvas can really show. When none fits, the
+      // sparsest tier that still draws something answers so `layoutFits`
+      // reports the overflow truthfully (and the fold path can respond). An
+      // empty tier is never a Fit answer; see `evaluationDrawsSomething`.
+      ? (() => {
+          const drawable = evaluations.filter(evaluationDrawsSomething);
+          return drawable.find((entry) => evaluationFits(geometry, entry, viewport))
+            ?? drawable[drawable.length - 1]
+            ?? evaluations[evaluations.length - 1];
+        })()
+      : selectSemanticTier(evaluations, {
+          limit,
+          previousTier: options.previousTier ?? null,
+          deadzone: options.deadzone,
+        });
 
   // ---- the folded tier: chosen only when the package-only drawing still
   // cannot fit the canvas. `C` is a MAPPED drawing, so its width is the
@@ -1352,7 +1529,11 @@ export function solveFitScale(
   const viewport = options.viewport;
   const lower = options.lowerScale ?? MIN_ZOOM_SCALE;
   const upper = options.upperScale ?? MAX_FIT_SCALE;
-  const solveAt = (scale: number, forceFold = false): SemanticZoomLayout => solveSemanticZoom(geometry, {
+  const solveAt = (
+    scale: number,
+    forceFold = false,
+    forceTier: SemanticTier | null = null,
+  ): SemanticZoomLayout => solveSemanticZoom(geometry, {
     scale,
     viewport,
     minFontPx: options.minFontPx,
@@ -1362,6 +1543,12 @@ export function solveFitScale(
     previousTier: null,
     deadzone: options.deadzone,
     forceFold,
+    forceTier,
+    // Only the floor probe runs the content-fit tier selection; every later
+    // evaluation is forced to the tier that probe chose, so the bisection
+    // stays inside ONE monotone map.
+    fitWithinViewport: forceTier === null && !forceFold,
+    fitFloorScale: lower,
     // The bisection measures the mapped (non-folded) drawing; see the option.
     autoFold: false,
   });
@@ -1374,18 +1561,28 @@ export function solveFitScale(
   }
 
   let iterations = 0;
-  const evaluate = (scale: number, forceFold = false): SemanticZoomLayout => {
+  const evaluate = (
+    scale: number,
+    forceFold = false,
+    forceTier: SemanticTier | null = null,
+  ): SemanticZoomLayout => {
     iterations += 1;
-    return solveAt(scale, forceFold);
+    return solveAt(scale, forceFold, forceTier);
   };
 
-  // The ceiling first: a drawing that already fits there is shown enlarged.
-  const ceiling = evaluate(upper);
+  // The FLOOR first: it is the probe that chooses the richest tier this canvas
+  // can show at all (see `fitWithinViewport`). Every later evaluation is forced
+  // to that tier, so the bracket below measures ONE monotone map.
+  const floor = evaluate(lower);
+  const tier: SemanticTier = floor.tier === 'D' ? 'C' : floor.tier;
+  const evaluateTier = (scale: number): SemanticZoomLayout => evaluate(scale, false, tier);
+
+  // The ceiling next: a drawing that already fits there is shown enlarged.
+  const ceiling = evaluateTier(upper);
   if (layoutFits(ceiling, viewport)) {
     return { scale: upper, layout: ceiling, fits: true, iterations, foldDepth: ceiling.foldDepth };
   }
 
-  const floor = evaluate(lower);
   if (!layoutFits(floor, viewport)) {
     // Even the floor's package-only map is bigger than the canvas. The folded
     // tier re-packs the kept packages instead of mapping the original extent;
@@ -1413,7 +1610,7 @@ export function solveFitScale(
   const bisectionBudget = FIT_SOLVE_MAX_ITERATIONS - FIT_SOLVE_FIXED_EVALUATIONS;
   for (let step = 0; step < bisectionBudget; step += 1) {
     const mid = (low + high) / 2;
-    const layout = evaluate(mid);
+    const layout = evaluateTier(mid);
     if (layoutFits(layout, viewport)) {
       low = mid;
       best = layout;

@@ -153,16 +153,20 @@ export function useSuggestionChips({
   // hook rather than beside it.
   const {
     enabled: suggestionsEnabled,
-    chips: replySuggestionChips,
-    loading: suggestionsLoading,
-    redraw: requestSuggestions,
+    firstDraw: {
+      chips: replySuggestionChips,
+      loading: suggestionsLoading,
+      redraw: requestSuggestions,
+    },
+    expansion: {
+      enabled: replyExpansionEnabled,
+      chips: replyExpansionChips,
+      source: replyExpansionSource,
+      canExpand: replyExpansionCanExpand,
+      request: requestReplyExpansion,
+      clear: clearReplyExpansion,
+    },
     reportEvent: reportReplySuggestionEvent,
-    expansionEnabled: replyExpansionEnabled,
-    expansionChips: replyExpansionChips,
-    expansionSource: replyExpansionSource,
-    canExpand: replyExpansionCanExpand,
-    requestExpansion: requestReplyExpansion,
-    clearExpansion: clearReplyExpansion,
   } = useReplySuggestions({
     sessionId,
     lastAssistantMessageId,
@@ -248,12 +252,12 @@ export function useSuggestionChips({
    * quoted draft — and, while the chain has depth left, becomes the seed of the
    * next expansion so the person can keep refining. At the cap the chip is simply
    * accepted and the strip goes away.
+   *
+   * The text arrives with the click, so accepting never looks a chip up by its
+   * array index again; `index` is only the batch position the `picked` event
+   * reports.
    */
-  const acceptExpansionChip = useCallback((index: number) => {
-    const text = replyExpansionChips[index];
-    if (text === undefined) {
-      return;
-    }
+  const acceptExpansionChip = useCallback((text: string, index: number) => {
     reportReplySuggestionEvent('picked', index, replyExpansionSource ?? undefined);
     const current = inputValueRef.current;
     const { prefix } = splitQuotedPrefix(current);
@@ -278,7 +282,6 @@ export function useSuggestionChips({
     clearReplyExpansion,
     inputValueRef,
     replyExpansionCanExpand,
-    replyExpansionChips,
     replyExpansionSource,
     reportReplySuggestionEvent,
     requestReplyExpansion,

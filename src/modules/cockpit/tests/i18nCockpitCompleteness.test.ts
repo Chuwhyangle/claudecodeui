@@ -145,6 +145,8 @@ describe('every locale carries the cockpit copy', () => {
       'observationTileLabel',
       'observationCollapsed',
       'observationEmpty',
+      'observationEmptyReason',
+      'observationEmptyNext',
       'observationError',
       'observationSelfTitle',
       'observationSelfLastRun',
@@ -286,6 +288,7 @@ describe('every locale carries the cockpit copy', () => {
       'projectNotRegistered',
       'projectDriverUnavailable',
       'projectOpenRefused',
+      'fleetNeedsYou',
       'projectUnregisteredNext',
       'projectDriverUnavailableNext',
       'fleetCliMissingNext',
@@ -298,6 +301,7 @@ describe('every locale carries the cockpit copy', () => {
       expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
     }
     expect(placeholders(reference.projectOpenRefused)).toEqual(['name']);
+    expect(placeholders(reference.fleetNeedsYou)).toEqual(['name']);
     expect(placeholders(reference.ordinalUnavailable)).toEqual(['n']);
   });
 

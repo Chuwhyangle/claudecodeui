@@ -5,7 +5,12 @@ import {
   readAuthLapseReport,
   recordAuthLapse,
 } from '@/shared/authToken';
-import type { ReplySuggestionsEventInput, ReplySuggestionsRequest } from '@/shared/types';
+import type {
+  ReplySuggestionsEventInput,
+  ReplySuggestionsRequest,
+  ReplySuggestionsResult,
+  ReplySuggestionsStatus,
+} from '@/shared/types';
 import type { SessionMessagesQuery } from '@/shared/types';
 import type { ActivitySnapshotFrame } from '@/shared/types';
 import type { OAuthConsentDecisionRequest } from '@/shared/types';
@@ -240,6 +245,57 @@ const fileContentPath = (projectId: string, filePath: string) =>
 
 const pluginAssetPath = (pluginName: string, assetFile: string) =>
   `/api/plugins/${encodeURIComponent(pluginName)}/assets/${encodeURIComponent(assetFile)}`;
+
+// ─── Reply-suggestions response reading ─────────────────────────────────────
+// The composer hooks hand these two parsers every answer the reply-suggestions
+// endpoints produce, so no call site touches a `Response` or trusts a shape.
+// A refused (non-2xx) or unreadable answer reads as `null`, which the controller
+// treats as the silent fallback to the habit chips.
+
+/** Most chips one draw may return when the caller has no `/status` reading. */
+const DEFAULT_REPLY_SUGGESTIONS_MAX_CHIPS = 3;
+
+/**
+ * Reads one draw: drops non-string and blank elements, trims what remains and
+ * caps the batch at `maxChips`. A body that is not an object is a failed read.
+ */
+function readReplySuggestionsResult(body: unknown, maxChips: number): ReplySuggestionsResult | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+  const record = body as Record<string, unknown>;
+  const chips: string[] = [];
+  if (Array.isArray(record.chips)) {
+    for (const item of record.chips) {
+      if (typeof item !== 'string') continue;
+      const text = item.trim();
+      if (!text) continue;
+      chips.push(text);
+      if (chips.length >= maxChips) break;
+    }
+  }
+  return {
+    chips,
+    draw: typeof record.draw === 'number' && Number.isFinite(record.draw) ? record.draw : 0,
+  };
+}
+
+/**
+ * Reads the four-field `/status` answer. A missing or mistyped field falls back to
+ * the disabled/default reading rather than propagating a malformed shape.
+ */
+function readReplySuggestionsStatus(body: unknown): ReplySuggestionsStatus | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+  const record = body as Record<string, unknown>;
+  return {
+    enabled: record.enabled === true,
+    expansion: record.expansion === 'vary' ? 'vary' : 'off',
+    maxChips: typeof record.maxChips === 'number' ? record.maxChips : DEFAULT_REPLY_SUGGESTIONS_MAX_CHIPS,
+    maxChipChars: typeof record.maxChipChars === 'number' ? record.maxChipChars : 120,
+  };
+}
 
 // ─── API endpoints ──────────────────────────────────────────────────────────
 // Every `/api/...` path the frontend talks to is declared here; components
@@ -924,11 +980,32 @@ export const api = {
   // the server writes to disk.
   // Reply suggestions: the LLM tier of the composer's empty-box chips. The three endpoints are
   // declared here and nowhere else — the composer's hooks call these and never assemble a URL.
-  // `suggest` answers `{ chips, draw }`; `event` is the ledger's write path and answers 204.
+  // `suggest` and `status` parse and validate before returning, so callers never touch a
+  // `Response`: a refused or unreadable answer is `null` and the controller falls back silently.
+  // `event` is the ledger's write path and answers whether the server accepted the row.
   replySuggestions: {
-    status: () => get('/api/reply-suggestions/status'),
-    suggest: (request: ReplySuggestionsRequest) => post('/api/reply-suggestions', request),
-    event: (event: ReplySuggestionsEventInput) => post('/api/reply-suggestions/events', event),
+    status: async (): Promise<ReplySuggestionsStatus | null> => {
+      const response = await get('/api/reply-suggestions/status');
+      if (!response.ok) return null;
+      const body = await response.json().catch(() => null) as unknown;
+      return readReplySuggestionsStatus(body);
+    },
+    suggest: async (
+      request: ReplySuggestionsRequest,
+      options: { maxChips?: number } = {},
+    ): Promise<ReplySuggestionsResult | null> => {
+      const response = await post('/api/reply-suggestions', request);
+      if (!response.ok) return null;
+      const body = await response.json().catch(() => null) as unknown;
+      return readReplySuggestionsResult(
+        body,
+        options.maxChips ?? DEFAULT_REPLY_SUGGESTIONS_MAX_CHIPS,
+      );
+    },
+    event: async (event: ReplySuggestionsEventInput): Promise<boolean> => {
+      const response = await post('/api/reply-suggestions/events', event);
+      return response.ok;
+    },
   },
 
   voiceRealtime: {

@@ -7,7 +7,11 @@ import React from 'react';
 import { beforeEach, test, vi } from 'vitest';
 
 import type { QuaySnapshot } from '@/shared/types';
-import QuayPanel, { buildQuayInFlightContract, IN_FLIGHT_STALE_AFTER_MS } from '@/modules/quay/QuayPanel';
+import QuayPanel, {
+  buildQuayInFlightContract,
+  CACHED_STALE_AFTER_MS,
+  IN_FLIGHT_STALE_AFTER_MS,
+} from '@/modules/quay/QuayPanel';
 import { type QuayPanelView, useQuayStatus } from '@/modules/quay/hooks/useQuayStatus';
 
 // The panel's in-flight reading travels hook → route → carrier. Only the network
@@ -230,15 +234,28 @@ test('QuayPanel stamps every Recent tasks and Stage goals row with its own last-
 
   const goalRows = rowsOf('quay-panel-stage-goals');
   assert.equal(goalRows.length, 2);
-  assert.equal(goalRows[0].getAttribute('data-updated-at'), updatedAt.goal);
-  assert.ok(
-    (goalRows[0].textContent ?? '').includes(new Date(updatedAt.goal).toLocaleString()),
-    `the goal row must render the formatted time; it read ${JSON.stringify(goalRows[0].textContent)}`,
+  // DRAFTS FIRST: the fixture lists the achieved goal first (newer `updatedAt`), but the card
+  // draws the unfinished one first — and the stamped row keeps its updated-at reading there.
+  const stampedGoal = Array.from(goalRows).find((row) =>
+    (row.textContent ?? '').includes('GOAL-STAMPED'),
   );
-  assert.equal(goalRows[1].getAttribute('data-updated-at'), null);
-  assert.match(goalRows[1].textContent ?? '', /—/);
-  assert.equal((goalRows[1].textContent ?? '').includes('never'), false);
-  assert.equal((goalRows[1].textContent ?? '').includes('Invalid Date'), false);
+  const unstampedGoal = Array.from(goalRows).find((row) =>
+    (row.textContent ?? '').includes('GOAL-UNSTAMPED'),
+  );
+  assert.ok(stampedGoal && unstampedGoal, 'both goal rows must be drawn');
+  assert.ok(
+    (goalRows[0].textContent ?? '').includes('GOAL-UNSTAMPED'),
+    'the draft goal must be drawn before the achieved one',
+  );
+  assert.equal(stampedGoal.getAttribute('data-updated-at'), updatedAt.goal);
+  assert.ok(
+    (stampedGoal.textContent ?? '').includes(new Date(updatedAt.goal).toLocaleString()),
+    `the goal row must render the formatted time; it read ${JSON.stringify(stampedGoal.textContent)}`,
+  );
+  assert.equal(unstampedGoal.getAttribute('data-updated-at'), null);
+  assert.match(unstampedGoal.textContent ?? '', /—/);
+  assert.equal((unstampedGoal.textContent ?? '').includes('never'), false);
+  assert.equal((unstampedGoal.textContent ?? '').includes('Invalid Date'), false);
 });
 
 test('QuayPanel renders an empty state for each detail list when the recents are empty', () => {
@@ -303,14 +320,19 @@ test('QuayPanel renders a section whose command did not answer as unavailable, n
 test('QuayPanel renders the Stage goals, Tests and Fan-in cards with the snapshot data', () => {
   const { getByTestId, container } = renderView({ status: 'loaded', snapshot: SNAPSHOT }, null);
 
-  // Stage goals: one row per recent goal, each carrying the status and a progress bar.
+  // Stage goals: one row per recent goal. Unfinished rows carry a progress bar; the achieved
+  // row has nothing left to complete, so it draws none (a full bar in every achieved row was
+  // the wall of colour that buried the goals still needing work).
   const goalRows = getByTestId('quay-panel-stage-goals-list').querySelectorAll('[data-testid="quay-panel-stage-goals-row"]');
   assert.equal(goalRows.length, 2);
   assert.match(goalRows[0]?.textContent ?? '', /GOAL-3/);
   assert.match(getByTestId('quay-panel-stage-goals-counts').textContent ?? '', /active/);
   const goalBars = getByTestId('quay-panel-stage-goals-list').querySelectorAll('[data-testid="quay-panel-stage-goals-bar"]');
-  assert.equal(goalBars.length, 2);
+  assert.equal(goalBars.length, 1);
   assert.ok(Array.from(goalBars).every((bar) => bar.querySelector('div') !== null));
+  const achievedRow = Array.from(goalRows).find((row) => (row.textContent ?? '').includes('GOAL-1'));
+  assert.ok(achievedRow, 'the achieved goal must still be drawn');
+  assert.equal(achievedRow.querySelector('[data-testid="quay-panel-stage-goals-bar"]'), null);
 
   // Tests: the current reading plus one timeline rect per recent round.
   assert.match(getByTestId('quay-panel-tests-current').textContent ?? '', /green/);
@@ -1133,3 +1155,49 @@ test('AC1: an unregistered project declares no focusable element and says so', (
   assert.match(container.textContent ?? '', /gap-unregistered/);
 });
 
+
+/**
+ * AC5 — a cached reading must say how old it is, and an old one must look different.
+ *
+ * 「(cached)」 beside a timestamp is easy to miss; the panel now prints the snapshot's own age
+ * (`generatedAt` is the server's read time) and marks a cached reading older than
+ * `CACHED_STALE_AFTER_MS` as stale. A fresh, non-cached snapshot renders no age marker at all —
+ * the absence is itself the reading.
+ */
+test('AC5: a cached snapshot shows its age, marks an over-threshold reading stale, and shows nothing when fresh', () => {
+  const cachedAt = (ageMs: number): QuaySnapshot => ({
+    ...SNAPSHOT,
+    cached: true,
+    generatedAt: new Date(Date.now() - ageMs).toISOString(),
+  });
+
+  const recent = renderView(
+    { status: 'loaded', snapshot: cachedAt(3 * 60_000 + 20_000) },
+    null,
+  );
+  // Queries are scoped to each render's container: several snapshots are rendered in this one
+  // case and the previous DOM must not answer for the next one.
+  const ageSpan = recent.container.querySelector('[data-testid="quay-panel-cached-age"]') as HTMLElement | null;
+  assert.ok(ageSpan, 'a cached snapshot must render an age marker');
+  assert.match(ageSpan.textContent ?? '', /cached 3m ago/);
+  assert.equal(ageSpan.getAttribute('data-stale'), 'false');
+  assert.equal((ageSpan.className ?? '').includes('text-amber-'), false);
+
+  const staleView = renderView(
+    { status: 'loaded', snapshot: cachedAt(CACHED_STALE_AFTER_MS + 5 * 60_000) },
+    null,
+  );
+  const staleSpan = staleView.container.querySelector('[data-testid="quay-panel-cached-age"]') as HTMLElement | null;
+  assert.ok(staleSpan, 'a stale cached snapshot must render an age marker');
+  assert.match(staleSpan.textContent ?? '', /cached 10m ago/);
+  assert.match(staleSpan.textContent ?? '', /stale/);
+  assert.equal(staleSpan.getAttribute('data-stale'), 'true');
+  assert.ok(
+    (staleSpan.className ?? '').includes('text-amber-'),
+    'a stale cached reading must carry the amber warning style',
+  );
+
+  // Fresh: the snapshot was not served from cache, so there is no age marker to explain.
+  const fresh = renderView({ status: 'loaded', snapshot: SNAPSHOT }, null);
+  assert.equal(fresh.container.querySelector('[data-testid="quay-panel-cached-age"]'), null);
+});

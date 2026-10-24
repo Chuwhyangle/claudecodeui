@@ -1,7 +1,7 @@
 ---
 id: architecture-fullscreen-fit-margin
 title: 架构图全屏适应边距：Fit 使用全屏宿主扣除实际叠层，不再沿用非全屏的预留边距
-status: ready
+status: done
 labels:
   - feature
 parent: null
@@ -48,6 +48,8 @@ depends_on:
 - **DoD / 真实浏览器**：本会话没有可用的 MCP 浏览器工具，按仓库约定用真实 Playwright 页面完成同一读法。前后对照：`tmp/architecture-fullscreen-fit/before-ux-08-L-fullscreen.png`（提案的 788×480 / 15%）对 `pc-1440x765-fullscreen-fit.png`（1169×652 / 51.7%，填满实测可用区、不被叠层遮挡）。Inspector 开/合：`pc-1440x765-fullscreen-inspector.png`（可用 1120×652.5、图 1119×636、scale 0.4943）与 `-inspector-closed.png`（回到 1350×652.5、0.5166）。临时改动全部在 DEV 开关之后，生产构建不含；截图只在 gitignored 的 `tmp/`。
 - **场景运行器**：仓库里没有 Architecture 场景（`e2e/scenarios/` 只有 `cockpit-mode-switch.json` 与 `quay-wall-focus-pin-utter.json`），故以新增 e2e 作为场景级回归。
 - **阈值复核结论（要求 2）**：`MAX_FIT_SCALE = 1.5` 与手工缩放的 `SEMANTIC_STRETCH_LIMIT = 1.8` 都未调整——L 在桌面解出 0.517 / 0.749，远低于上限；小图仍按 1.5 放大（既有用例通过）。改的是 Fit 的档位选择：先在地板比例上选"映射内容真正放得下的最丰富档位"（内容随 scale 单调不减，地板放得下 ⇔ 任意 scale 可达），再在该档内二分，从而在机制上排除"预算过早发稀疏档、Fit 没有更大 scale 可试"的锁档；全部档位/压缩用例逐条通过，四个视口的图都填满实测可用区（≥99.9%）。
+- **兄弟测试同步（上一轮 suite 红的真因与处置）**：`src/modules/architecture/tests/mobileCompactToolbar.test.tsx`（不在本任务 delta 内，但被本任务改掉的机制直接钉住）断言全屏后宿主 `paddingTop === '104px'`——`104 = 100（读出行覆盖带）+ 4（非全屏 `p-1` 预留边距）`。这个 `+4` 正是本任务要求 1 明令退役的"非全屏预留边距"。处置：不改回旧机制，改该用例到新契约——注入宿主 390×844 的实测框（新机制测宿主而不是读非全屏画布），断言 `paddingTop === '100px'`（只让出实测叠层，不留预留边距）；其余 14 条用例原样通过。`npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx`：`15 passed (1.2s)`。同时修正 `fullscreenOverlays` 用 `measureHostSize`（与求解同一读数）而不是裸 `clientWidth`——零 client 尺寸但可测 rect 的宿主曾使顶带宽度为 0 被 `solveFitArea` 丢弃。
+- **复测（本轮，代码改动后）**：`mobileCompactToolbar.test.tsx` 15 passed；三个 AC 单测文件 `189 passed`；`e2e/architecture-fullscreen-fit.spec.ts` 5 passed（1.3m，读数与上表一致：1440×765 99.9% / 1920×900 99.9% / 390×844 100% / 844×390 100%，控制臂 82.8% 红后修复 99.9% 绿）；`npm run typecheck`、`npm run build`、`npm run lint` 均 exit 0。
 
 ## Touches
 
@@ -58,14 +60,7 @@ depends_on:
 - src/modules/architecture/tests/semanticZoomLayout.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/svgViewport.test.tsx
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - e2e/architecture-fullscreen-fit.spec.ts
 - playwright.config.ts
 - tasks/architecture-fullscreen-fit-margin.md
-
-## Blocker
-
-**2026-10-24T12:05:19.465Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/mobileCompactToolbar.test.tsx: AssertionError [ERR_ASSERTION]: the drawing reserves the top chrome band inside the overlay
-- run_id：wk-prod-anchor
-- session_id：7b43933a-783c-40c1-a412-f99994464e46

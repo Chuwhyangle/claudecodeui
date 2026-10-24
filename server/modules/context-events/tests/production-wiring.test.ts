@@ -209,11 +209,11 @@ test('AC5 (d): the usage ledger tap feeds the stream, and a throwing observer ca
       setReplySuggestionsUsageObserver(() => {
         throw new Error('observer failed');
       });
-      ledger.write({ type: 'picked', sessionId: 's-broken', draw: 1, index: 0 });
+      ledger.write({ at: new Date().toISOString(), type: 'picked', sessionId: 's-broken', draw: 1, index: 0 });
       assert.equal((await readFile(ledgerPath, 'utf8')).trim().split('\n').length, 1, 'the ledger row is durable');
 
       setReplySuggestionsUsageObserver((record) => stream.recordUsage(record));
-      ledger.write({ type: 'picked', sessionId: 's-2', draw: 1, index: 0 });
+      ledger.write({ at: new Date().toISOString(), type: 'picked', sessionId: 's-2', draw: 1, index: 0 });
       await settle();
     } finally {
       setReplySuggestionsUsageObserver(null);

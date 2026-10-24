@@ -305,14 +305,19 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // server/modules/context-events/tests/ — context-event-writer,
     // utterance-classifier, shadow-predictor and production-wiring
     // (422 + 4 = 426 collected server test files).
-    // Then cockpit-initiative-view-and-decision-queue added its criterion
-    // server/modules/quay/tests/quay-initiatives.test.ts (426 + 1 = 427 collected
+    // Then observation-architecture-structural-delta added its criterion
+    // server/modules/observation/tests/architecture-delta.test.ts (426 + 1 = 427 collected
+    // server test files), and cockpit-initiative-view-and-decision-queue added its criterion
+    // server/modules/quay/tests/quay-initiatives.test.ts (427 + 1 = 428 collected
     // server test files).
     // Then deploy-readiness-build-and-safe-restart added its criterion
-    // server/modules/system/tests/deploy-readiness.test.ts (427 + 1 = 428 collected
-    // server test files).
-    // This fixture names 3 known files, so 428 - 3 = 425.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=425$/);
+    // server/modules/system/tests/deploy-readiness.test.ts (428 + 1 = 429 collected
+    // server test files), and gap-reply-suggestions-backend-encapsulation added three
+    // criteria under server/modules/reply-suggestions/tests/ — reply-suggestions-guard,
+    // reply-suggestions-draw-store and reply-suggestions-usage-log
+    // (429 + 3 = 432 collected server test files).
+    // This fixture names 3 known files, so 432 - 3 = 429.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=429$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -361,9 +366,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // Same collection as AC2 — 428 files on this tree — but this fixture names ONE known
-    // file, so 428 - 1 = 427 (AC2 reads 425 because its fixture names 3).
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=427$/);
+    // Same collection as AC2 — 432 files on this tree — but this fixture names ONE known
+    // file, so 432 - 1 = 431 (AC2 reads 429 because its fixture names 3).
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=431$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

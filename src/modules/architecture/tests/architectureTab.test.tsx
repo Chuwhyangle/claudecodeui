@@ -43,7 +43,7 @@ import {
   memberOverflowLabel,
   parserSafePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
-import { capDrawnMemberRows, renderWithMemberDetail } from '@/modules/architecture/PlantUmlGraph';
+import { capDrawnMemberRows, pickNavigationStart, renderWithMemberDetail } from '@/modules/architecture/PlantUmlGraph';
 import {
   buildFullPlantUmlDocument,
   standardiseDrawnStereotypes,
@@ -1564,8 +1564,15 @@ test('a focused canvas pans and zooms from the keyboard, and leaves Escape alone
   const host = await waitForDiagram();
   const root = graphRoot();
 
-  host.focus();
+  act(() => host.focus());
   assert.equal(document.activeElement, host, 'the canvas must be a keyboard focus target');
+  // Keyboard focus enters entity navigation (the cursor lands on the entity
+  // nearest the viewport centre). Panning is the state's non-keyboard gesture,
+  // so leave the state first — this is the same Escape the navigation case
+  // pins.
+  assert.equal(host.getAttribute('role'), 'application', 'keyboard focus enters entity navigation');
+  assert.equal(fireEvent.keyDown(host, { key: 'Escape' }), false, 'Escape leaves entity navigation');
+  assert.equal(host.getAttribute('role'), 'img', 'the canvas is an image again');
 
   const left = host.scrollLeft;
   const top = host.scrollTop;
@@ -1615,13 +1622,13 @@ test('entity navigation: Enter activates a ringed cursor, arrows move it, and th
   const host = await waitForDiagram();
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]')));
 
-  host.focus();
-  assert.equal(host.getAttribute('role'), 'img', 'before navigation the canvas is an image');
-
-  // Enter enters the entity-navigation state; the canvas becomes an application
-  // whose active descendant is the entity the cursor stands on.
-  assert.equal(fireEvent.keyDown(host, { key: 'Enter' }), false, 'Enter is consumed when it enters navigation');
-  assert.equal(host.getAttribute('role'), 'application', 'navigation turns the canvas into an application');
+  act(() => host.focus());
+  // jsdom's `.focus()` dispatches the focus event synchronously; wrapping it in
+  // `act` flushes the render the keyboard entry schedules.
+  // Keyboard focus enters entity navigation on the entity nearest the viewport
+  // centre, so the canvas is already an application naming an active
+  // descendant; Enter then acts on that cursor (it selects).
+  assert.equal(host.getAttribute('role'), 'application', 'keyboard focus enters entity navigation');
   const firstDomId = host.getAttribute('aria-activedescendant');
   assert.ok(firstDomId !== null, 'the canvas names its active descendant');
   const firstNode = document.getElementById(firstDomId);
@@ -1773,6 +1780,163 @@ function graphNodeLabel(id: string): string {
   assert.ok(node !== undefined, `${id} must be in the fixture`);
   return node.label;
 }
+
+/** One synthetic navigation item, for the pure start rule. */
+function navItem(id: string, x: number, y: number, kind: 'entity' | 'package' = 'entity') {
+  return { id, kind, packageId: 'pkg', x, y, width: 10, height: 10 };
+}
+
+test('the keyboard start rule is the nearest entity to the viewport centre, stable on ties', () => {
+  const items = [navItem('a', 0, 0), navItem('b', 100, 100), navItem('c', 300, 300)];
+  assert.equal(pickNavigationStart(items, null, { x: 105, y: 105 }), 'b', 'the nearest centre wins');
+
+  // Two entities exactly as far from the point: reading order (top, then left)
+  // decides, so the same rectangles always choose the same one.
+  const tied = [navItem('right', 20, 0), navItem('left', 0, 0)];
+  assert.equal(pickNavigationStart(tied, null, { x: 15, y: 5 }), 'left');
+  // Identical geometry: the id is the last tie-break.
+  assert.equal(pickNavigationStart([navItem('z', 0, 0), navItem('a', 0, 0)], null, { x: 5, y: 5 }), 'a');
+
+  // A last selection that is still drawn wins, even when it is farther away.
+  assert.equal(pickNavigationStart(items, 'c', { x: 0, y: 0 }), 'c');
+  // One that is no longer drawn falls back to the nearest entity.
+  assert.equal(pickNavigationStart(items, 'gone', { x: 105, y: 105 }), 'b');
+
+  // Package frames are places, not start positions while entities exist.
+  const withPackage = [...items, navItem('package::pkg', 104, 104, 'package')];
+  assert.equal(pickNavigationStart(withPackage, null, { x: 105, y: 105 }), 'b');
+  // A folded map draws no entities at all; the nearest frame is then the
+  // cursor, so the Tab still lands on something visible.
+  assert.equal(
+    pickNavigationStart([navItem('package::far', 0, 0, 'package'), navItem('package::near', 300, 300, 'package')], null, { x: 305, y: 305 }),
+    'package::near',
+  );
+  assert.equal(pickNavigationStart([], null, { x: 0, y: 0 }), null, 'an empty drawing has no start');
+});
+
+test('keyboard focus starts on the nearest entity, announces name/kind/n-of-m, and blur clears the ring', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('.uml-node[data-entity-id]')));
+  sizeHost(host, 800, 600);
+
+  const entities = [...host.querySelectorAll('.uml-node[data-entity-id]')]
+    .filter((element) => !(element.getAttribute('data-entity-id') ?? '').startsWith('grp::'));
+  assert.ok(entities.length >= 2, 'this case needs two drawn entities');
+  const nearest = entities[1];
+  const nearestId = nearest.getAttribute('data-entity-id') ?? '';
+  assert.ok(nearestId !== '');
+
+  // Synthetic geometry: the viewport is 800×600 at the origin and ONLY
+  // `nearest` sits at its centre; every other node is far away.
+  const originalRect = Element.prototype.getBoundingClientRect;
+  const box = (left: number, top: number, width: number, height: number): DOMRect => ({
+    left, top, width, height, right: left + width, bottom: top + height, x: left, y: top,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+    if (this.getAttribute('data-testid') === 'plantuml-host') return box(0, 0, 800, 600);
+    const id = this.getAttribute('data-entity-id');
+    if (id !== null) return id === nearestId ? box(380, 280, 40, 40) : box(0, 0, 20, 20);
+    return box(0, 0, 0, 0);
+  };
+
+  try {
+    fireEvent.focus(host);
+    assert.equal(host.getAttribute('role'), 'application', 'keyboard focus enters entity navigation');
+    const activeId = host.getAttribute('aria-activedescendant') ?? '';
+    const active = document.getElementById(activeId);
+    assert.ok(active !== null, 'the canvas names a drawn active descendant');
+    assert.equal(
+      active.getAttribute('data-entity-id'),
+      nearestId,
+      'the first focus lands on the entity nearest the viewport centre',
+    );
+    assert.equal(active.getAttribute('data-architecture-nav-focus'), 'true', 'the cursor publishes its focus state');
+    assert.ok(active.classList.contains('arch-nav-focus'), 'and the focus style class');
+    const ring = host.querySelector('[data-architecture-nav-ring]');
+    assert.ok(ring !== null, 'the focus ring is drawn');
+    assert.equal(ring.getAttribute('class'), 'arch-nav-ring', 'the focus ring carries a class of its own');
+    assert.equal(ring.getAttribute('stroke-dasharray'), '5 3', 'the focus ring is a dashed outline');
+
+    // The live region says ONLY name, kind and n/m — no package, no relation
+    // counts (the inspector owns those).
+    const announcer = document.querySelector('[data-architecture-nav-announcer]');
+    assert.ok(announcer instanceof HTMLElement, 'the canvas owns a polite live region');
+    const announcement = announcer.textContent ?? '';
+    const drawnEntities = [...host.querySelectorAll('.uml-node[data-entity-id]')]
+      .filter((element) => !(element.getAttribute('data-entity-id') ?? '').startsWith('grp::'));
+    const ordered = [...drawnEntities].sort((left, right) => {
+      const l = drawnRectOf(left);
+      const r = drawnRectOf(right);
+      return l.y - r.y || l.x - r.x
+        || (left.getAttribute('data-entity-id') ?? '').localeCompare(right.getAttribute('data-entity-id') ?? '');
+    });
+    const position = ordered.findIndex((element) => element === active) + 1;
+    assert.match(announcement, /, \d+\/\d+$/, `the reading ends in n/m (${announcement})`);
+    assert.ok(announcement.includes(`, ${position}/${drawnEntities.length}`), `the reading states ${position}/${drawnEntities.length}: ${announcement}`);
+    assert.equal(announcement.includes('package'), false, 'the package name stays out of the live region');
+    assert.equal(announcement.includes('incoming'), false, 'the relation counts stay out of the live region');
+    assert.equal(announcement.includes('outgoing'), false, 'the relation counts stay out of the live region');
+
+    // Leaving the canvas clears the focus ring and its state; with no
+    // selection there is nothing left painted on the canvas.
+    fireEvent.blur(host);
+    assert.equal(host.getAttribute('role'), 'img', 'blur returns the canvas to an image');
+    assert.equal(host.getAttribute('aria-activedescendant'), null, 'blur clears the active descendant');
+    assert.equal(host.querySelector('[data-architecture-nav-ring]'), null, 'blur removes the focus ring');
+    assert.equal(host.querySelector('[data-architecture-nav-focus]'), null, 'blur removes the focus state');
+    assert.equal(host.querySelector('[data-architecture-selected]'), null, 'nothing is selected by the focus alone');
+
+    // Re-entering the canvas keeps the cursor where the reader left it.
+    fireEvent.focus(host);
+    assert.equal(
+      document.getElementById(host.getAttribute('aria-activedescendant') ?? '')?.getAttribute('data-entity-id'),
+      nearestId,
+      're-focusing resumes on the last entity the cursor stood on',
+    );
+
+    // Enter selects. The selected state and the focused state are published
+    // separately and have different classes.
+    fireEvent.keyDown(host, { key: 'Enter' });
+    const selected = document.getElementById(host.getAttribute('aria-activedescendant') ?? '');
+    assert.ok(selected !== null);
+    assert.ok(selected.classList.contains('arch-selected'), 'the selection has its own style class');
+    assert.ok(selected.classList.contains('arch-nav-focus'), 'the cursor is still focused');
+    assert.equal(selected.getAttribute('data-architecture-selected'), 'true', 'the selection publishes its own data state');
+    assert.equal(selected.getAttribute('data-architecture-nav-focus'), 'true', 'the focus publishes its own data state');
+    const selectedRect = selected.querySelector('rect');
+    assert.equal(
+      selectedRect?.getAttribute('stroke-dasharray'),
+      null,
+      'the selection is a solid edge; only the focus ring is dashed',
+    );
+
+    // Blur keeps the SELECTION but removes the focus ring: the two states are
+    // genuinely independent.
+    fireEvent.blur(host);
+    assert.equal(host.querySelector('[data-architecture-nav-ring]'), null, 'the ring is focus-only');
+    assert.equal(
+      host.querySelector('[data-architecture-selected]')?.getAttribute('data-architecture-selected'),
+      'true',
+      'the selection survives the focus leaving',
+    );
+  } finally {
+    Element.prototype.getBoundingClientRect = originalRect;
+  }
+});
+
+test('a pointer press focuses the canvas for panning without painting a keyboard ring', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+
+  fireEvent.pointerDown(host);
+  fireEvent.focus(host);
+  assert.equal(host.getAttribute('role'), 'img', 'a pointer focus does not enter entity navigation');
+  assert.equal(host.querySelector('[data-architecture-nav-ring]'), null, 'and paints no ring');
+});
 
 
 test('the zoom cluster lives on the canvas, not in the toolbar, with 32px targets', async () => {
@@ -7118,4 +7282,84 @@ test('the 55-entity graph in tier B drops the member rows from the class bodies'
     contentBox.height + maxExtension > host.clientHeight + 0.5,
     'the full-body drawing would overflow this canvas at the fitted scale',
   );
+});
+
+/** A DOMRect stand-in for the layout jsdom does not perform. */
+function domRect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+test('fullscreen Fit measures the chrome over the host instead of reserving the non-fullscreen margin', async () => {
+  rememberDefaultWithMentionedFunctions();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  sizeHost(host, 400, 300);
+  triggerResize();
+
+  const root = graphRoot();
+  const fitViewport = (): string | null => root.getAttribute('data-architecture-fit-viewport');
+  // The in-tab reading is the host's content box (jsdom pins no padding).
+  await waitFor(() => assert.equal(fitViewport(), '400x300'));
+
+  // The readout row is the last in-flow chrome row; on the overlay it floats
+  // over the viewport. jsdom performs no layout, so its band is pinned here.
+  const header = document.querySelector('[data-architecture-canvas-header]');
+  assert.ok(header instanceof HTMLElement);
+  header.getBoundingClientRect = () => domRect(0, 0, 1440, 60);
+
+  // The corner slot (minimap + zoom cluster) sits 12 px inside the bottom-right
+  // corner. Pin its boxes so the solve has real chrome to subtract.
+  const overlays = document.querySelector('[data-architecture-canvas-overlays]');
+  assert.ok(overlays instanceof HTMLElement);
+  const cornerBoxes = [...overlays.children] as HTMLElement[];
+  assert.ok(cornerBoxes.length >= 1, 'the corner slot must hold the minimap/cluster');
+  const pinCorner = (width: number, height: number): void => {
+    for (const box of cornerBoxes) {
+      box.getBoundingClientRect = () => domRect(1440 - 12 - width, 765 - 12 - height, width, height);
+    }
+  };
+  pinCorner(60, 200);
+
+  // Enter the overlay with a viewport-sized host.
+  sizeHost(host, 1440, 765);
+  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-fullscreen="true"]')));
+
+  // area = 1440×765 − the 60 px readout band − the corner's 72 px right band
+  // (its 212 px height is the more expensive axis), less the one pixel the
+  // semantic writer rounds up. The non-fullscreen reserved margin would have
+  // answered 1416×681 instead.
+  await waitFor(() => assert.equal(fitViewport(), '1367x704'), { timeout: 4000 });
+  assert.equal(host.style.paddingTop, '60px');
+  assert.equal(host.style.paddingRight, '72px');
+  assert.equal(host.style.paddingBottom, '0px');
+  assert.equal(host.style.paddingLeft, '0px');
+
+  // Opening the minimap widens the corner slot past the cost of the bottom
+  // band: the SAME 150 ms debounce re-solves against the area above it.
+  pinCorner(300, 200);
+  triggerResize();
+  await waitFor(() => assert.equal(fitViewport(), '1439x492'), { timeout: 4000 });
+
+  // Leaving the overlay restores the ordinary reading and the in-flow padding.
+  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  await waitFor(() => assert.equal(document.querySelector('[data-architecture-fullscreen]'), null));
+  sizeHost(host, 400, 300);
+  triggerResize();
+  await waitFor(() => assert.equal(fitViewport(), '400x300'));
+  assert.equal(host.style.paddingTop, '');
+  assert.equal(host.style.paddingRight, '');
+  assert.equal(host.style.paddingBottom, '');
+  assert.equal(host.style.paddingLeft, '');
 });

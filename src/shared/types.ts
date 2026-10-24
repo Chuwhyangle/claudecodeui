@@ -3684,7 +3684,7 @@ export type ComposerChipStrip = {
   /** The expansion experiment's variant/response chips for the draft in the box. */
   expansionChips: readonly string[];
   /** Accepts one variant/response chip: replaces the body, keeping a `> quote` prefix. */
-  onAcceptExpansionChip: (index: number) => void;
+  onAcceptExpansionChip: (text: string, index: number) => void;
 };
 
 // ---------------------------
