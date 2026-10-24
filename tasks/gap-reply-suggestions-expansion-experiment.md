@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-expansion-experiment
 title: 回复建议扩展实验（缺省关闭）：选中某个 chip 后基于它再生成备选，替换正文；带引用时针对引用生成回应
-status: ready
+status: done
 labels:
   - gap
 parent: null
