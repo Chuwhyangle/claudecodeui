@@ -385,11 +385,11 @@ export default function PulseStrip({
       {/* The one baseline the strip keeps: a 1 px rule at the foot, no axis text. */}
       <div className="absolute inset-x-0 bottom-0 h-px bg-border" data-testid={`${testId}-baseline`} />
 
-      {/* Window selector: three tiny buttons in a reserved 32 px column at the right end, where
+      {/* Window selector: three tiny labels in a reserved 44 px column at the right end, where
           the 「24h」 label would be. Selecting a window re-selects the records; the strip's
           height never changes (the rows are laid out in the plot column beside it). */}
       <div
-        className="absolute right-0 top-0 flex w-8 flex-col items-end gap-0.5"
+        className="absolute right-0 top-1 flex w-11 flex-row items-center justify-end gap-0.5"
         data-testid={`${testId}-windows`}
       >
         {PULSE_WINDOW_HOURS.map((option) => (
@@ -411,7 +411,7 @@ export default function PulseStrip({
         ))}
       </div>
 
-      <div className="absolute inset-y-0 left-0 right-8 flex flex-col" style={{ paddingBottom: STRIP_PADDING }}>
+      <div className="absolute inset-y-0 left-0 right-11 flex flex-col" style={{ paddingBottom: STRIP_PADDING }}>
         {rows.map((row) => (
           <div
             key={row.id}
