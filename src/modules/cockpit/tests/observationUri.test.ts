@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatArchitectureUri,
+  formatInitiativeUri,
   formatObservationUri,
   formatProjectUri,
   formatSessionUri,
@@ -52,8 +53,25 @@ describe('observation URI grammar', () => {
     expect(parsed === null ? null : formatObservationUri(parsed)).toBe(uri);
   });
 
+  it('round-trips the fleet initiative URI (the reserved segment the initiative view pins)', () => {
+    const uri = formatInitiativeUri('cockpit-observation-wall');
+    expect(uri).toBe('quay://fleet/initiative/cockpit-observation-wall');
+    const parsed = parseObservationUri(uri);
+    expect(parsed).toEqual({
+      scheme: 'quay',
+      kind: 'initiative',
+      id: 'cockpit-observation-wall',
+      uri,
+    });
+    expect(parsed === null ? null : formatObservationUri(parsed)).toBe(uri);
+  });
+
   it.each([
     '',
+    'quay://fleet/initiative/',
+    'quay://fleet/task/abc',
+    'quay://fleet/initiative/a/b',
+    'quay://fleet/initiative/a b',
     '   ',
     'cloudcli://session/',
     'cloudcli://session/a/b',

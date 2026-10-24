@@ -338,6 +338,16 @@ export const api = {
    * and the overview must not spawn a CLI per project just to draw a count.
    */
   quayFleetSummary: () => get('/api/quay/fleet-summary'),
+  /**
+   * The cockpit's initiative view: active initiatives (charter, member cells, dependency
+   * edges) plus the `initiative-decision` queue and the liaison self-decisions the spot-check
+   * group samples. An unavailable fleet is a `{ok:false, available:false, reason}` body, not
+   * an HTTP failure — the queue survives a fleet CLI that cannot be spawned.
+   */
+  quayInitiatives: () => get('/api/quay/initiatives'),
+  /** Records one human ruling through the fleet's own `initiative decide` (by=human, kind=fact). */
+  quayInitiativeDecide: (slug: string, body: unknown) =>
+    post(`/api/quay/initiatives/${encodeURIComponent(slug)}/decide`, body),
   quaySnapshot: (
     projectId: string,
     { refresh = false, hours }: { refresh?: boolean; hours?: number } = {},

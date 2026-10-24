@@ -143,7 +143,9 @@
 #   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
 #   and the session-digest-llm row by observation-session-digest-llm-tier,
 #   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
-# so this file now covers 380 of the 422 files the current `find server -name '*.test.ts' -o -name
+#   and the quay-initiatives row by cockpit-initiative-view-and-decision-queue,
+#   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
+# so this file now covers 385 of the 427 files the current `find server -name '*.test.ts' -o -name
 # '*.test.js' | sort` list collects; a row here is a dispatch ORDER hint only, so an unlisted file is
 # not skipped — it just sorts alphabetically after the listed ones. The remaining ~40 unlisted files
 # (claude-resident-dispatch-hook and voice-realtime-voice-active-marker among them) came in with
@@ -612,3 +614,4 @@
 2058	server/modules/context-events/tests/context-event-writer.test.ts
 1941	server/modules/context-events/tests/utterance-classifier.test.ts
 2012	server/modules/context-events/tests/shadow-predictor.test.ts
+1877	server/modules/quay/tests/quay-initiatives.test.ts
