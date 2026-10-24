@@ -1,7 +1,7 @@
 ---
 id: cockpit-decision-counter-voice
 title: 裁定队列「反方位」：每条待裁定项附全新上下文生成的反方（忽略了什么 / 最强反例 / 什么会证伪），不阻塞、可缓存、限额
-status: todo
+status: ready
 labels:
   - cockpit
   - initiative
