@@ -1,7 +1,7 @@
 ---
 id: observation-p0-view-instrumentation-and-weekly-report
 title: 观察墙 T0：本地查看事件埋点（会话/tab 打开、停留、来源）+ 负载周报脚本入库
-status: ready
+status: done
 labels:
   - cockpit
   - observation

@@ -10,6 +10,7 @@ import type { ServerEvent,
   ProjectSession,IsSessionProcessing } from '@/shared/types';
 import { mergeProjectSelectionMetadata } from '@/modules/project-workspace/utils/projectSelectionMetadata';
 import { readSelectedProvider } from '@/shared/selectedProvider';
+import { reportView } from '@/shared/viewEvents';
 import {
   isSessionHiddenByProjectFilter,
   useProjectSessionFilter,
@@ -399,6 +400,21 @@ export function useProjectsState({
       // Silently ignore storage errors
     }
   }, [activeTab]);
+
+  /**
+   * Observation telemetry (`observation-p0-view-instrumentation`): report the reading the
+   * reader is looking at. A selected session is the target only while its chat pane is the
+   * active tab; every other tab is reported by name, so reading a session's output, the Quay
+   * board and the architecture drawing stay distinguishable in the weekly report. The tracker
+   * settles `dwellMs` and `fromTarget` itself, and is inert unless `App` installed it.
+   */
+  useEffect(() => {
+    if (activeTab === 'chat' && selectedSession?.id) {
+      reportView('session', selectedSession.id);
+      return;
+    }
+    reportView('tab', activeTab);
+  }, [activeTab, selectedSession?.id]);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
