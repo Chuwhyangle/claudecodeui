@@ -35,7 +35,7 @@ extra: {}
    - 构建和重启的回调接缝（由部署就绪任务引入；还不存在时就跳过）→ `build.completed`、`service.restarted`。
 3. **话语粗分类器**（纯函数）：首版是规则分类，类别取探针里的 10 类：立任务、构建/重启、落地/可用核验、检查进展、浏览器验证、发布、同意/推进、会话协作、诊断、讨论/其他。分类结果写进 `utterance.data.class`。
 4. **影子预测器**：
-   - 每条 `utterance` 写入后，根据同一会话的上一类别，用转移计数预测下一条话语的类别，写一条 `shadow.prediction`（`{class, confidence, method:"transition-v0", basis}`）。转移计数从事件流和历史转写中统计，冷启动可以用 `experiments/voice-grounding-probe/` 的方法从转写回填。
+   - 每条 `utterance` 写入后，根据同一会话的上一类别，用转移计数预测下一条话语的类别，写一条 `shadow.prediction`（`{class, confidence, method:"transition-v0", basis}`）。转移计数从事件流和历史转写中统计，冷启动可以从会话转写回填（按用户消息的时间顺序统计相邻类别的转移）。
    - 同一会话的下一条 `utterance` 到来时，写 `shadow.prediction.outcome`（`{predictionId, actualClass, hit}`）。
    - 预测结果不出现在任何界面上。
 5. **命中率表**：`scripts/shadow-prediction-report.mjs`（同时提供 `--json`）读取事件流，按类别输出样本数、命中率、置信度分桶的校准情况（每个置信区间的实际命中率），以及每个类别目前所在的阶梯级别（首版写死为「你自己做」或「系统建议」，作为基线）。
@@ -43,7 +43,7 @@ extra: {}
 ## AC
 
 - [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/context-event-writer.test.ts` exit 0——在临时 HOME 和夹具 schema 下：合法事件追加成一行，内容可以解析；不合法的事件被拒绝且不写入；超过 16 KB 的文本被截断并带 `truncated: true`；schema 文件缺失时状态为 `schema-unavailable`，且 0 次写入；并发 50 次追加后，行数恰好为 50 且每行都能解析。
-- [ ] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/utterance-classifier.test.ts` exit 0——10 个类别各有至少 2 条正例（取自 `experiments/voice-grounding-probe/utterance-sample40.json` 或探针语料），以及若干落入「讨论/其他」的反例。
+- [ ] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/utterance-classifier.test.ts` exit 0——10 个类别各有至少 2 条正例，以及若干落入「讨论/其他」的反例；例句直接写在测试夹具里（可取材自用户真实话语，如「检查进展。」「建 A、B、C 三个修复任务」「Build + 安全重启。」「检查是否已经落地可用」「用 MCP 浏览器访问……截图」）。
 - [ ] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/shadow-predictor.test.ts` exit 0——给定转移计数，预测输出概率最高的类别及其置信度；下一条话语到来后恰好产生一条 outcome，hit 判定正确；会话之间互不串扰；预测器在界面层不可见（不经过任何 websocket 帧）。
 - [ ] AC4: `node --test scripts/shadow-prediction-report.test.mjs` exit 0——夹具事件流产出的按类别命中率与校准分桶，与手算结果一致；坏行被跳过并计数。
 - [ ] AC5: 各生产点接入的单测：发送一条消息恰好产生 1 条 `utterance`；chip 的 picked 恰好产生 1 条 `chip.picked`；写入器抛错时发送流程照常完成。`npm run typecheck` 通过。
