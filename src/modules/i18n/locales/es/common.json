@@ -750,6 +750,7 @@
     "modeCockpit": "Cockpit",
     "modeSwitchLabel": "Cambiar entre sesiones y cockpit",
     "attentionBadge": "{{n}} elementos del proyecto te necesitan",
+    "attentionBadgeDetail": "{{n}} elementos del proyecto te necesitan: {{projects}}",
     "attentionUnavailable": "Atención no disponible: {{reason}}",
     "openProject": "Ver en el cockpit",
     "openCockpit": "Abrir el cockpit",

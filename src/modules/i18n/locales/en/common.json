@@ -841,6 +841,7 @@
     "modeCockpit": "Cockpit",
     "modeSwitchLabel": "Switch between sessions and cockpit",
     "attentionBadge": "{{n}} project items need you",
+    "attentionBadgeDetail": "{{n}} project items need you: {{projects}}",
     "attentionUnavailable": "Attention unavailable: {{reason}}",
     "openProject": "View in cockpit",
     "openCockpit": "Open cockpit",

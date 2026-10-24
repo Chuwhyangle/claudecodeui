@@ -25,6 +25,18 @@ type SidebarModeSwitchProps = {
   selectedProjectId?: string | null;
   /** `row` for the two headers and the mobile drawer, `column` for the collapsed icon rail. */
   layout?: 'row' | 'column';
+  /**
+   * The size classes the caller wants every segment to use. The cockpit header passes the same
+   * constant to its phone-remote toggle, so the header's controls line up instead of each
+   * carrying its own idea of "one button". Absent leaves the sidebar's own sizes untouched.
+   */
+  controlSizeClass?: string;
+  /**
+   * Called instead of the cockpit segment's navigation when the attention badge itself is
+   * clicked. The cockpit header uses it to open the fleet view with the waiting projects first;
+   * every other layout leaves it out, so a badge click there stays an ordinary switch to cockpit.
+   */
+  onAttentionBadgeClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
   /** The owning module's translator; sidebar callers pass one whose default namespace is `sidebar`. */
   t: TFunction;
 };
@@ -54,7 +66,9 @@ type ModeSwitchViewProps = {
   sessionsHref: string;
   cockpitHref: string;
   attention: FleetAttentionReading;
+  controlSizeClass?: string;
   onSelect: (mode: SidebarMode, event: MouseEvent<HTMLAnchorElement>) => void;
+  onAttentionBadgeClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
   t: TFunction;
 };
 
@@ -69,7 +83,9 @@ function ModeSwitchView({
   sessionsHref,
   cockpitHref,
   attention,
+  controlSizeClass,
   onSelect,
+  onAttentionBadgeClick,
   t,
 }: ModeSwitchViewProps) {
   const sessionsLabel = t('common:cockpit.modeSessions', 'Sessions');
@@ -77,12 +93,24 @@ function ModeSwitchView({
   const switchLabel = t('common:cockpit.modeSwitchLabel', 'Switch between sessions and cockpit');
   const isColumn = layout === 'column';
 
-  // The badge's accessible name has to carry the unit: read aloud on its own, "3" says
-  // nothing. `{{n}}` (not i18next's plural-aware `{{count}}`) keeps one string for 1 and 99.
-  const attentionLabel = t('common:cockpit.attentionBadge', {
-    n: attention.needsHumanTotal,
-    defaultValue: '{{n}} project items need you',
-  });
+  // The badge's accessible name has to carry the unit AND its source: read aloud on its own,
+  // "3" says nothing, and "3 project items need you" still leaves a person asking "which
+  // projects?". The waiting projects are named with their own counts, most first; `{{n}}` (not
+  // i18next's plural-aware `{{count}}`) keeps one string for 1 and 99.
+  const attentionProjects = attention.attentionByProject
+    .map((project) => `${project.name} (${project.needsHuman})`)
+    .join(', ');
+  const attentionLabel =
+    attention.attentionByProject.length > 0
+      ? t('common:cockpit.attentionBadgeDetail', {
+          n: attention.needsHumanTotal,
+          projects: attentionProjects,
+          defaultValue: '{{n}} project items need you: {{projects}}',
+        })
+      : t('common:cockpit.attentionBadge', {
+          n: attention.needsHumanTotal,
+          defaultValue: '{{n}} project items need you',
+        });
   const attentionWarning = t('common:cockpit.attentionUnavailable', {
     reason: attention.fleetReason ?? '',
     defaultValue: 'Attention unavailable: {{reason}}',
@@ -95,11 +123,26 @@ function ModeSwitchView({
   const segmentClass = (active: boolean): string =>
     cn(
       'relative flex items-center justify-center rounded-md text-muted-foreground transition-all',
-      isColumn ? 'h-11 w-11' : 'min-h-11 min-w-11 md:min-h-8 md:min-w-8 md:px-1.5',
+      isColumn
+        ? 'h-11 w-11'
+        : cn(controlSizeClass ?? 'min-h-11 min-w-11 md:min-h-8 md:min-w-8', 'md:px-1.5'),
       active
         ? 'bg-background text-foreground shadow-sm'
         : 'hover:text-foreground hover:bg-accent/60',
     );
+
+  // A badge click is a different destination from the segment's own link only when the caller
+  // says so; otherwise the whole segment (badge included) keeps its single navigation.
+  const handleCockpitClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    const clickedBadge =
+      event.target instanceof Element &&
+      event.target.closest('[data-testid="cockpit-attention-badge"]') !== null;
+    if (clickedBadge && onAttentionBadgeClick !== undefined) {
+      onAttentionBadgeClick(event);
+      return;
+    }
+    onSelect('cockpit', event);
+  };
 
   return (
     <div
@@ -127,7 +170,7 @@ function ModeSwitchView({
 
       <a
         href={cockpitHref}
-        onClick={(event) => onSelect('cockpit', event)}
+        onClick={handleCockpitClick}
         aria-current={mode === 'cockpit' ? 'page' : undefined}
         aria-label={cockpitLabel}
         title={cockpitLabel}
@@ -139,6 +182,7 @@ function ModeSwitchView({
           <span
             role="status"
             aria-label={attentionLabel}
+            title={attentionLabel}
             data-testid="cockpit-attention-badge"
             // A count is the one state that asks the person to act: amber, at the badge's own
             // corner, never the wide decorative chip that would compete with the tile's icon.
@@ -165,6 +209,8 @@ function RoutedModeSwitch({
   selectedProjectId,
   layout,
   attention,
+  controlSizeClass,
+  onAttentionBadgeClick,
   t,
 }: SidebarModeSwitchProps & { layout: 'row' | 'column'; attention: FleetAttentionReading }) {
   const location = useLocation();
@@ -196,7 +242,9 @@ function RoutedModeSwitch({
       sessionsHref={sessionsHref}
       cockpitHref={cockpitHref}
       attention={attention}
+      controlSizeClass={controlSizeClass}
       onSelect={handleSelect}
+      onAttentionBadgeClick={onAttentionBadgeClick}
       t={t}
     />
   );
@@ -212,6 +260,8 @@ function PlainModeSwitch({
   selectedProjectId,
   layout,
   attention,
+  controlSizeClass,
+  onAttentionBadgeClick,
   t,
 }: SidebarModeSwitchProps & { layout: 'row' | 'column'; attention: FleetAttentionReading }) {
   const currentPath =
@@ -225,7 +275,9 @@ function PlainModeSwitch({
       sessionsHref={mode === 'cockpit' ? readCockpitReturnPath() : currentPath}
       cockpitHref={cockpitPathForSelection(attention, selectedProjectId)}
       attention={attention}
+      controlSizeClass={controlSizeClass}
       onSelect={() => undefined}
+      onAttentionBadgeClick={onAttentionBadgeClick}
       t={t}
     />
   );
@@ -239,6 +291,8 @@ export default function SidebarModeSwitch({
   mode,
   selectedProjectId,
   layout = 'row',
+  controlSizeClass,
+  onAttentionBadgeClick,
   t,
 }: SidebarModeSwitchProps) {
   const attention = useFleetAttention();
@@ -249,6 +303,8 @@ export default function SidebarModeSwitch({
       selectedProjectId={selectedProjectId}
       layout={layout}
       attention={attention}
+      controlSizeClass={controlSizeClass}
+      onAttentionBadgeClick={onAttentionBadgeClick}
       t={t}
     />
   ) : (
@@ -257,6 +313,8 @@ export default function SidebarModeSwitch({
       selectedProjectId={selectedProjectId}
       layout={layout}
       attention={attention}
+      controlSizeClass={controlSizeClass}
+      onAttentionBadgeClick={onAttentionBadgeClick}
       t={t}
     />
   );
