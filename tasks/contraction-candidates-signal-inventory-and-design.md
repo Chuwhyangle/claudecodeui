@@ -1,7 +1,7 @@
 ---
 id: contraction-candidates-signal-inventory-and-design
 title: 收缩候选（观察墙之后）：盘点「从不发声的仪器」等退役信号 + 只读扫描原型 + 进入观察墙与裁定落地的设计
-status: ready
+status: needs-human
 labels:
   - cockpit
   - observation
@@ -32,9 +32,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `node scripts/contraction-candidates/scan.mjs --root /data/home/yale/work/quay --json > /tmp/cc-quay.json` exit 0，输出合法 JSON，覆盖方案第 1 条中至少 4 类，每条候选带非空 `evidence` 与 `counterCheck`；对 claudecodeui、quay-fleet 两个根同样 exit 0。
-- [ ] AC2: `node --test scripts/contraction-candidates/scan.test.mjs` exit 0——夹具仓库中：一个从未变红的闸被识别、一个零读者状态文件被识别、一个有读者的状态文件不被识别（负对照）；脚本运行前后夹具目录 git 状态不变（只读）。
-- [ ] AC3: `test -f docs/proposals/contraction-candidates.md && grep -c "^## " docs/proposals/contraction-candidates.md` 输出 ≥ 5（信号盘点 / 计算方法 / 误报与反例检查 / 观察墙呈现 / 裁定与落地）。
+- [x] AC1: `node scripts/contraction-candidates/scan.mjs --root /data/home/yale/work/quay --json > /tmp/cc-quay.json` exit 0，输出合法 JSON，覆盖方案第 1 条中至少 4 类，每条候选带非空 `evidence` 与 `counterCheck`；对 claudecodeui、quay-fleet 两个根同样 exit 0。
+- [x] AC2: `node --test scripts/contraction-candidates/scan.test.mjs` exit 0——夹具仓库中：一个从未变红的闸被识别、一个零读者状态文件被识别、一个有读者的状态文件不被识别（负对照）；脚本运行前后夹具目录 git 状态不变（只读）。
+- [x] AC3: `test -f docs/proposals/contraction-candidates.md && grep -c "^## " docs/proposals/contraction-candidates.md` 输出 ≥ 5（信号盘点 / 计算方法 / 误报与反例检查 / 观察墙呈现 / 裁定与落地）。
 
 ## DoD
 
@@ -44,6 +44,18 @@ depends_on:
 ## Notes
 
 fleet 侧的数据（每项目 `.quay/gate-events.jsonl`、`~/.quay-fleet/decisions.jsonl`）不要直接读文件：按「CloudCLI 不读 fleet 内部状态文件」的原则，启动本任务时先请 quay-fleet 暴露只读动词（例如基于这两个账本的 `inventory --json`），口径定了再由 fleet 立读口。各项目自己仓库里的文件（如 quay 的闸定义、文档）可以直接扫描。
+
+### 2026-10-24 worker round — AC verified, DoD review still open
+
+AC1–AC3 all pass in the task worktree (readings pasted in the doc §8): three roots exit 0 with
+7 / 3 / 3 kinds covered and 0 candidates missing evidence/counterCheck; the fixture test passes
+including the negative control and the read-only `git status` comparison; the doc has 9 `## `
+headings. Seven real candidates were manually cross-checked (§8 table).
+
+The DoD's second bullet is a **human review gate**: the design doc must be reviewed and the
+adjudication verbs / landing path confirmed by the user. That review has not happened, so the
+task is parked `needs-human` with all ACs ticked — it must not be flipped done before the
+review lands in the doc's `## Adjudication` section or in this task's Notes.
 
 ## Touches
 

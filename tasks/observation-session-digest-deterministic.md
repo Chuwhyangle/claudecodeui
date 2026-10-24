@@ -25,9 +25,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts` exit 0——固定 transcript 夹具：改动文件去重正确；vitest/node --test/playwright 三种输出各自解析出通过/失败计数，无法识别的输出给出「未评估」；以问句结尾与以编号选项结尾的末段判为「问你」，以陈述结尾的不判；结论摘录截断且标注 tier=deterministic。
-- [ ] AC2: 同一测试文件——轮次结束事件触发恰好一次写入且 revision+1；不在观察列表且不处于等待/出错的会话不写入；transcript 缺失时写入 unevaluated + reason。
-- [ ] AC3: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts` exit 0——固定 transcript 夹具：改动文件去重正确；vitest/node --test/playwright 三种输出各自解析出通过/失败计数，无法识别的输出给出「未评估」；以问句结尾与以编号选项结尾的末段判为「问你」，以陈述结尾的不判；结论摘录截断且标注 tier=deterministic。
+- [x] AC2: 同一测试文件——轮次结束事件触发恰好一次写入且 revision+1；不在观察列表且不处于等待/出错的会话不写入；transcript 缺失时写入 unevaluated + reason。
+- [x] AC3: `npm run typecheck` 通过。
 
 ## DoD
 
