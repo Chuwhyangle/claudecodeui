@@ -990,5 +990,23 @@
     "itemsList": "Butir {{list}}",
     "wholeReply": "seluruh balasan",
     "mismatch": "Balasan terakhir hanya memiliki {{count}} butir"
+  },
+  "sessionTaskChain": {
+    "summary": "{{total}} tugas dimulai di sesi ini: {{inProgress}} sedang berjalan · {{landed}} sudah digabung menunggu rilis · {{running}} aktif · {{blocked}} terhambat",
+    "expand": "Tampilkan rantai tugas",
+    "collapse": "Sembunyikan rantai tugas",
+    "stageFiled": "Didaftarkan",
+    "stageReady": "Siap",
+    "stageInProgress": "Sedang berjalan",
+    "stageLanded": "Sudah digabung, menunggu rilis",
+    "stageBuilt": "Sudah dibangun, menunggu mulai ulang",
+    "stageRunning": "Aktif",
+    "stageBlocked": "Terhambat",
+    "stageNeedsHuman": "Perlu orang",
+    "stageSuperseded": "Digantikan",
+    "stageUnknown": "Tidak ada di penyimpanan tugas",
+    "blockedReason": "Alasan belum mendarat: {{reason}}",
+    "liveNotice": "{{taskId}} kini aktif",
+    "unavailable": "Rantai tugas tidak tersedia: {{reason}}"
   }
 }

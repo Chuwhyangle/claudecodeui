@@ -907,5 +907,23 @@
     "itemsList": "{{list}}. maddeler",
     "wholeReply": "tüm yanıt",
     "mismatch": "Son yanıtta yalnızca {{count}} madde var"
+  },
+  "sessionTaskChain": {
+    "summary": "Bu oturumda başlatılan {{total}} görev: {{inProgress}} sürüyor · {{landed}} birleşti, yayın bekliyor · {{running}} canlı · {{blocked}} engellendi",
+    "expand": "Görev zincirini göster",
+    "collapse": "Görev zincirini gizle",
+    "stageFiled": "Kaydedildi",
+    "stageReady": "Hazır",
+    "stageInProgress": "Sürüyor",
+    "stageLanded": "Birleşti, yayın bekliyor",
+    "stageBuilt": "Derlendi, yeniden başlatma bekliyor",
+    "stageRunning": "Canlı",
+    "stageBlocked": "Engellendi",
+    "stageNeedsHuman": "Bir kişi gerekiyor",
+    "stageSuperseded": "Yerine geçildi",
+    "stageUnknown": "Görev deposunda yok",
+    "blockedReason": "İnmemesinin nedeni: {{reason}}",
+    "liveNotice": "{{taskId}} artık canlı",
+    "unavailable": "Görev zinciri kullanılamıyor: {{reason}}"
   }
 }

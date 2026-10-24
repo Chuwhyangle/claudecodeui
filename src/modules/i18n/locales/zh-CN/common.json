@@ -907,5 +907,23 @@
     "itemsList": "第 {{list}} 点",
     "wholeReply": "整条回复",
     "mismatch": "回复里只有 {{count}} 条"
+  },
+  "sessionTaskChain": {
+    "summary": "本会话发起 {{total}} 个任务：执行中 {{inProgress}} · 已合入待生效 {{landed}} · 线上 {{running}} · 卡住 {{blocked}}",
+    "expand": "展开任务流转链",
+    "collapse": "收起任务流转链",
+    "stageFiled": "立案",
+    "stageReady": "就绪",
+    "stageInProgress": "执行中",
+    "stageLanded": "已合入待生效",
+    "stageBuilt": "已构建待重启",
+    "stageRunning": "线上运行",
+    "stageBlocked": "卡住",
+    "stageNeedsHuman": "待人处理",
+    "stageSuperseded": "已取代",
+    "stageUnknown": "任务库中不存在",
+    "blockedReason": "未落地原因：{{reason}}",
+    "liveNotice": "{{taskId}} 已上线",
+    "unavailable": "任务流转链暂不可用：{{reason}}"
   }
 }

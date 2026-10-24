@@ -1,5 +1,18 @@
 export { default as ChatInterface } from '@/modules/chat/ChatInterface';
 /**
+ * The session → task chain bar: 「本会话发起 6 个任务：执行中 2 · 已合入待生效 3 · 线上 1 · 卡住 0」.
+ * Used by `ChatInterface` above the transcript; exported so a scenario runner can render it
+ * without the whole chat page and so the cockpit can adopt the same stage vocabulary.
+ */
+export { default as SessionTaskChain } from '@/modules/chat/SessionTaskChain';
+export type {
+  SessionTaskChainCounts,
+  SessionTaskChainEntry,
+  SessionTaskChainPort,
+  SessionTaskChainReading,
+  SessionTaskChainStage,
+} from '@/modules/chat/SessionTaskChain';
+/**
  * The i18n key for one activity phase's running word, or null when the phase
  * has none. Used by the sidebar module, whose running rows draw the same phase
  * label the dock draws — one reduction, so the two surfaces cannot disagree.

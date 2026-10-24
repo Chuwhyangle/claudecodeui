@@ -907,5 +907,23 @@
     "itemsList": "{{list}} 番目",
     "wholeReply": "返信全体",
     "mismatch": "最新の返信は {{count}} 項目しかありません"
+  },
+  "sessionTaskChain": {
+    "summary": "このセッションで開始したタスク {{total}} 件：実行中 {{inProgress}} · マージ済み反映待ち {{landed}} · 稼働中 {{running}} · 停止 {{blocked}}",
+    "expand": "タスクの流れを表示",
+    "collapse": "タスクの流れを隠す",
+    "stageFiled": "起案",
+    "stageReady": "準備完了",
+    "stageInProgress": "実行中",
+    "stageLanded": "マージ済み・反映待ち",
+    "stageBuilt": "ビルド済み・再起動待ち",
+    "stageRunning": "稼働中",
+    "stageBlocked": "停止",
+    "stageNeedsHuman": "人の判断待ち",
+    "stageSuperseded": "置き換え済み",
+    "stageUnknown": "タスクストアに無し",
+    "blockedReason": "未着地の理由：{{reason}}",
+    "liveNotice": "{{taskId}} が稼働中になりました",
+    "unavailable": "タスクの流れを取得できません：{{reason}}"
   }
 }

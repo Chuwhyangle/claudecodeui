@@ -907,5 +907,23 @@
     "itemsList": "Punti {{list}}",
     "wholeReply": "l'intera risposta",
     "mismatch": "L'ultima risposta ha solo {{count}} elementi"
+  },
+  "sessionTaskChain": {
+    "summary": "{{total}} attività avviate in questa sessione: {{inProgress}} in corso · {{landed}} unite in attesa di rilascio · {{running}} in produzione · {{blocked}} bloccate",
+    "expand": "Mostra la catena delle attività",
+    "collapse": "Nascondi la catena delle attività",
+    "stageFiled": "Registrata",
+    "stageReady": "Pronta",
+    "stageInProgress": "In corso",
+    "stageLanded": "Unita, in attesa di rilascio",
+    "stageBuilt": "Compilata, in attesa di riavvio",
+    "stageRunning": "In produzione",
+    "stageBlocked": "Bloccata",
+    "stageNeedsHuman": "Richiede una persona",
+    "stageSuperseded": "Sostituita",
+    "stageUnknown": "Non presente nell’archivio attività",
+    "blockedReason": "Motivo del mancato atterraggio: {{reason}}",
+    "liveNotice": "{{taskId}} è ora in produzione",
+    "unavailable": "La catena delle attività non è disponibile: {{reason}}"
   }
 }

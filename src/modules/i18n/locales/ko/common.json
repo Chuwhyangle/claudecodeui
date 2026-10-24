@@ -907,5 +907,23 @@
     "itemsList": "{{list}}번 항목",
     "wholeReply": "답변 전체",
     "mismatch": "최신 답변에는 항목이 {{count}}개뿐입니다"
+  },
+  "sessionTaskChain": {
+    "summary": "이 세션에서 시작한 작업 {{total}}개: 진행 중 {{inProgress}} · 병합 후 적용 대기 {{landed}} · 운영 중 {{running}} · 막힘 {{blocked}}",
+    "expand": "작업 흐름 펼치기",
+    "collapse": "작업 흐름 접기",
+    "stageFiled": "등록",
+    "stageReady": "준비됨",
+    "stageInProgress": "진행 중",
+    "stageLanded": "병합 후 적용 대기",
+    "stageBuilt": "빌드 후 재시작 대기",
+    "stageRunning": "운영 중",
+    "stageBlocked": "막힘",
+    "stageNeedsHuman": "사람 확인 필요",
+    "stageSuperseded": "대체됨",
+    "stageUnknown": "작업 저장소에 없음",
+    "blockedReason": "미착지 사유: {{reason}}",
+    "liveNotice": "{{taskId}} 이(가) 운영 중이 되었습니다",
+    "unavailable": "작업 흐름을 사용할 수 없습니다: {{reason}}"
   }
 }

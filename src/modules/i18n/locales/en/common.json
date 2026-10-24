@@ -998,5 +998,23 @@
     "itemsList": "Items {{list}}",
     "wholeReply": "the whole reply",
     "mismatch": "The latest reply has only {{count}} items"
+  },
+  "sessionTaskChain": {
+    "summary": "{{total}} tasks started in this session: {{inProgress}} in progress · {{landed}} merged pending release · {{running}} live · {{blocked}} blocked",
+    "expand": "Show the task chain",
+    "collapse": "Hide the task chain",
+    "stageFiled": "Filed",
+    "stageReady": "Ready",
+    "stageInProgress": "In progress",
+    "stageLanded": "Merged, pending release",
+    "stageBuilt": "Built, pending restart",
+    "stageRunning": "Live",
+    "stageBlocked": "Blocked",
+    "stageNeedsHuman": "Needs a person",
+    "stageSuperseded": "Superseded",
+    "stageUnknown": "Not in the task store",
+    "blockedReason": "Unlanded reason: {{reason}}",
+    "liveNotice": "{{taskId}} is now live",
+    "unavailable": "The task chain is unavailable: {{reason}}"
   }
 }

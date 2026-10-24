@@ -877,5 +877,23 @@
     "itemsList": "Punkte {{list}}",
     "wholeReply": "die ganze Antwort",
     "mismatch": "Die letzte Antwort hat nur {{count}} Punkte"
+  },
+  "sessionTaskChain": {
+    "summary": "{{total}} in dieser Sitzung gestartete Aufgaben: {{inProgress}} in Arbeit · {{landed}} zusammengeführt, Veröffentlichung ausstehend · {{running}} live · {{blocked}} blockiert",
+    "expand": "Aufgabenkette anzeigen",
+    "collapse": "Aufgabenkette ausblenden",
+    "stageFiled": "Angelegt",
+    "stageReady": "Bereit",
+    "stageInProgress": "In Arbeit",
+    "stageLanded": "Zusammengeführt, Veröffentlichung ausstehend",
+    "stageBuilt": "Gebaut, Neustart ausstehend",
+    "stageRunning": "Live",
+    "stageBlocked": "Blockiert",
+    "stageNeedsHuman": "Braucht eine Person",
+    "stageSuperseded": "Ersetzt",
+    "stageUnknown": "Nicht im Aufgabenspeicher",
+    "blockedReason": "Grund für die Nichtlandung: {{reason}}",
+    "liveNotice": "{{taskId}} ist jetzt live",
+    "unavailable": "Die Aufgabenkette ist nicht verfügbar: {{reason}}"
   }
 }

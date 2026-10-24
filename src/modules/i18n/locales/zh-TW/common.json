@@ -907,5 +907,23 @@
     "itemsList": "第 {{list}} 點",
     "wholeReply": "整條回覆",
     "mismatch": "回覆裡只有 {{count}} 條"
+  },
+  "sessionTaskChain": {
+    "summary": "本會話發起 {{total}} 個任務：執行中 {{inProgress}} · 已合入待生效 {{landed}} · 線上 {{running}} · 卡住 {{blocked}}",
+    "expand": "展開任務流轉鏈",
+    "collapse": "收起任務流轉鏈",
+    "stageFiled": "立案",
+    "stageReady": "就緒",
+    "stageInProgress": "執行中",
+    "stageLanded": "已合入待生效",
+    "stageBuilt": "已建置待重啟",
+    "stageRunning": "線上運行",
+    "stageBlocked": "卡住",
+    "stageNeedsHuman": "待人工處理",
+    "stageSuperseded": "已被取代",
+    "stageUnknown": "任務庫中不存在",
+    "blockedReason": "未落地原因：{{reason}}",
+    "liveNotice": "{{taskId}} 已上線",
+    "unavailable": "任務流轉鏈暫不可用：{{reason}}"
   }
 }

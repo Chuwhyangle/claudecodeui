@@ -877,5 +877,23 @@
     "itemsList": "пункты {{list}}",
     "wholeReply": "весь ответ",
     "mismatch": "В последнем ответе всего {{count}} пунктов"
+  },
+  "sessionTaskChain": {
+    "summary": "Задачи, начатые в этой сессии: {{total}}. В работе {{inProgress}} · слито, ждёт выпуска {{landed}} · работает {{running}} · заблокировано {{blocked}}",
+    "expand": "Показать цепочку задач",
+    "collapse": "Скрыть цепочку задач",
+    "stageFiled": "Заведена",
+    "stageReady": "Готова",
+    "stageInProgress": "В работе",
+    "stageLanded": "Слито, ждёт выпуска",
+    "stageBuilt": "Собрано, ждёт перезапуска",
+    "stageRunning": "Работает",
+    "stageBlocked": "Заблокирована",
+    "stageNeedsHuman": "Нужен человек",
+    "stageSuperseded": "Заменена",
+    "stageUnknown": "Нет в хранилище задач",
+    "blockedReason": "Причина несостоявшегося включения: {{reason}}",
+    "liveNotice": "{{taskId}} теперь работает",
+    "unavailable": "Цепочка задач недоступна: {{reason}}"
   }
 }

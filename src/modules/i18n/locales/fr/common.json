@@ -907,5 +907,23 @@
     "itemsList": "Points {{list}}",
     "wholeReply": "toute la réponse",
     "mismatch": "La dernière réponse ne compte que {{count}} points"
+  },
+  "sessionTaskChain": {
+    "summary": "{{total}} tâches lancées dans cette session : {{inProgress}} en cours · {{landed}} fusionnées en attente de publication · {{running}} en production · {{blocked}} bloquées",
+    "expand": "Afficher la chaîne des tâches",
+    "collapse": "Masquer la chaîne des tâches",
+    "stageFiled": "Enregistrée",
+    "stageReady": "Prête",
+    "stageInProgress": "En cours",
+    "stageLanded": "Fusionnée, en attente de publication",
+    "stageBuilt": "Compilée, en attente de redémarrage",
+    "stageRunning": "En production",
+    "stageBlocked": "Bloquée",
+    "stageNeedsHuman": "Nécessite une personne",
+    "stageSuperseded": "Remplacée",
+    "stageUnknown": "Absente du magasin de tâches",
+    "blockedReason": "Raison de non-atteinte : {{reason}}",
+    "liveNotice": "{{taskId}} est maintenant en production",
+    "unavailable": "La chaîne des tâches est indisponible : {{reason}}"
   }
 }
