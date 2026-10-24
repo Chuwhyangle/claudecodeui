@@ -781,5 +781,12 @@
     "echoUnmatched": "Не удалось выполнить «{{text}}».",
     "echoUnmatchedNext": "Попробуйте название проекта, «второй», «назад» или «все проекты».",
     "echoConfirm": "Подтвердите отправку «{{text}}»."
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "пункты {{from}}–{{to}}",
+    "itemsList": "пункты {{list}}",
+    "wholeReply": "весь ответ",
+    "mismatch": "В последнем ответе всего {{count}} пунктов"
   }
 }

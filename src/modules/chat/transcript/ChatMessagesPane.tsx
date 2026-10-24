@@ -18,6 +18,8 @@ import { nextPxPerMessage } from '@/modules/chat/utils/transcript/contentHeightM
 import type { ContentRowInput } from '@/modules/chat/utils/transcript/contentHeightModel';
 import { useLazyRowObserver } from '@/modules/chat/hooks/useLazyRowObserver';
 import { findPendingForegroundTool } from '@/modules/chat/hooks/useActivityControls';
+import { findLatestReplyItems, formatReplyItemUri } from '@/modules/chat/utils/transcript/replyItems';
+import type { ReplyItemRenderContext } from '@/modules/chat/utils/transcript/replyItems';
 import LazyMessageRow from '@/modules/chat/transcript/LazyMessageRow';
 import MessageComponent from '@/modules/chat/transcript/MessageComponent';
 import PendingResidentMessage from '@/modules/chat/transcript/PendingResidentMessage';
@@ -233,6 +235,11 @@ type ChatMessagesPaneProps = {
   onEditMessage?: (message: ChatMessage) => void;
   /** Branches the conversation into a new session ending at a message. */
   onForkFromMessage?: (message: ChatMessage) => void;
+  /**
+   * Ordinals of the latest reply's items the composer draft points at. The pane
+   * only marks rows with this set; the draft itself never changes.
+   */
+  highlightedReplyOrdinals?: readonly number[];
 };
 
 /**
@@ -287,6 +294,7 @@ function ChatMessagesPane({
   onWithdrawResidentCommand,
   onEditMessage,
   onForkFromMessage,
+  highlightedReplyOrdinals,
   onFileOpen,
   onShowSettings,
   onGrantToolPermission,
@@ -297,6 +305,34 @@ function ChatMessagesPane({
   const { t } = useTranslation('chat');
   const activeSessionId = currentSessionId ?? selectedSession?.id ?? null;
   const lazyRows = useLazyRowObserver(scrollContainerRef);
+
+  // The composer's reference is resolved against the latest reply's items, so
+  // the transcript and the preview read the same list. Only that one row gets
+  // the context; older replies keep their plain prose markup.
+  const highlightedReplyOrdinalSet = useMemo(
+    () => new Set<number>(highlightedReplyOrdinals ?? []),
+    [highlightedReplyOrdinals],
+  );
+  const latestReplyItems = useMemo(
+    () => findLatestReplyItems(visibleMessages),
+    [visibleMessages],
+  );
+  const replyItemsContextFor = useCallback(
+    (message: ChatMessage): ReplyItemRenderContext | undefined => {
+      if (!latestReplyItems || latestReplyItems.message !== message || !activeSessionId) {
+        return undefined;
+      }
+      const messageId =
+        message.transcriptRowId ?? message.id ?? message.blockKey ?? String(message.timestamp);
+      return {
+        items: latestReplyItems.items,
+        highlightedOrdinals: highlightedReplyOrdinalSet,
+        uriFor: (ordinal: number) =>
+          formatReplyItemUri({ sessionId: activeSessionId, messageId, ordinal }),
+      };
+    },
+    [latestReplyItems, activeSessionId, highlightedReplyOrdinalSet],
+  );
   // The placeholder estimate for never-measured rows: without it a jump centres
   // the target against 100px stand-ins in a conversation whose rows are 250px.
   const pxPerMessage = useTranscriptPxPerMessage(scrollContainerRef);
@@ -644,6 +680,7 @@ function ChatMessagesPane({
                             onEditMessage={onEditMessage}
                             onForkFromMessage={onForkFromMessage}
                             isInFlightTurn={inFlightTurnMessages?.has(message) ?? false}
+                            replyItems={replyItemsContextFor(message)}
                           />
                         )}
                       />
@@ -695,6 +732,7 @@ function ChatMessagesPane({
                     onEditMessage={onEditMessage}
                     onForkFromMessage={onForkFromMessage}
                     isInFlightTurn={inFlightTurnMessages?.has(item) ?? false}
+                    replyItems={replyItemsContextFor(item)}
                   />
                 </LazyMessageRow>
               );

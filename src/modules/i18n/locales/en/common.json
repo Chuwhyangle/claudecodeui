@@ -902,5 +902,12 @@
     "echoUnmatched": "Could not do “{{text}}”.",
     "echoUnmatchedNext": "Try a project name, “the second one”, “back” or “all projects”.",
     "echoConfirm": "Confirm before “{{text}}” is sent."
+  },
+  "replyReference": {
+    "item": "{{label}}“{{excerpt}}”",
+    "itemsRange": "Items {{from}}–{{to}}",
+    "itemsList": "Items {{list}}",
+    "wholeReply": "the whole reply",
+    "mismatch": "The latest reply has only {{count}} items"
   }
 }

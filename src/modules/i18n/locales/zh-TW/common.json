@@ -811,5 +811,12 @@
     "echoUnmatched": "無法執行「{{text}}」。",
     "echoUnmatchedNext": "試試專案名、「第二個」、「返回」或「全部專案」。",
     "echoConfirm": "確認後才會傳送「{{text}}」。"
+  },
+  "replyReference": {
+    "item": "{{label}}「{{excerpt}}」",
+    "itemsRange": "第 {{from}}–{{to}} 點",
+    "itemsList": "第 {{list}} 點",
+    "wholeReply": "整條回覆",
+    "mismatch": "回覆裡只有 {{count}} 條"
   }
 }
