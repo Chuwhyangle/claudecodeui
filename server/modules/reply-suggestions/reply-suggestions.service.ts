@@ -1,0 +1,516 @@
+/**
+ * Reply-suggestion generation: prompt construction, upstream calls, per-session
+ * de-dup, rate limiting, the circuit breaker, logging and the local usage ledger.
+ *
+ * THE SESSION IS READ, NEVER RECEIVED. The browser sends only an id. The
+ * assistant tail comes from the injected reader (`server/index.ts` binds the
+ * providers module's full-history read), so a caller cannot make the server
+ * echo arbitrary text to the gateway.
+ *
+ * WHAT PERSISTS IN MEMORY. For each session the service remembers the last
+ * assistant message id, how many extractions it has served (`draw`), and which
+ * chips it already showed. A new assistant message resets that state. Chips are
+ * de-duplicated exactly after normalisation and filtered for near-duplicates
+ * (character-set overlap >= 0.7) against what was already shown; a draw that
+ * comes back with fewer than two chips is supplemented ONCE. Only chips that are
+ * new in THIS draw are returned.
+ *
+ * PROTECTION. Sliding one-minute and one-day call caps; five consecutive upstream
+ * failures open a 30-second circuit; every upstream attempt has a timeout owned
+ * by the client. A log line carries only protocol, model, settings version,
+ * duration, outcome and token counts the upstream reported — never conversation
+ * text, chip text or the key.
+ *
+ * Consumers: `reply-suggestions.routes.ts` (the HTTP face) and the service
+ * criterion in `tests/reply-suggestions-service.test.ts`.
+ */
+import { AppError } from '@/shared/utils.js';
+
+import {
+  completeReplySuggestions,
+  ReplySuggestionsClientError,
+  type ReplySuggestionsCompletion,
+  type ReplySuggestionsCompletionRequest,
+} from './reply-suggestions-client.js';
+import type { ReplySuggestionsSettings } from './reply-suggestions-settings.js';
+import {
+  createReplySuggestionsUsageLog,
+  type ReplySuggestionsUsageLog,
+} from './reply-suggestions-usage-log.js';
+
+/** Five consecutive failures open the circuit (documented in `docs/operations/reply-suggestions.md`). */
+export const REPLY_SUGGESTIONS_CIRCUIT_FAILURE_THRESHOLD = 5;
+
+/** How long the circuit stays open after the fifth consecutive failure. */
+export const REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS = 30_000;
+
+/** How many previously shown chips a redraw prompt may list as "do not repeat". */
+export const REPLY_SUGGESTIONS_REDRAW_MEMORY = 12;
+
+/** The character-set overlap at or above which a chip is "the same suggestion, reworded". */
+export const REPLY_SUGGESTIONS_NEAR_DUPLICATE_OVERLAP = 0.7;
+
+/** The last assistant message, as the injected reader reports it. */
+export type LastAssistantMessage = {
+  id: string;
+  text: string;
+};
+
+/** Input the route has already parsed and validated. */
+export type ReplySuggestionsInput = {
+  sessionId: string;
+  redraw?: boolean;
+  focus?: string;
+};
+
+/** The pointer-click ledger event names the client reports. */
+export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
+
+/** One `/events` posting. */
+export type ReplySuggestionsEventInput = {
+  sessionId: string;
+  draw: number;
+  event: ReplySuggestionsEventName;
+  index?: number;
+};
+
+/** The reading `GET /status` exposes — no paths and no key. */
+export type ReplySuggestionsStatus = {
+  enabled: boolean;
+  expansion: ReplySuggestionsSettings['expansion'];
+  maxChips: number;
+  maxChipChars: number;
+};
+
+/** The public face of the service. */
+export type ReplySuggestionsService = {
+  status(): ReplySuggestionsStatus;
+  suggest(input: ReplySuggestionsInput): Promise<{ chips: string[]; draw: number }>;
+  recordEvent(input: ReplySuggestionsEventInput): void;
+};
+
+/**
+ * The injected seams. `complete` defaults to the real client; criteria replace
+ * it with a fake, exactly as the route criterion replaces the transcript reader.
+ */
+export type ReplySuggestionsServiceDeps = {
+  readSettings: () => ReplySuggestionsSettings;
+  readLastAssistantMessage: (sessionId: string) => Promise<LastAssistantMessage | null>;
+  complete?: (request: ReplySuggestionsCompletionRequest) => Promise<ReplySuggestionsCompletion>;
+  now?: () => number;
+  logger?: (line: string) => void;
+  usageLog?: ReplySuggestionsUsageLog;
+  usageLogPath?: string;
+  usageLogMaxBytes?: number;
+  usageLogHomeDir?: string;
+};
+
+/** Whichever reading's chips this session has already been shown. */
+type SessionState = {
+  messageId: string;
+  draw: number;
+  shown: string[];
+};
+
+/** The built-in system prompt; `settings.systemPrompt` replaces it whole when non-empty. */
+function builtInSystemPrompt(maxChipChars: number): string {
+  return [
+    '你在为用户起草聊天输入框里可直接发送的回复。用户刚看完助手最后一条消息，要从中挑一条。',
+    '给出 3 条互不相同的完整回复：第 1 条用「；」分隔、简要回答所有待答点，助手给了推荐就采纳；',
+    '第 2、3 条是真正的备选（不同的决定，或更短的确认），不是第 1 条的改写。',
+    `用用户的语言和简短风格，每条不超过 ${maxChipChars} 个字符。`,
+    '不得编造消息里没有的事实、数字或测量值：可以替人做决定，不可以编造事实。',
+    '没有待答点时，建议最可能的下一条指令。',
+    '只输出 JSON：{"chips": ["…", "…", "…"]}',
+  ].join('\n');
+}
+
+/** Truncate by code point, so a surrogate pair is never cut in half. */
+function truncateCodePoints(text: string, maximum: number): string {
+  const characters = [...text];
+  return characters.length <= maximum ? text : characters.slice(0, maximum).join('');
+}
+
+/** The last `maximum` code points of `text`. */
+function tailCodePoints(text: string, maximum: number): string {
+  const characters = [...text];
+  return characters.length <= maximum ? text : characters.slice(-maximum).join('');
+}
+
+/** The comparison form used by exact de-duplication. */
+function normalizeForCompare(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+/** The character set (whitespace removed) used by the near-duplicate filter. */
+function characterSet(text: string): Set<string> {
+  return new Set([...text.replace(/\s+/g, '').toLocaleLowerCase()]);
+}
+
+/** Jaccard overlap of two strings' character sets, in [0, 1]. */
+export function characterSetOverlap(left: string, right: string): number {
+  const a = characterSet(left);
+  const b = characterSet(right);
+  if (a.size === 0 && b.size === 0) return 1;
+  let intersection = 0;
+  for (const character of a) {
+    if (b.has(character)) intersection += 1;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 1 : intersection / union;
+}
+
+/** The built-in instruction block plus the delivery-side context, as one request. */
+function buildUserPrompt(options: {
+  tail: string;
+  focus: string;
+  avoid: readonly string[];
+  redraw: boolean;
+}): string {
+  const lines: string[] = ['助手最后一条消息（末尾节选，可能被截断）：', '"""', options.tail, '"""'];
+  if (options.focus !== '') {
+    lines.push('', '用户选中了消息里的这一段，想回应它：', '"""', options.focus, '"""');
+  }
+  const avoid = options.avoid.slice(-REPLY_SUGGESTIONS_REDRAW_MEMORY);
+  if (options.redraw && avoid.length > 0) {
+    lines.push('', '不要重复以下已经展示过的回复：');
+    for (const chip of avoid) lines.push(`- ${chip}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Parse the model's answer into a raw chip list.
+ *
+ * Accepts `{"chips": [...]}`, a bare array and either wrapped in a ``` fence.
+ * Every element must be a string; anything else refuses the WHOLE answer (it is
+ * an upstream-shape failure, mapped to 502 by the caller). Empty strings are
+ * dropped; clipping and exact de-duplication happen in `selectChips`.
+ *
+ * Consumers: `reply-suggestions.service.ts` (both the first and the supplement
+ * call) and the service criterion.
+ */
+export function parseSuggestionChips(text: string): string[] {
+  const trimmed = text.trim();
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  const candidates = fenced ? [fenced[1].trim(), trimmed] : [trimmed];
+
+  let parsed: unknown;
+  let parsedAt = -1;
+  for (const candidate of candidates) {
+    try {
+      parsed = JSON.parse(candidate);
+      parsedAt = candidates.indexOf(candidate);
+      break;
+    } catch {
+      // Try the next spelling (raw text after a failed fenced parse, or vice versa).
+    }
+  }
+  if (parsedAt === -1) {
+    throw new ReplySuggestionsClientError('parse', 'the model did not answer with JSON');
+  }
+
+  let chips: unknown;
+  if (Array.isArray(parsed)) {
+    chips = parsed;
+  } else if (parsed !== null && typeof parsed === 'object' && 'chips' in parsed) {
+    chips = (parsed as Record<string, unknown>).chips;
+  } else {
+    throw new ReplySuggestionsClientError('shape', 'the model answer was not an array or a {"chips": [...]} object');
+  }
+
+  if (!Array.isArray(chips)) {
+    throw new ReplySuggestionsClientError('shape', 'the model answer\'s "chips" was not an array');
+  }
+  if (chips.some((chip) => typeof chip !== 'string')) {
+    throw new ReplySuggestionsClientError('shape', 'the model answer contained a non-string chip');
+  }
+  return (chips as string[]).map((chip) => chip.trim()).filter((chip) => chip !== '');
+}
+
+/**
+ * Clip, exact-deduplicate (after normalisation), filter near-duplicates against
+ * the already-shown chips, and cap at `maxChips`.
+ *
+ * Consumers: `reply-suggestions.service.ts` only.
+ */
+function selectChips(
+  raw: readonly string[],
+  shown: readonly string[],
+  settings: ReplySuggestionsSettings,
+): string[] {
+  const shownNormalized = shown.map(normalizeForCompare);
+  const seen = new Set(shownNormalized);
+  const selected: string[] = [];
+  for (const chip of raw) {
+    const clipped = truncateCodePoints(chip.trim(), settings.maxChipChars).trim();
+    if (clipped === '') continue;
+    const normalized = normalizeForCompare(clipped);
+    if (seen.has(normalized)) continue;
+    const nearDuplicate = shownNormalized.some(
+      (prior) => characterSetOverlap(normalized, prior) >= REPLY_SUGGESTIONS_NEAR_DUPLICATE_OVERLAP,
+    );
+    if (nearDuplicate) continue;
+    selected.push(clipped);
+    seen.add(normalized);
+    if (selected.length >= settings.maxChips) break;
+  }
+  return selected;
+}
+
+/** The AppError for each non-2xx path; messages never carry the key or a payload. */
+function disabledError(): AppError {
+  return new AppError('reply suggestions are disabled', {
+    code: 'REPLY_SUGGESTIONS_DISABLED',
+    statusCode: 503,
+  });
+}
+
+function rateLimitedError(): AppError {
+  return new AppError('reply suggestions are over their call limit', {
+    code: 'REPLY_SUGGESTIONS_RATE_LIMITED',
+    statusCode: 429,
+  });
+}
+
+function upstreamError(category: string): AppError {
+  return new AppError(`reply-suggestions upstream request failed (${category})`, {
+    code: 'REPLY_SUGGESTIONS_UPSTREAM_FAILED',
+    statusCode: 502,
+  });
+}
+
+/**
+ * Parse one answer, mapping a malformed answer to the same 502 as a failed
+ * request: from the caller's point of view both mean "this draw produced
+ * nothing usable upstream".
+ *
+ * Consumers: `reply-suggestions.service.ts` only.
+ */
+function parseChipsOrUpstreamFailure(text: string): string[] {
+  try {
+    return parseSuggestionChips(text);
+  } catch (failure) {
+    const category = failure instanceof ReplySuggestionsClientError ? failure.category : 'shape';
+    throw upstreamError(category);
+  }
+}
+
+/**
+ * Build the service over one settings source and one transcript reader.
+ *
+ * Consumers: `reply-suggestions.module.ts` only.
+ */
+export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps): ReplySuggestionsService {
+  const now = deps.now ?? Date.now;
+  const logger = deps.logger ?? ((line: string) => console.log(line));
+  const complete = deps.complete ?? ((request: ReplySuggestionsCompletionRequest) => completeReplySuggestions(request));
+  const usageLog = deps.usageLog ?? createReplySuggestionsUsageLog({
+    ...(deps.usageLogPath === undefined ? {} : { filePath: deps.usageLogPath }),
+    ...(deps.usageLogMaxBytes === undefined ? {} : { maxBytes: deps.usageLogMaxBytes }),
+    ...(deps.usageLogHomeDir === undefined ? {} : { homeDir: deps.usageLogHomeDir }),
+  });
+
+  const sessionStates = new Map<string, SessionState>();
+  const inflight = new Map<string, Promise<{ chips: string[]; draw: number }>>();
+
+  // Sliding-window call ledgers. Kept as sorted arrays of timestamps; pruned on
+  // every check, so a quiet server carries only the last minute/day of entries.
+  const minuteCalls: number[] = [];
+  const dayCalls: number[] = [];
+
+  let consecutiveFailures = 0;
+  let circuitOpenUntil = 0;
+
+  function pruneCalls(window: number[], span: number, at: number): void {
+    while (window.length > 0 && window[0] <= at - span) window.shift();
+  }
+
+  function writeUsage(record: Record<string, unknown> & { type: string }): void {
+    try {
+      usageLog.write(record);
+    } catch (failure) {
+      const reason = failure instanceof Error ? failure.message : String(failure);
+      logger(`[reply-suggestions] usage log write failed: ${reason}`);
+    }
+  }
+
+  /** One upstream attempt: circuit, limits, call, log, breaker bookkeeping. */
+  async function callUpstream(
+    request: ReplySuggestionsCompletionRequest,
+    settings: ReplySuggestionsSettings,
+  ): Promise<ReplySuggestionsCompletion> {
+    const at = now();
+    if (consecutiveFailures >= REPLY_SUGGESTIONS_CIRCUIT_FAILURE_THRESHOLD) {
+      if (at < circuitOpenUntil) throw upstreamError('circuit-open');
+      // Cooldown elapsed: one trial call is allowed; a success closes the circuit.
+      consecutiveFailures = 0;
+      circuitOpenUntil = 0;
+    }
+
+    pruneCalls(minuteCalls, 60_000, at);
+    pruneCalls(dayCalls, 86_400_000, at);
+    if (minuteCalls.length >= settings.maxCallsPerMinute || dayCalls.length >= settings.maxCallsPerDay) {
+      throw rateLimitedError();
+    }
+    minuteCalls.push(at);
+    dayCalls.push(at);
+
+    const startedAt = now();
+    try {
+      const completion = await complete(request);
+      consecutiveFailures = 0;
+      circuitOpenUntil = 0;
+      logCompletion(settings, now() - startedAt, 'ok', completion);
+      return completion;
+    } catch (failure) {
+      const category = failure instanceof ReplySuggestionsClientError ? failure.category : 'unknown';
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= REPLY_SUGGESTIONS_CIRCUIT_FAILURE_THRESHOLD) {
+        circuitOpenUntil = now() + REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS;
+      }
+      logCompletion(settings, now() - startedAt, `error:${category}`, null);
+      if (failure instanceof AppError) throw failure;
+      throw upstreamError(category);
+    }
+  }
+
+  function logCompletion(
+    settings: ReplySuggestionsSettings,
+    durationMs: number,
+    outcome: string,
+    completion: ReplySuggestionsCompletion | null,
+  ): void {
+    const tokens: string[] = [];
+    const inputTokens = completion?.inputTokens ?? null;
+    const outputTokens = completion?.outputTokens ?? null;
+    if (inputTokens !== null) tokens.push(`inputTokens=${inputTokens}`);
+    if (outputTokens !== null) tokens.push(`outputTokens=${outputTokens}`);
+    const tokenPart = tokens.length === 0 ? '' : ` ${tokens.join(' ')}`;
+    logger(
+      `[reply-suggestions] protocol=${settings.protocol} model=${settings.model} version=${settings.version} ` +
+        `durationMs=${durationMs}${tokenPart} outcome=${outcome}`,
+    );
+  }
+
+  async function generate(input: ReplySuggestionsInput, settings: ReplySuggestionsSettings): Promise<{ chips: string[]; draw: number }> {
+    const message = await deps.readLastAssistantMessage(input.sessionId);
+    if (message === null || message.text.trim() === '') {
+      return { chips: [], draw: 0 };
+    }
+
+    const redraw = input.redraw === true;
+    const focus = input.focus === undefined ? '' : truncateCodePoints(input.focus, settings.maxFocusChars);
+    const inflightKey = [
+      input.sessionId,
+      message.id,
+      redraw ? 'redraw' : 'first',
+      focus,
+    ].join('\u0000');
+    const alreadyRunning = inflight.get(inflightKey);
+    if (alreadyRunning !== undefined) return alreadyRunning;
+
+    const task = (async (): Promise<{ chips: string[]; draw: number }> => {
+      const previous = sessionStates.get(input.sessionId);
+      const state: SessionState = previous !== undefined && previous.messageId === message.id
+        ? previous
+        : { messageId: message.id, draw: 0, shown: [] };
+
+      const draw = state.draw + 1;
+      const tail = tailCodePoints(message.text, settings.maxTailChars);
+      const avoid = redraw ? state.shown.slice(-REPLY_SUGGESTIONS_REDRAW_MEMORY) : [];
+      const temperature = redraw ? settings.redrawTemperature : settings.temperature;
+      const config = {
+        protocol: settings.protocol,
+        baseUrl: settings.baseUrl,
+        model: settings.model,
+        authScheme: settings.authScheme,
+        apiKey: settings.apiKey,
+        disableThinking: settings.disableThinking,
+        timeoutMs: settings.timeoutMs,
+      };
+      const request: ReplySuggestionsCompletionRequest = {
+        config,
+        system: settings.systemPrompt.trim() === '' ? builtInSystemPrompt(settings.maxChipChars) : settings.systemPrompt,
+        user: buildUserPrompt({ tail, focus, avoid, redraw }),
+        temperature,
+        maxOutputTokens: settings.maxOutputTokens,
+      };
+
+      const first = await callUpstream(request, settings);
+      const firstChips = parseChipsOrUpstreamFailure(first.text);
+      let selected = selectChips(firstChips, state.shown, settings);
+
+      // Fewer than two usable chips is a failed draw: supplement exactly ONCE.
+      if (settings.maxChips >= 2 && selected.length < 2) {
+        const supplement = await callUpstream(
+          {
+            ...request,
+            user: buildUserPrompt({
+              tail,
+              focus,
+              avoid: [...avoid, ...firstChips],
+              redraw: true,
+            }),
+          },
+          settings,
+        );
+        selected = selectChips([...firstChips, ...parseChipsOrUpstreamFailure(supplement.text)], state.shown, settings);
+      }
+
+      state.draw = draw;
+      state.shown = [...state.shown, ...selected];
+      sessionStates.set(input.sessionId, state);
+
+      if (settings.usageLog) {
+        writeUsage({
+          at: new Date(now()).toISOString(),
+          type: 'shown',
+          sessionId: input.sessionId,
+          draw,
+          model: settings.model,
+          protocol: settings.protocol,
+          version: settings.version,
+          chips: selected,
+        });
+      }
+
+      return { chips: selected, draw };
+    })().finally(() => {
+      inflight.delete(inflightKey);
+    });
+
+    inflight.set(inflightKey, task);
+    return task;
+  }
+
+  return {
+    status(): ReplySuggestionsStatus {
+      const settings = deps.readSettings();
+      return {
+        enabled: settings.enabled,
+        expansion: settings.expansion,
+        maxChips: settings.maxChips,
+        maxChipChars: settings.maxChipChars,
+      };
+    },
+
+    async suggest(input: ReplySuggestionsInput): Promise<{ chips: string[]; draw: number }> {
+      const settings = deps.readSettings();
+      if (!settings.enabled) throw disabledError();
+      return generate(input, settings);
+    },
+
+    recordEvent(input: ReplySuggestionsEventInput): void {
+      const settings = deps.readSettings();
+      if (!settings.usageLog) return;
+      writeUsage({
+        at: new Date(now()).toISOString(),
+        type: input.event,
+        sessionId: input.sessionId,
+        draw: input.draw,
+        ...(input.index === undefined ? {} : { index: input.index }),
+      });
+    },
+  };
+}

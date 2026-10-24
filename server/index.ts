@@ -95,6 +95,7 @@ import {
 import browserUseRoutes from './modules/browser-use/browser-use.routes.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { createArchitectureModule } from './modules/architecture/index.js';
+import { createReplySuggestionsModule } from './modules/reply-suggestions/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
@@ -1685,6 +1686,30 @@ app.use(
         resolveProjectPath: (projectId: string) => projectsDb.getProjectPathById(projectId),
         readSessionHistory: async (sessionId: string) =>
             (await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 })).messages,
+    }),
+);
+// Reply suggestions (composer chips). The module imports no sibling feature
+// module, so the composition root binds its ONE reader here: the providers
+// module's full-history read reduced to the last text-bearing assistant row.
+// A session that does not exist throws the reader's own 404 `AppError`, which
+// the process error middleware translates unchanged.
+app.use(
+    '/api/reply-suggestions',
+    authenticateToken,
+    createReplySuggestionsModule({
+        readLastAssistantMessage: async (sessionId: string) => {
+            const { messages } = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
+            for (let index = messages.length - 1; index >= 0; index -= 1) {
+                const message = messages[index];
+                const text = typeof message.text === 'string' && message.text.trim() !== ''
+                    ? message.text
+                    : (typeof message.content === 'string' ? message.content : '');
+                if (message.role === 'assistant' && message.kind === 'text' && text.trim() !== '') {
+                    return { id: message.id, text };
+                }
+            }
+            return null;
+        },
     }),
 );
 app.use('/api/scheduled-messages', authenticateToken, scheduledMessagesRoutes);

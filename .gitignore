@@ -224,3 +224,10 @@ playwright-report/
 # VOICE_REALTIME_SETTINGS_PATH at it) and edit. The local copy must never be committed — it is a
 # deployment's tuning, not the project's defaults.
 voice-realtime.settings.json
+
+# The reply-suggestions LOCAL settings file: gateway, model, key-file reference and caps.
+# `config/reply-suggestions.settings.example.json` is the TRACKED template; copy it to
+# config/reply-suggestions.settings.json (or ~/.config/claudecodeui/reply-suggestions.settings.json)
+# and point REPLY_SUGGESTIONS_SETTINGS_PATH at it. The local copy must never be committed — it is a
+# deployment's tuning/credential reference, not the project's defaults.
+reply-suggestions.settings.json
