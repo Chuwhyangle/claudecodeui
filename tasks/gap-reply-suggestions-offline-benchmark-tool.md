@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-offline-benchmark-tool
 title: 回复建议离线基准工具：模型×提示词×温度×思考矩阵、多评判、使用记录回放、盲标清单生成与打分
-status: todo
+status: needs-human
 labels:
   - gap
 parent: null
@@ -47,3 +47,9 @@ depends_on:
 - `experiments/reply-suggestions-bench/README.md`
 - `experiments/reply-suggestions-bench/fixtures/synthetic-judgements.json`
 - `tasks/gap-reply-suggestions-offline-benchmark-tool.md`
+
+## Needs-Human
+
+**执行 2026-10-24T06:30:21.250Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：unsatisfiableUnannotatedAc=[回放一次真实使用记录（后端任务落地后产生的本机记录；若尚无足够记录则注明条数并用合成记录演示格式），贴出点选率、重抽率、点选后改动比例。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）
