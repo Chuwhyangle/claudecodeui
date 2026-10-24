@@ -240,6 +240,13 @@ export type QuayInitiativesDependencies = {
   home?: string;
   /** Sampling ratio for `kind ∈ {inference, llm}` decisions; defaults to 1/5. */
   auditRatio?: number;
+  /**
+   * A lazy ratio provider, used by the composition root instead of `auditRatio` when the
+   * server-settings module is part of an import cycle: calling it at module-evaluation time
+   * would read that module before its own constants exist. Called on the first read and
+   * memoized, so the settings file is still read exactly once per process.
+   */
+  resolveAuditRatio?: () => number;
 };
 
 /** Parses a JSON object, or `null` when the child printed something else. */
@@ -461,7 +468,16 @@ export function createQuayInitiatives(
   dependencies: QuayInitiativesDependencies = {},
 ): QuayInitiativesService {
   const exec = dependencies.exec ?? defaultExecFile;
-  const auditRatio = clampRatio(dependencies.auditRatio ?? DEFAULT_INITIATIVE_AUDIT_RATIO);
+  // Resolved once, on demand: a provider exists because this module is composed during an
+  // import cycle with the settings module (its exported constants are not initialised yet
+  // while the composition root runs), while a test supplies the number directly.
+  let auditRatio: number | null = null;
+  const readAuditRatio = (): number => {
+    auditRatio ??= clampRatio(
+      dependencies.auditRatio ?? dependencies.resolveAuditRatio?.() ?? DEFAULT_INITIATIVE_AUDIT_RATIO,
+    );
+    return auditRatio;
+  };
 
   const resolveBinPath = (): string | null =>
     dependencies.binPath
@@ -497,7 +513,7 @@ export function createQuayInitiatives(
     initiatives: [],
     decisionQueue,
     audit: [],
-    auditRatio,
+    auditRatio: readAuditRatio(),
   });
 
   /** Reads one initiative's decision ledger through `initiative show --json`. */
@@ -597,7 +613,7 @@ export function createQuayInitiatives(
         initiatives,
         decisionQueue: queue,
         audit,
-        auditRatio,
+        auditRatio: readAuditRatio(),
       };
     },
 

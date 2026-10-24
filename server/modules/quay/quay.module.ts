@@ -132,7 +132,11 @@ export const quayFleetRegistry = createQuayFleetRegistry({
  * the knob is documented as read-once); a malformed value already fell back inside the loader.
  */
 export const quayInitiatives = createQuayInitiatives({
-  auditRatio: loadServerSettings().initiative.auditRatio,
+  // Lazy, not an import-time read: this module and the settings module are in an import
+  // cycle, so calling the loader while this file evaluates would read the settings module
+  // before its own constants exist. The provider runs on the first initiatives read and the
+  // service memoizes the answer.
+  resolveAuditRatio: () => loadServerSettings().initiative.auditRatio,
 });
 
 /**
