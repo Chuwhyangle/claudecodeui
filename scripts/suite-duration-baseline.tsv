@@ -213,7 +213,12 @@
 #   time on 2026-10-24 with
 #   `bash scripts/test.sh server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts`
 #   (dur=3737ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
-#   coverage floor green now that the tree collects 416 server test files).
+#   coverage floor green now that the tree collects 416 server test files),
+#   and the session-digest row by observation-session-digest-deterministic, measured one file at a
+#   time on 2026-10-24 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts`
+#   (dur=3622ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
+#   coverage floor green now that the tree collects 417 server test files).
 1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
@@ -590,3 +595,4 @@
 3023	server/modules/observation/tests/observation-routes.test.ts
 3289	server/modules/observation/tests/producer-liveness.test.ts
 3737	server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts
+3622	server/modules/observation/tests/session-digest.test.ts
