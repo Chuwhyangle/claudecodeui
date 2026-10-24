@@ -139,9 +139,9 @@
 #   (that file is new and no green round contains it yet),
 #   and the server-import-cycle-budget row by gap-ac394-server-import-cycle-budget,
 #   measured one file at a time on 2026-10-17 (its own new criterion; no green round contains it yet),
-# so this file now covers 339 of the 361 files the current `find server -name '*.test.ts' -o -name
+# so this file now covers 375 of the 415 files the current `find server -name '*.test.ts' -o -name
 # '*.test.js' | sort` list collects; a row here is a dispatch ORDER hint only, so an unlisted file is
-# not skipped — it just sorts alphabetically after the listed ones. The remaining ~22 unlisted files
+# not skipped — it just sorts alphabetically after the listed ones. The remaining ~40 unlisted files
 # (claude-resident-dispatch-hook and voice-realtime-voice-active-marker among them) came in with
 # sibling tasks that moved the collected-count pins but left this baseline alone).
 #
@@ -204,11 +204,16 @@
 #   `npx tsx --tsconfig server/tsconfig.json --test <file>` (durations below; each is its own new
 #   criterion and no green round contains them yet — the rows also keep the 90% coverage floor green
 #   now that the tree collects 412 server test files).
+#   and the three observation rows (store, routes and producer-liveness) by
+#   observation-object-model-seen-cursor-and-delta, measured one file at a time on 2026-10-24 with
+#   `npx tsx --tsconfig server/tsconfig.json --test <file>` (durations below; each is its own new
+#   criterion and no green round contains them yet — the rows also keep the 90% coverage floor green
+#   now that the tree collects 415 server test files),
 #   and the fleet-cli-contracts row by fleet-cli-cross-repo-contract-tests, measured one file at a
 #   time on 2026-10-24 with
 #   `bash scripts/test.sh server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts`
 #   (dur=3737ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
-#   coverage floor green now that the tree collects 413 server test files).
+#   coverage floor green now that the tree collects 416 server test files).
 1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
@@ -581,4 +586,7 @@
 2090	server/modules/reply-suggestions/tests/reply-suggestions-client.test.ts
 1658	server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts
 1924	server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts
+3495	server/modules/observation/tests/observation-store.test.ts
+3023	server/modules/observation/tests/observation-routes.test.ts
+3289	server/modules/observation/tests/producer-liveness.test.ts
 3737	server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts

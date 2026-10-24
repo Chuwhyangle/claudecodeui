@@ -277,11 +277,15 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // criteria under server/modules/reply-suggestions/tests/ — reply-suggestions-settings,
     // reply-suggestions-client, reply-suggestions-service and reply-suggestions-routes
     // (408 + 4 = 412 collected server test files).
+    // Then observation-object-model-seen-cursor-and-delta added its three criteria
+    // server/modules/observation/tests/observation-store.test.ts,
+    // observation-routes.test.ts and producer-liveness.test.ts (412 + 3 = 415 collected
+    // server test files).
     // Re-measured 2026-10-24 after fleet-cli-cross-repo-contract-tests added its cross-repo
     // criterion server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts
-    // (412 + 1 = 413 collected server test files).
-    // This fixture names 3 known files, so 413 - 3 = 410.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=410$/);
+    // (415 + 1 = 416 collected server test files).
+    // This fixture names 3 known files, so 416 - 3 = 413.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=413$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -330,9 +334,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 413 files on this tree — but this fixture names ONE known file,
-    // so 413 - 1 = 412 (AC2 reads 410 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=412$/);
+    // same collection as AC2 — 416 files on this tree — but this fixture names ONE known file,
+    // so 416 - 1 = 415 (AC2 reads 413 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=415$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

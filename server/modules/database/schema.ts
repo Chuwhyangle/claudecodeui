@@ -546,6 +546,73 @@ CREATE TABLE IF NOT EXISTS ui_last_opened (
 );
 `;
 
+// ---------------------------------------------------------------------------
+// Observation layer (tasks/observation-object-model-seen-cursor-and-delta).
+//
+// The wall's persisted material: the unified observed-object model (`observed_objects`), the
+// append-only revision log the delta reader walks (`observed_revisions`), the cross-device
+// "seen" cursor, the per-user watch list, and the producer heartbeats the wall's own liveness
+// reading is computed from. `digest_json` and `delta_items_json` carry kind-specific structured
+// readings as JSON text; the store validates their shape before writing. Timestamps are epoch
+// milliseconds, like `ui_last_opened.opened_at`, so the injected clock is the only clock.
+// ---------------------------------------------------------------------------
+
+export const OBSERVED_OBJECTS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS observed_objects (
+    uri TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    status_state TEXT NOT NULL,
+    status_reason TEXT,
+    digest_json TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    provenance_producer TEXT NOT NULL,
+    provenance_tier TEXT NOT NULL,
+    provenance_evaluated_at INTEGER NOT NULL
+);
+`;
+
+export const OBSERVED_REVISIONS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS observed_revisions (
+    uri TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    at INTEGER NOT NULL,
+    delta_items_json TEXT NOT NULL,
+    PRIMARY KEY (uri, revision),
+    FOREIGN KEY (uri) REFERENCES observed_objects(uri) ON DELETE CASCADE
+);
+`;
+
+export const OBSERVATION_SEEN_CURSORS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS observation_seen_cursors (
+    user_id TEXT NOT NULL,
+    uri TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, uri)
+);
+`;
+
+export const OBSERVATION_WATCH_ENTRIES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS observation_watch_entries (
+    user_id TEXT NOT NULL,
+    uri TEXT NOT NULL,
+    pinned_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, uri)
+);
+`;
+
+export const OBSERVATION_PRODUCER_HEARTBEATS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS observation_producer_heartbeats (
+    producer TEXT PRIMARY KEY NOT NULL,
+    last_attempt_at INTEGER,
+    last_write_at INTEGER,
+    last_error TEXT,
+    expected_interval_ms INTEGER NOT NULL
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -609,4 +676,14 @@ ${SUPERSEDED_PROVIDER_SESSIONS_TABLE_SCHEMA_SQL}
 ${USER_VOICE_SETTINGS_TABLE_SCHEMA_SQL}
 
 ${VOICE_USER_IDENTIFIERS_TABLE_SCHEMA_SQL}
+
+${OBSERVED_OBJECTS_TABLE_SCHEMA_SQL}
+
+${OBSERVED_REVISIONS_TABLE_SCHEMA_SQL}
+
+${OBSERVATION_SEEN_CURSORS_TABLE_SCHEMA_SQL}
+
+${OBSERVATION_WATCH_ENTRIES_TABLE_SCHEMA_SQL}
+
+${OBSERVATION_PRODUCER_HEARTBEATS_TABLE_SCHEMA_SQL}
 `;
