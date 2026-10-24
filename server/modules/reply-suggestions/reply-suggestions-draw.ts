@@ -38,7 +38,7 @@ import type { ReplySuggestionsSettings } from './reply-suggestions-settings.js';
 import type { ReplySuggestionsExpansionSource } from './reply-suggestions-usage-log.js';
 
 /** The already-clipped message context one draw shares across its one or two calls. */
-export type ReplySuggestionsDrawContext = {
+type ReplySuggestionsDrawContext = {
   settings: ReplySuggestionsSettings;
   tail: string;
   focus: string;
@@ -48,7 +48,7 @@ export type ReplySuggestionsDrawContext = {
 };
 
 /** The one method the service needs: produce the selected chips for a draw. */
-export type ReplySuggestionsDrawRunner = {
+type ReplySuggestionsDrawRunner = {
   draw(context: ReplySuggestionsDrawContext, shown: readonly string[]): Promise<string[]>;
 };
 

@@ -9,8 +9,10 @@
  * ledger or any mutable module state, so every function is safe to call twice and
  * easy to drive from a criterion.
  *
- * Consumers: `reply-suggestions.service.ts` (the draw path) and the service
- * criterion in `tests/reply-suggestions-service.test.ts`.
+ * Consumers: `reply-suggestions.service.ts` (the truncation helpers for the
+ * focus, seed and assistant tail), `reply-suggestions-draw.ts` (parsing and
+ * selection) and the service criterion in
+ * `tests/reply-suggestions-service.test.ts`.
  */
 import { ReplySuggestionsClientError } from './reply-suggestions-client.js';
 
@@ -25,13 +27,22 @@ const REPLY_SUGGESTIONS_NEAR_DUPLICATE_OVERLAP = 0.7;
  */
 const TRAILING_SEPARATOR_MARKS = /[；;，,、]+$/u;
 
-/** Truncate by code point, so a surrogate pair is never cut in half. */
+/**
+ * Truncate by code point, so a surrogate pair is never cut in half.
+ *
+ * Consumers: `reply-suggestions.service.ts` (focus/seed) and
+ * `selectChips` below.
+ */
 export function truncateCodePoints(text: string, maximum: number): string {
   const characters = [...text];
   return characters.length <= maximum ? text : characters.slice(0, maximum).join('');
 }
 
-/** The last `maximum` code points of `text`. */
+/**
+ * The last `maximum` code points of `text`.
+ *
+ * Consumers: `reply-suggestions.service.ts` (the assistant tail).
+ */
 export function tailCodePoints(text: string, maximum: number): string {
   const characters = [...text];
   return characters.length <= maximum ? text : characters.slice(-maximum).join('');
@@ -55,8 +66,9 @@ function characterSet(text: string): Set<string> {
 /**
  * Jaccard overlap of two strings' character sets, in [0, 1].
  *
- * Consumers: `selectChips` below and the service criterion, which pins the
- * threshold's boundary with two hand-built strings.
+ * Consumers: `selectChips` below and the service criterion in
+ * `tests/reply-suggestions-service.test.ts`, which pins the threshold's
+ * boundary with two hand-built strings.
  */
 export function characterSetOverlap(left: string, right: string): number {
   const a = characterSet(left);
@@ -79,6 +91,8 @@ export function characterSetOverlap(left: string, right: string): number {
  * marks are stripped here, before exact de-duplication in `selectChips`, so
  * `甲；` and `甲` are the same chip. A chip that was only separator marks becomes
  * empty and is dropped, never passed on as an empty string.
+ *
+ * Consumers: `reply-suggestions-draw.ts` and the service criterion.
  */
 export function parseSuggestionChips(text: string): string[] {
   const trimmed = text.trim();
@@ -124,7 +138,7 @@ export function parseSuggestionChips(text: string): string[] {
  * Clip, exact-deduplicate (after normalisation), filter near-duplicates against
  * the already-shown chips, and cap at `options.maxChips`.
  *
- * Consumers: `reply-suggestions.service.ts` only.
+ * Consumers: `reply-suggestions-draw.ts` only.
  */
 export function selectChips(
   raw: readonly string[],

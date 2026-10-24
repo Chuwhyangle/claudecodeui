@@ -8,20 +8,27 @@
  * the built-in instruction block whole; the user prompt always names the
  * delivery-side context, so a custom system prompt cannot silently drop it.
  *
- * Consumers: `reply-suggestions.service.ts` (the draw path) and the service
- * criterion in `tests/reply-suggestions-service.test.ts`.
+ * Consumers: `reply-suggestions-draw.ts` (both prompts and both built-in system
+ * prompts) and the service criterion in
+ * `tests/reply-suggestions-service.test.ts`, which reads the built-in rules off
+ * the prompt the service sends.
  */
 import type { ReplySuggestionsExpansionSource } from './reply-suggestions-usage-log.js';
 
 /**
  * How many previously shown chips a redraw prompt may list as "do not repeat".
  *
- * Consumers: `reply-suggestions.service.ts` (`generate`), which slices the
- * shown list to this bound before handing it to the builders below.
+ * Consumers: `reply-suggestions-draw.ts` (`draw`), which slices the shown list
+ * to this bound before handing it to the builders below.
  */
 export const REPLY_SUGGESTIONS_REDRAW_MEMORY = 12;
 
-/** The built-in system prompt; `generation.systemPrompt` replaces it whole when non-empty. */
+/**
+ * The built-in system prompt; `generation.systemPrompt` replaces it whole when
+ * non-empty.
+ *
+ * Consumers: `reply-suggestions-draw.ts` (`composeRequest`).
+ */
 export function builtInSystemPrompt(maxChipChars: number): string {
   return [
     '你在为用户起草聊天输入框里可直接发送的回复。用户刚看完助手最后一条消息，要从中挑一条。',
@@ -35,7 +42,11 @@ export function builtInSystemPrompt(maxChipChars: number): string {
   ].join('\n');
 }
 
-/** The built-in system prompt for an expansion draw. */
+/**
+ * The built-in system prompt for an expansion draw.
+ *
+ * Consumers: `reply-suggestions-draw.ts` (`composeRequest`).
+ */
 export function builtInExpansionSystemPrompt(
   maxChipChars: number,
   source: ReplySuggestionsExpansionSource,
@@ -52,7 +63,11 @@ export function builtInExpansionSystemPrompt(
   ].join('\n');
 }
 
-/** The built-in instruction block plus the delivery-side context, as one request. */
+/**
+ * The built-in instruction block plus the delivery-side context, as one request.
+ *
+ * Consumers: `reply-suggestions-draw.ts` (`composeRequest`).
+ */
 export function buildUserPrompt(options: {
   tail: string;
   focus: string;
@@ -77,6 +92,8 @@ export function buildUserPrompt(options: {
  * instruction to respond to the quotation. `avoid` lists the chips already shown
  * in this draw, exactly as the redraw prompt does, so a supplement never repeats
  * the first answer.
+ *
+ * Consumers: `reply-suggestions-draw.ts` (`composeRequest`).
  */
 export function buildExpansionPrompt(options: {
   tail: string;

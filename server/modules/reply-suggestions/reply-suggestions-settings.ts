@@ -42,20 +42,34 @@ import os from 'node:os';
 import path from 'node:path';
 import { inspect } from 'node:util';
 
-/** The only environment variable this module reads. It names the settings file. */
+/**
+ * The only environment variable this module reads. It names the settings file.
+ *
+ * Consumers: the settings criterion in `tests/reply-suggestions-settings.test.ts`
+ * (its environment leg) and this reader's own resolution below.
+ */
 export const REPLY_SUGGESTIONS_SETTINGS_PATH_ENV = 'REPLY_SUGGESTIONS_SETTINGS_PATH';
 
-/** The two upstream wire dialects the client supports. */
+/**
+ * The two upstream wire dialects the client supports.
+ *
+ * Consumers: `reply-suggestions-client.ts`, `reply-suggestions-usage-log.ts`
+ * (the shown row's `protocol`) and `server/modules/observation/session-digest-llm-settings.ts`
+ * (through the barrel).
+ */
 export type ReplySuggestionsProtocol = 'anthropic' | 'openai';
 
 /**
  * How the API key travels. The empty string means "the protocol's default":
  * `x-api-key` for anthropic, `bearer` for openai.
+ *
+ * Consumers: `reply-suggestions-client.ts` (the header it builds) and
+ * `server/modules/observation/session-digest-llm-settings.ts` (through the barrel).
  */
 export type ReplySuggestionsAuthScheme = '' | 'x-api-key' | 'bearer';
 
 /** The experimental expansion switch; `vary` is parsed and surfaced, not implemented here. */
-export type ReplySuggestionsExpansion = 'off' | 'vary';
+type ReplySuggestionsExpansion = 'off' | 'vary';
 
 /** What every redaction path answers instead of the secret. */
 const REDACTED = '[redacted]';
@@ -98,7 +112,11 @@ export class ApiCredential {
   }
 }
 
-/** Everything a client needs to reach the gateway; the client receives exactly this group. */
+/** Everything a client needs to reach the gateway; the client receives exactly this group.
+ *
+ * Consumers: `reply-suggestions-client.ts` (its `ReplySuggestionsClientConfig`
+ * alias) and `reply-suggestions-draw.ts` (the completion request's `config`).
+ */
 export type ReplySuggestionsUpstream = {
   protocol: ReplySuggestionsProtocol;
   baseUrl: string;
@@ -110,7 +128,7 @@ export type ReplySuggestionsUpstream = {
 };
 
 /** Everything that shapes the answer: decoding knobs, chip budgets and the prompt. */
-export type ReplySuggestionsGeneration = {
+type ReplySuggestionsGeneration = {
   temperature: number;
   redrawTemperature: number;
   maxOutputTokens: number;
@@ -122,14 +140,18 @@ export type ReplySuggestionsGeneration = {
   expansion: ReplySuggestionsExpansion;
 };
 
-/** The sliding-window call budget the upstream guard enforces. */
+/** The sliding-window call budget the upstream guard enforces.
+ *
+ * Consumers: `reply-suggestions-guard.ts` (the `run` signature) and, through the
+ * settings reading, `reply-suggestions.service.ts`.
+ */
 export type ReplySuggestionsLimits = {
   maxCallsPerMinute: number;
   maxCallsPerDay: number;
 };
 
 /** What the reader observed while producing this reading. */
-export type ReplySuggestionsDiagnostics = {
+type ReplySuggestionsDiagnostics = {
   source: 'default' | 'file';
   path: string | null;
   problems: string[];
@@ -145,6 +167,10 @@ export type ReplySuggestionsDiagnostics = {
  * invalidated it). `enabled` is the EFFECTIVE switch: a file that says true but
  * leaves `baseUrl`, `model` or the credential unresolved reads as disabled and
  * names the missing item in `diagnostics.problems`.
+ *
+ * Consumers: `reply-suggestions.service.ts`, `reply-suggestions-draw.ts` (the
+ * `upstream`/`generation` groups), the observation settings reader (through the
+ * source's return type), the settings criterion and the service criterion.
  */
 export type ReplySuggestionsSettings = {
   version: string;

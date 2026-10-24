@@ -25,10 +25,21 @@
  */
 import type { ReplySuggestionsProtocol, ReplySuggestionsUpstream } from './reply-suggestions-settings.js';
 
-/** What the client needs to know about the gateway: exactly the settings' `upstream` group. */
+/**
+ * What the client needs to know about the gateway: exactly the settings'
+ * `upstream` group.
+ *
+ * Consumers: the client criterion in `tests/reply-suggestions-client.test.ts`;
+ * `reply-suggestions-draw.ts` passes the upstream group as this type.
+ */
 export type ReplySuggestionsClientConfig = ReplySuggestionsUpstream;
 
-/** One completion request: the resolved prompt and the decoding knobs. */
+/**
+ * One completion request: the resolved prompt and the decoding knobs.
+ *
+ * Consumers: `reply-suggestions.service.ts`, `reply-suggestions-draw.ts` and
+ * `server/modules/observation/session-digest-llm.ts` (through the barrel).
+ */
 export type ReplySuggestionsCompletionRequest = {
   config: ReplySuggestionsClientConfig;
   system: string;
@@ -37,7 +48,12 @@ export type ReplySuggestionsCompletionRequest = {
   maxOutputTokens: number;
 };
 
-/** The answer text plus whichever token counts the upstream chose to report. */
+/**
+ * The answer text plus whichever token counts the upstream chose to report.
+ *
+ * Consumers: `reply-suggestions.service.ts`, `reply-suggestions-draw.ts` and
+ * `server/modules/observation/session-digest-llm.ts` (through the barrel).
+ */
 export type ReplySuggestionsCompletion = {
   text: string;
   inputTokens: number | null;
@@ -49,9 +65,14 @@ export type ReplySuggestionsCompletion = {
  * response, but the categories stay distinct so a log line (and a test) can say
  * whether the gateway answered badly, timed out, or was unreachable.
  */
-export type ReplySuggestionsClientErrorCategory = 'timeout' | 'http' | 'network' | 'parse' | 'shape';
+type ReplySuggestionsClientErrorCategory = 'timeout' | 'http' | 'network' | 'parse' | 'shape';
 
-/** A categorised client failure. `message` never carries the key or a payload. */
+/**
+ * A categorised client failure. `message` never carries the key or a payload.
+ *
+ * Consumers: `reply-suggestions-chips.ts` (parse/shape), `reply-suggestions-draw.ts`
+ * (the log category and the 502 mapping) and both criteria that fake an upstream.
+ */
 export class ReplySuggestionsClientError extends Error {
   readonly category: ReplySuggestionsClientErrorCategory;
   readonly httpStatus: number | null;
@@ -81,6 +102,8 @@ function authHeaders(config: ReplySuggestionsClientConfig): Record<string, strin
 /**
  * Build the completion endpoint. A `baseUrl` that already ends in `/v1` (with or
  * without a trailing slash) is not given a second `/v1`.
+ *
+ * Consumers: the client criterion in `tests/reply-suggestions-client.test.ts`.
  */
 export function replySuggestionsEndpoint(baseUrl: string, protocol: ReplySuggestionsProtocol): string {
   const root = baseUrl.trim().replace(/\/+$/, '');

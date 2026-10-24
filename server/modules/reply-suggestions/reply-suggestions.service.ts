@@ -5,18 +5,16 @@
  * THE SESSION IS READ, NEVER RECEIVED: the browser sends only an id, so a caller
  * cannot make the server echo arbitrary text to the gateway. This file owns the
  * request's shape, the per-session draw state and the ledger rows; the gateway
- * conversation itself is `reply-suggestions-draw.ts`, the draw state and batch
- * cache are `reply-suggestions-draw-store.ts`, prompts are
- * `reply-suggestions-prompts.ts`, chip parsing is `reply-suggestions-chips.ts`
- * and the ledger's typed rows are `reply-suggestions-usage-log.ts`.
+ * conversation is `reply-suggestions-draw.ts`, the state and cache are
+ * `reply-suggestions-draw-store.ts`, prompts are `reply-suggestions-prompts.ts`,
+ * chip parsing is `reply-suggestions-chips.ts` and the typed ledger rows are
+ * `reply-suggestions-usage-log.ts`.
  *
- * A failure or an empty batch is never cached, so the next request tries again;
- * a redraw replaces the batch; an expansion draw neither reads nor writes it; a
- * cache hit still leaves a `shown` row so the display is counted apart from the
- * paid call.
+ * A failure or an empty batch is never cached; a redraw replaces the batch; an
+ * expansion draw neither reads nor writes it; a cache hit still leaves a `shown`
+ * row so the display is counted apart from the paid call.
  *
- * Consumers: `reply-suggestions.routes.ts` (the HTTP face) and the service
- * criterion in `tests/reply-suggestions-service.test.ts`.
+ * Consumers: `reply-suggestions.routes.ts` and the service criterion.
  */
 import { AppError } from '@/shared/utils.js';
 
@@ -40,10 +38,12 @@ import {
   type ReplySuggestionsUsageRecord,
 } from './reply-suggestions-usage-log.js';
 
-/** The last assistant message, as the injected reader reports it. */
+/** The last assistant message, as the injected reader reports it.
+ * Consumers: `reply-suggestions.module.ts` and `server/index.ts` (through the barrel). */
 export type LastAssistantMessage = { id: string; text: string };
 
-/** Input the route has already parsed and validated. */
+/** Input the route has already parsed and validated.
+ * Consumers: `reply-suggestions.routes.ts` and the service criterion. */
 export type ReplySuggestionsInput = {
   sessionId: string;
   redraw?: boolean;
@@ -54,7 +54,8 @@ export type ReplySuggestionsInput = {
   expand?: boolean;
 };
 
-/** One `/events` posting. `source` is present only when an expansion chip was picked. */
+/** One `/events` posting; `source` is present only for an expansion chip.
+ * Consumers: `reply-suggestions.routes.ts` (its parsed event shape). */
 export type ReplySuggestionsEventInput = {
   sessionId: string;
   draw: number;
@@ -63,7 +64,8 @@ export type ReplySuggestionsEventInput = {
   source?: ReplySuggestionsExpansionSource;
 };
 
-/** The reading `GET /status` exposes — no paths and no key. */
+/** The reading `GET /status` exposes — no paths and no key.
+ * Consumers: `reply-suggestions.routes.ts` and the settings criterion. */
 export type ReplySuggestionsStatus = {
   enabled: boolean;
   expansion: ReplySuggestionsSettings['generation']['expansion'];
@@ -71,14 +73,16 @@ export type ReplySuggestionsStatus = {
   maxChipChars: number;
 };
 
-/** The public face of the service. */
+/** The public face of the service.
+ * Consumers: `reply-suggestions.routes.ts` and the route criterion. */
 export type ReplySuggestionsService = {
   status(): ReplySuggestionsStatus;
   suggest(input: ReplySuggestionsInput): Promise<{ chips: string[]; draw: number }>;
   recordEvent(input: ReplySuggestionsEventInput): void;
 };
 
-/** The injected seams; criteria replace `complete` and the reader with fakes. */
+/** The injected seams; criteria replace `complete` and the reader with fakes.
+ * Consumers: `reply-suggestions.module.ts` and both service-driving criteria. */
 export type ReplySuggestionsServiceDeps = {
   readSettings: () => ReplySuggestionsSettings;
   readLastAssistantMessage: (sessionId: string) => Promise<LastAssistantMessage | null>;

@@ -37,9 +37,13 @@ import path from 'node:path';
 import type { ReplySuggestionsProtocol } from './reply-suggestions-settings.js';
 
 /** The default cap for one ledger file: 5 MB, as the task's protection clause says. */
-export const REPLY_SUGGESTIONS_USAGE_LOG_MAX_BYTES = 5 * 1024 * 1024;
+const REPLY_SUGGESTIONS_USAGE_LOG_MAX_BYTES = 5 * 1024 * 1024;
 
-/** How a `shown` row was produced: a real upstream call or a cache hit. */
+/**
+ * How a `shown` row was produced: a real upstream call or a cache hit.
+ *
+ * Consumers: `reply-suggestions.service.ts` (the `shown` row's `served`).
+ */
 export type ReplySuggestionsServed = 'upstream' | 'cache';
 
 /**
@@ -47,14 +51,21 @@ export type ReplySuggestionsServed = 'upstream' | 'cache';
  * (variants of it), `focus` is the quoted passage with no reply written yet.
  * Written into the ledger so a replay can tell the two apart without storing
  * either text twice.
+ *
+ * Consumers: `reply-suggestions.service.ts`, `reply-suggestions-draw.ts`,
+ * `reply-suggestions-prompts.ts` and `reply-suggestions.routes.ts`.
  */
 export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
 
-/** The pointer-click ledger event names the client reports. */
+/**
+ * The pointer-click ledger event names the client reports.
+ *
+ * Consumers: `reply-suggestions.service.ts` and `reply-suggestions.routes.ts`.
+ */
 export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
 
 /** One display of a batch. `expansion` is present only for an expansion draw. */
-export type ReplySuggestionsShownRecord = {
+type ReplySuggestionsShownRecord = {
   at: string;
   type: 'shown';
   sessionId: string;
@@ -68,7 +79,7 @@ export type ReplySuggestionsShownRecord = {
 };
 
 /** One client event. `index` is the chip position; `source` names an expansion. */
-export type ReplySuggestionsEventRecord = {
+type ReplySuggestionsEventRecord = {
   at: string;
   type: ReplySuggestionsEventName;
   sessionId: string;
@@ -77,7 +88,12 @@ export type ReplySuggestionsEventRecord = {
   source?: ReplySuggestionsExpansionSource;
 };
 
-/** The discriminated union every ledger line is one of. */
+/**
+ * The discriminated union every ledger line is one of.
+ *
+ * Consumers: `reply-suggestions.service.ts` (`writeUsage`) and the context-events
+ * tap in `server/index.ts` (its `recordUsage` reads only a few fields).
+ */
 export type ReplySuggestionsUsageRecord = ReplySuggestionsShownRecord | ReplySuggestionsEventRecord;
 
 /**
@@ -134,7 +150,13 @@ export function eventRecord(options: {
   };
 }
 
-/** The writer seam the service depends on. `write` accepts only a typed row. */
+/**
+ * The writer seam the service depends on. `write` accepts only a typed row.
+ *
+ * Consumers: `reply-suggestions.service.ts` (its injected `usageLog`),
+ * `reply-suggestions.module.ts` (builds one) and the context-events wiring
+ * criterion.
+ */
 export type ReplySuggestionsUsageLog = {
   readonly path: string;
   write(record: ReplySuggestionsUsageRecord): void;

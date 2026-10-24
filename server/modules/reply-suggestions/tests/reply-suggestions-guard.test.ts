@@ -16,8 +16,8 @@ import {
   createUpstreamGuard,
   REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS,
   REPLY_SUGGESTIONS_CIRCUIT_FAILURE_THRESHOLD,
-  type ReplySuggestionsLimits,
 } from '../reply-suggestions-guard.js';
+import type { ReplySuggestionsLimits } from '../reply-suggestions-settings.js';
 
 const GENEROUS: ReplySuggestionsLimits = { maxCallsPerMinute: 1000, maxCallsPerDay: 100_000 };
 

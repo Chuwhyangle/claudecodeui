@@ -18,22 +18,28 @@
  * ONE INSTANCE PER SERVICE. The counters are closure state, so two guards are
  * independent; the service creates one guard per settings source (one per process).
  *
- * Consumers: `reply-suggestions.service.ts` (`callUpstream`) and the guard
- * criterion in `tests/reply-suggestions-guard.test.ts`.
+ * Consumers: `reply-suggestions-draw.ts` (its one completion attempt) and the
+ * guard criterion in `tests/reply-suggestions-guard.test.ts`.
  */
 import { AppError } from '@/shared/utils.js';
 
-/** Five consecutive failures open the circuit (documented in `docs/operations/reply-suggestions.md`). */
+import type { ReplySuggestionsLimits } from './reply-suggestions-settings.js';
+
+/**
+ * Five consecutive failures open the circuit (documented in `docs/operations/reply-suggestions.md`).
+ *
+ * Consumers: this file and the guard criterion in
+ * `tests/reply-suggestions-guard.test.ts`.
+ */
 export const REPLY_SUGGESTIONS_CIRCUIT_FAILURE_THRESHOLD = 5;
 
-/** How long the circuit stays open after the fifth consecutive failure. */
+/**
+ * How long the circuit stays open after the fifth consecutive failure.
+ *
+ * Consumers: this file, the guard criterion and the service criterion (which
+ * advances its injected clock by this amount).
+ */
 export const REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS = 30_000;
-
-/** The per-window ceilings a run is checked against, taken from the settings' `limits` group. */
-export type ReplySuggestionsLimits = {
-  maxCallsPerMinute: number;
-  maxCallsPerDay: number;
-};
 
 /**
  * The 502 every failed upstream path answers with. `category` names the client
@@ -58,7 +64,12 @@ function rateLimitedError(): AppError {
   });
 }
 
-/** The one method: run one upstream attempt under the breaker and the caps. */
+/**
+ * The one method: run one upstream attempt under the breaker and the caps.
+ *
+ * Consumers: `reply-suggestions-draw.ts`, which holds one guard and wraps each
+ * completion attempt in `run`.
+ */
 export type ReplySuggestionsUpstreamGuard = {
   run<T>(limits: ReplySuggestionsLimits, call: () => Promise<T>): Promise<T>;
 };
@@ -67,7 +78,7 @@ export type ReplySuggestionsUpstreamGuard = {
  * Build one guard. `now` is injectable so a criterion can move the clock instead
  * of sleeping; production leaves it as `Date.now`.
  *
- * Consumers: `reply-suggestions.service.ts` only.
+ * Consumers: `reply-suggestions-draw.ts` only (one guard per draw runner).
  */
 export function createUpstreamGuard(options: { now?: () => number } = {}): ReplySuggestionsUpstreamGuard {
   const now = options.now ?? Date.now;

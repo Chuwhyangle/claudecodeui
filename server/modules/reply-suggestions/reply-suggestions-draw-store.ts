@@ -21,11 +21,16 @@
  * criterion in `tests/reply-suggestions-draw-store.test.ts`.
  */
 
-/** How many session records the store keeps. Least-recently-used entries are evicted past this. */
+/**
+ * How many session records the store keeps. Least-recently-used entries are evicted past this.
+ *
+ * Consumers: `createDrawStore` below and the store criterion in
+ * `tests/reply-suggestions-draw-store.test.ts`.
+ */
 export const REPLY_SUGGESTIONS_DRAW_STORE_SIZE = 200;
 
 /** One batch returned to the client for a cached draw. */
-export type ReplySuggestionsCachedBatch = {
+type ReplySuggestionsCachedBatch = {
   chips: string[];
   draw: number;
 };
@@ -39,7 +44,7 @@ type SessionRecord = {
   batch: { version: string; chips: string[]; draw: number } | null;
 };
 
-export type ReplySuggestionsDrawStore = {
+type ReplySuggestionsDrawStore = {
   /** The chips already shown for this session's current message, as a copy. */
   shownChips(sessionId: string, messageId: string): string[];
   /** Record the chips selected for this message; returns the new draw number. */
@@ -58,7 +63,8 @@ export type ReplySuggestionsDrawStore = {
  * Build one store. `capacity` is injectable for a criterion that wants a smaller
  * bound; production uses the shipped 200-key bound.
  *
- * Consumers: `reply-suggestions.service.ts` only.
+ * Consumers: `reply-suggestions.service.ts` (the whole draw path) and the store
+ * criterion in `tests/reply-suggestions-draw-store.test.ts`.
  */
 export function createDrawStore(options: { capacity?: number } = {}): ReplySuggestionsDrawStore {
   const capacity = options.capacity ?? REPLY_SUGGESTIONS_DRAW_STORE_SIZE;

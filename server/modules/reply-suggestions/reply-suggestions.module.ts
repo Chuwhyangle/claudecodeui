@@ -31,6 +31,9 @@ import { createReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js
  * to the last text-bearing assistant row (or null). Everything else is an
  * override for criteria and for deployments whose local data directory is not
  * the default; production passes only the reader.
+ *
+ * Consumers: `server/index.ts` (through the barrel) and the route criterion in
+ * `tests/reply-suggestions-routes.test.ts`.
  */
 export type ReplySuggestionsModuleDeps = {
   readLastAssistantMessage: (sessionId: string) => Promise<LastAssistantMessage | null>;
