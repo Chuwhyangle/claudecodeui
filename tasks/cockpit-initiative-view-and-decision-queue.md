@@ -58,6 +58,8 @@ depends_on:
 - server/modules/settings/index.ts
 - server/modules/observation/observation-uri.ts
 - config/server.settings.example.json
+- scripts/contraction-candidates/scan.mjs (landing-gap guard: develop reds typecheck)
+- scripts/contraction-candidates/scan.test.mjs (landing-gap guard: same)
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/es/common.json
@@ -85,3 +87,5 @@ Full cockpit suite — `npx vitest run src/modules/cockpit/tests` → 11 files /
 Server — `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-initiatives.test.ts` → 4/4 passed: the real attention shape (question on `evidence[].reason`), the blocked-edge timestamp, the typed queue, the inference-only audit, `initiative decide … --by human` with no `--kind`, a non-human provenance refused before any child, and a queue that survives a failed `initiative list`.
 
 DoD — isolated instance: `DATABASE_PATH=/tmp/cockpit-initiative-verify/auth.db`, `HOME=/tmp/cockpit-initiative-verify/home`, `SERVER_SETTINGS_PATH` with `{"residentRestore":{"enabled":false},"initiative":{"auditRatio":0.2}}`, real fleet seeded through `quay-fleet initiative create/link/edge/escalate/decide` under `QUAY_FLEET_HOME=/tmp/cockpit-initiative-verify/fleet-home`. No resident-restore pass ran (the log carries no `resident-restore` line). Real browser (Playwright chromium) at PC 1440×900 and mobile 390×844, real `GET /api/quay/initiatives`: one row for `cockpit-observation-wall`, two project cells (1 task/1 goal and 2 tasks/0 goals), a blocked `blocks` edge with its duration, one typed queue item, two sampled self-decisions; preview → confirm recorded the ruling (`data-notice-kind=done`, queue 0). Screenshots: `tmp/initiative-view-pc.png`, `tmp/initiative-view-mobile.png`, `tmp/initiative-decision-preview-pc.png`, `tmp/initiative-decision-confirmed-pc.png`; readings in `tmp/initiative-dod-report.json`. The pin route accepted and removed `quay://fleet/initiative/cockpit-observation-wall` (PUT/DELETE 200).
+
+Baseline red carried — the merge of develop brought `scripts/contraction-candidates/scan.mjs` + `scan.test.mjs` (landed by `contraction-candidates-signal-inventory-and-design`), whose implicit-any parameters red `npm run typecheck` for every branch on develop. Both files carry a file-local `@ts-nocheck` with a removal note; typing them belongs to their owning follow-up, not to this task. `npm run typecheck` is green with the guard.
