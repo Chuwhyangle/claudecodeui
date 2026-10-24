@@ -1,7 +1,7 @@
 ---
 id: architecture-archguard-refresh-trigger
 title: 架构图手动刷新分析：确认弹窗后整项目重跑 archguard，多会话并发点击合并为一个作业，失败保留旧产物
-status: todo
+status: ready
 labels:
   - feature
 parent: null
