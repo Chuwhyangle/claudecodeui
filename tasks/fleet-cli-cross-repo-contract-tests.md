@@ -33,10 +33,6 @@ extra: {}
 
 - 对当前安装的 fleet 版本跑一次全绿，贴出握手版本与每份契约的校验结果；再人为把一份声明改错，贴出变红输出。
 
-## Notes
-
-2026-10-24 追加（fleet 已落地 `fleet-initiative-store-and-cli`）：契约清单加入 `initiative show <slug> --json`、`initiative list --json`，以及在临时 `QUAY_FLEET_HOME` 下执行的 `initiative create`。形状以真实输出为准（`{ok, initiative:{slug, charter:{intent, projects[], completionCriteria, grantScope:{mayDecide[], mustEscalate[]}, exitConditions, expiresAt}, members:[{project, taskRefs[], goalRefs[], liaison}], edges:[{from, to, kind}], status}, decisions:[{at, by, question, options[], chosen, rationale, kind}], ledger:{byteLength, corruptLines}}`）；edges 的 from/to 必须是带项目段的 quay:// URI，decisions 的 kind 取值为 fact/inference/experience/llm。`liveness --json` 与 `initiative predict|score` 落地后同样补入。
-
 ## Touches
 
 - server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts (new)
