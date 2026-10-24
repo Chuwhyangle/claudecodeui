@@ -6,6 +6,12 @@ import { cn } from '@/shared/utils';
 import { QuayPanel, parseQuayUri } from '@/modules/quay';
 import type { QuayPanelView } from '@/modules/quay';
 import type { CockpitProject, CockpitView } from '@/modules/cockpit/cockpitView';
+import type {
+  ObservationWallEntry,
+  ObservationWallView,
+} from '@/modules/cockpit/hooks/useObservationWall';
+import ObservationPreview from '@/modules/cockpit/ObservationPreview';
+import ObservationWall from '@/modules/cockpit/ObservationWall';
 
 /**
  * The cockpit stage: one view at a time, with the view's focusable children declared exactly
@@ -58,6 +64,24 @@ export type CockpitStageProps = {
   boardProjectId: string | null;
   boardView: QuayPanelView;
   onRefreshBoard: () => void;
+  /**
+   * The observation wall's reading and its interactions. The stage draws it; the page owns the
+   * preview's seen-cursor write, the pin write and the navigation, because those are requests,
+   * not layout.
+   */
+  wallView: ObservationWallView;
+  wallFocusUri: string | null;
+  wallNow: number;
+  wallPreview: ObservationWallEntry | null;
+  wallPinPendingUri: string | null;
+  wallArchitectureReason: string | null;
+  onWallFocus: (uri: string) => void;
+  onWallOpen: (uri: string) => void;
+  onWallLater: () => void;
+  onWallTogglePin: (uri: string) => void;
+  onWallOpenSession: () => void;
+  onWallOpenArchitecture: () => void;
+  onReloadWall: () => void;
 };
 
 /** Rendered by `CockpitPage` as the right-hand stage. */
@@ -74,6 +98,19 @@ export default function CockpitStage({
   boardProjectId,
   boardView,
   onRefreshBoard,
+  wallView,
+  wallFocusUri,
+  wallNow,
+  wallPreview,
+  wallPinPendingUri,
+  wallArchitectureReason,
+  onWallFocus,
+  onWallOpen,
+  onWallLater,
+  onWallTogglePin,
+  onWallOpenSession,
+  onWallOpenArchitecture,
+  onReloadWall,
 }: CockpitStageProps) {
   // FOCUS STARTS ON THE STAGE, NOT IN THE TEXT BOX. A page that loads with the intent input
   // focused swallows the first arrow press (editable targets own their keys by design), so the
@@ -91,7 +128,24 @@ export default function CockpitStage({
       data-testid="cockpit-stage"
       data-cockpit-view={view.type}
     >
-      {view.type === 'fleet' ? (
+      {view.type === 'wall' ? (
+        <WallView
+          wallView={wallView}
+          focusables={focusables}
+          focusUri={wallFocusUri}
+          now={wallNow}
+          preview={wallPreview}
+          pinPendingUri={wallPinPendingUri}
+          architectureReason={wallArchitectureReason}
+          onFocus={onWallFocus}
+          onOpen={onWallOpen}
+          onLater={onWallLater}
+          onTogglePin={onWallTogglePin}
+          onOpenSession={onWallOpenSession}
+          onOpenArchitecture={onWallOpenArchitecture}
+          onReload={onReloadWall}
+        />
+      ) : view.type === 'fleet' ? (
         <FleetView
           projects={projects}
           fleetStatus={fleetStatus}
@@ -113,6 +167,112 @@ export default function CockpitStage({
         />
       )}
     </section>
+  );
+}
+
+/**
+ * The wall view: the observation list, with the preview stage beside it on a wide screen and
+ * IN PLACE of it on a phone.
+ *
+ * The PC layout is the product's model (tiles + right-hand stage). The phone cannot show two
+ * columns, so the preview takes the whole stage and 「稍后再看」 returns to the list — the same
+ * model, one viewport. The list itself stays mounted on a wide screen, so a preview never
+ * destroys its scroll position.
+ */
+function WallView({
+  wallView,
+  focusables,
+  focusUri,
+  now,
+  preview,
+  pinPendingUri,
+  architectureReason,
+  onFocus,
+  onOpen,
+  onLater,
+  onTogglePin,
+  onOpenSession,
+  onOpenArchitecture,
+  onReload,
+}: {
+  wallView: ObservationWallView;
+  /** The wall's declared objects, published so the scenario surface can read them. */
+  focusables: readonly QuayFocusableObject[];
+  focusUri: string | null;
+  now: number;
+  preview: ObservationWallEntry | null;
+  pinPendingUri: string | null;
+  architectureReason: string | null;
+  onFocus: (uri: string) => void;
+  onOpen: (uri: string) => void;
+  onLater: () => void;
+  onTogglePin: (uri: string) => void;
+  onOpenSession: () => void;
+  onOpenArchitecture: () => void;
+  onReload: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className="flex min-h-0 flex-1"
+      data-testid="cockpit-wall"
+      // The same declaration the fleet/board views publish: what is focusable on this stage.
+      // The dev-only scenario surface reads it, so a wall scenario can name ① / ② rather than
+      // scraping a class name.
+      data-cockpit-focusables={JSON.stringify(focusables)}
+    >
+      <div className={cn('flex min-w-0 flex-1 flex-col', preview !== null && 'hidden md:flex')}>
+        {wallView.status === 'loading' && (
+          <p className="p-6 text-xs text-muted-foreground" data-testid="observation-wall-loading">
+            {t('cockpit.loading')}
+          </p>
+        )}
+        {wallView.status === 'error' && (
+          <div className="p-6" data-testid="observation-wall-error">
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              {t('cockpit.observationError', { message: wallView.message })}
+            </p>
+            <button
+              type="button"
+              onClick={onReload}
+              className="mt-2 min-h-11 rounded border border-border/60 px-2 text-xs text-foreground hover:bg-accent sm:min-h-0 sm:py-0.5"
+              data-testid="observation-wall-retry"
+            >
+              {t('cockpit.retry')}
+            </button>
+          </div>
+        )}
+        {wallView.status === 'loaded' && (
+          <ObservationWall
+            wall={wallView.wall}
+            focusUri={focusUri}
+            now={now}
+            onFocus={onFocus}
+            onOpen={onOpen}
+            onTogglePin={onTogglePin}
+            pinPendingUri={pinPendingUri}
+          />
+        )}
+      </div>
+
+      {preview !== null && (
+        <div className="flex min-h-0 w-full md:w-96 md:shrink-0">
+          <ObservationPreview
+            entry={preview}
+            now={now}
+            onLater={onLater}
+            onTogglePin={() => onTogglePin(preview.object.uri)}
+            pinPending={pinPendingUri === preview.object.uri}
+            onOpenSession={preview.object.kind === 'session' ? onOpenSession : undefined}
+            onOpenArchitecture={preview.object.kind === 'architecture' ? onOpenArchitecture : undefined}
+            architectureUnavailableReason={
+              preview.object.kind === 'architecture' ? architectureReason : null
+            }
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -294,9 +294,15 @@ vi.mock('@/shared/context/WebSocketContext', () => ({
 const apiMock = vi.hoisted(() => ({
   quayFleetSummary: vi.fn(),
   quaySnapshot: vi.fn(),
+  // The observation wall reads its own route through `authenticatedFetch`; these cases are about
+  // the fleet/board stage, so an empty wall is the honest fixture.
+  observationFetch: vi.fn(),
 }));
 
-vi.mock('@/shared/api', () => ({ api: apiMock }));
+vi.mock('@/shared/api', () => ({
+  api: apiMock,
+  authenticatedFetch: apiMock.observationFetch,
+}));
 
 const FLEET: QuayFleetSummary = {
   projects: [
@@ -441,7 +447,7 @@ function LocationProbe() {
   return <div data-testid="location" data-search={location.search} />;
 }
 
-function renderCockpit(initialPath = '/cockpit') {
+function renderCockpit(initialPath = '/cockpit?view=fleet') {
   return render(
     <I18nextProvider i18n={i18n}>
       <MemoryRouter initialEntries={[initialPath]}>
@@ -453,7 +459,8 @@ function renderCockpit(initialPath = '/cockpit') {
 }
 
 const locationSearch = () => screen.getByTestId('location').getAttribute('data-search') ?? '';
-const focusUri = () => screen.getByTestId('cockpit-focus').getAttribute('data-cockpit-focus');
+const focusUri = () =>
+  screen.getByTestId('cockpit-page').getAttribute('data-cockpit-focus-uri');
 
 /** The focusable declaration a rendered view publishes, parsed from its own attribute. */
 function declaredFocusables(container: HTMLElement): Array<{
@@ -484,8 +491,12 @@ beforeEach(() => {
   hubMock.reset();
   apiMock.quayFleetSummary.mockReset();
   apiMock.quaySnapshot.mockReset();
+  apiMock.observationFetch.mockReset();
   apiMock.quayFleetSummary.mockResolvedValue(okResponse(FLEET));
   apiMock.quaySnapshot.mockResolvedValue(okResponse(SNAPSHOT));
+  apiMock.observationFetch.mockResolvedValue(
+    okResponse({ entries: [], collapsedCount: 0, producers: [], self: null }),
+  );
 });
 
 describe('fleet view contract', () => {
@@ -667,7 +678,8 @@ describe('hub-authored state', () => {
   });
 
   it('renders the focused object and the view the hub broadcast, not the URL', async () => {
-    renderCockpit();
+    // `?debug=1`: the device echo is a machine handle, so it lives behind the debug switch now.
+    renderCockpit('/cockpit?view=fleet&debug=1');
     await screen.findByTestId('cockpit-fleet-tiles');
     await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
@@ -683,8 +695,11 @@ describe('hub-authored state', () => {
       lastEventSource: { deviceId: 'device-phone', deviceName: 'phone', role: 'input' },
     });
 
-    // The URL follows the hub's view (the fleet segment `claudecodeui` is project p1).
-    await waitFor(() => expect(locationSearch()).toBe('?view=board&project=p1'));
+    // The URL follows the hub's view (the fleet segment `claudecodeui` is project p1), and the
+    // debug switch survives the navigation.
+    await waitFor(() =>
+      expect(locationSearch()).toBe('?view=board&project=claudecodeui&debug=1'),
+    );
     await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/task/task-a'));
     expect(screen.getByTestId('cockpit-event-source').textContent).toContain('phone');
   });
@@ -751,7 +766,7 @@ describe('cockpit header mode switch', () => {
 });
 
 describe('view changes and history', () => {
-  it('Enter on a project opens its board, and Backspace returns to the fleet', async () => {
+  it('Enter on a project opens its board, and Backspace returns to the wall', async () => {
     renderCockpit();
     await screen.findByTestId('cockpit-fleet-tiles');
     await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
@@ -759,18 +774,19 @@ describe('view changes and history', () => {
     fireEvent.keyDown(window, { key: 'ArrowRight' });
     fireEvent.keyDown(window, { key: 'Enter' });
 
-    await waitFor(() => expect(locationSearch()).toBe('?view=board&project=p2'));
+    await waitFor(() => expect(locationSearch()).toBe('?view=board&project=quay-fleet'));
     await screen.findByTestId('cockpit-board');
     expect(apiMock.quaySnapshot.mock.calls[0]?.[0]).toBe('p2');
 
     fireEvent.keyDown(window, { key: 'Backspace' });
 
-    await waitFor(() => expect(locationSearch()).toBe('?view=fleet'));
-    await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(locationSearch()).toBe('?view=wall'));
+    await screen.findByTestId('cockpit-wall');
   });
 
   it('round-trips the view description through the URL', () => {
     const views: CockpitView[] = [
+      { type: 'wall' },
       { type: 'fleet' },
       { type: 'board', project: 'p1' },
       { type: 'board', project: 'p 1/x' },
@@ -780,8 +796,8 @@ describe('view changes and history', () => {
       expect(parseCockpitView(formatCockpitView(view))).toEqual(view);
     }
     // A malformed URL still lands on a usable stage rather than throwing or blanking.
-    expect(parseCockpitView('?view=board')).toEqual({ type: 'fleet' });
-    expect(parseCockpitView('')).toEqual({ type: 'fleet' });
+    expect(parseCockpitView('?view=board')).toEqual({ type: 'wall' });
+    expect(parseCockpitView('')).toEqual({ type: 'wall' });
   });
 });
 
@@ -816,7 +832,7 @@ describe('board view contract', () => {
   it('shows an error state (not a blank stage) when the snapshot fails, and focus stays in the view', async () => {
     apiMock.quaySnapshot.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
 
-    renderCockpit('/cockpit?view=board&project=p1');
+    renderCockpit('/cockpit?view=board&project=p1&debug=1');
 
     const error = await screen.findByTestId('quay-panel-error');
     expect(error.textContent).toContain('HTTP 500');
@@ -991,7 +1007,7 @@ describe('cockpit input', () => {
     fireEvent.change(textarea, { target: { value: '看 claudecodeui' } });
     fireEvent.keyDown(textarea, { key: 'Enter' });
 
-    await waitFor(() => expect(locationSearch()).toBe('?view=board&project=p1'));
+    await waitFor(() => expect(locationSearch()).toBe('?view=board&project=claudecodeui'));
     expect(sentEvents('utterance')[0]?.text).toBe('看 claudecodeui');
 
     // The intent → first-frame latency is recorded for the scenario runner.
@@ -1017,6 +1033,6 @@ describe('cockpit input', () => {
     const unmatched = await screen.findByTestId('cockpit-intent-unmatched');
     expect(unmatched.textContent).toContain('今天天气不错');
     // No guess — and therefore no navigation: the stage stays on the fleet it was showing.
-    expect(locationSearch()).toBe('');
+    expect(locationSearch()).toBe('?view=fleet');
   });
 });

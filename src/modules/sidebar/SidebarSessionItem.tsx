@@ -6,6 +6,7 @@ import type { TFunction } from 'i18next';
 import { Badge, Dialog, DialogContent, DialogTitle, LLMProviderLogo, Tooltip, buttonVariants } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import { useSessionActivityEntry } from '@/shared/context/SessionProtectionContext';
+import { WatchPinToggle, formatSessionUri } from '@/modules/cockpit';
 import type { LLMProvider, Project, ProjectSession, SessionWithProvider } from '@/shared/types';
 import { PROVIDER_LABELS, createSessionViewModel, formatCompactAge } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import { presentSessionActivity } from '@/modules/sidebar/utils/sessionActivityPresentation';
@@ -236,6 +237,11 @@ function SidebarSessionItem({
               </div>
             </div>
 
+            {/* 「钉到观察墙 / 取消」, the same action the wall tile carries. */}
+            <WatchPinToggle
+              uri={formatSessionUri(session.id)}
+              testId="cockpit-session-watch-toggle"
+            />
             <button
               type="button"
               aria-label={`Session options for ${sessionView.sessionName}`}
@@ -473,6 +479,13 @@ function SidebarSessionItem({
           </div>
         </a>
 
+        {/* 「钉到观察墙 / 取消」 sits beside the options trigger, always visible: pinning a
+            session is a one-click action, not a menu item. */}
+        <WatchPinToggle
+          uri={formatSessionUri(session.id)}
+          testId="cockpit-session-watch-toggle"
+          className="absolute right-9 top-1/2 -translate-y-1/2 transform"
+        />
         <SessionOptions
           className="absolute right-2 top-1/2 -translate-y-1/2 transform transition-all duration-200"
           sessionId={session.id}

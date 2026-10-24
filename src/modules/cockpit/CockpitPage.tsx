@@ -21,6 +21,7 @@ import { pinCockpitTargetSession } from '@/modules/cockpit/cockpitRouting';
 import type { CockpitFleetPort, CockpitFleetReading, CockpitFleetWriteResult } from '@/modules/cockpit/cockpitRouting';
 import {
   buildCockpitFleetContract,
+  buildObservationWallContract,
   cockpitViewPath,
   cockpitViewUri,
   parseCockpitView,
@@ -30,6 +31,17 @@ import {
 import type { CockpitProject, CockpitTiming, CockpitView } from '@/modules/cockpit/cockpitView';
 import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
 import { useCockpitPushToTalk } from '@/modules/cockpit/hooks/useCockpitPushToTalk';
+import {
+  latestProducerRunAt,
+  markObservationSeen,
+  toggleObservationPin,
+  useObservationWall,
+} from '@/modules/cockpit/hooks/useObservationWall';
+import type {
+  ObservationWallEntry,
+  ObservationWallView,
+} from '@/modules/cockpit/hooks/useObservationWall';
+import { parseObservationUri } from '@/modules/cockpit/observationUri';
 import { encodeQr } from '@/modules/cockpit/cockpitQr';
 
 /** Where the phone remote lives, relative to the cockpit's router basename. */
@@ -129,6 +141,30 @@ type PendingTiming = {
 };
 
 /**
+ * Every input gets an echo — the references' 「每次输入都有回声」 rule. The three shapes are the
+ * product's: something was DONE, something CANNOT be done (with the reason and the next step),
+ * or something needs CONFIRMATION. The first two disappear after a few seconds; a confirmation
+ * stays exactly as long as the confirmation card does.
+ */
+type CockpitEchoKind = 'done' | 'refused' | 'confirm';
+
+type CockpitEcho = {
+  kind: CockpitEchoKind;
+  /** What happened / what was asked, in the person's own words where possible. */
+  text: string;
+  /** Refused only: why it could not be done. */
+  reason?: string;
+  /** Refused only: the next step the person can take. */
+  next?: string;
+};
+
+/** How long a done/refused echo stays on screen. */
+export const COCKPIT_ECHO_TTL_MS = 3_000;
+
+/** How often the wall's liveness labels are re-derived ("3 min ago" must not freeze). */
+const LIVENESS_TICK_MS = 30_000;
+
+/**
  * The instant this module loaded. The initial `url` latency reading is measured from here
  * rather than from a render-time `performance.now()`: a module-level read is not a render
  * impurity, and module evaluation still precedes the page's first committed frame.
@@ -184,22 +220,37 @@ function cockpitViewForHubView(
   projects: readonly CockpitProject[],
   hubView: CockpitHubView,
 ): CockpitView {
-  if (hubView.type === 'fleet') return { type: 'fleet' };
+  if (hubView.type === 'fleet') return { type: 'wall' };
   // The hub's segment is a fleet registry id; the spoken project name is still accepted as an
   // alias because the intent parser may hand one through.
   const project =
     resolveCockpitProject(projects, hubView.project) ??
     projects.find((candidate) => candidate.name.toLowerCase() === hubView.project.toLowerCase()) ??
     null;
-  return project === null ? { type: 'fleet' } : { type: 'board', project: project.projectId };
+  // The URL carries the FLEET registry id (the project segment every `quay://` address uses),
+  // never the CloudCLI project id — a stored UUID link is rewritten by the page's own effect.
+  return project === null
+    ? { type: 'wall' }
+    : { type: 'board', project: project.fleetProjectId ?? project.projectId };
 }
 
-/** The fleet registry segment a page view addresses, or null (fleet / unregistered project). */
+/**
+ * Keeps `?debug=1` across a view navigation. The debug switch is a reading preference, not part
+ * of the view; dropping it whenever the view changes would turn itself off the first time the
+ * person navigated.
+ */
+function withDebugQuery(path: string, search: string): string {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  if (params.get('debug') !== '1') return path;
+  return `${path}${path.includes('?') ? '&' : '?'}debug=1`;
+}
+
+/** The fleet registry segment a page view addresses, or null (wall / fleet / unregistered). */
 function fleetSegmentForView(
   projects: readonly CockpitProject[],
   view: CockpitView,
 ): string | null {
-  if (view.type === 'fleet') return null;
+  if (view.type !== 'board') return null;
   return resolveCockpitProject(projects, view.project)?.fleetProjectId ?? null;
 }
 
@@ -234,6 +285,26 @@ export default function CockpitPage() {
   // The dictation chain's own failure sentence, shown where the cockpit's other notices are.
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 
+  // The observation wall (GET /api/observation/wall): the cockpit's home.
+  const observation = useObservationWall();
+  // The wall's liveness labels ("3 min ago") are re-derived on a slow tick, so a timestamp is a
+  // reading about now rather than about the moment the page happened to mount.
+  const [now, setNow] = useState(() => Date.now());
+  // The object whose in-place preview is open; `null` when the stage shows the list alone.
+  const [wallPreviewUri, setWallPreviewUri] = useState<string | null>(null);
+  // The object whose pin write is in flight.
+  const [wallPinPendingUri, setWallPinPendingUri] = useState<string | null>(null);
+  // The answer to the last input: done / refused+reason+next / awaiting confirmation.
+  const [echo, setEcho] = useState<CockpitEcho | null>(null);
+  // The phone remote's QR is opt-in: the code lives behind 「手机遥控」, not in the header.
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  // `?debug=1` is the only place machine handles are drawn: URIs, first-frame timings and
+  // device ids are diagnostics, not something a person reads on a status bar.
+  const debug = useMemo(() => {
+    const params = new URLSearchParams(location.search.startsWith('?') ? location.search.slice(1) : location.search);
+    return params.get('debug') === '1';
+  }, [location.search]);
+
   // The change whose first committed render has not been observed yet; consumed by the effect
   // below exactly once, so a latency is recorded once per real view change.
   const pendingTimingRef = useRef<PendingTiming | null>(null);
@@ -243,6 +314,13 @@ export default function CockpitPage() {
   // A deep link (`?view=board&project=…`) is restored into the hub ONCE, after the fleet reads,
   // because the fleet registry id that addresses the hub is only known then.
   const seededRef = useRef(false);
+  // The echo arm: true between submitting a phrase and the hub answering it, so an unrelated
+  // hub frame cannot be reported as "your input did". `echoSubmitRevRef` is the hub revision
+  // the phrase was sent at, so a repeat of the SAME view still produces a done echo.
+  const echoArmedRef = useRef(false);
+  const echoSubmitRevRef = useRef(0);
+  // The phrase the armed echo is about, so the done sentence can quote it.
+  const lastSubmittedTextRef = useRef('');
 
   const loadFleet = useCallback(async () => {
     setFleet({ status: 'loading' });
@@ -326,14 +404,22 @@ export default function CockpitPage() {
   );
 
   const urlView = useMemo(() => parseCockpitView(location.search), [location.search]);
-  // The view the hub describes, translated into the page's vocabulary.
-  const hubView = useMemo(
-    () => cockpitViewForHubView(projects, hubState.view),
-    [hubState.view, projects],
+  /**
+   * THE URL IS THE VIEW.
+   *
+   * A view change is a browser navigation, so the back button returns to the previous view —
+   * one of the walkthrough items folded into this task. The hub still owns board intents (its
+   * `setView` / `zoom` / `back` events are mirrored INTO the URL by the effect below), but the
+   * page renders the URL rather than keeping a second copy of the hub's view.
+   */
+  const view: CockpitView = urlView;
+
+  // The observation wall's reading, and the entries the stage draws (empty while loading).
+  const wallView: ObservationWallView = observation.view;
+  const wallEntries = useMemo(
+    () => (wallView.status === 'loaded' ? wallView.wall.entries : []),
+    [wallView],
   );
-  // Before the hub's first event the page honours its own URL: that is what makes a deep link
-  // open the board it names instead of flashing the fleet.
-  const view = hubState.rev === 0 ? urlView : hubView;
 
   // The view's project segment may be either handle: the cockpit's own URL writes the
   // CloudCLI id, while the sidebar's entry links speak the fleet registry id. Resolve it once
@@ -357,6 +443,15 @@ export default function CockpitPage() {
     boardProjectId !== null,
   );
 
+  // The wall's declared objects: one per entry, with the same grid cells the tiles are drawn in.
+  const wallFocusables = useMemo(
+    () =>
+      wallView.status === 'loaded'
+        ? buildObservationWallContract(wallView.wall.entries, fleetGridColumns(viewportWidth)).focusables
+        : [],
+    [wallView, viewportWidth],
+  );
+
   const fleetFocusables = useMemo(
     () =>
       fleet.status === 'loaded'
@@ -378,7 +473,12 @@ export default function CockpitPage() {
     return buildQuayInFlightContract(boardFleetProjectId, boardView.snapshot.inFlight)?.focusables ?? [];
   }, [view, boardView, boardFleetProjectId]);
 
-  const focusables = view.type === 'fleet' ? fleetFocusables : boardFocusables;
+  const focusables =
+    view.type === 'wall'
+      ? wallFocusables
+      : view.type === 'fleet'
+        ? fleetFocusables
+        : boardFocusables;
   // Focus is the hub's: the page only looks the address up in the set it is drawing. An address
   // the current view does not declare renders as "no focus" (never as a local fallback).
   const focusObject = useMemo(
@@ -389,11 +489,12 @@ export default function CockpitPage() {
     [focusables, hubState.focusUri],
   );
 
-  // Restore a deep-linked view into the hub once the fleet roster can translate it.
+  // Restore a deep-linked BOARD into the hub once the fleet roster can translate it, so a
+  // key/utterance that follows addresses the board the person opened.
   useEffect(() => {
     if (seededRef.current || fleet.status !== 'loaded') return;
     seededRef.current = true;
-    if (urlView.type === 'fleet') return;
+    if (urlView.type !== 'board') return;
     // The hub already has a view (another display drove it): the URL is stale, the hub wins.
     if (hubState.rev !== 0 || hubState.view.type !== 'fleet') return;
     const segment = fleetSegmentForView(projects, urlView);
@@ -419,12 +520,12 @@ export default function CockpitPage() {
     [boardFleetProjectId, focusables, projects, view],
   );
   const visibleReportKey = JSON.stringify(visibleReport);
-  // True when the hub's view is the one this page is drawing. A deep link to a project the
-  // fleet has not registered has no hub address, so the page keeps rendering its URL view and
-  // does NOT report a stage the hub cannot describe (reporting would flip the hub to `fleet`
-  // and take the board away with it).
+  // True when the hub's view is one this page can describe. The wall and 「全部项目」 are both
+  // the hub's `fleet` stage (the wall adds objects the fleet grid does not address); a board is
+  // described only when the fleet registry can mint its address. A deep link to an unregistered
+  // project therefore keeps its board and does NOT report a stage the hub cannot describe.
   const hubDescribesView = useMemo(() => {
-    if (view.type === 'fleet') return hubState.view.type === 'fleet';
+    if (view.type !== 'board') return hubState.view.type === 'fleet';
     const segment = fleetSegmentForView(projects, view);
     return (
       segment !== null &&
@@ -447,20 +548,194 @@ export default function CockpitPage() {
     reportVisible(visibleReportRef.current);
   }, [fleet.status, hub.connected, hubDescribesView, reportVisible, visibleReportKey]);
 
-  // The URL follows the hub's view, so a view is linkable and a reload restores it. Replace,
-  // not push: the browser's back stack is not this stage's history (the hub's stack is).
-  // Compared as VIEWS, not as strings: `/cockpit` and `?view=fleet` are the same stage, and
-  // rewriting an empty query to an explicit one would be a navigation nobody asked for.
-  const viewPath = cockpitViewPath(view);
+  // A hub-originated board intent becomes a browser navigation (PUSH), so 「后退」 returns to
+  // the view the person came from. Wall/「全部项目」 are page-local views: the hub never needs to
+  // name them, and turning every key press into a history entry would be noise.
+  const lastHubViewRef = useRef<string>('fleet');
   useEffect(() => {
-    const current = parseCockpitView(location.search);
-    const alreadyThere =
-      current.type === view.type &&
-      (view.type === 'fleet' ||
-        (current.type === 'board' && current.project === view.project));
-    if (alreadyThere) return;
-    navigate(viewPath, { replace: true });
-  }, [location.search, navigate, view, viewPath]);
+    if (hubState.rev === 0) return;
+    const key =
+      hubState.view.type === 'board' ? `board:${hubState.view.project.toLowerCase()}` : 'fleet';
+    if (lastHubViewRef.current === key) return;
+    lastHubViewRef.current = key;
+    if (hubState.view.type === 'board') {
+      const target = cockpitViewForHubView(projects, hubState.view);
+      const segment = target.type === 'board' ? target.project : hubState.view.project;
+      // The URL already describes this board (possibly with `?debug=1`): not a navigation.
+      if (urlView.type === 'board' && urlView.project.toLowerCase() === segment.toLowerCase()) {
+        return;
+      }
+      navigate(withDebugQuery(cockpitViewPath({ type: 'board', project: segment }), location.search));
+      return;
+    }
+    // The hub went back to its fleet stage: follow it from a board to the wall.
+    if (urlView.type === 'board') {
+      navigate(withDebugQuery(cockpitViewPath({ type: 'wall' }), location.search));
+    }
+  }, [hubState.rev, hubState.view, location.search, navigate, projects, urlView.type]);
+
+  // A URL stored by an older cockpit carries the CloudCLI project id. Once the roster can
+  // translate it, rewrite it to the fleet registry id with REPLACE — the same view, spelled in
+  // the address space the rest of the app uses, so no history entry is added for the rename.
+  useEffect(() => {
+    if (urlView.type !== 'board' || fleet.status !== 'loaded') return;
+    const project = resolveCockpitProject(projects, urlView.project);
+    const fleetId = project?.fleetProjectId ?? null;
+    if (fleetId === null || fleetId === urlView.project) return;
+    navigate(withDebugQuery(cockpitViewPath({ type: 'board', project: fleetId }), location.search), {
+      replace: true,
+    });
+  }, [fleet.status, location.search, navigate, projects, urlView]);
+
+  // The wall's liveness labels are re-derived on a slow tick ("3 min ago" must not freeze).
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), LIVENESS_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // The preview's entry, resolved from the live wall. A tile a re-read removes closes the
+  // preview instead of leaving a stale object on the stage.
+  const wallPreviewEntry = useMemo<ObservationWallEntry | null>(
+    () =>
+      wallPreviewUri === null
+        ? null
+        : wallEntries.find((entry) => entry.object.uri === wallPreviewUri) ?? null,
+    [wallEntries, wallPreviewUri],
+  );
+  useEffect(() => {
+    if (wallPreviewUri !== null && wallView.status === 'loaded' && wallPreviewEntry === null) {
+      setWallPreviewUri(null);
+    }
+  }, [wallPreviewEntry, wallPreviewUri, wallView.status]);
+
+  /**
+   * Opening a tile's preview. THE OPEN IS THE SEE: one `POST /seen` for this open, then the
+   * local wall drops the object's deltas (the cursor is the server's, so they clear on every
+   * device). 「稍后再看」 closes without this call — that is the whole difference.
+   */
+  const openWallEntry = useCallback(
+    (uri: string) => {
+      const entry = wallEntries.find((candidate) => candidate.object.uri === uri);
+      if (entry === undefined) return;
+      setWallPreviewUri(uri);
+      void markObservationSeen(entry.object.uri, entry.object.revision)
+        .then(() => observation.applySeen(entry.object.uri, entry.object.revision))
+        .catch((error) => {
+          setEcho({
+            kind: 'refused',
+            text: t('cockpit.observationSeenFailed'),
+            reason: error instanceof Error ? error.message : '',
+            next: t('cockpit.observationSeenNext'),
+          });
+        });
+    },
+    [observation, t, wallEntries],
+  );
+
+  const closeWallPreview = useCallback(() => setWallPreviewUri(null), []);
+
+  /** Pin / unpin one wall object. The wall is re-read so the tile's residency is the server's. */
+  const toggleWallPin = useCallback(
+    async (uri: string) => {
+      const entry = wallEntries.find((candidate) => candidate.object.uri === uri);
+      if (entry === undefined) return;
+      setWallPinPendingUri(uri);
+      try {
+        await toggleObservationPin(uri, !entry.pinned);
+        await observation.reload();
+        setEcho({
+          kind: 'done',
+          text: t(entry.pinned ? 'cockpit.observationUnpinnedEcho' : 'cockpit.observationPinnedEcho', {
+            title: entry.object.title,
+          }),
+        });
+      } catch (error) {
+        setEcho({
+          kind: 'refused',
+          text: t('cockpit.observationPinFailed'),
+          reason: error instanceof Error ? error.message : '',
+          next: t('cockpit.observationPinNext'),
+        });
+      } finally {
+        setWallPinPendingUri(null);
+      }
+    },
+    [observation, t, wallEntries],
+  );
+
+  /** A session tile's one door into the conversation, and its reason when it has no id. */
+  const openWallSession = useCallback(() => {
+    if (wallPreviewEntry === null) return;
+    const parsed = parseObservationUri(wallPreviewEntry.object.uri);
+    if (parsed === null || parsed.kind !== 'session') return;
+    navigate(`/session/${encodeURIComponent(parsed.id)}`);
+  }, [navigate, wallPreviewEntry]);
+
+  /**
+   * Architecture tiles open the architecture tab with the changed entity focused
+   * (`?entity=` is the tab's own deep-link parameter). The digest carries the session the
+   * graph was read from; without it there is no tab to open, and the preview states that.
+   */
+  const wallArchitectureSessionId = useMemo(() => {
+    if (wallPreviewEntry === null || wallPreviewEntry.object.kind !== 'architecture') return null;
+    const digest = wallPreviewEntry.object.digest;
+    for (const key of ['sessionId', 'session', 'sourceSessionId']) {
+      const value = digest[key];
+      if (typeof value === 'string' && value.trim() !== '') return value.trim();
+    }
+    return null;
+  }, [wallPreviewEntry]);
+
+  const openWallArchitecture = useCallback(() => {
+    if (wallArchitectureSessionId === null) return;
+    const digest = wallPreviewEntry?.object.digest ?? {};
+    const entityCandidate = [digest.entityId, digest.entity, digest.focusEntity].find(
+      (value): value is string => typeof value === 'string' && value.trim() !== '',
+    );
+    const search = new URLSearchParams();
+    if (entityCandidate !== undefined) search.set('entity', entityCandidate);
+    const suffix = search.toString();
+    navigate(
+      `/session/${encodeURIComponent(wallArchitectureSessionId)}/architecture${suffix === '' ? '' : `?${suffix}`}`,
+    );
+  }, [navigate, wallArchitectureSessionId, wallPreviewEntry]);
+
+  // Every input gets an echo. The hub's answer is what decides which of the three shapes it is:
+  // a confirmation card (needs confirmation), an unmatched phrase (refused, with the reason and
+  // the next step), or any other hub revision after a submit (done — including a repeat of the
+  // view the person is already on).
+  useEffect(() => {
+    const pending = hubState.pendingSend;
+    if (pending !== null) {
+      echoArmedRef.current = false;
+      if (pending.target === null) {
+        setEcho({
+          kind: 'refused',
+          text: t('cockpit.echoUnmatched', { text: pending.text }),
+          reason:
+            pending.reason === 'no-focus'
+              ? t('cockpit.noFocusTarget', { text: pending.text })
+              : t('cockpit.noTargetSession', { text: pending.text }),
+          next: t('cockpit.echoUnmatchedNext'),
+        });
+      } else {
+        setEcho({ kind: 'confirm', text: t('cockpit.echoConfirm', { text: pending.text }) });
+      }
+      return;
+    }
+    if (!echoArmedRef.current) return;
+    if (hubState.rev <= echoSubmitRevRef.current) return;
+    echoArmedRef.current = false;
+    setEcho({ kind: 'done', text: t('cockpit.echoDone', { text: lastSubmittedTextRef.current }) });
+  }, [hubState.pendingSend, hubState.rev, t]);
+
+  // The done/refused echo disappears after a few seconds; a confirmation lives exactly as long
+  // as the card it belongs to.
+  useEffect(() => {
+    if (echo === null || echo.kind === 'confirm') return undefined;
+    const timer = window.setTimeout(() => setEcho(null), COCKPIT_ECHO_TTL_MS);
+    return () => window.clearTimeout(timer);
+  }, [echo]);
 
   /**
    * The send seam's explicit 「钉选」 action. It writes to the fleet registry, then tells the hub
@@ -524,22 +799,43 @@ export default function CockpitPage() {
         input: text,
         startedAt: performance.now(),
       };
+      // Arm the echo BEFORE the event leaves: the hub's answer may arrive on the very next frame.
+      echoArmedRef.current = true;
+      echoSubmitRevRef.current = hubState.rev;
+      lastSubmittedTextRef.current = text;
       hub.dispatch({ type: 'utterance', text });
     },
-    [hub],
+    [hub, hubState.rev],
   );
 
   const confirmSend = useCallback(() => {
     const target = hubState.pendingSend?.target;
     hub.dispatch({ type: 'confirm' });
     setPinNotice(null);
+    setEcho({ kind: 'done', text: t('cockpit.echoSent') });
     if (target?.projectId != null) setSentProjectId(target.projectId);
-  }, [hub, hubState.pendingSend]);
+  }, [hub, hubState.pendingSend, t]);
 
   const cancelSend = useCallback(() => {
     hub.dispatch({ type: 'cancel' });
     setPinNotice(null);
-  }, [hub]);
+    setEcho({ kind: 'done', text: t('cockpit.echoCancelled') });
+  }, [hub, t]);
+
+  /**
+   * A page-local view switch (wall ⇄ 「全部项目」). A PUSH, so the browser's back returns to the
+   * previous view; a repeat of the view already drawn is not a navigation and adds no entry.
+   */
+  const switchView = useCallback(
+    (next: CockpitView) => {
+      const alreadyThere =
+        next.type === view.type &&
+        (next.type !== 'board' || (view.type === 'board' && next.project === view.project));
+      if (alreadyThere) return;
+      navigate(withDebugQuery(cockpitViewPath(next), location.search));
+    },
+    [location.search, navigate, view],
+  );
 
   /** The hub's view, from a pointer on a fleet tile: address it and let the hub stack it. */
   const openProject = useCallback(
@@ -597,6 +893,13 @@ export default function CockpitPage() {
           break;
         case 'Enter':
           event.preventDefault();
+          // On the wall, Enter opens the focused object's in-place preview. The hub's zoom is
+          // a BOARD gesture (`quay://…/board`); an observation URI is not a board address, so
+          // the wall's preview is the page's own transition rather than a stated no-op.
+          if (view.type === 'wall' && focusObject !== null) {
+            openWallEntry(focusObject.uri);
+            break;
+          }
           pendingTimingRef.current = {
             source: 'key',
             input: 'Enter',
@@ -606,6 +909,11 @@ export default function CockpitPage() {
           break;
         case 'Backspace':
           event.preventDefault();
+          // A preview is the innermost stage: Backspace closes it before it pops the view.
+          if (wallPreviewUri !== null) {
+            closeWallPreview();
+            break;
+          }
           pendingTimingRef.current = {
             source: 'key',
             input: 'Backspace',
@@ -629,7 +937,17 @@ export default function CockpitPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cancelSend, confirmSend, hub, hubState.pendingSend]);
+  }, [
+    cancelSend,
+    closeWallPreview,
+    confirmSend,
+    focusObject,
+    hub,
+    hubState.pendingSend,
+    openWallEntry,
+    view.type,
+    wallPreviewUri,
+  ]);
 
   // One reading for the initial URL-driven mount: how long the first stage took to appear.
   useEffect(() => {
@@ -643,7 +961,7 @@ export default function CockpitPage() {
     if (hubState.pendingSend !== null) pendingTimingRef.current = null;
   }, [hubState.pendingSend]);
 
-  const viewKey = view.type === 'board' ? `board:${view.project}` : 'fleet';
+  const viewKey = view.type === 'board' ? `board:${view.project}` : view.type;
   useEffect(() => {
     const pending = pendingTimingRef.current;
     if (pending === null) return;
@@ -664,6 +982,20 @@ export default function CockpitPage() {
           return segment !== null &&
             focusObject.uri.toLowerCase().startsWith(`quay://${segment.toLowerCase()}/`);
         })?.name ?? null;
+  // The status bar names what the person calls the object, never its storage address. On the
+  // wall that is the tile's title; on a board it is the task id, or the ordinal when the object
+  // is not a task. The raw `quay://` / `cloudcli://` handle lives behind `?debug=1` only.
+  const focusedHumanLabel =
+    focusObject === null
+      ? null
+      : view.type === 'wall'
+        ? (wallEntries.find((entry) => entry.object.uri === focusObject.uri)?.object.title ??
+          focusObject.label)
+        : (() => {
+            const parsed = focusObject.uri.startsWith('quay://') ? focusObject.uri.split('/') : [];
+            // quay://<project>/task/<id> — the id is the readable part.
+            return parsed.length >= 5 && parsed[3] === 'task' ? parsed[4]! : focusObject.label;
+          })();
 
   const pendingSend: CockpitPendingSend | null = hubState.pendingSend;
   const pendingTarget = pendingSend?.target ?? null;
@@ -687,58 +1019,116 @@ export default function CockpitPage() {
       data-cockpit-timings={JSON.stringify(timings)}
       data-cockpit-hub-rev={hubState.rev}
       data-cockpit-hub-view={JSON.stringify(hubState.view)}
+      data-cockpit-focus-uri={focusObject?.uri ?? undefined}
+      data-cockpit-debug={debug ? 'true' : undefined}
     >
-      <header className="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-2">
-        <div className="flex items-center gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="text-sm font-semibold">{t('cockpit.title')}</span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {t('cockpit.readOnly')}
+          <span className="text-xs text-muted-foreground" data-testid="cockpit-view-label">
+            {view.type === 'wall'
+              ? t('cockpit.wallView')
+              : view.type === 'fleet'
+                ? t('cockpit.fleetView')
+                : `${t('cockpit.boardView')} · ${viewProject?.name ?? view.project}`}
           </span>
-          <span className="text-[11px] text-muted-foreground" data-testid="cockpit-view-label">
-            {view.type === 'fleet'
-              ? t('cockpit.fleetView')
-              : `${t('cockpit.boardView')} · ${viewProject?.name ?? view.project}`}
-          </span>
+          {/*
+            When every producer is healthy the wall's own tile is absent — the layer has nothing
+            to say. One quiet timestamp says it is alive without spending the top of the page on
+            an all-green statement: 「各生产者最近更新」.
+          */}
+          {wallView.status === 'loaded' &&
+            wallView.wall.producers.length > 0 &&
+            wallView.wall.producers.every((producer) => producer.state === 'ok') &&
+            latestProducerRunAt(wallView.wall) !== null && (
+              <span
+                className="text-xs text-muted-foreground"
+                data-testid="cockpit-producers-ok"
+                data-last-run-at={latestProducerRunAt(wallView.wall)}
+              >
+                {t('cockpit.observationProducersOk')}
+              </span>
+            )}
         </div>
-        <span className="hidden text-[11px] text-muted-foreground sm:block" data-testid="cockpit-key-hint">
+        <span className="hidden text-xs text-muted-foreground sm:block" data-testid="cockpit-key-hint">
           {t('cockpit.keyHint')}
         </span>
         {/* The same switch the sidebar header draws, with this page's segment active: that is
             the way back to the session list (no separate 「返回」 link to drift from it). */}
         <SidebarModeSwitch mode="cockpit" t={t} />
-        {/*
-          The phone remote's door: the stage shows the address, the phone scans it. No token is
-          minted — the remote is behind the same login, and the hub binds a device to the signed-in
-          user's state, so the code only has to carry the URL.
-        */}
-        <div
-          className="hidden items-center gap-2 sm:flex"
-          data-testid="cockpit-remote-panel"
-          data-cockpit-remote-url={remoteUrl}
+        {/* The phone remote is one button, not a permanent QR in the header. */}
+        <button
+          type="button"
+          onClick={() => setRemoteOpen((open) => !open)}
+          aria-expanded={remoteOpen}
+          className="min-h-11 min-w-11 rounded border border-border/60 px-2 text-xs text-foreground hover:bg-accent sm:min-h-0 sm:py-0.5"
+          data-testid="cockpit-remote-toggle"
         >
-          <RemoteQr value={remoteUrl} title={t('cockpit.remoteScanHint')} />
-          <div className="flex max-w-40 flex-col text-[10px] leading-tight text-muted-foreground">
-            <span className="text-[11px] font-medium text-foreground">{t('cockpit.remoteTitle')}</span>
-            <span>{t('cockpit.remoteScanHint')}</span>
-            <a href={remoteUrl} className="underline" data-testid="cockpit-remote-link">
-              {t('cockpit.remoteOpen')}
-            </a>
+          {t('cockpit.remoteTitle')}
+        </button>
+        {/*
+          The phone remote's door: no token is minted — the remote is behind the same login, and
+          the hub binds a device to the signed-in user's state, so the code only carries the URL.
+          Rendered ONLY after the person asks for it (the QR is noise for everyone else).
+        */}
+        {remoteOpen && (
+          <div
+            className="flex items-center gap-2"
+            data-testid="cockpit-remote-panel"
+            data-cockpit-remote-url={remoteUrl}
+          >
+            <RemoteQr value={remoteUrl} title={t('cockpit.remoteScanHint')} />
+            <div className="flex max-w-40 flex-col gap-0.5 text-xs leading-tight text-muted-foreground">
+              <span className="font-medium text-foreground">{t('cockpit.remoteTitle')}</span>
+              <span>{t('cockpit.remoteScanHint')}</span>
+              <a href={remoteUrl} className="underline" data-testid="cockpit-remote-link">
+                {t('cockpit.remoteOpen')}
+              </a>
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {/*
+          On a phone the strip becomes a horizontal row above the stage: the same two view
+          switches and the same project list, without a fixed 12rem column that would push the
+          single-column wall into horizontal overflow.
+        */}
         <aside
-          className="flex w-48 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border/40 p-3"
+          className="flex w-full shrink-0 flex-row gap-1 overflow-x-auto border-b border-border/40 p-2 md:w-48 md:flex-col md:overflow-y-auto md:border-b-0 md:border-r md:p-3"
           data-testid="cockpit-project-strip"
           // The strip is navigation chrome, NOT part of the stage's focus contract: the fleet
           // tiles are the declared objects, and declaring the same project twice would make
           // 「第二个」 ambiguous.
           aria-label={t('cockpit.projectStrip')}
         >
-          <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <p className="mb-1 hidden shrink-0 text-xs uppercase tracking-wide text-muted-foreground md:block">
             {t('cockpit.projectStrip')}
           </p>
+          {/*
+            Two page-local views, above the project list: the observation wall (home) and
+            「全部项目」 (the old fleet grid, demoted from the landing page). Each switch is a
+            browser navigation, so the back button returns to the previous view.
+          */}
+          <button
+            type="button"
+            onClick={() => switchView({ type: 'wall' })}
+            aria-current={view.type === 'wall' ? 'page' : undefined}
+            className="min-h-11 shrink-0 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
+            data-testid="cockpit-nav-wall"
+          >
+            {t('cockpit.wallView')}
+          </button>
+          <button
+            type="button"
+            onClick={() => switchView({ type: 'fleet' })}
+            aria-current={view.type === 'fleet' ? 'page' : undefined}
+            className="min-h-11 shrink-0 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
+            data-testid="cockpit-nav-fleet"
+          >
+            {t('cockpit.fleetView')}
+          </button>
           {fleet.status === 'loading' && (
             <p className="text-xs text-muted-foreground">{t('cockpit.loading')}</p>
           )}
@@ -757,14 +1147,14 @@ export default function CockpitPage() {
               key={project.projectId}
               type="button"
               onClick={() => openProject(project)}
-              className="truncate rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent"
+              className="min-h-11 shrink-0 truncate rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
               data-testid="cockpit-project-strip-item"
               data-cockpit-sent={sentProjectId === project.projectId ? 'true' : undefined}
               title={project.projectPath}
             >
               {project.name}
               {sentProjectId === project.projectId && (
-                <span className="ml-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+                <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
                   {t('cockpit.sent')}
                 </span>
               )}
@@ -785,22 +1175,41 @@ export default function CockpitPage() {
           boardProjectId={boardProjectId}
           boardView={boardView}
           onRefreshBoard={refreshBoard}
+          wallView={wallView}
+          wallFocusUri={focusObject?.uri ?? null}
+          wallNow={now}
+          wallPreview={wallPreviewEntry}
+          wallPinPendingUri={wallPinPendingUri}
+          wallArchitectureReason={
+            wallPreviewEntry !== null &&
+            wallPreviewEntry.object.kind === 'architecture' &&
+            wallArchitectureSessionId === null
+              ? t('cockpit.observationArchitectureUnavailable')
+              : null
+          }
+          onWallFocus={(uri) => hub.dispatch({ type: 'focus', uri: uri as QuayObjectUri })}
+          onWallOpen={openWallEntry}
+          onWallLater={closeWallPreview}
+          onWallTogglePin={(uri) => void toggleWallPin(uri)}
+          onWallOpenSession={openWallSession}
+          onWallOpenArchitecture={openWallArchitecture}
+          onReloadWall={() => void observation.reload()}
         />
       </div>
 
-      <footer className="border-t border-border/40 px-4 py-2" data-testid="cockpit-status">
-        <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-          <span data-testid="cockpit-focus" data-cockpit-focus={focusObject?.uri ?? undefined}>
-            {t('cockpit.focus')}: {focusObject?.uri ?? t('cockpit.noFocus')}
+      <footer className="shrink-0 border-t border-border/40 bg-background px-4 py-2" data-testid="cockpit-status">
+        <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {/*
+            The status bar says only what a person can read: the focused object's NAME, never its
+            storage handle. `quay://…`, first-frame timings and device ids are diagnostics and
+            live behind `?debug=1` below.
+          */}
+          <span data-testid="cockpit-focus">
+            {t('cockpit.focus')}: {focusedHumanLabel ?? t('cockpit.noFocus')}
           </span>
-          {focusedProjectName !== null && (
+          {focusObject !== null && focusedProjectName !== null && (
             <span data-testid="cockpit-focus-name">
-              {focusObject?.label} · {focusedProjectName}
-            </span>
-          )}
-          {focusObject !== null && focusedProjectName === null && (
-            <span data-testid="cockpit-focus-name">
-              {focusObject.label} · {focusObject.display.status}
+              {focusedHumanLabel} · {focusedProjectName}
             </span>
           )}
           {/*
@@ -823,30 +1232,57 @@ export default function CockpitPage() {
                 : `quay-fleet${fleet.fleetBinPath === null ? '' : ` at ${fleet.fleetBinPath}`} did not complete the version handshake${fleet.fleetVersion === null ? '' : ` (v${fleet.fleetVersion})`} — continuing as compatible`}
             </span>
           )}
-          <span data-testid="cockpit-view-uri" data-cockpit-view-uri={viewUri ?? undefined}>
-            {viewUri ?? ''}
-          </span>
-          {lastTiming !== null && (
-            <span data-testid="cockpit-timing">
-              {t('cockpit.timingLast', { ms: Math.round(lastTiming.ms) })}
-            </span>
-          )}
-          {/*
-            「来自手机」: which device produced the last event. The name is the browser's own
-            announcement, and the arrow is language-neutral, so this needs no translated
-            sentence to stay readable in every locale.
-          */}
-          {hubState.lastEventSource !== null && (
-            <span
-              data-testid="cockpit-event-source"
-              data-cockpit-source-role={hubState.lastEventSource.role}
-              data-cockpit-source-device={hubState.lastEventSource.deviceId}
-              title={hubState.lastEventSource.deviceId}
-            >
-              ← {hubState.lastEventSource.deviceName ?? hubState.lastEventSource.deviceId}
+          {debug && (
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1" data-testid="cockpit-debug">
+              <span data-testid="cockpit-view-uri" data-cockpit-view-uri={viewUri ?? undefined}>
+                {viewUri ?? ''}
+              </span>
+              <span data-testid="cockpit-focus-uri" data-cockpit-focus={focusObject?.uri ?? undefined}>
+                {focusObject?.uri ?? ''}
+              </span>
+              {lastTiming !== null && (
+                <span data-testid="cockpit-timing">
+                  {t('cockpit.timingLast', { ms: Math.round(lastTiming.ms) })}
+                </span>
+              )}
+              {hubState.lastEventSource !== null && (
+                <span
+                  data-testid="cockpit-event-source"
+                  data-cockpit-source-role={hubState.lastEventSource.role}
+                  data-cockpit-source-device={hubState.lastEventSource.deviceId}
+                  title={hubState.lastEventSource.deviceId}
+                >
+                  ← {hubState.lastEventSource.deviceName ?? hubState.lastEventSource.deviceId}
+                </span>
+              )}
             </span>
           )}
         </div>
+
+        {/* Every input gets an echo; done/refused fade after a few seconds, confirmation waits. */}
+        {echo !== null && (
+          <div
+            role="status"
+            className={
+              echo.kind === 'refused'
+                ? 'mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-200'
+                : 'mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-border/60 bg-muted/40 px-2 py-1 text-xs text-foreground'
+            }
+            data-testid="cockpit-echo"
+            data-echo-kind={echo.kind}
+          >
+            <span data-testid="cockpit-echo-text">
+              {echo.kind === 'refused' ? '⚠ ' : echo.kind === 'confirm' ? '? ' : '✓ '}
+              {echo.text}
+            </span>
+            {echo.reason !== undefined && echo.reason !== '' && (
+              <span data-testid="cockpit-echo-reason">{echo.reason}</span>
+            )}
+            {echo.next !== undefined && echo.next !== '' && (
+              <span data-testid="cockpit-echo-next">{echo.next}</span>
+            )}
+          </div>
+        )}
 
         {/*
           A phrase the hub could not place is stated verbatim rather than guessed at. When the

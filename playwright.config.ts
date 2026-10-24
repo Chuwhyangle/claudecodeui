@@ -679,6 +679,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // interaction-heavy entries' value and clears that measurement with room for a load-slowed
   // fan-in run, rather than leaving the file to the 55 s single-file default.
   'cockpit-remote.spec.ts': 240_000,
+  // The observation wall's layout criterion: three real pages (PC 1440×900, phone 390×844, and
+  // the phone control arm) against the stubbed wall, each reading computed typography, contrast,
+  // tap targets and the last tile's box against the bottom bar — plus the control arm that
+  // injects a fixed transparent bar and re-reads through the same function) and two DoD
+  // walkthroughs (pin five objects, open a preview, watch the delta clear, browser-back; then
+  // the same path on a phone). MEASURED on this worktree 2026-10-24: `5 passed (19.5s)` for the
+  // whole invocation (config evaluation, both webServers' boot and all five browser launches
+  // included; the three layout cases alone read 16.9s). 240_000 is the sibling cockpit entries'
+  // value and clears that measurement ~12x, leaving room for a load-slowed fan-in run.
+  'cockpit-observation-wall.spec.ts': 240_000,
 };
 
 /**
