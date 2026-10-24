@@ -31,8 +31,8 @@ depends_on:
 ## DoD
 
 - 在 claudecodeui 上选两个相隔若干次落地的提交生成差分，贴出结果并人工核对至少一条环/边的真实性。
-- - **浏览器实际操作 + 截图（必做，PC 1440×900 与移动 390×844 各一套）**，截图存 `tmp/`；场景运行器可用时补场景与报告（AGENTS.md「UI 验证」）。
-- - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
+- **浏览器实际操作 + 截图（必做，PC 1440×900 与移动 390×844 各一套）**，截图存 `tmp/`；场景运行器可用时补场景与报告（AGENTS.md「UI 验证」）。
+- 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
 
 ## Touches
 
