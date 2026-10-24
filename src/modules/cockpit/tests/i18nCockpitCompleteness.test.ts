@@ -118,6 +118,89 @@ describe('every locale carries the cockpit copy', () => {
     expect(placeholders(reference.attentionUnavailable)).toEqual(['reason']);
   });
 
+  // The observation wall's copy is a second surface with its own sentences: the three-state
+  // readings, the liveness labels, the tile/preview actions and the three input echoes. Naming
+  // them here keeps a rename from being "covered" by the generic loop while every locale
+  // silently falls back to English — and the count-bearing sentences keep their placeholders.
+  it('covers the observation wall and its echoes', () => {
+    const required = [
+      'wallView',
+      'observationStateOk',
+      'observationStateAttention',
+      'observationStateRed',
+      'observationStateUnevaluated',
+      'observationKindSession',
+      'observationKindProject',
+      'observationKindArchitecture',
+      'observationTemporary',
+      'observationUnseen',
+      'observationPin',
+      'observationUnpin',
+      'observationPinned',
+      'observationAutoSurfaced',
+      'observationOpen',
+      'observationTileLabel',
+      'observationCollapsed',
+      'observationEmpty',
+      'observationError',
+      'observationSelfTitle',
+      'observationSelfLastRun',
+      'observationSelfNeverRan',
+      'observationNoReason',
+      'observationNoSummary',
+      'observationJustNow',
+      'observationMinutesAgo',
+      'observationHoursAgo',
+      'observationDaysAgo',
+      'observationRevision',
+      'observationPreviewLabel',
+      'observationLater',
+      'observationRecentTurn',
+      'observationChanges',
+      'observationNoChanges',
+      'observationTests',
+      'observationNoTests',
+      'observationFiveLayers',
+      'observationNoDigest',
+      'observationDeltas',
+      'observationNoDeltas',
+      'observationDiffs',
+      'observationOpenArchitecture',
+      'observationOpenSession',
+      'observationArchitectureUnavailable',
+      'observationProducersOk',
+      'observationSeenFailed',
+      'observationSeenNext',
+      'observationPinnedEcho',
+      'observationUnpinnedEcho',
+      'observationPinFailed',
+      'observationPinNext',
+      'echoDone',
+      'echoSent',
+      'echoCancelled',
+      'echoUnmatched',
+      'echoUnmatchedNext',
+      'echoConfirm',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(reference.observationUnseen)).toEqual(['n']);
+    expect(placeholders(reference.observationCollapsed)).toEqual(['n']);
+    expect(placeholders(reference.observationTileLabel)).toEqual(['position', 'state', 'title']);
+    expect(placeholders(reference.observationSelfLastRun)).toEqual(['time']);
+    expect(placeholders(reference.observationRevision)).toEqual(['revision']);
+    expect(placeholders(reference.observationPinnedEcho)).toEqual(['title']);
+    expect(placeholders(reference.observationUnpinnedEcho)).toEqual(['title']);
+    expect(placeholders(reference.echoDone)).toEqual(['text']);
+    expect(placeholders(reference.echoUnmatched)).toEqual(['text']);
+    expect(placeholders(reference.echoConfirm)).toEqual(['text']);
+    for (const key of ['observationMinutesAgo', 'observationHoursAgo', 'observationDaysAgo']) {
+      expect(placeholders(reference[key]), `cockpit.${key}`).toEqual(['n']);
+    }
+  });
+
   // Positive control: the same checker must reject a missing block, a blank value, a key-copied
   // value and a dropped placeholder. Without this the green above could not go red.
   it('rejects a missing, blank, key-copied or placeholder-dropping block (positive control)', () => {
