@@ -54,8 +54,10 @@ extra: {}
 - server/modules/system/system.service.ts
 - server/modules/system/system.module.ts
 - server/index.ts
+- server/shared/tests/quay-test-script.test.ts
 - scripts/write-client-build-info.mjs (new)
 - scripts/write-client-build-info.test.mjs (new)
+- scripts/suite-duration-baseline.tsv
 - package.json
 - src/shared/api.ts
 - src/modules/cockpit/DeployReadiness.tsx (new)
@@ -86,6 +88,7 @@ extra: {}
 - AC4：`node --test scripts/write-client-build-info.test.mjs` → 2 pass / 0 fail。
 - AC5：`npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` → 12 pass；同轮 `i18nCockpitCompleteness.test.ts` → 9 pass。
 - AC6：`npm run typecheck` 通过；12 个 locale 均补齐 `deploy*` 文案（任一 locale 缺键或丢占位符都会被完整性用例打红）。
+- 新增 server 测试文件的套件钉子：`server/shared/tests/quay-test-script.test.ts` 的收集数 427→428（AC2 unknown 424→425、AC3 426→427），`scripts/suite-duration-baseline.tsv` 增加本文件的时长行，使 AC7 的 90% 覆盖底线保持在上方（385/428→386/428）。该文件 14 项全绿。
 - DoD 浏览器（独立 Playwright；隔离实例 API `:3101` + vite `:5174`，独立 DB，`residentRestore.enabled=false`，重启指向桩脚本，未触碰 `:3001`）：
   - `tmp/deploy-verify/1-pending-build.png` — 驾驶舱常驻条：「1 change not yet built · Build and restart」。
   - `tmp/deploy-verify/2-confirm-panel.png` — 确认面板列出将生效提交与「重启期间页面会断开数秒」；确认前 deploy 请求 0 次。
