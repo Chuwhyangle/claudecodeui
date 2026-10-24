@@ -1132,6 +1132,13 @@ export type FetchHistoryOptions = {
  */
 export type FetchHistoryResult = {
   messages: NormalizedMessage[];
+  /**
+   * Absolute 0-based subscript of `messages[0]` in the full normalized
+   * history. Optional on the provider contract so each reader need not
+   * recompute what `sliceTailPage` already knows; the sessions service fills
+   * it in from `total`, `offset` and the page length on every route.
+   */
+  startIndex?: number;
   total: number;
   hasMore: boolean;
   offset: number;

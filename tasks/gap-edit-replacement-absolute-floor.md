@@ -1,7 +1,7 @@
 ---
 id: gap-edit-replacement-absolute-floor
 title: 编辑重发：replacement 的退休改用绝对切点 + 窗口原点（阶段 1 止血）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -80,6 +80,7 @@ depends_on:
 - **AC7**：`npm run typecheck` 退出码 **0**（client + server + scripts 三个 tsconfig）；`npm run lint` 退出码 **0**（仅既有 warning，无 error）。全部测试均按单文件直接运行，无 `--test` fan-out。
 - **独立缺口登记（Plan §4）**：`cutIndex < 0` 且本客户端**没有** replacement 行的路径（典型：另一标签页持有的窗口比被编辑锚点更新，它只收到 `history_truncated`）仍是 no-op——本条保证编辑者自己的替换行有绝对 floor，但不保证第三方旧窗口能截断不可见的旧行。该缺口不在阶段 1 范围，留给身份贯通阶段。
 - **交付状态**：实现提交 `c679313c1`（8 个 Touches 内文件）；`docs/proposals/transcript-authored-message-identity.md` 在 develop 上不存在（仅在 author checkout 未跟踪），本条未改动它，也未新增该文件。所有探针已删除（`grep -rn __gapEdit src server` 为空）。
+- **续轮：fan-in suite 红（兄弟判据旧设计）**：fan-in 的 suite 腿红在 `server/modules/providers/tests/session-window-around.test.ts`（AC-210 判据），该文件不在本条的源码 delta 内。按提示先单文件复现，**复现成功**（非环境抖动）：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/session-window-around.test.ts` 退出码 **1**，逐字 `AssertionError [ERR_ASSERTION]: limit=10 offset=0 diverged from the tail contract`；读数 `actual.startIndex=1230`、`expected.startIndex=0`，其余字段（messages/total/hasMore/offset/limit/tokenUsage）逐字相同。真实原因：本条 AC3 给 `fetchHistory` 信封新增的 `startIndex` 是**按页**的绝对原点（约束尾页为 `total - page.length`），而该兄弟判据把整个信封与 `{...full, …}`（整段读的 `full.startIndex=0`）做 `deepEqual`——既有的 tail 契约字段未变，变宽的是信封本身。处理（非「取 develop 版本」）：在该判据的期望信封上补 `startIndex = Math.max(0, full.total - offset - page.length)`，从**同一套切片算术**推导而非复制响应值（页报错原点仍会红），并在文件头注明该字段的来源与不变量；同时把该文件登记进 Touches。修后：`session-window-around.test.ts` **7/7 pass** 退出码 **0**；`sessions.service.test.ts` **9/9 pass** 退出码 **0**；`npm run typecheck` 退出码 **0**。
 
 ## Touches
 
@@ -91,5 +92,14 @@ depends_on:
 - server/shared/types.ts
 - server/modules/providers/services/sessions.service.ts
 - server/modules/providers/tests/sessions.service.test.ts
+- server/modules/providers/tests/session-window-around.test.ts
 - docs/proposals/transcript-authored-message-identity.md
 - tasks/gap-edit-replacement-absolute-floor.md
+
+## Blocker
+
+**2026-10-24T08:28:39.434Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/session-window-around.test.ts:   AssertionError [ERR_ASSERTION]: limit=10 offset=0 diverged from the tail contract
+- run_id：wk-prod-anchor
+- session_id：c76de98d-ae10-4159-831b-7501838ffddd

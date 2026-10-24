@@ -94,6 +94,82 @@ describe('truncateAt', () => {
     assert.equal(result.current.getMessages('session-1').length, 4);
   });
 
+  it('stamps an absolute floor when the anchor lives only in the live rows', async () => {
+    const { useSessionStore } = await import('@/modules/chat/hooks/useSessionStore');
+    const view = renderHook(() => useSessionStore());
+
+    // A tail page whose absolute origin is 20. The message being edited is not
+    // on this page at all — it only exists as a live row — so the cut has no
+    // server row to drop and must not invent one.
+    sessionMessages.mockResolvedValue(tailPage(22, [
+      absoluteRow(20, 'kept one'),
+      absoluteRow(21, 'kept two'),
+    ]));
+    await act(async () => {
+      await view.result.current.fetchFromServer('session-1', { limit: 20, offset: 0 });
+    });
+
+    act(() => {
+      view.result.current.appendRealtime('session-1', {
+        ...absoluteRow(22, 'older prompt', 'u-old'),
+        id: 'local_anchor',
+      } as NormalizedMessage);
+      view.result.current.appendRealtime('session-1', {
+        ...absoluteRow(23, 'older prompt, corrected'),
+        id: 'local_replacement',
+        replacesAnchorId: 'u-old',
+      } as NormalizedMessage);
+      view.result.current.truncateAt('session-1', 'u-old');
+    });
+
+    const slot = view.result.current.getSessionSlot('session-1');
+    // No server row was cut: the window did not hold the anchor.
+    assert.deepEqual(
+      slot?.serverMessages.map((message) => message.content),
+      ['kept one', 'kept two'],
+    );
+    // The replacement survives, stamped with the window's absolute end — the
+    // earliest position a row persisted after this cut can occupy.
+    assert.deepEqual(
+      slot?.realtimeMessages.map((message) => message.id),
+      ['local_replacement'],
+    );
+    assert.equal(slot?.realtimeMessages[0]?.replacesAfterRowCount, 22);
+  });
+
+  it('leaves the store untouched when neither the anchor nor a replacement exists', async () => {
+    const { result } = await loadedStore();
+    const slotBefore = result.current.getSessionSlot('session-1');
+    assert.ok(slotBefore);
+    const messagesBefore = result.current.getMessages('session-1');
+    const serverRefBefore = slotBefore.serverMessages;
+    const realtimeRefBefore = slotBefore.realtimeMessages;
+    const countersBefore = {
+      startIndex: slotBefore.startIndex,
+      endIndex: slotBefore.endIndex,
+      total: slotBefore.total,
+      offset: slotBefore.offset,
+    };
+
+    act(() => {
+      result.current.truncateAt('session-1', 'not-here-either');
+    });
+
+    // Not a no-op that happens to draw the same rows: the cut wrote nothing.
+    assert.equal(slotBefore.serverMessages, serverRefBefore);
+    assert.equal(slotBefore.realtimeMessages, realtimeRefBefore);
+    assert.equal(result.current.getMessages('session-1'), messagesBefore);
+    assert.deepEqual(
+      {
+        startIndex: slotBefore.startIndex,
+        endIndex: slotBefore.endIndex,
+        total: slotBefore.total,
+        offset: slotBefore.offset,
+      },
+      countersBefore,
+    );
+  });
+
   it('clears rows that streamed for the turn being replaced', async () => {
     const { result } = await loadedStore();
 
@@ -324,7 +400,7 @@ function drawnEditedRows(view: Awaited<ReturnType<typeof windowShiftStore>>) {
 }
 
 describe('replacement rows across a sliding history window', () => {
-  it.fails('KNOWN GAP: a shifted window draws the edited user row twice', async () => {
+  it('retires the persisted replacement after the window origin moves', async () => {
     const view = await windowShiftStore();
 
     // The rewrite added one row, so the tail page now starts at absolute 21.
