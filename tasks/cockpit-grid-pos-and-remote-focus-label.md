@@ -1,7 +1,7 @@
 ---
 id: cockpit-grid-pos-and-remote-focus-label
 title: 驾驶舱：方向键按可视网格位置吸附（现按可聚焦序号）；遥控器焦点卡片显示对象名称
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
