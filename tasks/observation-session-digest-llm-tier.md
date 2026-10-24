@@ -1,7 +1,7 @@
 ---
 id: observation-session-digest-llm-tier
 title: 观察墙 T6：会话摘要第二档（LLM）——一句话结论/选项/跑偏提示，限频限量，用量可查
-status: ready
+status: done
 labels:
   - cockpit
   - observation

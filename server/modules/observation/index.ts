@@ -44,13 +44,19 @@ export {
 export type { ObservationKind, ObservationUri } from './observation-uri.js';
 // consumer: server/modules/websocket/services/chat-run-registry.service.ts, which fires the
 // producer once per terminal run event; the criterion can build its own instance over an
-// injected clock and transcript reader
-export { createSessionDigestProducer, sessionDigestProducer, SESSION_DIGEST_PRODUCER } from './session-digest.producer.js';
+// injected clock and transcript reader. `sessionDigestProducer` is the COMPOSED producer: the
+// deterministic write, then the bounded LLM tier, so the registry keeps calling one verb.
+export { createSessionDigestProducer, SESSION_DIGEST_PRODUCER } from './session-digest.producer.js';
 export type {
   SessionDigestProducer,
   SessionDigestProducerDeps,
   SessionTurnEndEvent,
 } from './session-digest.producer.js';
+// consumer: the run registry, which keeps calling ONE producer per terminal run event; the
+// composed value there is the deterministic write plus the bounded LLM tier. The tier's
+// factory, constants and settings helper stay out of the barrel: the tier criterion imports
+// them from their own files, and nothing else may reach the tier's knobs.
+export { sessionDigestProducer } from './session-digest-llm.js';
 export type {
   SessionActivity,
   SessionDigest,

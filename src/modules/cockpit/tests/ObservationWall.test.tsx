@@ -612,6 +612,71 @@ describe('seen and pins', () => {
   });
 });
 
+describe('the LLM digest tier', () => {
+  it('renders the model options as buttons, asks for confirmation, and sends exactly once', async () => {
+    // Give the watched session a second-tier reading: one conclusion, two reply options and a
+    // drift note that already carries the advisory marker the producer appends.
+    wallState.entries[0]!.object.digest.llm = {
+      state: 'evaluated',
+      conclusion: '登录刷新循环已修复。',
+      options: ['继续跑全量测试', '先补一条回归'],
+      driftNote: '偏离会话目标（语义判断，仅作建议）',
+      advisory: '语义判断，仅作建议',
+    };
+    renderCockpit();
+    await screen.findByTestId('observation-wall-tiles');
+
+    fireEvent.click(within(tileByUri('cloudcli://session/s1')).getByTestId('observation-tile-open'));
+    const preview = await screen.findByTestId('cockpit-observation-preview');
+
+    const options = within(preview).getAllByTestId('observation-preview-llm-option');
+    expect(options.map((button) => button.textContent)).toEqual(['继续跑全量测试', '先补一条回归']);
+    expect(within(preview).getByTestId('observation-preview-llm-conclusion').textContent).toContain(
+      '登录刷新循环已修复',
+    );
+    expect(within(preview).getByTestId('observation-preview-llm-drift').textContent).toContain('仅作建议');
+
+    // A click only ASKS: no confirmation card yet, and nothing has been sent.
+    expect(within(preview).queryByTestId('observation-preview-llm-confirm')).toBeNull();
+    expect(hubMock.sent.filter((frame) => frame.type === 'chat.send')).toHaveLength(0);
+
+    fireEvent.click(options[1]!);
+    const confirm = await within(preview).findByTestId('observation-preview-llm-confirm');
+    // The confirmation sentence names the exact option text that will be sent.
+    expect(within(preview).getByTestId('observation-preview-llm-confirm-text').textContent).toContain(
+      '先补一条回归',
+    );
+    expect(hubMock.sent.filter((frame) => frame.type === 'chat.send')).toHaveLength(0);
+
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(hubMock.sent.filter((frame) => frame.type === 'chat.send')).toHaveLength(1));
+    const sent = hubMock.sent.filter((frame) => frame.type === 'chat.send')[0]!;
+    expect(sent).toMatchObject({ type: 'chat.send', sessionId: 's1', content: '先补一条回归' });
+
+    // The card closes. Confirming the same option again cannot deliver it twice.
+    expect(within(preview).queryByTestId('observation-preview-llm-confirm')).toBeNull();
+    fireEvent.click(options[1]!);
+    await within(preview).findByTestId('observation-preview-llm-confirm');
+    fireEvent.click(within(preview).getByTestId('observation-preview-llm-confirm'));
+    expect(hubMock.sent.filter((frame) => frame.type === 'chat.send')).toHaveLength(1);
+  });
+
+  it('shows the limit reason instead of options when the tier was skipped', async () => {
+    wallState.entries[0]!.object.digest.llm = { state: 'skipped', reason: '本轮未生成（限额）' };
+    renderCockpit();
+    await screen.findByTestId('observation-wall-tiles');
+
+    fireEvent.click(within(tileByUri('cloudcli://session/s1')).getByTestId('observation-tile-open'));
+    const preview = await screen.findByTestId('cockpit-observation-preview');
+
+    expect(within(preview).queryByTestId('observation-preview-llm-option')).toBeNull();
+    const note = within(preview).getByTestId('observation-preview-llm-note');
+    expect(note.getAttribute('data-llm-state')).toBe('skipped');
+    expect(note.textContent).toContain('限额');
+  });
+});
+
 describe('blind spots and the raw material', () => {
   it('ends every preview with its declaration and the door back, and keeps the tiles quiet', async () => {
     renderCockpit();
