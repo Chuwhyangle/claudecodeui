@@ -48,6 +48,8 @@ extra: {}
 - server/modules/settings/server-settings.ts
 - config/server.settings.example.json
 - server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - scripts/workload-report/report.py (new)
 - scripts/workload-report/README.md (new)
 - scripts/workload-report/testdata/sample.jsonl (new)
