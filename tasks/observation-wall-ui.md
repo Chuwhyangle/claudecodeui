@@ -1,7 +1,7 @@
 ---
 id: observation-wall-ui
 title: 观察墙 T5：驾驶舱观察墙 UI（PC + 移动）——磁贴/观察列表/原地预览/已看到；并入两个走查任务中仍成立的条目
-status: ready
+status: done
 labels:
   - cockpit
   - observation
