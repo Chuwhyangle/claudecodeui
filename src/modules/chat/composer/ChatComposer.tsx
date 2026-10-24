@@ -10,8 +10,9 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { PaperclipIcon, AudioLinesIcon, MessageSquareIcon, XIcon, Loader2, ArrowUpIcon, PencilIcon, Lock, Copy, Check, Sparkles } from 'lucide-react';
+import { PaperclipIcon, AudioLinesIcon, MessageSquareIcon, XIcon, Loader2, ArrowUpIcon, PencilIcon, Lock, Copy, Check, Sparkles, CircleAlert } from 'lucide-react';
 
+import { cn } from '@/shared/utils';
 import { useActivityFreshness } from '@/modules/chat/hooks/useActivityFreshness';
 import { useVoiceInput, type VoiceCaptureEngine } from '@/modules/chat/hooks/useVoiceInput';
 import { useVoiceAvailable } from '@/modules/chat/hooks/useVoiceAvailable';
@@ -58,6 +59,19 @@ const RELEASE_COPIED_NOTICE_MS = 1500;
 
 /** How long a tap on an unavailable Live Voice entry leaves its explanation on screen. */
 const LIVE_VOICE_NOTICE_MS = 4000;
+
+/** How long a failed Suggest draw keeps its visible failure reading before recovering. */
+const REPLY_SUGGEST_FAILURE_DISPLAY_MS = 3000;
+
+/**
+ * Top padding for a textarea whose first line would otherwise sit under the chip strip.
+ *
+ * The strip is an absolute overlay (`top-0`, `py-2`) holding 24px chips, and the
+ * preview line below them ends at 44px. `pt-12` starts the text at 48px, clearing
+ * both. It is applied only while the box holds text AND the strip is drawn — the
+ * empty-box layout, which the strip was designed for, keeps its original padding.
+ */
+const TEXT_CLEARANCE_UNDER_CHIP_ROW_CLASS = 'pt-12';
 
 /**
  * The viewport width, in CSS pixels, below which the compact footer drops the clear control.
@@ -261,8 +275,12 @@ type ChatComposerProps = {
   replySuggestionsEnabled?: boolean;
   /** A draw is in flight: the Suggest button is disabled and shows its progress label. */
   replySuggestionsLoading?: boolean;
-  /** Asks for a whole new batch of model chips. */
-  onRequestReplySuggestions?: () => void;
+  /**
+   * Asks for a whole new batch of model chips. A promise that resolves false (or
+   * rejects) is a failed draw: the control shows a short failure state instead of
+   * appearing to have done nothing.
+   */
+  onRequestReplySuggestions?: () => void | Promise<boolean>;
   /**
    * The expansion experiment's variant/response chips for the draft in the box.
    * Drawn as their own row under the textarea (the empty-box strip cannot carry
@@ -554,6 +572,43 @@ export default function ChatComposer({
     const timer = setTimeout(() => setLiveVoiceNotice(null), LIVE_VOICE_NOTICE_MS);
     return () => clearTimeout(timer);
   }, [liveVoiceNotice]);
+
+  // A failed Suggest draw must not look like a press that did nothing: the control
+  // switches to a failure reading for a few seconds, then recovers. The ref holds
+  // the one timer so a second press supersedes the mark instead of stacking timers.
+  const [replySuggestFailed, setReplySuggestFailed] = useState(false);
+  const replySuggestFailureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (replySuggestFailureTimer.current !== null) {
+      clearTimeout(replySuggestFailureTimer.current);
+      replySuggestFailureTimer.current = null;
+    }
+  }, []);
+  const requestReplySuggestions = useCallback(async () => {
+    if (!onRequestReplySuggestions) {
+      return;
+    }
+    if (replySuggestFailureTimer.current !== null) {
+      clearTimeout(replySuggestFailureTimer.current);
+      replySuggestFailureTimer.current = null;
+    }
+    setReplySuggestFailed(false);
+    let succeeded = true;
+    try {
+      succeeded = (await onRequestReplySuggestions()) !== false;
+    } catch {
+      // A thrown request is a failed draw, not an error the composer should carry.
+      succeeded = false;
+    }
+    if (succeeded) {
+      return;
+    }
+    setReplySuggestFailed(true);
+    replySuggestFailureTimer.current = setTimeout(() => {
+      replySuggestFailureTimer.current = null;
+      setReplySuggestFailed(false);
+    }, REPLY_SUGGEST_FAILURE_DISPLAY_MS);
+  }, [onRequestReplySuggestions]);
   const dismissVoiceFailure = useCallback(() => setVoiceFailure(null), []);
   const noopTranscript = useCallback(() => {}, []);
   // The names the transcript is repaired against. Fetched once per project (the module
@@ -662,6 +717,10 @@ export default function ChatComposer({
   // component: one listbox, three sources.
   const resolvedSuggestionCount = suggestionChips?.length ?? inputSuggestionCandidates.length;
   const showSuggestionChips = inputSuggestionsVisible && resolvedSuggestionCount > 0;
+  // The strip overlays the box. It only needs clearance while the box holds text:
+  // the quoted chip is the one chip allowed then, and without room made for the
+  // row it covers the first line of the quote. The empty-box layout is unchanged.
+  const chipRowOverText = showSuggestionChips && input !== '';
   const canQueueDraft = isLoading && Boolean(input.trim() || attachedFiles.length > 0);
   // The same button press, two different outcomes. For a per-run session the text waits in this
   // client's queue until the turn ends, which is why the button becomes a queue arrow and the hint
@@ -1027,6 +1086,9 @@ export default function ChatComposer({
               onFocus={() => onInputFocusChange?.(true)}
               onBlur={() => onInputFocusChange?.(false)}
               onInput={onTextareaInput}
+              // The strip is absolutely positioned over the box; while text is
+              // present it must start under the chips and their preview line.
+              className={chipRowOverText ? TEXT_CLEARANCE_UNDER_CHIP_ROW_CLASS : undefined}
               placeholder={showSuggestionChips ? '' : placeholder}
               aria-activedescendant={
                 showSuggestionChips && selectedInputSuggestionIndex !== null
@@ -1168,9 +1230,13 @@ export default function ChatComposer({
             {/*
               The Suggest button lives in the footer on purpose: it is the one control that
               regenerates the chips above the input, and it must stay reachable while the
-              textarea is covered by them. It is drawn only when the feature is on (the status
-              reading said so) and is disabled for the whole draw, so a second click cannot
-              become a second request.
+              textarea is covered by them. It is drawn only when the feature is on AND there
+              is an assistant message to draw from (`replySuggestionsEnabled` folds both in;
+              a new conversation has nothing to suggest from), and is disabled for the whole
+              draw, so a second click cannot become a second request.
+
+              A failed draw is not silent: the control shows a failure reading for a few
+              seconds (`data-reply-suggest-state="failed"`) and then returns to idle.
 
               On the compact tier it is an icon button, the same 32px square as the controls
               beside it. The labelled version was 61px — twice an icon button — and with a
@@ -1184,31 +1250,51 @@ export default function ChatComposer({
             {replySuggestionsEnabled && (isCompactTier ? (
               <PromptInputButton
                 data-slot="reply-suggest-button"
-                tooltip={{ content: t('input.suggestions.suggest', { defaultValue: 'Suggest' }) }}
-                onClick={onRequestReplySuggestions}
+                data-reply-suggest-state={replySuggestFailed ? 'failed' : replySuggestionsLoading ? 'loading' : 'idle'}
+                tooltip={{
+                  content: replySuggestFailed
+                    ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })
+                    : t('input.suggestions.suggest', { defaultValue: 'Suggest' }),
+                }}
+                onClick={requestReplySuggestions}
                 disabled={replySuggestionsLoading}
-                aria-label={t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
+                aria-label={replySuggestFailed
+                  ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })
+                  : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
                 aria-busy={replySuggestionsLoading || undefined}
                 // The <360px band shrinks every PromptInputButton to 28px to fit the long model
                 // name; the icon control keeps its 32px hit target there and the right cluster
                 // gives up 2px per gap instead (below), so the row still does not overflow.
-                className="shrink-0 rounded-full border border-dashed border-border/70 text-muted-foreground hover:border-primary/60 hover:text-foreground focus-visible:ring-2 max-[359px]:!w-8"
+                className={cn(
+                  'shrink-0 rounded-full border border-dashed border-border/70 text-muted-foreground hover:border-primary/60 hover:text-foreground focus-visible:ring-2 max-[359px]:!w-8',
+                  replySuggestFailed && 'border-destructive/60 text-destructive',
+                )}
               >
-                {replySuggestionsLoading ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                {replySuggestionsLoading
+                  ? <Loader2 className="animate-spin" />
+                  : replySuggestFailed ? <CircleAlert /> : <Sparkles />}
               </PromptInputButton>
             ) : (
               <button
                 type="button"
                 data-slot="reply-suggest-button"
-                onClick={onRequestReplySuggestions}
+                data-reply-suggest-state={replySuggestFailed ? 'failed' : replySuggestionsLoading ? 'loading' : 'idle'}
+                onClick={requestReplySuggestions}
                 disabled={replySuggestionsLoading}
-                aria-label={t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
+                aria-label={replySuggestFailed
+                  ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })
+                  : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
                 aria-busy={replySuggestionsLoading || undefined}
-                className="h-8 shrink-0 whitespace-nowrap rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className={cn(
+                  'h-8 shrink-0 whitespace-nowrap rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+                  replySuggestFailed && 'border-destructive/60 text-destructive',
+                )}
               >
                 {replySuggestionsLoading
                   ? t('input.suggestions.suggesting', { defaultValue: 'Suggesting…' })
-                  : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
+                  : replySuggestFailed
+                    ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })
+                    : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
               </button>
             ))}
 

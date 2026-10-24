@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
+import { buildSuggestionChips } from '@/modules/chat/utils/inputSuggestions';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 
 /**
@@ -255,5 +256,68 @@ describe('composer wiring', () => {
     fireEvent.mouseDown(view.getByRole('listbox'));
 
     assert.equal(document.activeElement === textarea, true, 'the press must leave focus in the textarea');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The strip is an overlay: a non-empty box must not have its first line under it
+// ---------------------------------------------------------------------------
+
+/** The top-padding token that starts the text below the chip row and its preview. */
+const CLEARANCE_CLASS = /(^|\s)pt-12(\s|$)/u;
+
+const quotedChips = () => buildSuggestionChips({ quotedText: '选中的原文' });
+
+const renderComposerOverStrip = (overrides: Record<string, unknown> = {}) => render(React.createElement(
+  ChatComposer,
+  {
+    ...composerBaseProps(),
+    inputSuggestionCandidates: [],
+    inputSuggestionsVisible: true,
+    suggestionChips: quotedChips(),
+    ...overrides,
+  } as unknown as React.ComponentProps<typeof ChatComposer>,
+));
+
+describe('chip row clearance over a non-empty box', () => {
+  it('(a) reserves the chip row above the text while a quoted chip shows', () => {
+    const view = renderComposerOverStrip({ input: '> 选中的原文\n' });
+
+    const textarea = view.container.querySelector('textarea');
+    assert.ok(textarea, 'the composer must render a textarea');
+    assert.match(textarea.className, CLEARANCE_CLASS, 'the first line starts below the chip row');
+    assert.ok(view.getByRole('listbox'), 'the quoted chip row is still drawn');
+  });
+
+  it('(b) leaves the empty-box layout unchanged', () => {
+    const view = renderComposerOverStrip({
+      input: '',
+      inputSuggestionCandidates: ['检查进展'],
+      suggestionChips: undefined,
+    });
+
+    const textarea = view.container.querySelector('textarea');
+    assert.ok(textarea);
+    assert.equal(CLEARANCE_CLASS.test(textarea.className), false, 'the empty box keeps its original padding');
+  });
+
+  it('(c) after the quote fills the box the row stays and the text keeps its clearance', () => {
+    const view = renderComposerOverStrip({ input: '' });
+    const before = view.container.querySelector('textarea');
+    assert.ok(before);
+    assert.equal(CLEARANCE_CLASS.test(before.className), false);
+
+    view.rerender(React.createElement(ChatComposer, {
+      ...composerBaseProps(),
+      input: '> 选中的原文\n',
+      inputSuggestionCandidates: [],
+      inputSuggestionsVisible: true,
+      suggestionChips: quotedChips(),
+    } as unknown as React.ComponentProps<typeof ChatComposer>));
+
+    const after = view.container.querySelector('textarea');
+    assert.ok(after);
+    assert.match(after.className, CLEARANCE_CLASS);
+    assert.ok(view.getByRole('listbox'), 'the quoted chip is still offered for appending a second passage');
   });
 });

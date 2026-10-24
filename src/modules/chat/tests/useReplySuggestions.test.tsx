@@ -203,6 +203,45 @@ describe('useReplySuggestions', () => {
     const sent = apiMocks.event.mock.calls[2][0] as Record<string, unknown>;
     assert.equal(sent.draw, 7);
   });
+
+  it('(i) is off while the conversation has no assistant message to draw from', async () => {
+    const { result } = renderReply({ lastAssistantMessageId: null });
+
+    await flush();
+
+    assert.equal(result.current.enabled, false, 'no assistant message means no Suggest control');
+    assert.equal(apiMocks.suggest.mock.calls.length, 0, 'there is nothing to draw from');
+  });
+
+  it('(j) redraw resolves true on a fresh batch and false on a failed draw', async () => {
+    const { result } = renderReply();
+    await settle(result);
+    await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
+
+    apiMocks.suggest.mockImplementationOnce(
+      () => Promise.resolve({ ok: false, status: 502, json: async () => ({}) }),
+    );
+    let refused: boolean | undefined;
+    await act(async () => {
+      refused = await result.current.redraw();
+    });
+    assert.equal(refused, false, 'a non-ok answer is a failed draw');
+
+    apiMocks.suggest.mockImplementationOnce(() => Promise.reject(new Error('gateway down')));
+    let thrown: boolean | undefined;
+    await act(async () => {
+      thrown = await result.current.redraw();
+    });
+    assert.equal(thrown, false, 'a thrown request is a failed draw');
+
+    apiMocks.suggest.mockImplementationOnce(() => okJson({ chips: ['新答复'], draw: 11 }));
+    let applied: boolean | undefined;
+    await act(async () => {
+      applied = await result.current.redraw();
+    });
+    assert.equal(applied, true, 'an applied batch is a success');
+    assert.deepEqual(result.current.chips, ['新答复']);
+  });
 });
 
 // ---------------------------------------------------------------------------

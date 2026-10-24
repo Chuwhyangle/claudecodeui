@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import { useChatComposerState } from '@/modules/chat/hooks/useChatComposerState';
+import { useReplySuggestions } from '@/modules/chat/hooks/useReplySuggestions';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import { resetChatDrafts } from '@/shared/chatDrafts';
 import { buildSuggestionChips } from '@/modules/chat/utils/inputSuggestions';
@@ -281,6 +282,108 @@ describe('chip clicks at the composer surface', () => {
     fireEvent.click(buttons[1]);
     assert.deepEqual((props.onAcceptReplyExpansionChip as ReturnType<typeof vi.fn>).mock.calls, [[1]]);
     assert.equal((props.onSubmit as ReturnType<typeof vi.fn>).mock.calls.length, 0, 'a variant is filled, not sent by the component');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Suggest control: absent when nothing can be suggested, visibly failed
+// ---------------------------------------------------------------------------
+
+const flushMicrotasks = () => act(async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+});
+
+/**
+ * The real hook feeding the real composer, which is where the two readings meet:
+ * `enabled` is false while the conversation has no assistant message, so the
+ * control is not drawn at all rather than pressed into a silent no-op.
+ */
+function SuggestVisibilityHarness({ lastAssistantMessageId }: { lastAssistantMessageId: string | null }) {
+  const { enabled, loading, redraw } = useReplySuggestions({
+    sessionId: 'session-a',
+    lastAssistantMessageId,
+    active: true,
+  });
+  return React.createElement(ChatComposer, {
+    ...composerBaseProps(),
+    replySuggestionsEnabled: enabled,
+    replySuggestionsLoading: loading,
+    onRequestReplySuggestions: redraw,
+  } as unknown as React.ComponentProps<typeof ChatComposer>);
+}
+
+describe('the Suggest control', () => {
+  it('(a) is not drawn when there is no assistant message to respond to', async () => {
+    const view = render(React.createElement(SuggestVisibilityHarness, { lastAssistantMessageId: null }));
+    await waitFor(() => assert.equal(apiMocks.status.mock.calls.length, 1));
+    await flushMicrotasks();
+
+    assert.equal(view.queryByRole('button', { name: enChat.input.suggestions.suggest }), null);
+  });
+
+  it('(b) is drawn once an assistant message exists', async () => {
+    const view = render(React.createElement(SuggestVisibilityHarness, { lastAssistantMessageId: 'assistant-1' }));
+
+    await waitFor(() => assert.ok(view.queryByRole('button', { name: enChat.input.suggestions.suggest })));
+  });
+
+  it('(d) stays hidden when /status says the feature is off', async () => {
+    apiMocks.status.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ enabled: false, expansion: 'off', maxChips: 3, maxChipChars: 120 }),
+    }));
+    const view = render(React.createElement(SuggestVisibilityHarness, { lastAssistantMessageId: 'assistant-1' }));
+    await waitFor(() => assert.equal(apiMocks.status.mock.calls.length, 1));
+    await flushMicrotasks();
+
+    assert.equal(view.queryByRole('button', { name: enChat.input.suggestions.suggest }), null);
+  });
+
+  it('(c) shows a visible failure state and recovers a few seconds later', async () => {
+    const { view } = renderComposer({ onRequestReplySuggestions: () => Promise.resolve(false) });
+    const idle = view.getByRole('button', { name: enChat.input.suggestions.suggest });
+    assert.equal(idle.getAttribute('data-reply-suggest-state'), 'idle');
+
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        fireEvent.click(idle);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const failed = view.getByRole('button', { name: 'Suggest failed' });
+      assert.equal(failed.getAttribute('data-reply-suggest-state'), 'failed');
+      assert.ok(failed.className.includes('text-destructive'), 'the failure is visible, not only an attribute');
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      const recovered = view.getByRole('button', { name: enChat.input.suggestions.suggest });
+      assert.equal(recovered.getAttribute('data-reply-suggest-state'), 'idle');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('(c2) treats a rejected request as a failure, never as an uncaught exception', async () => {
+    const { view } = renderComposer({
+      onRequestReplySuggestions: () => Promise.reject(new Error('gateway down')),
+    });
+    const button = view.getByRole('button', { name: enChat.input.suggestions.suggest });
+
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    assert.equal(
+      view.getByRole('button', { name: 'Suggest failed' }).getAttribute('data-reply-suggest-state'),
+      'failed',
+    );
   });
 });
 
