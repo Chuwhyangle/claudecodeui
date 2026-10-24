@@ -2,6 +2,7 @@ import { Settings, Sparkles, PanelLeftOpen, Bug, AlertTriangle } from 'lucide-re
 import type { TFunction } from 'i18next';
 
 import { DiscordIcon } from '@/shared/ui';
+import SidebarModeSwitch from '@/modules/sidebar/SidebarModeSwitch';
 
 const DISCORD_INVITE_URL = 'https://discord.gg/buxwujPNRE';
 const GITHUB_ISSUES_URL = 'https://github.com/siteboon/claudecodeui/issues/new';
@@ -12,6 +13,8 @@ type SidebarCollapsedProps = {
   updateAvailable: boolean;
   restartRequired: boolean;
   onShowVersionModal: () => void;
+  /** The selected project, so the rail's mode switch can deep-link its registered board. */
+  selectedProjectId?: string | null;
   t: TFunction;
 };
 
@@ -22,6 +25,7 @@ export default function SidebarCollapsed({
   updateAvailable,
   restartRequired,
   onShowVersionModal,
+  selectedProjectId,
   t,
 }: SidebarCollapsedProps) {
   return (
@@ -35,6 +39,14 @@ export default function SidebarCollapsed({
       >
         <PanelLeftOpen className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
       </button>
+
+      {/* The same two-mode control the expanded header draws, stacked to fit the rail. */}
+      <SidebarModeSwitch
+        mode="sessions"
+        selectedProjectId={selectedProjectId}
+        layout="column"
+        t={t}
+      />
 
       <div className="nav-divider my-1 w-6" />
 

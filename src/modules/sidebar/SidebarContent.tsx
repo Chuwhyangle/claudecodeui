@@ -236,6 +236,7 @@ export default function SidebarContent({
         onCreateProject={onCreateProject}
         onCollapseSidebar={onCollapseSidebar}
         onShowSettings={onShowSettings}
+        selectedProjectId={projectListProps.selectedProject?.projectId ?? null}
         onGoHome={onGoHome}
         t={t}
       />

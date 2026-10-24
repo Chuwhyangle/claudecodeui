@@ -94,6 +94,30 @@ describe('every locale carries the cockpit copy', () => {
     }
   });
 
+  // The mode switch, the attention badge, the row's deep-link action and the command
+  // palette's two cockpit commands all render through this block. Naming them here keeps
+  // a rename from being "covered" by the generic loop above while every locale silently
+  // falls back to English.
+  it('covers the cockpit entry control and its commands', () => {
+    const required = [
+      'modeSessions',
+      'modeCockpit',
+      'modeSwitchLabel',
+      'attentionBadge',
+      'attentionUnavailable',
+      'openProject',
+      'openCockpit',
+      'openCockpitNewWindow',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    // The badge's accessible name must carry the count, and the warning its reason.
+    expect(placeholders(reference.attentionBadge)).toEqual(['n']);
+    expect(placeholders(reference.attentionUnavailable)).toEqual(['reason']);
+  });
+
   // Positive control: the same checker must reject a missing block, a blank value, a key-copied
   // value and a dropped placeholder. Without this the green above could not go red.
   it('rejects a missing, blank, key-copied or placeholder-dropping block (positive control)', () => {

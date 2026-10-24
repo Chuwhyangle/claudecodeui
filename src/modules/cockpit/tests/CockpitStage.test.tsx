@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -707,6 +707,46 @@ describe('visual attention', () => {
     expect(
       within(tiles[1] as HTMLElement).getByTestId('cockpit-fleet-tile-driver').getAttribute('data-driver-state'),
     ).toBe('stale');
+  });
+});
+
+describe('cockpit header mode switch', () => {
+  it('draws the same switch as the sidebar, with the cockpit segment current', async () => {
+    window.sessionStorage.clear();
+    renderCockpit();
+
+    const modeSwitch = await screen.findByTestId('sidebar-mode-switch');
+    expect(modeSwitch.getAttribute('data-sidebar-mode')).toBe('cockpit');
+
+    const cockpitSegment = modeSwitch.querySelector(
+      '[data-mode-switch-link="cockpit"]',
+    ) as HTMLAnchorElement;
+    const sessionsSegment = modeSwitch.querySelector(
+      '[data-mode-switch-link="sessions"]',
+    ) as HTMLAnchorElement;
+    expect(cockpitSegment.getAttribute('aria-current')).toBe('page');
+    expect(sessionsSegment.hasAttribute('aria-current')).toBe(false);
+  });
+
+  it('leads back to the remembered session route, and home when nothing was recorded', async () => {
+    window.sessionStorage.clear();
+    renderCockpit();
+
+    const withNoRecord = await screen.findByTestId('sidebar-mode-switch');
+    expect(
+      withNoRecord.querySelector('[data-mode-switch-link="sessions"]')?.getAttribute('href'),
+    ).toBe('/');
+
+    cleanup();
+    window.sessionStorage.setItem('cockpit.returnPath', '/session/abc?tab=chat');
+    renderCockpit();
+
+    const withRecord = await screen.findByTestId('sidebar-mode-switch');
+    expect(
+      withRecord.querySelector('[data-mode-switch-link="sessions"]')?.getAttribute('href'),
+    ).toBe('/session/abc?tab=chat');
+
+    window.sessionStorage.clear();
   });
 });
 

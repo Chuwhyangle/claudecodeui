@@ -6,6 +6,7 @@ import { CLOUDCLI_WORDMARK_FONT_FAMILY } from '@/shared/constants';
 import { IS_PLATFORM,cn } from '@/shared/utils';
 import type { SidebarSearchMode } from '@/shared/types';
 import GitHubStarBadge from '@/modules/sidebar/GitHubStarBadge';
+import SidebarModeSwitch from '@/modules/sidebar/SidebarModeSwitch';
 
 const MOD_KEY =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
@@ -29,6 +30,8 @@ type SidebarHeaderProps = {
   onCollapseSidebar: () => void;
   /** Opens the Settings dialog. Moved up from the footer so the panel bottom is left for the session list. */
   onShowSettings: () => void;
+  /** The selected project, so the mode switch can deep-link its registered board. */
+  selectedProjectId?: string | null;
   /** Clears the selected project and session and returns to the landing overview. */
   onGoHome: () => void;
   t: TFunction;
@@ -72,6 +75,7 @@ export default function SidebarHeader({
   onCreateProject,
   onCollapseSidebar,
   onShowSettings,
+  selectedProjectId,
   onGoHome,
   t,
 }: SidebarHeaderProps) {
@@ -127,6 +131,9 @@ export default function SidebarHeader({
           )}
 
           <div className="flex flex-shrink-0 items-center gap-0.5">
+            {/* The mode switch sits immediately before settings: the two ways out of the
+                session list and into the app's controls are the header's right-hand cluster. */}
+            <SidebarModeSwitch mode="sessions" selectedProjectId={selectedProjectId} t={t} />
             <Button
               variant="ghost"
               size="sm"
@@ -315,6 +322,7 @@ export default function SidebarHeader({
           )}
 
           <div className="flex flex-shrink-0 gap-1.5">
+            <SidebarModeSwitch mode="sessions" selectedProjectId={selectedProjectId} t={t} />
             <button
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 transition-all active:scale-95"
               onClick={onShowSettings}

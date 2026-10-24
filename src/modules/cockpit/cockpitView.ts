@@ -127,6 +127,71 @@ const VIEW_QUERY_KEY = 'view';
 const PROJECT_QUERY_KEY = 'project';
 
 /**
+ * Where the browser session remembers the page the person left to enter the cockpit.
+ *
+ * Session storage, not local storage: the return trip belongs to this tab, and a second
+ * window opened on the cockpit (Ctrl+click) must not overwrite the first tab's origin.
+ */
+const RETURN_PATH_STORAGE_KEY = 'cockpit.returnPath';
+
+/**
+ * Remembers the router-relative path the cockpit was entered from, so the cockpit's
+ * 「会话」 segment can lead back to it. Relative to the router (basename already stripped),
+ * matching what {@link readCockpitReturnPath} hands back to `useHref`.
+ */
+export function rememberCockpitReturnPath(path: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(RETURN_PATH_STORAGE_KEY, path);
+  } catch {
+    // A blocked storage area must not break the switch: the cockpit simply falls back home.
+  }
+}
+
+/**
+ * The remembered pre-cockpit route, or `/` when nothing usable was recorded.
+ *
+ * Only a single-slash absolute path is accepted: a stored value that is empty, relative or
+ * protocol-relative would navigate somewhere the person never was (and `//host` is an
+ * off-site redirect), so it reads as "no record" instead.
+ */
+export function readCockpitReturnPath(): string {
+  if (typeof window === 'undefined') return '/';
+  try {
+    const stored = window.sessionStorage.getItem(RETURN_PATH_STORAGE_KEY);
+    if (stored !== null && stored.startsWith('/') && !stored.startsWith('//')) {
+      return stored;
+    }
+  } catch {
+    // Fall through to the home route.
+  }
+  return '/';
+}
+
+/**
+ * Resolves the project a view's `project` segment names.
+ *
+ * BOTH handles are accepted because both are minted by this app: the cockpit's own URL uses
+ * the CloudCLI project id (the id the snapshot route is keyed by), while the sidebar's entry
+ * links speak the quay-fleet registry id (the same segment every `quay://` address carries).
+ * Matching projectId first keeps an id that could be either from being re-read as the other.
+ */
+export function resolveCockpitProject(
+  projects: readonly CockpitProject[],
+  segment: string,
+): CockpitProject | null {
+  const target = segment.trim();
+  if (target === '') return null;
+  return (
+    projects.find((project) => project.projectId === target) ??
+    projects.find(
+      (project) => (project.fleetProjectId ?? '').toLowerCase() === target.toLowerCase(),
+    ) ??
+    null
+  );
+}
+
+/**
  * The display name for a project: its path's last non-empty segment. A path that ends in a
  * separator, or one with no segments at all, falls back to the project id rather than showing
  * an empty tile.

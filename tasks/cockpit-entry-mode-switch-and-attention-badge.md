@@ -1,7 +1,7 @@
 ---
 id: cockpit-entry-mode-switch-and-attention-badge
 title: 驾驶舱入口：侧边栏头部「会话/驾驶舱」模式切换（含回程）+ needs-human 注意力徽标 + 项目行深链 + 命令面板
-status: ready
+status: done
 labels:
   - cockpit
   - ui

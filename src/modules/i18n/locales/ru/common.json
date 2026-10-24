@@ -715,6 +715,14 @@
     "projectNotRegistered": "Не зарегистрирован в quay-fleet",
     "unnamedSession": "Безымянный диалог · {{id}}",
     "deviceMobile": "Телефон",
-    "deviceDesktop": "Компьютер"
+    "deviceDesktop": "Компьютер",
+    "modeSessions": "Сеансы",
+    "modeCockpit": "Кокпит",
+    "modeSwitchLabel": "Переключение между сеансами и кокпитом",
+    "attentionBadge": "{{n}} задач проекта ждут вас",
+    "attentionUnavailable": "Внимание недоступно: {{reason}}",
+    "openProject": "Открыть в кокпите",
+    "openCockpit": "Открыть кокпит",
+    "openCockpitNewWindow": "Открыть кокпит в новом окне"
   }
 }

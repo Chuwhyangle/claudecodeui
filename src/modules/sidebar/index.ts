@@ -1,5 +1,9 @@
 export { default as Sidebar } from '@/modules/sidebar/Sidebar';
 export { default as ResidentMark } from '@/modules/sidebar/ResidentMark';
+// The two-mode 「会话 / 驾驶舱」 control. The cockpit page header renders the same component
+// (its active segment is `cockpit`), which is how the stage leads back to the session list.
+export { default as SidebarModeSwitch } from '@/modules/sidebar/SidebarModeSwitch';
+export type { SidebarMode } from '@/modules/sidebar/SidebarModeSwitch';
 // The Conversations/sidebar controller, exported so the module's own tests can
 // drive the live feed through the same entry point the barrel exposes (tests
 // import cross-module symbols through barrels; see AGENTS.md).

@@ -292,6 +292,7 @@ function Sidebar({
           updateAvailable={updateAvailable}
           restartRequired={restartRequired}
           onShowVersionModal={() => setShowVersionModal(true)}
+          selectedProjectId={selectedProject?.projectId ?? null}
           t={t}
         />
       ) : (
