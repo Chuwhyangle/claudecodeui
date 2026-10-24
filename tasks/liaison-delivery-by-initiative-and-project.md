@@ -23,6 +23,15 @@ extra: {}
 3. 联络会话启动或恢复时向 fleet 重新登记（若探针结论要求）。
 4. 只做投递，不做决策；投递记录可查（谁、何时、哪条倡议、结果）。
 
+## 探针结论与正文修订
+
+`fleet-liaison-stable-addressing-probe`（fleet 任务，2026-10-24 结论）实测：网关 sessionId 是唯一跨进程重启仍稳定的登记身份；本地 provider sessionId 随进程消失；pid 每次重启都变且可复用（须靠 procStart 核对）；name 不是地址（实测 3 个同时活着的同名会话）。据此本任务的寻址按结论收窄：
+
+- registry 的 `liaisonSessions[initiative][project]` 值 = CloudCLI 会话 id（即网关 sessionId），解析只按二键读 registry，**name 永不参与解析**。
+- 存活判定用 CloudCLI 自己的常驻注册表（`sessionHostManager.liveHostForSession`）——在本进程里它是授权读数，比 fleet 侧 `~/.claude/sessions/<pid>.json → procStart` 的本地核对更强；后者仍留给没有该注册表的读者。
+- 重登记只在网关 id 变化时发生（fleet `registry sessions add` 同 pair 换 id 即一条登记），本任务不新增重登记机制。
+- 缺席（unregistered / 登记了但不存活）⇒ 倡议收件箱；fleet 不可用是**另一种读数**（错误 + 本地待投队列），不与缺席同形。
+
 ## AC
 
 - [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/liaison/tests/liaison-deliver.test.ts` exit 0——桩 fleet registry + 桩常驻注册表：resolved 且存活时经会话发送服务投递恰好一次并带前缀；dead 时写入收件箱、不调用发送；ambiguous 时拒绝投递并产生上报；会话恢复事件触发收件箱补投且不重复。
@@ -39,7 +48,9 @@ extra: {}
 - server/modules/liaison/index.ts (new)
 - server/modules/liaison/liaison.module.ts (new)
 - server/modules/liaison/liaison-deliver.service.ts (new)
+- server/modules/liaison/liaison-store.ts (new)
 - server/modules/liaison/tests/liaison-deliver.test.ts (new)
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/server-import-cycle-budget.baseline.json
 - tasks/liaison-delivery-by-initiative-and-project.md
