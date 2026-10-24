@@ -26,17 +26,42 @@ extra:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/CockpitDeepLink.test.tsx` exit 0（新建）——中枢桩持有 board A、URL 为 `?view=board&project=B` 时：渲染出的视图是 B、URL 保持 B、中枢桩收到恰好一次 `setView` 且参数为 B。
-- [ ] AC2: 同一测试文件——裸 `/cockpit`（无 view 参数）且中枢桩持有 board A 时渲染 A 且 URL 对齐到 A、不发 `setView`；URL 为 `?view=fleet` 而中枢持有 board A 时渲染 fleet 并发 `setView(fleet)`。
-- [ ] AC3: 同一测试文件——页面挂载后中枢桩推送新视图（模拟另一设备驱动）时，页面渲染该视图且 URL 随之镜像；重连后（连接状态 false→true）裸 URL 采纳中枢视图。
-- [ ] AC4: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——既有用例原样通过、不弱化。
-- [ ] AC5: `npm run typecheck` 通过。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/CockpitDeepLink.test.tsx` exit 0（新建）——中枢桩持有 board A、URL 为 `?view=board&project=B` 时：渲染出的视图是 B、URL 保持 B、中枢桩收到恰好一次 `setView` 且参数为 B。
+- [x] AC2: 同一测试文件——裸 `/cockpit`（无 view 参数）且中枢桩持有 board A 时渲染 A 且 URL 对齐到 A、不发 `setView`；URL 为 `?view=fleet` 而中枢持有 board A 时渲染 fleet 并发 `setView(fleet)`。
+- [x] AC3: 同一测试文件——页面挂载后中枢桩推送新视图（模拟另一设备驱动）时，页面渲染该视图且 URL 随之镜像；重连后（连接状态 false→true）裸 URL 采纳中枢视图。
+- [x] AC4: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——既有用例原样通过、不弱化。
+- [x] AC5: `npm run typecheck` 通过。
 
 ## DoD
 
 - **MCP 浏览器实际操作 + 截图（必做，存 `tmp/`）**：隔离实例，先让中枢停在 claudecodeui 的 board；再依次：(1) 直接加载 `/cockpit?view=board&project=quay` 落在 quay 且 URL 不变；(2) 从 claudecodeui 的会话页点模式切换「驾驶舱」段，落在该项目 board / 无选中项目时落在 fleet；(3) 项目行「在驾驶舱中查看」落在对应项目；(4) 裸 `/cockpit` 落在中枢视图；(5) 双浏览器上下文，另一端驱动后本端仍跟随。每步 `browser_evaluate` 读回 `location.search` 与 `data-cockpit-view`。
 - 场景运行器已有 `e2e/scenarios/cockpit-mode-switch.json`：跑 `node scripts/ui-scenario.mjs e2e/scenarios/cockpit-mode-switch.json` 并贴 JSON 报告与检查点截图。
 - 隔离实例必须关闭 residentRestore：`SERVER_SETTINGS_PATH` 指向 `{"residentRestore":{"enabled":false}}`（或用 `scripts/isolated-instance.sh`），否则会对线上同一批会话重复起进程。
+
+## 验证记录（2026-10-24 worker）
+
+命令（worktree `cockpit-deeplink-lost-to-stale-hub-view`）：
+
+- AC1–AC3：`npx vitest run src/modules/cockpit/tests/CockpitDeepLink.test.tsx` → exit 0，5 tests passed（3 个 describe 共 5 条用例）。
+- AC4：`npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` → exit 0，21 tests passed（文件未改动）。
+- AC5：`npm run typecheck` → exit 0。
+- 实现提交：`0b074e20c fix(cockpit): an explicit view link beats the hub's stale view`。
+
+隔离实例（`scripts/isolated-instance.sh start`，`residentRestore started=0`，端口 14025）+ Vite dev（5174）。浏览器逐项读数（`tmp/deeplink-dod/readings.json`，`data-cockpit-view` / `location.search` / 中枢视图）：
+
+| 步骤 | 预期 | 实测 |
+| --- | --- | --- |
+| 前提：中枢先停在 claudecodeui board | hubView board/claudecodeui | board/claudecodeui（rev 26） |
+| (1) 直载 `?view=board&project=quay` | quay、URL 不变 | `?view=board&project=quay`，view board，hub 随后 setView 到 quay |
+| (2a) claudecodeui 会话页点「驾驶舱」段 | board claudecodeui | `?view=board&project=claudecodeui`，Board · claudecodeui |
+| (2b) 未选中项目点「驾驶舱」段 | fleet | `?view=fleet`，view fleet |
+| (3) 项目行「在驾驶舱中查看」 | archguard board | `?view=board&project=archguard`，Board · archguard |
+| (4) 裸 `/cockpit` | 采纳中枢 archguard | URL 镜像为 `?view=board&project=archguard` |
+| (5) 双上下文：另一端驱动 | 本端跟随 | follower 由 archguard 镜像到 claudecodeui |
+
+截图：`tmp/deeplink-dod/step-1-deep-link-board-quay.png`、`step-2-mode-switch-from-session.png`、`step-3-mode-switch-no-selection.png`、`step-4-project-row-cockpit-link.png`、`step-5-bare-cockpit-adopts-hub.png`、`step-6-two-contexts-follower.png`。
+
+场景运行器：`node scripts/ui-scenario.mjs e2e/scenarios/cockpit-mode-switch.json --base-url http://127.0.0.1:5174 …` → `ok:true`，3/3 steps，4339ms，3 checkpoints；报告 `tmp/scenario-report.json`，检查点截图 `tmp/scenario-cockpit-mode-switch/step-{1,2,3}-*.png`。
 
 ## Touches
 

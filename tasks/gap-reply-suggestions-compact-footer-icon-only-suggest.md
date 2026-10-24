@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-compact-footer-icon-only-suggest
 title: 窄屏底栏：「建议」按钮改纯图标，修复有字时发送按钮被挤出屏幕（360/375px）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -28,21 +28,21 @@ extra:
 
 ## AC
 
-- [ ] 紧凑档图标版逐腿通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/tests/composerClearInput.test.tsx` 退出码 0；用例（独立）：(a) 紧凑档「建议」按钮内没有可见文字节点，`aria-label` 等于现有 Suggest 文案；(b) 宽屏档仍显示文字「Suggest」；(c) 紧凑档请求进行中按钮禁用并带进行中的无障碍标记（`aria-busy` 或文案切换为 Suggesting…）；(d) 紧凑档、有字、宽度 ≥360px 时底栏控件按顺序为：附件、建议、更多、清空、模型、权限、麦克风、发送；(e) 紧凑档、空输入框时没有清空；(f) <360px 有字时没有清空；(g) 紧凑档底栏仍是不换行的（`flex-nowrap`）。
-- [ ] 无多余的宽度回退：`grep -nE "max-\[359px\]:hidden" src/modules/chat/composer/ChatComposer.tsx` 仍有输出（<360px 的隐藏规则保留），且 `grep -cE "min-w-\[?[0-9]+" src/modules/chat/composer/ChatComposer.tsx` 的值不大于改动前（不靠加最小宽度硬撑；改动前的值在 DoD 里贴出）。
-- [ ] 文案：不新增文案键；`en` 与 `zh-CN` 现有的 suggest／suggesting／suggestHint 三个键仍被引用：`grep -c "input.suggestions.suggest" src/modules/chat/composer/ChatComposer.tsx` ≥ 2。
-- [ ] 静态门：`npm run typecheck`、`npm run lint` 退出码均为 0。
+- [x] 紧凑档图标版逐腿通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/tests/composerClearInput.test.tsx` 退出码 0；用例（独立）：(a) 紧凑档「建议」按钮内没有可见文字节点，`aria-label` 等于现有 Suggest 文案；(b) 宽屏档仍显示文字「Suggest」；(c) 紧凑档请求进行中按钮禁用并带进行中的无障碍标记（`aria-busy` 或文案切换为 Suggesting…）；(d) 紧凑档、有字、宽度 ≥360px 时底栏控件按顺序为：附件、建议、更多、清空、模型、权限、麦克风、发送；(e) 紧凑档、空输入框时没有清空；(f) <360px 有字时没有清空；(g) 紧凑档底栏仍是不换行的（`flex-nowrap`）。
+- [x] 无多余的宽度回退：`grep -nE "max-\[359px\]:hidden" src/modules/chat/composer/ChatComposer.tsx` 仍有输出（<360px 的隐藏规则保留），且 `grep -cE "min-w-\[?[0-9]+" src/modules/chat/composer/ChatComposer.tsx` 的值不大于改动前（不靠加最小宽度硬撑；改动前的值在 DoD 里贴出）。
+- [x] 文案：不新增文案键；`en` 与 `zh-CN` 现有的 suggest／suggesting／suggestHint 三个键仍被引用：`grep -c "input.suggestions.suggest" src/modules/chat/composer/ChatComposer.tsx` ≥ 2。
+- [x] 静态门：`npm run typecheck`、`npm run lint` 退出码均为 0。
 
 ## DoD
 
 真实页面读数，缺一不可；用**隔离实例**（自己的端口与 `DATABASE_PATH`，`SERVER_SETTINGS_PATH` 指向 `{"residentRestore":{"enabled":false}}`，不碰常驻 :3001，不重启常驻服务）；不要在运行中的会话页面按 Escape。MCP 浏览器的视口分别设为 320、340、360、375、390、412 像素宽，选可选模型里**名字最长**的一个。
 
-- [ ] 每个宽度下，输入框**有字**与**为空**两态各取一次读数并贴出：底栏 `scrollWidth`、`clientWidth`、发送按钮右边缘与表单右边缘的差；要求溢出为 0（发送按钮完整在表单内）。360 与 375 两档是此前的失败点，要特别列出改动前后的对比（改动前值：360px 有字溢出 26px，375px 溢出 11px）。
-- [ ] 360px 有字时底栏截图一张，375px 一张，390px 一张，320px 一张；贴出截图。
-- [ ] 点图标版「建议」：贴请求读数（一次 POST）、点击中的进行状态截图、完成后 chip 被替换的截图。
-- [ ] 键盘 Tab 到该按钮时焦点环可见（截图）；悬停提示显示「Suggest」文案。
-- [ ] 开始打字的瞬间，右侧模型按钮的左边界移动的像素值（空 → 有字）贴出，确认没有可见跳动或被挤压变形。
-- [ ] 宽屏（1280px）下按钮仍是带文字的版本，贴截图。
+- [x] 每个宽度下，输入框**有字**与**为空**两态各取一次读数并贴出：底栏 `scrollWidth`、`clientWidth`、发送按钮右边缘与表单右边缘的差；要求溢出为 0（发送按钮完整在表单内）。360 与 375 两档是此前的失败点，要特别列出改动前后的对比（改动前值：360px 有字溢出 26px，375px 溢出 11px）。
+- [x] 360px 有字时底栏截图一张，375px 一张，390px 一张，320px 一张；贴出截图。
+- [x] 点图标版「建议」：贴请求读数（一次 POST）、点击中的进行状态截图、完成后 chip 被替换的截图。
+- [x] 键盘 Tab 到该按钮时焦点环可见（截图）；悬停提示显示「Suggest」文案。
+- [x] 开始打字的瞬间，右侧模型按钮的左边界移动的像素值（空 → 有字）贴出，确认没有可见跳动或被挤压变形。
+- [x] 宽屏（1280px）下按钮仍是带文字的版本，贴截图。
 
 ## Touches
 
@@ -51,3 +51,41 @@ extra:
 - `src/modules/chat/tests/composerCompactTier.test.tsx`
 - `src/modules/chat/tests/composerClearInput.test.tsx`
 - `tasks/gap-reply-suggestions-compact-footer-icon-only-suggest.md`
+
+## 验证记录
+
+隔离实例：playwright 自起的真实 server + Vite（本次运行 server/client 各自随机端口，`DATABASE_PATH`/`HOME` 均为一次性目录；`SERVER_SETTINGS_PATH={"residentRestore":{"enabled":false}}`；`REPLY_SUGGESTIONS_SETTINGS_PATH` 指向本地 stand-in 网关）。未触碰常驻 :3001。
+
+**逐腿**
+- `scripts/with-memory-cap.sh npx vitest run chatComposerResponsive / composerCompactTier / composerClearInput` → 3 files / 43 tests passed，exit 0。
+- `npm run typecheck` → exit 0；`npm run lint` → exit 0（仅既有 warning）。
+- `grep -nE "max-\[359px\]:hidden" ChatComposer.tsx` → `className="max-[359px]:hidden"`（清空按钮，JS 状态门之外的 CSS 同规则兜底）。
+- `grep -cE "min-w-\[?[0-9]+" ChatComposer.tsx`：改动前 6 → 改动后 6。
+- `grep -c "input.suggestions.suggest" ChatComposer.tsx` → 5。
+
+**几何读数（真实页面；长模型 `claude-sonnet-4-5-20250929`）**
+
+| 宽度 | 空：scrollWidth/clientWidth | 空：sendRight−formRight | 有字：scrollWidth/clientWidth | 有字：sendRight−formRight | 溢出 |
+|---|---|---|---|---|---|
+| 320 | 302/302 | −13 | 302/302 | −13 | 0 / 0 |
+| 340 | 322/322 | −13 | 322/322 | −13 | 0 / 0 |
+| 360 | 342/342 | −13 | 342/342 | −13 | 0 / 0 |
+| 375 | 357/357 | −13 | 357/357 | −13 | 0 / 0 |
+| 390 | 372/372 | −13 | 372/372 | −13 | 0 / 0 |
+| 412 | 394/394 | −13 | 394/394 | −13 | 0 / 0 |
+
+改动前失败点：360px 有字溢出 26px（368/342），375px 溢出 11px（368/357）；改动后两档均为 0，且发送按钮右边缘在表单内 13px。紧凑档「建议」按钮在每个宽度下都是 32×32、`textContent` 为空、`aria-label` = `Suggest`；320/340px 有字时清空 ✕ 不出现。
+
+**交互**
+- 点击图标版「建议」：一次点击 → 恰好 1 个 POST（`{sessionId, redraw:true}`），响应 `{"chips":["建议甲 #4","建议乙 #4","建议丙 #4"],"draw":4}`；进行中 `disabled=true`、`aria-busy=true`、图标为 `svg.animate-spin`。
+- chip 替换：上一批 `建议甲 #3…` → 完成后 `建议甲 #4…`。
+- 键盘：从「附件」按 Tab 一步即到「建议」（`focused="Suggest"`），焦点环可见。
+- 悬停提示显示 `Suggest`。
+- 模型按钮左边界（空 → 有字）：320/340/360/375/390/412 = 139/159/175/190/205/227 → 同值，位移 0px。
+- 宽屏 1280：按钮文字仍为 `Suggest`（宽 61px），模型 chip 行与底栏正常。
+
+**截图**（`tmp/compact-suggest/`）
+- `compact-320-with-text.png`、`compact-360-with-text.png`、`compact-375-with-text.png`、`compact-390-with-text.png`
+- `suggest-in-flight-redraw.png`（进行中）、`suggest-after-redraw.png`（chip 已替换）
+- `suggest-focus-ring.png`、`suggest-hover-tooltip.png`
+- `wide-1280-labelled.png`

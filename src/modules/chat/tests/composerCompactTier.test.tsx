@@ -230,6 +230,11 @@ const baseProps = (options: { dropzoneRef?: MutableRefObject<HTMLFormElement | n
   hasInput: false,
   onClearInput: () => undefined,
   onSubmit: () => undefined,
+  // The shipping footer's row carries the Suggest control (icon on this tier) whenever the
+  // feature is on; the arrangement cases must measure that row, not one missing a control.
+  replySuggestionsEnabled: true,
+  replySuggestionsLoading: false,
+  onRequestReplySuggestions: vi.fn(),
   isDragActive: false,
   queuedDraft: null,
   isEditingSentMessage: false,
