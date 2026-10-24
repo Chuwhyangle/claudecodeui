@@ -46,11 +46,14 @@ extra: {}
 
 ## Touches
 
+- src/modules/sidebar/Sidebar.tsx
 - src/modules/sidebar/SidebarHeader.tsx
 - src/modules/sidebar/SidebarCollapsed.tsx
+- src/modules/sidebar/SidebarContent.tsx
 - src/modules/sidebar/SidebarProjectItem.tsx
 - src/modules/sidebar/SidebarModeSwitch.tsx
 - src/modules/sidebar/hooks/useFleetAttention.ts
+- src/modules/sidebar/hooks/useFleetTaskCounts.ts
 - src/modules/sidebar/index.ts
 - src/modules/sidebar/tests/SidebarModeSwitch.test.tsx
 - src/modules/sidebar/tests/SidebarProjectItem.test.tsx
