@@ -1,15 +1,19 @@
 import { memo, useEffect, useRef } from 'react';
-import { Check, ChevronDown, ChevronRight, Edit3, ListFilter, Star, Trash2, X } from 'lucide-react';
+import type { MouseEvent } from 'react';
+import { Check, ChevronDown, ChevronRight, Edit3, LayoutDashboard, ListFilter, Star, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
+import { useHref, useInRouterContext } from 'react-router-dom';
 
 import { Button } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import type { LLMProvider, MCPServerStatus, Project, ProjectSession, QuayFleetTaskCounts, SessionWithProvider } from '@/shared/types';
+import { cockpitViewPath } from '@/modules/cockpit';
 import { getQuayIndicatorStatus, getTaskIndicatorStatus } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import TaskIndicator from '@/modules/sidebar/TaskIndicator';
 import QuayIndicator from '@/modules/sidebar/QuayIndicator';
 import SidebarProjectSessions from '@/modules/sidebar/SidebarProjectSessions';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
+import { useFleetAttention } from '@/modules/sidebar/hooks/useFleetAttention';
 import { useFleetTaskCounts } from '@/modules/sidebar/hooks/useFleetTaskCounts';
 
 /**
@@ -64,6 +68,70 @@ const getSessionCountDisplay = (project: Project, sessions: SessionWithProvider[
   const total = Number(project.sessionMeta?.total ?? sessions.length);
   return String(total);
 };
+
+type CockpitProjectLinkProps = {
+  /** The project's quay-fleet registry id — the project segment this board link addresses. */
+  fleetProjectId: string;
+  /** Compact-card sizing (`h-8 w-8`) versus the desktop row's `h-6 w-6`. */
+  compact: boolean;
+  label: string;
+  onNavigate: (event: MouseEvent<HTMLAnchorElement>) => void;
+  /** Layout-only additions; the desktop row reveals its action group on hover. */
+  className?: string;
+};
+
+/** The anchor itself, shared by the routed and plain branches so the two cannot drift. */
+function CockpitProjectAnchor({
+  href,
+  fleetProjectId,
+  compact,
+  label,
+  onNavigate,
+  className,
+}: CockpitProjectLinkProps & { href: string }) {
+  return (
+    <a
+      href={href}
+      onClick={onNavigate}
+      title={label}
+      aria-label={label}
+      data-testid="cockpit-project-link"
+      data-cockpit-project={fleetProjectId}
+      className={cn(
+        'flex items-center justify-center rounded border border-border bg-muted/30 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+        compact ? 'h-8 w-8 rounded-lg' : 'h-6 w-6',
+        className,
+      )}
+    >
+      <LayoutDashboard className={compact ? 'h-4 w-4' : 'h-3 w-3'} aria-hidden />
+    </a>
+  );
+}
+
+function RoutedCockpitProjectLink(props: CockpitProjectLinkProps) {
+  const href = useHref(
+    cockpitViewPath({ type: 'board', project: props.fleetProjectId }),
+  );
+  return <CockpitProjectAnchor {...props} href={href} />;
+}
+
+/**
+ * 「在驾驶舱中查看」 for one row: a real link to the project's board, shown only when
+ * quay-fleet registers the project (an unregistered project has no addressable board).
+ * Split from the row because `useHref` needs a router, and the row is also rendered in unit
+ * tests that mount no router.
+ */
+function CockpitProjectLink(props: CockpitProjectLinkProps) {
+  const inRouter = useInRouterContext();
+  return inRouter ? (
+    <RoutedCockpitProjectLink {...props} />
+  ) : (
+    <CockpitProjectAnchor
+      {...props}
+      href={cockpitViewPath({ type: 'board', project: props.fleetProjectId })}
+    />
+  );
+}
 
 /**
  * A project row's task badge: the todo / ready / needs-human counts from the shared
@@ -156,6 +224,11 @@ function SidebarProjectItem({
   // badge, so their row is unchanged even though the shared read covers the whole fleet.
   const fleetTaskCounts = useFleetTaskCounts(project.projectId);
   const showTaskCounts = Boolean(project.hasQuayConfig) && fleetTaskCounts !== null;
+  // The fleet registry id is the ONLY handle a cockpit board link can be built from; an
+  // unregistered project has none, so the action is absent rather than pointing nowhere.
+  const attention = useFleetAttention();
+  const fleetProjectId = attention.fleetProjectIdByProject.get(project.projectId) ?? null;
+  const cockpitLinkLabel = t('common:cockpit.openProject', 'View in cockpit');
   const mobileRenameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -316,6 +389,14 @@ function SidebarProjectItem({
                   </>
                 ) : (
                   <>
+                    {fleetProjectId !== null && (
+                      <CockpitProjectLink
+                        compact
+                        fleetProjectId={fleetProjectId}
+                        label={cockpitLinkLabel}
+                        onNavigate={(event) => event.stopPropagation()}
+                      />
+                    )}
                     <button
                       className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-500/10 active:scale-90 dark:border-red-800 dark:bg-red-900/30"
                       onClick={(event) => {
@@ -502,6 +583,15 @@ function SidebarProjectItem({
                 >
                   <Edit3 className="h-3 w-3" />
                 </div>
+                {fleetProjectId !== null && (
+                  <CockpitProjectLink
+                    compact={false}
+                    fleetProjectId={fleetProjectId}
+                    label={cockpitLinkLabel}
+                    onNavigate={(event) => event.stopPropagation()}
+                    className="touch:opacity-100 opacity-0 transition-opacity group-hover:opacity-100"
+                  />
+                )}
                 <div
                   className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-red-50 group-hover:opacity-100 dark:hover:bg-red-900/20"
                   onClick={(event) => {

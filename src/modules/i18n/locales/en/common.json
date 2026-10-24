@@ -836,6 +836,14 @@
     "projectNotRegistered": "Not registered with quay-fleet",
     "unnamedSession": "Unnamed conversation · {{id}}",
     "deviceMobile": "Phone",
-    "deviceDesktop": "Desktop"
+    "deviceDesktop": "Desktop",
+    "modeSessions": "Sessions",
+    "modeCockpit": "Cockpit",
+    "modeSwitchLabel": "Switch between sessions and cockpit",
+    "attentionBadge": "{{n}} project items need you",
+    "attentionUnavailable": "Attention unavailable: {{reason}}",
+    "openProject": "View in cockpit",
+    "openCockpit": "Open cockpit",
+    "openCockpitNewWindow": "Open cockpit in a new window"
   }
 }

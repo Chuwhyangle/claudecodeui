@@ -745,6 +745,14 @@
     "projectNotRegistered": "quay-fleet'e kayıtlı değil",
     "unnamedSession": "Adsız konuşma · {{id}}",
     "deviceMobile": "Telefon",
-    "deviceDesktop": "Masaüstü"
+    "deviceDesktop": "Masaüstü",
+    "modeSessions": "Oturumlar",
+    "modeCockpit": "Kokpit",
+    "modeSwitchLabel": "Oturumlar ve kokpit arasında geçiş yap",
+    "attentionBadge": "{{n}} proje öğesi sizi bekliyor",
+    "attentionUnavailable": "Dikkat bilgisi kullanılamıyor: {{reason}}",
+    "openProject": "Kokpitte görüntüle",
+    "openCockpit": "Kokpiti aç",
+    "openCockpitNewWindow": "Kokpiti yeni pencerede aç"
   }
 }

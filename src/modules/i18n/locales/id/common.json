@@ -828,6 +828,14 @@
     "projectNotRegistered": "Tidak terdaftar di quay-fleet",
     "unnamedSession": "Percakapan tanpa nama · {{id}}",
     "deviceMobile": "Ponsel",
-    "deviceDesktop": "Desktop"
+    "deviceDesktop": "Desktop",
+    "modeSessions": "Sesi",
+    "modeCockpit": "Kokpit",
+    "modeSwitchLabel": "Beralih antara sesi dan kokpit",
+    "attentionBadge": "{{n}} item proyek membutuhkan Anda",
+    "attentionUnavailable": "Perhatian tidak tersedia: {{reason}}",
+    "openProject": "Lihat di kokpit",
+    "openCockpit": "Buka kokpit",
+    "openCockpitNewWindow": "Buka kokpit di jendela baru"
   }
 }

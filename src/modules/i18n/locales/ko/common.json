@@ -745,6 +745,14 @@
     "projectNotRegistered": "quay-fleet에 등록되지 않음",
     "unnamedSession": "제목 없는 대화 · {{id}}",
     "deviceMobile": "휴대폰",
-    "deviceDesktop": "데스크톱"
+    "deviceDesktop": "데스크톱",
+    "modeSessions": "세션",
+    "modeCockpit": "콕핏",
+    "modeSwitchLabel": "세션과 콕핏 전환",
+    "attentionBadge": "{{n}}개의 프로젝트 항목이 확인을 기다립니다",
+    "attentionUnavailable": "주의 정보를 읽을 수 없음: {{reason}}",
+    "openProject": "콕핏에서 보기",
+    "openCockpit": "콕핏 열기",
+    "openCockpitNewWindow": "새 창에서 콕핏 열기"
   }
 }

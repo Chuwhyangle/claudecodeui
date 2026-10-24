@@ -13,6 +13,7 @@ import type {
   VoiceFailureReport,
 } from '@/shared/types';
 import { buildQuayInFlightContract, useQuayStatus } from '@/modules/quay';
+import { SidebarModeSwitch } from '@/modules/sidebar';
 import CockpitInput from '@/modules/cockpit/CockpitInput';
 import CockpitStage from '@/modules/cockpit/CockpitStage';
 import type { CockpitFleetStatus } from '@/modules/cockpit/CockpitStage';
@@ -24,6 +25,7 @@ import {
   cockpitViewUri,
   parseCockpitView,
   projectNameFromPath,
+  resolveCockpitProject,
 } from '@/modules/cockpit/cockpitView';
 import type { CockpitProject, CockpitTiming, CockpitView } from '@/modules/cockpit/cockpitView';
 import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
@@ -183,11 +185,13 @@ function cockpitViewForHubView(
   hubView: CockpitHubView,
 ): CockpitView {
   if (hubView.type === 'fleet') return { type: 'fleet' };
-  const segment = hubView.project.toLowerCase();
+  // The hub's segment is a fleet registry id; the spoken project name is still accepted as an
+  // alias because the intent parser may hand one through.
   const project =
-    projects.find((candidate) => (candidate.fleetProjectId ?? '').toLowerCase() === segment) ??
-    projects.find((candidate) => candidate.name.toLowerCase() === segment);
-  return project === undefined ? { type: 'fleet' } : { type: 'board', project: project.projectId };
+    resolveCockpitProject(projects, hubView.project) ??
+    projects.find((candidate) => candidate.name.toLowerCase() === hubView.project.toLowerCase()) ??
+    null;
+  return project === null ? { type: 'fleet' } : { type: 'board', project: project.projectId };
 }
 
 /** The fleet registry segment a page view addresses, or null (fleet / unregistered project). */
@@ -196,8 +200,7 @@ function fleetSegmentForView(
   view: CockpitView,
 ): string | null {
   if (view.type === 'fleet') return null;
-  const project = projects.find((candidate) => candidate.projectId === view.project);
-  return project?.fleetProjectId ?? null;
+  return resolveCockpitProject(projects, view.project)?.fleetProjectId ?? null;
 }
 
 /** Rendered by `App` for the `/cockpit` route. */
@@ -332,7 +335,20 @@ export default function CockpitPage() {
   // open the board it names instead of flashing the fleet.
   const view = hubState.rev === 0 ? urlView : hubView;
 
-  const boardProjectId = view.type === 'board' ? view.project : null;
+  // The view's project segment may be either handle: the cockpit's own URL writes the
+  // CloudCLI id, while the sidebar's entry links speak the fleet registry id. Resolve it once
+  // so the snapshot request, the board contract and the hub all use the CloudCLI id.
+  const viewProject = useMemo(
+    () => (view.type === 'board' ? resolveCockpitProject(projects, view.project) : null),
+    [projects, view],
+  );
+  // The snapshot route is keyed by the CloudCLI project id. While the roster is still loading
+  // a deep-linked fleet id cannot be translated yet; wait instead of requesting a 404 under the
+  // wrong id (a later roster failure falls back to the raw segment, so the stage still tries).
+  const boardProjectId =
+    view.type === 'board'
+      ? viewProject?.projectId ?? (fleet.status === 'loading' ? null : view.project)
+      : null;
   // The board reads through the Quay module's own hook — the same snapshot request, cache
   // bypass and window handling the Quay tab uses. `isActive` keeps it idle on the fleet view.
   const { view: boardView, refresh: refreshBoard } = useQuayStatus(
@@ -351,7 +367,7 @@ export default function CockpitPage() {
 
   // The board's project segment: the fleet registry id, never the CloudCLI project id.
   const boardFleetProjectId: string | null = view.type === 'board'
-    ? projects.find((project) => project.projectId === view.project)?.fleetProjectId
+    ? viewProject?.fleetProjectId
       ?? (boardView.status === 'loaded' ? boardView.snapshot.fleetProjectId ?? null : null)
     : null;
 
@@ -681,12 +697,15 @@ export default function CockpitPage() {
           <span className="text-[11px] text-muted-foreground" data-testid="cockpit-view-label">
             {view.type === 'fleet'
               ? t('cockpit.fleetView')
-              : `${t('cockpit.boardView')} · ${projects.find((project) => project.projectId === view.project)?.name ?? view.project}`}
+              : `${t('cockpit.boardView')} · ${viewProject?.name ?? view.project}`}
           </span>
         </div>
         <span className="hidden text-[11px] text-muted-foreground sm:block" data-testid="cockpit-key-hint">
           {t('cockpit.keyHint')}
         </span>
+        {/* The same switch the sidebar header draws, with this page's segment active: that is
+            the way back to the session list (no separate 「返回」 link to drift from it). */}
+        <SidebarModeSwitch mode="cockpit" t={t} />
         {/*
           The phone remote's door: the stage shows the address, the phone scans it. No token is
           minted — the remote is behind the same login, and the hub binds a device to the signed-in

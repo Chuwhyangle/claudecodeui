@@ -715,6 +715,14 @@
     "projectNotRegistered": "Nicht bei quay-fleet registriert",
     "unnamedSession": "Unbenannte Unterhaltung · {{id}}",
     "deviceMobile": "Telefon",
-    "deviceDesktop": "Desktop"
+    "deviceDesktop": "Desktop",
+    "modeSessions": "Sitzungen",
+    "modeCockpit": "Cockpit",
+    "modeSwitchLabel": "Zwischen Sitzungen und Cockpit wechseln",
+    "attentionBadge": "{{n}} Projektaufgaben brauchen dich",
+    "attentionUnavailable": "Aufmerksamkeit nicht verfügbar: {{reason}}",
+    "openProject": "Im Cockpit ansehen",
+    "openCockpit": "Cockpit öffnen",
+    "openCockpitNewWindow": "Cockpit in neuem Fenster öffnen"
   }
 }

@@ -1,13 +1,15 @@
 import * as React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useHref, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
   ChevronRight,
+  ExternalLink,
   FileText,
   GitCommit,
   GitMerge,
+  LayoutDashboard,
   MessageSquare,
   MessageSquarePlus,
   RefreshCw,
@@ -37,6 +39,17 @@ import { useCommitsSource } from '@/modules/command-palette/hooks/useCommitsSour
 import { useSessionMessageSearch } from '@/modules/command-palette/hooks/useSessionMessageSearch';
 import { useBranchesSource } from '@/modules/command-palette/hooks/useBranchesSource';
 import { useGitActions } from '@/modules/command-palette/hooks/useGitActions';
+
+/**
+ * The cockpit's route, mirroring `COCKPIT_PATH` in `@/modules/cockpit/cockpitView`.
+ *
+ * WHY NOT IMPORT IT: the cockpit barrel also exports `CockpitPage`, and this module is loaded
+ * while the cockpit page itself is evaluating (`CockpitPage` → sidebar → command palette). A
+ * barrel import here closes command-palette ⇄ cockpit into one cycle, which vitest's module
+ * runner resolves only intermittently; the drift is covered by the palette's test, which pins
+ * this literal against the cockpit module's own exported path.
+ */
+const COCKPIT_COMMAND_PATH = '/cockpit';
 
 type Page = 'actions' | 'files' | 'sessions' | 'commits' | 'branches';
 
@@ -69,6 +82,9 @@ function CommandPalette({
   const { toggleDarkMode } = useTheme();
   const navigate = useNavigate();
   const ops = usePaletteOps();
+  // The new-window command must carry the deployment basename: `window.open('/cockpit')`
+  // would escape a reverse-proxy prefix.
+  const cockpitHref = useHref(COCKPIT_COMMAND_PATH);
 
   const page = pages.at(-1);
 
@@ -211,6 +227,26 @@ function CommandPalette({
                 <CommandItem value={`${t('commandPalette.toggleTheme')} dark light mode`} onSelect={() => run(toggleDarkMode)}>
                   <SunMoon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="flex-1">{t('commandPalette.toggleTheme')}</span>
+                </CommandItem>
+                <CommandItem
+                  value={`${t('common:cockpit.openCockpit')} cockpit 驾驶舱 stage fleet`}
+                  onSelect={() => run(() => navigate(COCKPIT_COMMAND_PATH))}
+                >
+                  <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">{t('common:cockpit.openCockpit')}</span>
+                </CommandItem>
+                <CommandItem
+                  value={`${t('common:cockpit.openCockpitNewWindow')} cockpit new window tab 驾驶舱 新窗口`}
+                  onSelect={() =>
+                    run(() => {
+                      // The cockpit is routinely parked on a second screen; opening it in its
+                      // own window must not navigate this one away from the session list.
+                      window.open(cockpitHref, '_blank', 'noopener,noreferrer');
+                    })
+                  }
+                >
+                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">{t('common:cockpit.openCockpitNewWindow')}</span>
                 </CommandItem>
               </CommandGroup>
             )}

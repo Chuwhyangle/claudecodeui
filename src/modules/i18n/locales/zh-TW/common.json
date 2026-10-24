@@ -745,6 +745,14 @@
     "projectNotRegistered": "未登記到 quay-fleet",
     "unnamedSession": "未命名工作階段 · {{id}}",
     "deviceMobile": "手機",
-    "deviceDesktop": "桌面"
+    "deviceDesktop": "桌面",
+    "modeSessions": "會話",
+    "modeCockpit": "駕駛艙",
+    "modeSwitchLabel": "在會話與駕駛艙之間切換",
+    "attentionBadge": "{{n}} 個專案事項需要你",
+    "attentionUnavailable": "無法讀取注意力資訊：{{reason}}",
+    "openProject": "在駕駛艙中檢視",
+    "openCockpit": "開啟駕駛艙",
+    "openCockpitNewWindow": "在新視窗開啟駕駛艙"
   }
 }
