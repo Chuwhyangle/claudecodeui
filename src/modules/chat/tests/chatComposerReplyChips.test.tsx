@@ -95,14 +95,12 @@ beforeEach(() => {
   localStorage.clear();
   resetChatDrafts();
   apiMocks.status.mockReset().mockImplementation(() => Promise.resolve({
-    ok: true,
-    json: async () => ({ enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120 }),
+    enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120,
   }));
   apiMocks.suggest.mockReset().mockImplementation(() => Promise.resolve({
-    ok: true,
-    json: async () => ({ chips: ['模型一', '模型二'], draw: 3 }),
+    chips: ['模型一', '模型二'], draw: 3,
   }));
-  apiMocks.event.mockReset().mockImplementation(() => Promise.resolve({ ok: true }));
+  apiMocks.event.mockReset().mockImplementation(() => Promise.resolve(true));
 });
 
 afterEach(() => {
@@ -289,7 +287,7 @@ describe('chip clicks at the composer surface', () => {
     fireEvent.click(buttons[1]);
     assert.deepEqual(
       (chipStripOf(props).onAcceptExpansionChip as ReturnType<typeof vi.fn>).mock.calls,
-      [[1]],
+      [['变体二', 1]],
     );
     assert.equal((props.onSubmit as ReturnType<typeof vi.fn>).mock.calls.length, 0, 'a variant is filled, not sent by the component');
   });
@@ -310,7 +308,7 @@ const flushMicrotasks = () => act(async () => {
  * control is not drawn at all rather than pressed into a silent no-op.
  */
 function SuggestVisibilityHarness({ lastAssistantMessageId }: { lastAssistantMessageId: string | null }) {
-  const { enabled, loading, redraw } = useReplySuggestions({
+  const { enabled, firstDraw } = useReplySuggestions({
     sessionId: 'session-a',
     lastAssistantMessageId,
     active: true,
@@ -319,8 +317,8 @@ function SuggestVisibilityHarness({ lastAssistantMessageId }: { lastAssistantMes
     ...composerBaseProps(),
     chipStrip: chipStripProps({
       suggestionsEnabled: enabled,
-      suggestionsLoading: loading,
-      onRequestSuggestions: redraw,
+      suggestionsLoading: firstDraw.loading,
+      onRequestSuggestions: firstDraw.redraw,
     }),
   } as unknown as React.ComponentProps<typeof ChatComposer>);
 }
@@ -345,10 +343,7 @@ describe('the Suggest control', () => {
   });
 
   it('(d) stays hidden when /status says the feature is off', async () => {
-    apiMocks.status.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ enabled: false, expansion: 'off', maxChips: 3, maxChipChars: 120 }),
-    }));
+    apiMocks.status.mockImplementation(() => Promise.resolve({ enabled: false, expansion: 'off', maxChips: 3, maxChipChars: 120 }));
     const view = render(React.createElement(SuggestVisibilityHarness, { lastAssistantMessageId: 'assistant-1' }));
     await waitFor(() => assert.equal(apiMocks.status.mock.calls.length, 1));
     await flushMicrotasks();
@@ -429,10 +424,7 @@ type ComposerSetupOptions = {
 
 const setupComposer = (quotedSelection: string | null = null, options: ComposerSetupOptions = {}) => {
   if (options.expansion === 'vary') {
-    apiMocks.status.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ enabled: true, expansion: 'vary', maxChips: 3, maxChipChars: 120 }),
-    }));
+    apiMocks.status.mockImplementation(() => Promise.resolve({ enabled: true, expansion: 'vary', maxChips: 3, maxChipChars: 120 }));
   }
   const sendMessage = vi.fn();
   const frames: FrameRequestCallback[] = [];
@@ -722,10 +714,7 @@ describe('composer state chip acceptance', () => {
   it('(f) keeps the expansion branch as it was: fills, asks for variants, never sends', async () => {
     const { view, sendMessage } = setupComposer(null, { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['变体一', '变体二'], draw: 11 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体一', '变体二'], draw: 11 }));
 
     act(() => {
       acceptChipAt(view, 0);
@@ -815,10 +804,7 @@ describe('composer state expansion', () => {
   it('(b) fills without sending and sends exactly one seed expansion request when expansion is vary', async () => {
     const { view, sendMessage } = setupComposer(null, { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['变体一', '变体二'], draw: 11 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体一', '变体二'], draw: 11 }));
 
     act(() => {
       acceptChipAt(view, 0);
@@ -836,21 +822,15 @@ describe('composer state expansion', () => {
   it('(c) accepting a variant replaces the body instead of appending it', async () => {
     const { view } = setupComposer(null, { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['变体一', '变体二'], draw: 11 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体一', '变体二'], draw: 11 }));
     act(() => {
       acceptChipAt(view, 0);
     });
     await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体一', '变体二']));
 
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['变体三'], draw: 12 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体三'], draw: 12 }));
     act(() => {
-      view.result.current.chipStrip.onAcceptExpansionChip(0);
+      view.result.current.chipStrip.onAcceptExpansionChip('变体一', 0);
     });
 
     assert.equal(view.result.current.input, '变体一', 'replaced, not appended to the seed');
@@ -861,10 +841,7 @@ describe('composer state expansion', () => {
   it('(e) a manual edit drops the variant chips', async () => {
     const { view } = setupComposer(null, { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['变体一'], draw: 11 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体一'], draw: 11 }));
     act(() => {
       acceptChipAt(view, 0);
     });
@@ -882,10 +859,7 @@ describe('composer state expansion', () => {
   it('(f) sending the draft drops the variant chips', async () => {
     const { view, deliver } = setupComposer(null, { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['变体一'], draw: 11 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体一'], draw: 11 }));
     act(() => {
       acceptChipAt(view, 0);
     });
@@ -907,10 +881,7 @@ describe('composer state expansion', () => {
   it('(g) quoting sends a focus expansion request with an empty seed', async () => {
     const { view } = setupComposer('选中的原文', { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['回应一', '回应二'], draw: 15 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['回应一', '回应二'], draw: 15 }));
 
     act(() => {
       acceptQuotedChip(view);
@@ -926,21 +897,15 @@ describe('composer state expansion', () => {
   it('(h) accepting a response keeps the `> 原文` line and replaces only what follows it', async () => {
     const { view } = setupComposer('选中的原文', { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['回应一', '回应二'], draw: 15 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['回应一', '回应二'], draw: 15 }));
     act(() => {
       acceptQuotedChip(view);
     });
     await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['回应一', '回应二']));
 
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({
-      ok: true,
-      json: async () => ({ chips: ['回应一的变体'], draw: 16 }),
-    }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['回应一的变体'], draw: 16 }));
     act(() => {
-      view.result.current.chipStrip.onAcceptExpansionChip(0);
+      view.result.current.chipStrip.onAcceptExpansionChip('回应一', 0);
     });
 
     assert.equal(view.result.current.input, '> 选中的原文\n回应一');
