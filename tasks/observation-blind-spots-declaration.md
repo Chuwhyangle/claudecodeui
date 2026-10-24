@@ -27,9 +27,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/blind-spots.test.ts` exit 0——四种 kind 写入时未提供 blindSpots 则填入对应默认声明且非空；生产者追加的声明与默认合并去重；tier=llm 的会话对象额外带 LLM 声明；wall 响应中每个对象都有非空 blindSpots。
-- [ ] AC2: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——预览末尾渲染「看不见」列表与对应的原始材料入口；磁贴本身不渲染盲区。
-- [ ] AC3: `npm run typecheck` 通过；文案覆盖 12 个 locale。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/blind-spots.test.ts` exit 0——四种 kind 写入时未提供 blindSpots 则填入对应默认声明且非空；生产者追加的声明与默认合并去重；tier=llm 的会话对象额外带 LLM 声明；wall 响应中每个对象都有非空 blindSpots。
+- [x] AC2: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——预览末尾渲染「看不见」列表与对应的原始材料入口；磁贴本身不渲染盲区。
+- [x] AC3: `npm run typecheck` 通过；文案覆盖 12 个 locale。
 
 ## DoD
 
@@ -44,6 +44,7 @@ depends_on:
 - server/modules/observation/index.ts
 - server/modules/observation/tests/blind-spots.test.ts
 - src/modules/cockpit/ObservationPreview.tsx
+- src/modules/cockpit/hooks/useObservationWall.ts
 - src/modules/cockpit/tests/ObservationWall.test.tsx
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
 - src/modules/i18n/locales/de/common.json
