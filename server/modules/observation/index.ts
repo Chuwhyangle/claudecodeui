@@ -58,6 +58,46 @@ export type {
   SessionTestReading,
   SessionTestRunner,
 } from './session-digest.js';
+// consumer: the composition root, which refreshes each fleet-registered project on the quay
+// snapshot's TTL and on task-status transitions; and `observation-wall-ui`, which renders the
+// five layers. The criterion builds its own producer over an injected clock and readers.
+export {
+  createProjectTruthProducer,
+  createCheckDeployFreshnessReader,
+  PROJECT_TRUTH_PRODUCER,
+  PROJECT_TRUTH_REFRESH_MS,
+} from './project-truth.producer.js';
+export type {
+  ProjectTruthDeployExec,
+  ProjectTruthDeployExecResult,
+  ProjectTruthProducer,
+  ProjectTruthProducerDeps,
+} from './project-truth.producer.js';
+export {
+  buildProjectTruth,
+  PROJECT_TRUTH_LAYER_LABELS,
+  PROJECT_TRUTH_NOT_APPLICABLE_REASON,
+} from './project-truth.js';
+export type {
+  ProjectDeployLayer,
+  ProjectInflightLayer,
+  ProjectLandedLayer,
+  ProjectLandedTask,
+  ProjectLivenessLayer,
+  ProjectTruthBoardReading,
+  ProjectTruthDeployReading,
+  ProjectTruthDeployTarget,
+  ProjectTruthDigest,
+  ProjectTruthGoalGateRow,
+  ProjectTruthInFlightTask,
+  ProjectTruthLayerState,
+  ProjectTruthLayers,
+  ProjectTruthProjectRef,
+  ProjectTruthReading,
+  ProjectTruthTaskRow,
+  ProjectVerificationEntry,
+  ProjectVerificationLayer,
+} from './project-truth.js';
 // consumer: server/modules/observation/observation-store.ts (the wall's producers[]) and the
 // producer-liveness criterion
 export {
