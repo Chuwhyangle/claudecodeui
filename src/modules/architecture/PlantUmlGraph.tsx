@@ -3385,13 +3385,20 @@ export function PlantUmlGraph({
             // The coarse drawer overlays the canvas' bottom band. Reserving it
             // as padding makes the flex centring use the area ABOVE the drawer,
             // so a fitted drawing is never half-hidden behind it. The portrait
-            // phone adds its collapsible zoom controls' band to the same
-            // reservation: the controls float over the canvas, so the drawing
-            // is fitted ABOVE them instead of under them. Padding (not a chrome
-            // row) is deliberate — `clientHeight` still counts it, so the
-            // canvas-share reading loses nothing.
+            // phone reserves its collapsible zoom controls' band in the SAME
+            // bottom region: the controls float over the canvas, so the drawing
+            // is fitted ABOVE them instead of under them. The two bands are
+            // measured from the same bottom edge, so they compose as a maximum
+            // rather than a sum — an open drawer already covers the controls'
+            // footprint, and reserving both would lift the drawing 80px higher
+            // than either surface needs. Padding (not a chrome row) is
+            // deliberate — `clientHeight` still counts it, so the canvas-share
+            // reading loses nothing.
             ...(bottomObscuredPx + portraitControlBandPx > 0
-              ? { paddingBottom: `${(touchUi ? 4 : 12) + bottomObscuredPx + portraitControlBandPx}px` }
+              ? {
+                paddingBottom: `${(touchUi ? 4 : 12)
+                  + Math.max(bottomObscuredPx, portraitControlBandPx)}px`,
+              }
               : {}),
             // The overlay's chrome (toolbar + readout rows) is drawn OVER the
             // viewport-sized canvas. Reserving it as padding makes the flex
@@ -3658,7 +3665,7 @@ export function PlantUmlGraph({
             // tier trims the row to the 44px targets themselves (no extra
             // band) because its height budget is the whole point of the tier.
             style={{
-              gap: shortTouch || portraitPhone ? 4 : touchUi ? TOUCH_CONTROL_GAP_PX : 4,
+              gap: shortTouch ? 4 : touchUi ? TOUCH_CONTROL_GAP_PX : 4,
               flexDirection: touchUi ? 'row' : 'column',
               height: portraitClusterCollapsed
                 ? '44px'
