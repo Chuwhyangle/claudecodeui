@@ -202,12 +202,27 @@ function parsePlaywrightOutput(output: string): { passed: number; failed: number
  */
 export function parseTestOutput(output: string): SessionTestReading {
   const vitest = parseVitestOutput(output);
-  if (vitest !== null) return { state: 'evaluated', runner: 'vitest', ...vitest };
+  if (vitest !== null) return evaluatedOrVacuous('vitest', vitest);
   const nodeTest = parseNodeTestOutput(output);
-  if (nodeTest !== null) return { state: 'evaluated', runner: 'node-test', ...nodeTest };
+  if (nodeTest !== null) return evaluatedOrVacuous('node-test', nodeTest);
   const playwright = parsePlaywrightOutput(output);
-  if (playwright !== null) return { state: 'evaluated', runner: 'playwright', ...playwright };
+  if (playwright !== null) return evaluatedOrVacuous('playwright', playwright);
   return { state: 'unevaluated', reason: '未识别到 vitest / node --test / playwright 的通过失败计数输出' };
+}
+
+/**
+ * A `0 passed / 0 failed` summary is what a skipped or not-executed run prints. Calling that
+ * green would be the "silent green" the observation layer exists to avoid, so it is reported as
+ * unevaluated instead of as a healthy zero.
+ */
+function evaluatedOrVacuous(
+  runner: SessionTestRunner,
+  counts: { passed: number; failed: number },
+): SessionTestReading {
+  if (counts.passed === 0 && counts.failed === 0) {
+    return { state: 'unevaluated', reason: `${runner} 报告 0 通过 0 失败：测试未执行或全部跳过` };
+  }
+  return { state: 'evaluated', runner, ...counts };
 }
 
 /**

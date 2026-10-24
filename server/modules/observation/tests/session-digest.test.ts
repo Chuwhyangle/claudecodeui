@@ -175,6 +175,12 @@ test('AC1: output no runner recognizes reads unevaluated with a reason', () => {
   assert.equal(reading.state, 'unevaluated');
   if (reading.state !== 'unevaluated') return;
   assert.match(reading.reason, /未识别/);
+
+  // A skipped run's `0 passed / 0 failed` is a readable summary but not a green reading.
+  const vacuous = parseTestOutput('ℹ tests 1\nℹ pass 0\nℹ fail 0\nℹ skipped 1\n');
+  assert.equal(vacuous.state, 'unevaluated');
+  if (vacuous.state !== 'unevaluated') return;
+  assert.match(vacuous.reason, /0 通过 0 失败/);
 });
 
 test('AC1: a question ending and a numbered-options ending both ask you, a statement does not', () => {
