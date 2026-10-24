@@ -1029,8 +1029,14 @@ export function PlantUmlGraph({
     const hostRect = host.getBoundingClientRect();
     const originLeft = hostRect.left + host.clientLeft;
     const originTop = hostRect.top + host.clientTop;
-    const width = host.clientWidth;
-    const height = host.clientHeight;
+    // The SAME reading the solve uses (`measureHostSize`): the client box when
+    // the browser has laid it out, else the rect. Using `clientWidth` directly
+    // here would build a zero-wide top band in a host that only reports a rect
+    // (jsdom), and `solveFitArea` drops zero-area overlays — the chrome would
+    // silently vanish from the deduction.
+    const hostSize = measureHostSize(host);
+    const width = hostSize?.width ?? 0;
+    const height = hostSize?.height ?? 0;
     const rects: FitOverlayRect[] = [];
     if (topObscuredPx > 0) {
       rects.push({ left: 0, top: 0, width, height: Math.min(height, topObscuredPx) });
