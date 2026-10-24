@@ -25,12 +25,12 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/observation-store.test.ts` exit 0——写入修订后 revision 单调递增；游标之后的差量条目正确；游标存在 DB 中，换一个连接读到相同游标；status 为 unevaluated 时必须带 reason（缺 reason 的写入被拒）。
-- [ ] AC2: 同一测试文件——墙的组成：钉选对象常驻；未钉选的 attention/red 对象自动浮现，游标前移且状态复原后退出；超过上限 12 时按 red>attention>ok×最近修订排序并返回折叠数。
-- [ ] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/observation-routes.test.ts` exit 0——三个 API 的成功/鉴权/非法 URI 路径；`seen` 回退游标（revision 小于现值）被忽略。
-- [ ] AC4: `npx vitest run src/modules/cockpit/tests/observationUri.test.ts` exit 0——`cloudcli://session/<id>`、`cloudcli://architecture/<p>` 解析/格式化往返，非法形式被拒。
-- [ ] AC5: `npm run typecheck` 通过；`server/shared/tests/server-import-cycle-budget.test.ts` 通过。
-- [ ] AC6: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/producer-liveness.test.ts` exit 0——假时钟：生产者按期心跳时为 ok；超过 2 × expectedIntervalMs 未尝试为 stale；最近一次带 lastError 为 red；登记后从未运行为 unevaluated；任一非 ok 时 wall 响应含「观察层自身」attention 条目且不被上限折叠。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/observation-store.test.ts` exit 0——写入修订后 revision 单调递增；游标之后的差量条目正确；游标存在 DB 中，换一个连接读到相同游标；status 为 unevaluated 时必须带 reason（缺 reason 的写入被拒）。
+- [x] AC2: 同一测试文件——墙的组成：钉选对象常驻；未钉选的 attention/red 对象自动浮现，游标前移且状态复原后退出；超过上限 12 时按 red>attention>ok×最近修订排序并返回折叠数。
+- [x] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/observation-routes.test.ts` exit 0——三个 API 的成功/鉴权/非法 URI 路径；`seen` 回退游标（revision 小于现值）被忽略。
+- [x] AC4: `npx vitest run src/modules/cockpit/tests/observationUri.test.ts` exit 0——`cloudcli://session/<id>`、`cloudcli://architecture/<p>` 解析/格式化往返，非法形式被拒。
+- [x] AC5: `npm run typecheck` 通过；`server/shared/tests/server-import-cycle-budget.test.ts` 通过。
+- [x] AC6: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/producer-liveness.test.ts` exit 0——假时钟：生产者按期心跳时为 ok；超过 2 × expectedIntervalMs 未尝试为 stale；最近一次带 lastError 为 red；登记后从未运行为 unevaluated；任一非 ok 时 wall 响应含「观察层自身」attention 条目且不被上限折叠。
 
 ## DoD
 
