@@ -25,13 +25,13 @@ depends_on:
 | 落地 | 自游标以来转为 done 的任务 | — |
 | 部署 | 运行版本 vs HEAD（复用 `scripts/check-deploy-freshness.mjs` 的逻辑）；目前只有 CloudCLI 自身有部署概念 | 其他项目为「不适用」，不显示绿 |
 | 验证 | goal/AC 的 gate 三态（pass/fail/not-evaluated） | 未评估 |
-| 活性 | driver 最近 tick、fleet 心跳时间（经 fleet CLI 读口；读口未就绪时读 `~/.quay-fleet/heartbeat.json` 并标注来源）、最近一次 gate 事件时间 | 超过阈值 ⇒ red |
+| 活性 | 目标契约：`quay-fleet liveness --json`（fleet 任务 `fleet-liveness-read-port`：`fleet.{state,lastTickAt,ageSec}`、`projects[].driver.{state,ageSec}`、`lastGateAt`、`halted`，三态 ok/stale/unknown，stale 阈值由 fleet 配置）。**过渡期读 `quay-fleet status --json`**（已存在：`projects[].drivers.{worker,promotion,goal,outer}.state/ageSec/anchorAlive` 与 heartbeat 的 service 段）；不要只读 `~/.quay-fleet/heartbeat.json`——它没有每项目 driver 状态。读法集中在一个函数里，liveness 落地后只换这一处 | stale ⇒ red；unknown ⇒ 未评估 + 原因 |
 差量条目：「落地 X」「X 转红」「goal Y 推进」「driver 静默 25 分钟」。状态：任一层 red ⇒ red；有 needs-human ⇒ attention。
 
 ## AC
 
 - [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/project-truth.test.ts` exit 0——快照夹具生成五层读数；非 CloudCLI 项目的部署层为「不适用」且不计入绿；driver 最近 tick 超过阈值时状态为 red 且差量含静默时长；gate 结果为 not-evaluated 时该层为未评估而非绿。
-- [ ] AC2: 同一测试文件——游标之后新转为 done 的任务出现在差量中、游标之前的不出现；fleet 读口不可用时活性层注明来源为心跳文件或未评估。
+- [ ] AC2: 同一测试文件——游标之后新转为 done 的任务出现在差量中、游标之前的不出现；fleet 读口不可用时活性层为未评估并带原因；桩 `status --json` 与桩 `liveness --json` 两种输入都能得出同样的五层读数。
 - [ ] AC3: `npm run typecheck` 通过。
 
 ## DoD
