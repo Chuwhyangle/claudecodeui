@@ -858,6 +858,24 @@
     "decisionAuditObject": "이의",
     "decisionAuditAgreed": "동의로 표시했습니다",
     "decisionAuditObjected": "이의가 인간 결정으로 기록되었습니다",
-    "decisionAuditObjectionDefault": "표본 확인 중 이의를 제기했습니다"
+    "decisionAuditObjectionDefault": "표본 확인 중 이의를 제기했습니다",
+    "projectDriverUnavailable": "드라이버 사용 불가",
+    "projectOpenRefused": "“{{name}}”을(를) 열 수 없습니다.",
+    "projectUnregisteredNext": "quay-fleet에 등록한 뒤(예: `quay-fleet registry add <경로>`) 새로 고치세요.",
+    "projectDriverUnavailableNext": "프로젝트 드라이버를 시작한 뒤 새로 고치세요.",
+    "fleetCliMissingNext": "QUAY_FLEET_BIN을 설정한 뒤 새로 고치세요.",
+    "ordinalsRegisteredOnly": "순번(①, ②, …)은 등록된 프로젝트만 가리킵니다.",
+    "ordinalUnavailable": "{{n}}에 해당하는 번호가 매겨진 프로젝트가 없습니다.",
+    "ordinalUnavailableNext": "프로젝트 목록을 사용하거나 프로젝트를 등록한 뒤 다시 시도하세요.",
+    "attentionBadgeDetail": "{{n}}개의 프로젝트 항목이 확인을 기다립니다: {{projects}}",
+    "observationBlindSpots": "이 보기에 보이지 않는 것:",
+    "observationOpenQuay": "Quay 패널 열기"
+  },
+  "replyReference": {
+    "item": "{{label}}「{{excerpt}}」",
+    "itemsRange": "{{from}}–{{to}}번 항목",
+    "itemsList": "{{list}}번 항목",
+    "wholeReply": "답변 전체",
+    "mismatch": "최신 답변에는 항목이 {{count}}개뿐입니다"
   }
 }

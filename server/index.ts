@@ -100,7 +100,13 @@ import { createLiaisonModule, createFileLiaisonStore, createQuayFleetRunner } fr
 // The ONE quay-fleet binary locator (QUAY_FLEET_BIN → PATH → ~/.quay-fleet/bin). The liaison
 // module must not grow a second lookup order, so the composition root injects this one.
 import { locateQuayFleetCli } from './modules/quay/quay-fleet-locator.js';
-import { createReplySuggestionsModule } from './modules/reply-suggestions/index.js';
+import { createReplySuggestionsModule, setReplySuggestionsUsageObserver } from './modules/reply-suggestions/index.js';
+// The host-level context event stream (context-event-stream-and-shadow-predictor).
+// ONE process instance: the chat control plane records utterances through it, the
+// cockpit records focus/send events, and the reply-suggestions ledger's observer
+// mirrors the chip events. The shadow predictor inside it writes to the same
+// stream and to nothing else.
+import { contextEvents } from './modules/context-events/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
@@ -274,6 +280,11 @@ const chatControl = createChatControlService({
             ...activityStore.sessionIds(),
         ]),
     ],
+    // The person's accepted send is the utterance. The recorder is fire-and-forget
+    // and contained on both sides, so a stream failure never reaches the send.
+    recordContextEvent: (event) => {
+        void contextEvents.record(event);
+    },
 });
 
 // The cockpit hub: ONE per process, the state every display and input device of a user shares.
@@ -349,7 +360,17 @@ const cockpitHub = createCockpitModule({
             });
         }
     },
+    // The cockpit's focus / reference-resolution / send-card events are recorded
+    // for the host stream only; they never travel back over a websocket.
+    recordContextEvent: (event) => {
+        void contextEvents.record(event);
+    },
 });
+
+// The reply-suggestions ledger's read-only tap: every `shown` / `picked` /
+// `redrawn` row becomes the matching `chip.*` context event. The ledger itself
+// keeps its file, rotation and field names unchanged.
+setReplySuggestionsUsageObserver((record) => contextEvents.recordUsage(record));
 
 // M3 liaison delivery (`liaison-delivery-by-initiative-and-project`). The module is a leaf:
 // it knows the (initiative, project) → session resolution, the three-state reading and the
@@ -1764,12 +1785,14 @@ app.use(
 // The observation wall (observation-object-model-seen-cursor-and-delta). The module is a leaf:
 // it reads and writes through the database barrel and knows nothing about websockets, so the
 // composition root binds its push seam to the cockpit hub — the same per-user socket fan-out
-// the cockpit already uses. The block cap is the server settings file's `observation.wallLimit`.
+// the cockpit already uses. The block cap is the server settings file's `observation.wallLimit`;
+// the UI view-event log's switch and path are `observation.viewEvents` (local file, never the DB).
 app.use(
     '/api/observation',
     authenticateToken,
     createObservationModule({
         wallLimit: serverSettings.observation.wallLimit,
+        viewEvents: serverSettings.observation.viewEvents,
         publish: (userId, frame) => cockpitHub.broadcast(userId, frame),
     }),
 );

@@ -1,7 +1,7 @@
 ---
 id: observation-session-digest-llm-tier
 title: 观察墙 T6：会话摘要第二档（LLM）——一句话结论/选项/跑偏提示，限频限量，用量可查
-status: todo
+status: done
 labels:
   - cockpit
   - observation
@@ -26,9 +26,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest-llm.test.ts` exit 0——桩 LLM 客户端：观察列表外或低于 minTurnChars 的轮次不调用；超过 maxPerHour 时跳过并标注限额；调用失败时保留确定性摘要并带原因；成功时写入 tier=llm 且 driftNote 带「仅作建议」标记；每次调用写一条用量记录。
-- [ ] AC2: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——LLM 选项渲染为按钮，点击后先出现确认预览，确认后发送恰好一次。
-- [ ] AC3: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest-llm.test.ts` exit 0——桩 LLM 客户端：观察列表外或低于 minTurnChars 的轮次不调用；超过 maxPerHour 时跳过并标注限额；调用失败时保留确定性摘要并带原因；成功时写入 tier=llm 且 driftNote 带「仅作建议」标记；每次调用写一条用量记录。
+- [x] AC2: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——LLM 选项渲染为按钮，点击后先出现确认预览，确认后发送恰好一次。
+- [x] AC3: `npm run typecheck` 通过。
 
 ## DoD
 
@@ -45,4 +45,8 @@ depends_on:
 - config/server.settings.example.json
 - src/modules/cockpit/ObservationPreview.tsx
 - src/modules/cockpit/tests/ObservationWall.test.tsx
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
+- server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/server-import-cycle-budget.baseline.json
 - tasks/observation-session-digest-llm-tier.md

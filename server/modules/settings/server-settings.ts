@@ -37,7 +37,12 @@ import {
   DEFAULT_RESIDENT_RESTORE_MAX,
   DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
 } from '@/modules/session-hosts/index.js';
-import { DEFAULT_OBSERVATION_WALL_LIMIT } from '@/modules/observation/index.js';
+import {
+  DEFAULT_OBSERVATION_WALL_LIMIT,
+  DEFAULT_VIEW_EVENTS_ENABLED,
+  defaultViewEventsPath,
+  type ViewEventsSettings,
+} from '@/modules/observation/index.js';
 
 /**
  * The environment variable naming the settings file, or nothing when the shipped user-copy
@@ -81,15 +86,18 @@ export type ResidentRestoreSettings = {
 export type ServerSettingsSource = 'default' | 'file';
 
 /**
- * The observation wall's server-level policy.
+ * The observation wall's and view instrumentation's server-level policy.
  *
  * `wallLimit` is the number of object blocks the wall renders before folding the rest. The
  * observation layer's own 「观察层自身」 entry is deliberately NOT part of this cap — a wall
- * that is quiet because its producers died must still say so. Consumed by `server/index.ts`
- * when it composes the observation module.
+ * that is quiet because its producers died must still say so. `viewEvents` controls the local
+ * UI view-event log: `enabled` ships true (the log stays on this machine and never enters the
+ * database), and `path` names the JSONL file the server appends to. Consumed by
+ * `server/index.ts` when it composes the observation module.
  */
 export type ObservationSettings = {
   wallLimit: number;
+  viewEvents: ViewEventsSettings;
 };
 
 /**
@@ -197,7 +205,10 @@ function defaultServerSettings(filePath: string): ServerSettings {
       max: DEFAULT_RESIDENT_RESTORE_MAX,
       maxAgeMs: DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
     },
-    observation: { wallLimit: DEFAULT_OBSERVATION_WALL_LIMIT },
+    observation: {
+      wallLimit: DEFAULT_OBSERVATION_WALL_LIMIT,
+      viewEvents: { enabled: DEFAULT_VIEW_EVENTS_ENABLED, path: defaultViewEventsPath() },
+    },
     initiative: { auditRatio: DEFAULT_INITIATIVE_AUDIT_RATIO },
     source: 'default',
     path: filePath,
@@ -261,12 +272,16 @@ function isPositiveInteger(value: unknown): value is number {
 /**
  * The `observation` block, field by field over the shipped defaults.
  *
- * A malformed block keeps the shipped wall limit and says why in `problems`. The limit must be
+ * A malformed block keeps the shipped values and says why in `problems`. The wall limit must be
  * a positive integer: zero would render an empty wall while everything behind it is healthy,
- * which is the exact "quiet looks fine" failure the layer exists to rule out.
+ * which is the exact "quiet looks fine" failure the layer exists to rule out. `viewEvents` is
+ * read by {@link readViewEvents}.
  */
 function readObservation(raw: unknown, problems: string[]): ObservationSettings {
-  const settings: ObservationSettings = { wallLimit: DEFAULT_OBSERVATION_WALL_LIMIT };
+  const settings: ObservationSettings = {
+    wallLimit: DEFAULT_OBSERVATION_WALL_LIMIT,
+    viewEvents: { enabled: DEFAULT_VIEW_EVENTS_ENABLED, path: defaultViewEventsPath() },
+  };
 
   if (raw === undefined) {
     return settings;
@@ -282,6 +297,47 @@ function readObservation(raw: unknown, problems: string[]): ObservationSettings 
       settings.wallLimit = record.wallLimit;
     } else {
       problems.push('`observation.wallLimit` must be a positive integer');
+    }
+  }
+  settings.viewEvents = readViewEvents(record.viewEvents, problems);
+  return settings;
+}
+
+/**
+ * The `observation.viewEvents` block, field by field over the shipped defaults.
+ *
+ * The switch must be a real boolean: a string `"false"` is a malformed value, not an opt-out,
+ * so it falls back to the shipped `true` and is reported — the same "silently off looks like a
+ * quiet machine" failure the wall itself rules out. A `path` must be a non-empty string; it is
+ * used as written, so an operator who names a relative path gets it resolved from the server's
+ * working directory.
+ */
+function readViewEvents(raw: unknown, problems: string[]): ViewEventsSettings {
+  const settings: ViewEventsSettings = {
+    enabled: DEFAULT_VIEW_EVENTS_ENABLED,
+    path: defaultViewEventsPath(),
+  };
+  if (raw === undefined) {
+    return settings;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    problems.push('`observation.viewEvents` must be a JSON object');
+    return settings;
+  }
+
+  const record = raw as Record<string, unknown>;
+  if (record.enabled !== undefined) {
+    if (typeof record.enabled === 'boolean') {
+      settings.enabled = record.enabled;
+    } else {
+      problems.push('`observation.viewEvents.enabled` must be a boolean');
+    }
+  }
+  if (record.path !== undefined) {
+    if (typeof record.path === 'string' && record.path.trim() !== '') {
+      settings.path = record.path;
+    } else {
+      problems.push('`observation.viewEvents.path` must be a non-empty string');
     }
   }
   return settings;

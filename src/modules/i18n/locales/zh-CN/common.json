@@ -858,6 +858,24 @@
     "decisionAuditObject": "有异议",
     "decisionAuditAgreed": "已标记为同意",
     "decisionAuditObjected": "异议已记录为一条 human 决策",
-    "decisionAuditObjectionDefault": "抽查时提出异议"
+    "decisionAuditObjectionDefault": "抽查时提出异议",
+    "projectDriverUnavailable": "驱动不可用",
+    "projectOpenRefused": "无法打开「{{name}}」。",
+    "projectUnregisteredNext": "先把它登记到 quay-fleet（例如 `quay-fleet registry add <路径>`），然后刷新。",
+    "projectDriverUnavailableNext": "启动该项目的驱动，然后刷新。",
+    "fleetCliMissingNext": "设置 QUAY_FLEET_BIN，然后刷新。",
+    "ordinalsRegisteredOnly": "编号只给已登记项目。",
+    "ordinalUnavailable": "{{n}} 没有对应的编号项目。",
+    "ordinalUnavailableNext": "从项目条打开，或先登记该项目再重试。",
+    "attentionBadgeDetail": "{{n}} 个项目事项需要你：{{projects}}",
+    "observationBlindSpots": "这个视图看不见：",
+    "observationOpenQuay": "打开 Quay 面板"
+  },
+  "replyReference": {
+    "item": "{{label}}「{{excerpt}}」",
+    "itemsRange": "第 {{from}}–{{to}} 点",
+    "itemsList": "第 {{list}} 点",
+    "wholeReply": "整条回复",
+    "mismatch": "回复里只有 {{count}} 条"
   }
 }

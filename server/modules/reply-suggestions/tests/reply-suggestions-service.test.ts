@@ -491,3 +491,42 @@ test('(o) a normal redraw with focus still works while expansion is off, and a s
   );
   assert.equal(harness.calls.length, 1, 'the refused shape made no second upstream call');
 });
+
+// ---------------------------------------------------------------------------
+// Chip text post-processing: separator marks at the end are not part of a reply
+// ---------------------------------------------------------------------------
+
+test('(p) a trailing separator mark is stripped from the parsed chip', () => {
+  assert.deepEqual(
+    parseSuggestionChips(JSON.stringify({ chips: ['选 Python；', '再来一条;', '好，就这样,', '并列项、'] })),
+    ['选 Python', '再来一条', '好，就这样', '并列项'],
+  );
+});
+
+test('(q) sentence endings and closing brackets/quotes are left intact', () => {
+  const kept = ['继续？', '完成了。', '快点！', '（选 A）', '「可以」', '“好了”'];
+  assert.deepEqual(parseSuggestionChips(JSON.stringify({ chips: kept })), kept);
+});
+
+test('(r) a chip made only of separator marks is dropped, never left as an empty string', () => {
+  assert.deepEqual(
+    parseSuggestionChips(JSON.stringify({ chips: ['；', '；；', '，', '、', '  '] })),
+    [],
+  );
+});
+
+test('(s) de-duplication happens after trailing separators are stripped', async (t) => {
+  const harness = makeHarness(t, { responder: () => chips('甲；', '甲', '乙') });
+  const draw = await harness.service.suggest({ sessionId: 's-strip-dedup' });
+  assert.deepEqual(draw.chips, ['甲', '乙'], '甲； and 甲 are one chip');
+});
+
+test('(t) the built-in prompt tells the model not to end a single point with a separator', async (t) => {
+  const harness = makeHarness(t, { responder: () => chips('a', 'b', 'c') });
+  await harness.service.suggest({ sessionId: 's-prompt-no-separator-tail' });
+  assert.ok(
+    harness.calls[0].system.includes('不要以分隔'),
+    'the default prompt carries the no-trailing-separator rule',
+  );
+  assert.equal(harness.settings.systemPrompt, '', 'this reading is the built-in prompt, not an override');
+});

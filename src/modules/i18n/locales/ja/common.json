@@ -858,6 +858,24 @@
     "decisionAuditObject": "異議",
     "decisionAuditAgreed": "同意として記録しました",
     "decisionAuditObjected": "異議を人間の決定として記録しました",
-    "decisionAuditObjectionDefault": "抜き取り確認で異議を申し立てました"
+    "decisionAuditObjectionDefault": "抜き取り確認で異議を申し立てました",
+    "projectDriverUnavailable": "ドライバー利用不可",
+    "projectOpenRefused": "「{{name}}」を開けませんでした。",
+    "projectUnregisteredNext": "quay-fleet に登録して（例: `quay-fleet registry add <パス>`）、再読み込みしてください。",
+    "projectDriverUnavailableNext": "プロジェクトのドライバーを起動して、再読み込みしてください。",
+    "fleetCliMissingNext": "QUAY_FLEET_BIN を設定して、再読み込みしてください。",
+    "ordinalsRegisteredOnly": "序数（①、②、…）は登録済みのプロジェクトだけを指します。",
+    "ordinalUnavailable": "{{n}} に対応する番号付きプロジェクトはありません。",
+    "ordinalUnavailableNext": "プロジェクト一覧から開くか、プロジェクトを登録してから、もう一度お試しください。",
+    "attentionBadgeDetail": "{{n}} 件のプロジェクト項目があなたを待っています：{{projects}}",
+    "observationBlindSpots": "このビューに見えないもの：",
+    "observationOpenQuay": "Quay パネルを開く"
+  },
+  "replyReference": {
+    "item": "{{label}}「{{excerpt}}」",
+    "itemsRange": "{{from}}–{{to}} 番目",
+    "itemsList": "{{list}} 番目",
+    "wholeReply": "返信全体",
+    "mismatch": "最新の返信は {{count}} 項目しかありません"
   }
 }

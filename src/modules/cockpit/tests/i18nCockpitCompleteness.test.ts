@@ -104,6 +104,7 @@ describe('every locale carries the cockpit copy', () => {
       'modeCockpit',
       'modeSwitchLabel',
       'attentionBadge',
+      'attentionBadgeDetail',
       'attentionUnavailable',
       'openProject',
       'openCockpit',
@@ -113,8 +114,10 @@ describe('every locale carries the cockpit copy', () => {
       expect(typeof reference[key], `cockpit.${key}`).toBe('string');
       expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
     }
-    // The badge's accessible name must carry the count, and the warning its reason.
+    // The badge's accessible name must carry the count, its sourced form the project list, and
+    // the warning its reason.
     expect(placeholders(reference.attentionBadge)).toEqual(['n']);
+    expect(placeholders(reference.attentionBadgeDetail)).toEqual(['n', 'projects']);
     expect(placeholders(reference.attentionUnavailable)).toEqual(['reason']);
   });
 
@@ -154,6 +157,8 @@ describe('every locale carries the cockpit copy', () => {
       'observationDaysAgo',
       'observationRevision',
       'observationPreviewLabel',
+      'observationBlindSpots',
+      'observationOpenQuay',
       'observationLater',
       'observationRecentTurn',
       'observationChanges',
@@ -271,6 +276,29 @@ describe('every locale carries the cockpit copy', () => {
     for (const key of ['initiativeDurationMinutes', 'initiativeDurationHours', 'initiativeDurationDays']) {
       expect(placeholders(reference[key]), `cockpit.${key}`).toEqual(['n']);
     }
+  });
+
+  // The project strip's refusal copy: a project the fleet cannot address (or whose driver is
+  // down) stays clickable and answers with a reason and a next step. Naming the keys here keeps
+  // the generic loop above from silently "covering" a rename with the English fallback.
+  it('covers the unopenable-project feedback copy', () => {
+    const required = [
+      'projectNotRegistered',
+      'projectDriverUnavailable',
+      'projectOpenRefused',
+      'projectUnregisteredNext',
+      'projectDriverUnavailableNext',
+      'fleetCliMissingNext',
+      'ordinalsRegisteredOnly',
+      'ordinalUnavailable',
+      'ordinalUnavailableNext',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(reference.projectOpenRefused)).toEqual(['name']);
+    expect(placeholders(reference.ordinalUnavailable)).toEqual(['n']);
   });
 
   // Positive control: the same checker must reject a missing block, a blank value, a key-copied

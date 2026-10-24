@@ -941,6 +941,24 @@
     "decisionAuditObject": "Keberatan",
     "decisionAuditAgreed": "Ditandai setuju",
     "decisionAuditObjected": "Keberatan dicatat sebagai keputusan manusia",
-    "decisionAuditObjectionDefault": "Keberatan diajukan saat pemeriksaan sampel"
+    "decisionAuditObjectionDefault": "Keberatan diajukan saat pemeriksaan sampel",
+    "projectDriverUnavailable": "Driver tidak tersedia",
+    "projectOpenRefused": "Tidak dapat membuka “{{name}}”.",
+    "projectUnregisteredNext": "Daftarkan ke quay-fleet (misalnya `quay-fleet registry add <path>`), lalu muat ulang.",
+    "projectDriverUnavailableNext": "Jalankan driver proyek, lalu muat ulang.",
+    "fleetCliMissingNext": "Setel QUAY_FLEET_BIN, lalu muat ulang.",
+    "ordinalsRegisteredOnly": "Nomor urut (①, ②, …) hanya menunjuk proyek yang terdaftar.",
+    "ordinalUnavailable": "Tidak ada proyek bernomor untuk {{n}}.",
+    "ordinalUnavailableNext": "Gunakan bilah proyek, atau daftarkan proyeknya, lalu coba lagi.",
+    "attentionBadgeDetail": "{{n}} item proyek membutuhkan Anda: {{projects}}",
+    "observationBlindSpots": "Tampilan ini tidak dapat melihat:",
+    "observationOpenQuay": "Buka panel Quay"
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "Butir {{from}}–{{to}}",
+    "itemsList": "Butir {{list}}",
+    "wholeReply": "seluruh balasan",
+    "mismatch": "Balasan terakhir hanya memiliki {{count}} butir"
   }
 }

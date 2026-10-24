@@ -284,11 +284,29 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // Re-measured 2026-10-24 after fleet-cli-cross-repo-contract-tests added its cross-repo
     // criterion server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts
     // (415 + 1 = 416 collected server test files).
-    // Re-measured 2026-10-24 after liaison-delivery-by-initiative-and-project added
-    // server/modules/liaison/tests/liaison-deliver.test.ts (416 + 1 = 417 collected
+    // Then observation-session-digest-deterministic added its criterion
+    // server/modules/observation/tests/session-digest.test.ts and
+    // liaison-delivery-by-initiative-and-project added its criterion
+    // server/modules/liaison/tests/liaison-deliver.test.ts (416 + 2 = 418 collected
     // server test files).
-    // This fixture names 3 known files, so 417 - 3 = 414.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=414$/);
+    // Then observation-p0-view-instrumentation-and-weekly-report added its criterion
+    // server/modules/observation/tests/view-events.test.ts (418 + 1 = 419 collected
+    // server test files).
+    // Then observation-project-layered-truth added its criterion
+    // server/modules/observation/tests/project-truth.test.ts (419 + 1 = 420 collected
+    // server test files).
+    // Then observation-blind-spots-declaration added its criterion
+    // server/modules/observation/tests/blind-spots.test.ts (420 + 1 = 421 collected
+    // server test files).
+    // Then observation-session-digest-llm-tier added its criterion
+    // server/modules/observation/tests/session-digest-llm.test.ts (421 + 1 = 422 collected
+    // server test files).
+    // Then context-event-stream-and-shadow-predictor added its four criteria under
+    // server/modules/context-events/tests/ — context-event-writer,
+    // utterance-classifier, shadow-predictor and production-wiring
+    // (422 + 4 = 426 collected server test files).
+    // This fixture names 3 known files, so 426 - 3 = 423.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=423$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -337,9 +355,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 417 files on this tree — but this fixture names ONE known file,
-    // so 417 - 1 = 416 (AC2 reads 414 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=416$/);
+    // Same collection as AC2 — 426 files on this tree — but this fixture names ONE known
+    // file, so 426 - 1 = 425 (AC2 reads 423 because its fixture names 3).
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=425$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

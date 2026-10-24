@@ -828,6 +828,24 @@
     "decisionAuditObject": "Возразить",
     "decisionAuditAgreed": "Отмечено как согласованное",
     "decisionAuditObjected": "Возражение записано как решение человека",
-    "decisionAuditObjectionDefault": "Возражение заявлено при выборочной проверке"
+    "decisionAuditObjectionDefault": "Возражение заявлено при выборочной проверке",
+    "projectDriverUnavailable": "Драйвер недоступен",
+    "projectOpenRefused": "Не удалось открыть «{{name}}».",
+    "projectUnregisteredNext": "Зарегистрируйте его в quay-fleet (например, `quay-fleet registry add <путь>`) и обновите страницу.",
+    "projectDriverUnavailableNext": "Запустите драйвер проекта и обновите страницу.",
+    "fleetCliMissingNext": "Задайте QUAY_FLEET_BIN и обновите страницу.",
+    "ordinalsRegisteredOnly": "Порядковые номера (①, ②, …) обозначают только зарегистрированные проекты.",
+    "ordinalUnavailable": "Нет пронумерованного проекта для {{n}}.",
+    "ordinalUnavailableNext": "Используйте полосу проектов или зарегистрируйте проект и повторите попытку.",
+    "attentionBadgeDetail": "{{n}} задач проекта ждут вас: {{projects}}",
+    "observationBlindSpots": "Это представление не видит:",
+    "observationOpenQuay": "Открыть панель Quay"
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "пункты {{from}}–{{to}}",
+    "itemsList": "пункты {{list}}",
+    "wholeReply": "весь ответ",
+    "mismatch": "В последнем ответе всего {{count}} пунктов"
   }
 }

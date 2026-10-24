@@ -68,6 +68,7 @@ import {
   rasterizeSvgToPng,
   serializeSvgForExport,
 } from '@/modules/architecture/exportArtifacts';
+import { BOTTOM_SLOT_INFO_INSET_PX, overlayLayoutDefect } from '@/modules/architecture/bottomSlotLayout';
 import {
   CanvasHeaderSlotContext,
   CompactToolbarSlotContext,
@@ -661,7 +662,7 @@ export default function ArchitecturePanel({
     if (container === null || hint === null) return;
     const containerBox = container.getBoundingClientRect();
     const hintBox = hint.getBoundingClientRect();
-    const rectsOf = (selector: string): ArchitectureHintRect[] => [...container.querySelectorAll(selector)]
+    const rectsOf = (selector: string, root: ParentNode = container): ArchitectureHintRect[] => [...root.querySelectorAll(selector)]
       .map((element) => element.getBoundingClientRect())
       .filter((rect) => rect.width > 0 && rect.height > 0)
       .map((rect) => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }));
@@ -673,6 +674,10 @@ export default function ArchitecturePanel({
         bottom: containerBox.bottom,
       },
       hint: { width: hintBox.width, height: hintBox.height },
+      // The bottom band's shared slots: the reading must not cover the drawing's
+      // own labels, the corner slot (map + zoom controls), the INFO slot's pill,
+      // or an open tray/dock that already owns part of the canvas. Every box
+      // comes from the live DOM, so this one rule serves all tiers.
       obstacles: [
         // The package tabs (each frame's own `path`) and the class-name text.
         ...rectsOf('.uml-package[data-package-id] > path'),
@@ -680,7 +685,21 @@ export default function ArchitecturePanel({
         // The canvas's own corner chrome, for the same reason the fit avoids it.
         ...rectsOf('[data-architecture-minimap]'),
         ...rectsOf('[data-architecture-zoom-cluster]'),
+        // The INFO slot's other occupant: the selection pill. Before this, the
+        // hint was placed bottom-first straight onto the pill. The DEV control
+        // arm removes this obstacle (together with the pill's slot anchor) to
+        // restore that defect.
+        ...(overlayLayoutDefect() === 'no-slot-layout' ? [] : rectsOf('[data-architecture-tray-pill]')),
+        // An expanded tray / open dock is a bottom band of its own; the reading
+        // stays above it instead of being painted underneath. The dock is a
+        // SIBLING of the canvas region in the panel column, so it is read from
+        // the document rather than from inside the container.
+        ...rectsOf('[data-architecture-tray-expanded-panel]'),
+        ...rectsOf('[data-architecture-dock]', document),
+        ...rectsOf('[data-architecture-dock-touch]', document),
       ],
+      // The INFO slot's inset, stated once in `bottomSlotLayout`.
+      margin: BOTTOM_SLOT_INFO_INSET_PX,
     });
     setHoverHintPosition({ left: placement.left, top: placement.top });
   }, [hoverHintSignature]);
@@ -1789,6 +1808,35 @@ export default function ArchitecturePanel({
           .reduce((total, count) => total + count, 0);
         return { id: node.id, label, file, incoming, outgoing, hidden };
       })();
+  /**
+   * The hover reading as ONE string.
+   *
+   * It is built here rather than as JSX fragments for two reasons: the reading
+   * must be printed whole in the span's `title` (the visible line may be
+   * ellipsized on a narrow canvas), and the ellipsis must never remove anything
+   * the title cannot give back.
+   */
+  const hoverHintText = hoverReading === null
+    ? ''
+    : [
+        t('architecture.copyFix.hoverSummary', {
+          defaultValue: '{{name}} · {{file}} · {{in}} in / {{out}} out',
+          name: hoverReading.label,
+          file: hoverReading.file,
+          in: hoverReading.incoming,
+          out: hoverReading.outgoing,
+        }),
+        ' — ',
+        visibleHover !== null && visibleHover.relations.length > 0
+          ? visibleHover.relations.join(', ')
+          : t('architecture.copyFix.hoverNoRelations', { defaultValue: 'no drawn relations' }),
+        hoverReading.hidden > 0
+          ? ` · ${t('architecture.copyFix.hoverHidden', {
+            defaultValue: '{{count}} more hidden by the filter',
+            count: hoverReading.hidden,
+          })}`
+          : '',
+      ].join('');
   // The selection as the renderer and the inspector need it: separate readings,
   // so neither has to narrow the union itself.
   const selectedNodeId = selection?.kind === 'entity' ? selection.nodeId : null;
@@ -4364,8 +4412,12 @@ export default function ArchitecturePanel({
                   style={{
                     left: hoverHintPosition?.left ?? HOVER_HINT_MARGIN_PX,
                     top: hoverHintPosition?.top ?? HOVER_HINT_MARGIN_PX,
+                    // The reading never runs across the whole canvas: at 85% on
+                    // a phone it would reach into the corner slot, and the
+                    // measured placement has nothing left to choose from.
+                    maxWidth: 'min(85%, 720px)',
                   }}
-                  className="pointer-events-none absolute z-20 flex max-w-[85%] flex-col items-start gap-1"
+                  className="pointer-events-none absolute z-20 flex flex-col items-start gap-1"
                 >
                   <span
                     ref={hoverHintRef}
@@ -4374,28 +4426,20 @@ export default function ArchitecturePanel({
                     data-architecture-hover-relations={visibleHover?.relations.join(',') ?? ''}
                     data-architecture-hover-in={hoverReading.incoming}
                     data-architecture-hover-out={hoverReading.outgoing}
+                    // The visible line is ONE line: when the reading does not
+                    // fit it is ellipsized, never hard-clipped — and the title
+                    // always carries the words the ellipsis hid.
+                    title={hoverHintText}
+                    style={{
+                      display: 'block',
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
                     className="pointer-events-none rounded bg-background/90 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm"
                   >
-                    {t('architecture.copyFix.hoverSummary', {
-                      defaultValue: '{{name}} · {{file}} · {{in}} in / {{out}} out',
-                      name: hoverReading.label,
-                      file: hoverReading.file,
-                      in: hoverReading.incoming,
-                      out: hoverReading.outgoing,
-                    })}
-                    {' — '}
-                    {visibleHover !== null && visibleHover.relations.length > 0
-                      ? visibleHover.relations.join(', ')
-                      : t('architecture.copyFix.hoverNoRelations', { defaultValue: 'no drawn relations' })}
-                    {hoverReading.hidden > 0 && (
-                      <>
-                        {' · '}
-                        {t('architecture.copyFix.hoverHidden', {
-                          defaultValue: '{{count}} more hidden by the filter',
-                          count: hoverReading.hidden,
-                        })}
-                      </>
-                    )}
+                    {hoverHintText}
                   </span>
                 </div>
               )}

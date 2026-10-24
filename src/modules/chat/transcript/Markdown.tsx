@@ -10,17 +10,25 @@ import { useTranslation } from 'react-i18next';
 import { MermaidDiagram } from '@/modules/code-editor';
 import { MarkdownImage } from '@/modules/chat/transcript/MarkdownImage';
 import { normalizeInlineCodeFences } from '@/modules/chat/utils/transcript/chatFormatting';
+import { matchReplyItem } from '@/modules/chat/utils/transcript/replyItems';
 import { buildSyntaxTheme } from '@/modules/chat/utils/transcript/syntaxHighlightTheme';
 import { copyTextToClipboard } from '@/shared/utils';
 import { SyntaxHighlighter } from '@/shared/syntaxHighlighter';
 import { usePaletteOps } from '@/modules/command-palette';
 import type { PrismStyleSheet } from '@/modules/chat/utils/transcript/syntaxHighlightTheme';
+import type { ReplyItem, ReplyItemRenderContext } from '@/modules/chat/utils/transcript/replyItems';
 
 type MarkdownProps = {
   children: React.ReactNode;
   className?: string;
   /** Render single newlines as hard line breaks (for user-typed messages). */
   breaks?: boolean;
+  /**
+   * When set, the blocks that became addressable items publish their address,
+   * label and highlight state on the DOM — see `replyItems.ts`. Only the latest
+   * assistant reply receives this, so older replies stay plain prose.
+   */
+  replyItems?: ReplyItemRenderContext;
 };
 
 // Links to the wider web (or in-page anchors) keep normal browser navigation;
@@ -190,6 +198,17 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
  */
 const syntaxTheme = buildSyntaxTheme(oneLight as PrismStyleSheet, oneDark as PrismStyleSheet);
 
+/**
+ * The low-key ① label drawn to the left of a labelled item, and the wash the
+ * highlight arm adds. Drawn through `::before` on the item's own element (from
+ * `data-reply-item-label`) rather than as a real text node: the label is a
+ * reading aid, and a real span would become part of the row's text for every
+ * reader of `textContent` — the export, the search index and a scenario's
+ * text reading included.
+ */
+const REPLY_ITEM_LABEL_CLASS =
+  'before:mr-1.5 before:select-none before:text-[0.75em] before:text-muted-foreground before:content-[attr(data-reply-item-label)] data-[reply-item-highlighted=true]:rounded-sm data-[reply-item-highlighted=true]:bg-primary/10';
+
 // The `:root`/`.dark` declarations backing syntaxTheme.style. Injected once
 // because the values are derived from the Prism theme objects at runtime and so
 // cannot live in index.css. ThemeContext toggles `.dark` on <html>, which is
@@ -255,7 +274,7 @@ const markdownComponents = {
  * render model-authored markdown with this module's shared prose styling,
  * code highlighting and table rules.
  */
-function MarkdownBodyRenderer({ children, breaks = false }: Omit<MarkdownProps, 'className'>) {
+function MarkdownBodyRenderer({ children, breaks = false, replyItems }: Omit<MarkdownProps, 'className'>) {
   const content = useMemo(
     () => normalizeInlineCodeFences(String(children ?? '')),
     [children],
@@ -280,8 +299,8 @@ function MarkdownBodyRenderer({ children, breaks = false }: Omit<MarkdownProps, 
   const rehypePlugins = useMemo(() => (hasMath ? [rehypeKatex] : EMPTY_PLUGINS), [hasMath]);
   const { openFileInEditor, openDirectory } = usePaletteOps();
 
-  const components = useMemo(
-    () => ({
+  const components = useMemo(() => {
+    const base: Record<string, unknown> = {
       ...markdownComponents,
       a: ({ href, children: linkChildren }: { href?: string; children?: React.ReactNode }) => {
         // Prefer the href when it is a real path; otherwise fall back to the
@@ -324,9 +343,85 @@ function MarkdownBodyRenderer({ children, breaks = false }: Omit<MarkdownProps, 
           </a>
         );
       },
-    }),
-    [openFileInEditor, openDirectory],
-  );
+    };
+
+    if (!replyItems) {
+      return base;
+    }
+
+    /**
+     * The DOM facts a labelled item publishes. Absent for a block that is not
+     * one of the latest reply's items, so an ordinary paragraph keeps exactly
+     * the markup it had before this feature existed.
+     */
+    const itemAttributes = (item: ReplyItem | null): Record<string, string> =>
+      item
+        ? {
+            'data-reply-item-uri': replyItems.uriFor(item.ordinal),
+            'data-reply-item-label': item.label,
+            'data-reply-item-kind': item.kind,
+            ...(replyItems.highlightedOrdinals.has(item.ordinal)
+              ? { 'data-reply-item-highlighted': 'true' }
+              : {}),
+          }
+        : {};
+    const labelledClass = (item: ReplyItem | null) => (item ? ` ${REPLY_ITEM_LABEL_CLASS}` : '');
+
+    base.li = ({ node, children, ...props }: { node?: any; children?: React.ReactNode }) => {
+      // A nested item is never one of the reply's top-level points, even when
+      // its text happens to match. Markdown allows up to three spaces of
+      // top-level indentation, so the column is what separates the two.
+      const topLevel = !node?.position || node.position.start.column <= 3;
+      const item = topLevel
+        ? matchReplyItem(childrenToText(children), replyItems.items, ['ordered', 'unordered'])
+        : null;
+      return (
+        <li
+          {...props}
+          className={`[&>div:last-child]:mb-0 [&>div]:mb-1${labelledClass(item)}`}
+          {...itemAttributes(item)}
+        >
+          {children}
+        </li>
+      );
+    };
+
+    const makeHeading = (Tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') =>
+      ({ node: _node, children, ...props }: { node?: any; children?: React.ReactNode; className?: string }) => {
+        const item = matchReplyItem(childrenToText(children), replyItems.items, ['heading']);
+        return React.createElement(
+          Tag,
+          { ...props, className: `${props.className ?? ''}${labelledClass(item)}`, ...itemAttributes(item) },
+          children,
+        );
+      };
+    base.h1 = makeHeading('h1');
+    base.h2 = makeHeading('h2');
+    base.h3 = makeHeading('h3');
+    base.h4 = makeHeading('h4');
+    base.h5 = makeHeading('h5');
+    base.h6 = makeHeading('h6');
+
+    base.p = ({ node, children, ...props }: { node?: any; children?: React.ReactNode }) => {
+      // A numbered bold paragraph is exactly a paragraph whose first inline
+      // child is the bold run; other paragraphs keep the plain renderer.
+      const opensWithBold = node?.children?.[0]?.tagName === 'strong';
+      const item = opensWithBold
+        ? matchReplyItem(childrenToText(children), replyItems.items, ['bold-paragraph'])
+        : null;
+      return (
+        <div
+          {...props}
+          className={`mb-2 last:mb-0${labelledClass(item)}`}
+          {...itemAttributes(item)}
+        >
+          {children}
+        </div>
+      );
+    };
+
+    return base;
+  }, [openFileInEditor, openDirectory, replyItems]);
 
   return (
     <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components as any}>
@@ -348,10 +443,10 @@ function MarkdownBodyRenderer({ children, breaks = false }: Omit<MarkdownProps, 
 export const MarkdownBody = memo(MarkdownBodyRenderer);
 
 /** Markdown in its own prose container. The form every non-streaming caller uses. */
-export const Markdown = memo(function Markdown({ children, className, breaks }: MarkdownProps) {
+export const Markdown = memo(function Markdown({ children, className, breaks, replyItems }: MarkdownProps) {
   return (
     <div className={className}>
-      <MarkdownBody breaks={breaks}>{children}</MarkdownBody>
+      <MarkdownBody breaks={breaks} replyItems={replyItems}>{children}</MarkdownBody>
     </div>
   );
 });

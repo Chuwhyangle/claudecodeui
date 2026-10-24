@@ -828,6 +828,24 @@
     "decisionAuditObject": "Einspruch",
     "decisionAuditAgreed": "Als zugestimmt markiert",
     "decisionAuditObjected": "Einspruch als menschliche Entscheidung aufgezeichnet",
-    "decisionAuditObjectionDefault": "Einspruch bei der Stichprobenprüfung erhoben"
+    "decisionAuditObjectionDefault": "Einspruch bei der Stichprobenprüfung erhoben",
+    "projectDriverUnavailable": "Treiber nicht verfügbar",
+    "projectOpenRefused": "„{{name}}“ konnte nicht geöffnet werden.",
+    "projectUnregisteredNext": "Registriere es bei quay-fleet (z. B. `quay-fleet registry add <Pfad>`) und lade dann neu.",
+    "projectDriverUnavailableNext": "Starte den Treiber des Projekts und lade dann neu.",
+    "fleetCliMissingNext": "Setze QUAY_FLEET_BIN und lade dann neu.",
+    "ordinalsRegisteredOnly": "Ordnungszahlen (①, ②, …) benennen nur registrierte Projekte.",
+    "ordinalUnavailable": "Kein nummeriertes Projekt für {{n}}.",
+    "ordinalUnavailableNext": "Nutze die Projektleiste oder registriere das Projekt und versuche es erneut.",
+    "attentionBadgeDetail": "{{n}} Projektaufgaben brauchen dich: {{projects}}",
+    "observationBlindSpots": "Diese Ansicht kann nicht sehen:",
+    "observationOpenQuay": "Quay-Panel öffnen"
+  },
+  "replyReference": {
+    "item": "{{label}}„{{excerpt}}“",
+    "itemsRange": "Punkte {{from}}–{{to}}",
+    "itemsList": "Punkte {{list}}",
+    "wholeReply": "die ganze Antwort",
+    "mismatch": "Die letzte Antwort hat nur {{count}} Punkte"
   }
 }

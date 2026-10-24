@@ -858,6 +858,24 @@
     "decisionAuditObject": "İtiraz et",
     "decisionAuditAgreed": "Katılıyorum olarak işaretlendi",
     "decisionAuditObjected": "İtiraz insan kararı olarak kaydedildi",
-    "decisionAuditObjectionDefault": "Örnekleme kontrolünde itiraz edildi"
+    "decisionAuditObjectionDefault": "Örnekleme kontrolünde itiraz edildi",
+    "projectDriverUnavailable": "Sürücü kullanılamıyor",
+    "projectOpenRefused": "“{{name}}” açılamadı.",
+    "projectUnregisteredNext": "quay-fleet’e kaydedin (örneğin `quay-fleet registry add <yol>`), sonra yenileyin.",
+    "projectDriverUnavailableNext": "Projenin sürücüsünü başlatın, sonra yenileyin.",
+    "fleetCliMissingNext": "QUAY_FLEET_BIN’i ayarlayın, sonra yenileyin.",
+    "ordinalsRegisteredOnly": "Sıra numaraları (①, ②, …) yalnızca kayıtlı projeleri belirtir.",
+    "ordinalUnavailable": "{{n}} için numaralı proje yok.",
+    "ordinalUnavailableNext": "Proje çubuğunu kullanın veya projeyi kaydedip yeniden deneyin.",
+    "attentionBadgeDetail": "{{n}} proje öğesi sizi bekliyor: {{projects}}",
+    "observationBlindSpots": "Bu görünüm göremez:",
+    "observationOpenQuay": "Quay panelini aç"
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "{{from}}–{{to}}. maddeler",
+    "itemsList": "{{list}}. maddeler",
+    "wholeReply": "tüm yanıt",
+    "mismatch": "Son yanıtta yalnızca {{count}} madde var"
   }
 }

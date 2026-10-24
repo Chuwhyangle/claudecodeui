@@ -47,8 +47,11 @@ export type {
 // re-exported so a criterion can compose the REAL service with injected adapters
 // rather than reimplementing its index, its budget or its rate limit.
 export {
+  createQuayFleetLivenessReader,
   createQuayService,
   isReadOnlyQuayCommand,
+  QUAY_FLEET_LIVENESS_DEFAULT_STALE_AFTER_SEC,
+  QUAY_FLEET_LIVENESS_TIMEOUT_MS,
   QUAY_FLEET_SUMMARY_MAX_CONCURRENT_PROJECTS,
   QUAY_FLEET_SUMMARY_TTL_MS,
   QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS,
@@ -62,6 +65,15 @@ export type {
   QuayCommandRunner,
   QuayDriverState,
   QuayDriverSummary,
+  // Consumed by `server/modules/observation/project-truth.ts`: the project tile's 活性 layer
+  // reads the fleet's per-project driver state through this one normalized contract.
+  QuayFleetLivenessCommandResult,
+  QuayFleetLivenessExec,
+  QuayFleetLivenessReader,
+  QuayFleetLivenessReaderOptions,
+  QuayFleetLivenessReading,
+  QuayFleetLivenessState,
+  QuayFleetProjectLiveness,
   /** Consumed by the sidebar's project-row task badges: one quay project's fleet entry. */
   QuayFleetProjectSummary,
   /** Consumed by `GET /api/quay/fleet-summary`: the eager cross-project reading. */

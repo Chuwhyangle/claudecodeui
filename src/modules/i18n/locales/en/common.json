@@ -949,6 +949,24 @@
     "decisionAuditObject": "Object",
     "decisionAuditAgreed": "Marked as agreed",
     "decisionAuditObjected": "Objection recorded as a human decision",
-    "decisionAuditObjectionDefault": "Objection raised during the spot-check"
+    "decisionAuditObjectionDefault": "Objection raised during the spot-check",
+    "projectDriverUnavailable": "Driver unavailable",
+    "projectOpenRefused": "Could not open “{{name}}”.",
+    "projectUnregisteredNext": "Register it with quay-fleet (for example `quay-fleet registry add <path>`), then refresh.",
+    "projectDriverUnavailableNext": "Start the project’s driver, then refresh.",
+    "fleetCliMissingNext": "Set QUAY_FLEET_BIN, then refresh.",
+    "ordinalsRegisteredOnly": "Ordinals (①, ②, …) address registered projects only.",
+    "ordinalUnavailable": "No numbered project for {{n}}.",
+    "ordinalUnavailableNext": "Use the project strip, or register the project, then try again.",
+    "attentionBadgeDetail": "{{n}} project items need you: {{projects}}",
+    "observationBlindSpots": "This view cannot see:",
+    "observationOpenQuay": "Open the Quay panel"
+  },
+  "replyReference": {
+    "item": "{{label}}“{{excerpt}}”",
+    "itemsRange": "Items {{from}}–{{to}}",
+    "itemsList": "Items {{list}}",
+    "wholeReply": "the whole reply",
+    "mismatch": "The latest reply has only {{count}} items"
   }
 }

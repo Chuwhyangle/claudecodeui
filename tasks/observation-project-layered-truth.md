@@ -1,7 +1,7 @@
 ---
 id: observation-project-layered-truth
 title: 观察墙 T3：项目磁贴生产者——分层真相（在飞/落地/部署/验证/活性）+ 差量，取不到如实三态
-status: ready
+status: done
 labels:
   - cockpit
   - observation
@@ -30,9 +30,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/project-truth.test.ts` exit 0——快照夹具生成五层读数；非 CloudCLI 项目的部署层为「不适用」且不计入绿；driver 最近 tick 超过阈值时状态为 red 且差量含静默时长；gate 结果为 not-evaluated 时该层为未评估而非绿。
-- [ ] AC2: 同一测试文件——游标之后新转为 done 的任务出现在差量中、游标之前的不出现；fleet 读口不可用时活性层为未评估并带原因；桩 `status --json` 与桩 `liveness --json` 两种输入都能得出同样的五层读数。
-- [ ] AC3: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/project-truth.test.ts` exit 0——快照夹具生成五层读数；非 CloudCLI 项目的部署层为「不适用」且不计入绿；driver 最近 tick 超过阈值时状态为 red 且差量含静默时长；gate 结果为 not-evaluated 时该层为未评估而非绿。
+- [x] AC2: 同一测试文件——游标之后新转为 done 的任务出现在差量中、游标之前的不出现；fleet 读口不可用时活性层为未评估并带原因；桩 `status --json` 与桩 `liveness --json` 两种输入都能得出同样的五层读数。
+- [x] AC3: `npm run typecheck` 通过。
 
 ## DoD
 
@@ -48,4 +48,18 @@ depends_on:
 - server/modules/quay/quay.service.ts
 - server/modules/quay/index.ts
 - scripts/check-deploy-freshness.mjs
+- server/shared/tests/quay-test-script.test.ts
 - tasks/observation-project-layered-truth.md
+
+## Evidence
+
+- AC1/AC2 — `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/project-truth.test.ts` → 10/10 passed. Covers: five layers from one snapshot fixture (在飞 phase/task, 落地 window, 部署 fresh, 验证 pass, 活性 age) with an activity instant on every green layer; a non-CloudCLI project (`deploy: null`) reading 部署 `not-applicable` while a deliberately failing deploy reader is ignored (and no 「部署 红」 delta); a 1500s-silent driver reading the object `red` with 「driver 静默 25 分钟」; an active AC with gate `not-evaluated` reading the layer `unevaluated` (object attention, never green); needs-human → attention; producer cursor semantics (first read claims no landings; only a task done after the previous observation appears as 「落地」); a failed task-list read preserving the landing cursor so a later read still catches that window; an unavailable fleet port reading 活性 `unevaluated` with its reason; and stubbed `liveness --json` + `status --json` documents normalizing to the identical five layers and delta.
+- AC3 — `npm run typecheck` exit 0 (client, server and scripts projects; the new `--json` switch in `scripts/check-deploy-freshness.mjs` type-checks under `scripts/tsconfig.json` as well).
+- New server test file — `server/shared/tests/quay-test-script.test.ts` pins the collected file count, so the two numbers were re-measured for the added criterion: 419 → 420 collected, AC2 `known=3 unknown=417`, AC3 `known=1 unknown=419`; that criterion passes 14/14, and the AC-394 import-cycle budget criterion passes 11/11 with the new `modules/observation → modules/quay` type/reader edge (no new SCC, no manifest change).
+- DoD manual pass — a throwaway probe (in `tmp/`, not committed) built the same readings from real sources: `quay task list --json --no-body`, `quay goal list --json`, `quay lanes --json --window-hours 3` (in-flight = intervals with `finalState === null`), `quay-fleet liveness --json` through the shipping reader, and `scripts/check-deploy-freshness.mjs --json` with a 24h landing window.
+  - Fleet liveness (source `liveness`, at 2026-10-24T10:39:23Z): quay-fleet ok/2s, quay ok/4s, claudecodeui ok/1s, archguard ok/9s, plantuml-js ok/4s. Cross-checked against `~/.quay-fleet/heartbeat.json` (tick 218, at 10:39:07Z, errors 0) and `quay-fleet status --json` (`anchorAlive: true`, worker state `ok` for all five).
+  - claudecodeui: tasks `{done:1031, ready:12, superseded:20}` — exactly the counts in `quay-fleet status --json`; 在飞 5 (`observation-project-layered-truth@implementing`, `architecture-readout-minimap-hover-layout@implementing`, `gap-reply-suggestions-model-chip-fill-only@implementing`, `observation-prediction-scoring-24h-ratios@fan-in`, `gap-reply-suggestions-compact-footer-icon-only-suggest@implementing`); 落地 36 in 24h; 部署 red — `{"verdict":"stale","buildSha":"2d995e88e0d90b219991fb4455cc07259b0d8abb","refSha":"54f928b91435a454dd1db355f08b9046d472ddec","behindBy":61}` (the live server is 61 commits behind HEAD); 验证 unevaluated (4/282 AC gates not-evaluated, 0 failing); 活性 ok age 1s.
+  - quay: tasks `{done:2908, todo:1, ready:2, superseded:75}` — exact match with the fleet status counts; 在飞 0; 落地 14 in 24h; 部署 not-applicable; 验证 red (2 failing / 3 not-evaluated of 227); 活性 ok age 23s.
+  - quay-fleet: tasks `{done:173, needs-human:1, superseded:9}` — exact match; 在飞 0; 落地 7 in 24h; 部署 not-applicable; 验证 red (5 failing / 1 not-evaluated of 82); 活性 ok age 0s.
+  - The deploy layer was read with the updated script from this worktree against the running instance and main's HEAD, because the running checkout still carries the pre-`--json` script; after fan-in the shipped script is the one the producer invokes.
+- Isolated-instance note — no server instance was started for this task (the producer is a primitive; the composition root wiring lands with the wall UI task), so the resident-restore constraint never came into play.

@@ -2,12 +2,19 @@ import { useMemo } from 'react';
 
 import { MarkdownBody } from '@/modules/chat/transcript/Markdown';
 import { splitStreamingMarkdown } from '@/modules/chat/utils/transcript/streamingMarkdown';
+import type { ReplyItemRenderContext } from '@/modules/chat/utils/transcript/replyItems';
 
 type StreamingMarkdownProps = {
   content: string;
   /** False once the reply is complete, which stops the splitting. */
   isStreaming: boolean;
   className?: string;
+  /**
+   * Labels for the latest reply's addressable items. Both halves receive the
+   * whole reply's item list, so a list split across the streaming boundary
+   * still labels each rendered item by its text.
+   */
+  replyItems?: ReplyItemRenderContext;
 };
 
 /**
@@ -48,6 +55,7 @@ export default function StreamingMarkdown({
   content,
   isStreaming,
   className,
+  replyItems,
 }: StreamingMarkdownProps) {
   const { settled, pending } = useMemo(
     () => (isStreaming ? splitStreamingMarkdown(content) : { settled: content, pending: '' }),
@@ -56,8 +64,8 @@ export default function StreamingMarkdown({
 
   return (
     <div className={className}>
-      {settled && <MarkdownBody>{settled}</MarkdownBody>}
-      {pending && <MarkdownBody>{pending}</MarkdownBody>}
+      {settled && <MarkdownBody replyItems={replyItems}>{settled}</MarkdownBody>}
+      {pending && <MarkdownBody replyItems={replyItems}>{pending}</MarkdownBody>}
     </div>
   );
 }

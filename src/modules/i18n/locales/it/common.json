@@ -858,6 +858,24 @@
     "decisionAuditObject": "Obietta",
     "decisionAuditAgreed": "Contrassegnato come approvato",
     "decisionAuditObjected": "Obiezione registrata come decisione umana",
-    "decisionAuditObjectionDefault": "Obiezione sollevata durante la verifica a campione"
+    "decisionAuditObjectionDefault": "Obiezione sollevata durante la verifica a campione",
+    "projectDriverUnavailable": "Driver non disponibile",
+    "projectOpenRefused": "Impossibile aprire «{{name}}».",
+    "projectUnregisteredNext": "Registralo in quay-fleet (ad esempio `quay-fleet registry add <percorso>`), poi aggiorna.",
+    "projectDriverUnavailableNext": "Avvia il driver del progetto, poi aggiorna.",
+    "fleetCliMissingNext": "Imposta QUAY_FLEET_BIN, poi aggiorna.",
+    "ordinalsRegisteredOnly": "Gli ordinali (①, ②, …) indicano solo i progetti registrati.",
+    "ordinalUnavailable": "Nessun progetto numerato per {{n}}.",
+    "ordinalUnavailableNext": "Usa la barra dei progetti o registra il progetto, poi riprova.",
+    "attentionBadgeDetail": "{{n}} elementi di progetto richiedono la tua attenzione: {{projects}}",
+    "observationBlindSpots": "Questa vista non vede:",
+    "observationOpenQuay": "Apri il pannello Quay"
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "Punti {{from}}–{{to}}",
+    "itemsList": "Punti {{list}}",
+    "wholeReply": "l'intera risposta",
+    "mismatch": "L'ultima risposta ha solo {{count}} elementi"
   }
 }
