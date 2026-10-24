@@ -1,7 +1,7 @@
 ---
 id: gap-edit-replacement-absolute-floor
 title: 编辑重发：replacement 的退休改用绝对切点 + 窗口原点（阶段 1 止血）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
