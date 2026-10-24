@@ -632,9 +632,11 @@ export default function ChatComposer({
   const inlineQuoteChip = useInlineQuoteChip({
     input,
     chip: quotedChip,
-    // A listen owns the box while it commits text: the chip row is the right
-    // shape there, and the provisional wash must keep its own layout.
-    enabled: provisionalVoiceRange === null,
+    // A listen owns the box: the chip row is the right shape there, and the
+    // provisional wash must keep its own layout. Any non-idle listen ends the
+    // inline mode at once — waiting for the first committed range would leave
+    // the chip in the flow while the microphone is already live.
+    enabled: voiceState === 'idle',
     textareaRef,
     mirrorRef: inputMirrorRef,
     bodyRef: composerBodyRef,
@@ -1126,10 +1128,11 @@ export default function ChatComposer({
                 onAccept={chipStrip.onAccept}
               />
             )}
-            {/* While the chip is inline the strip has nothing left to draw: the quoted
-                chip is the only one a non-empty box allows, and it has moved into the
-                text flow. */}
-            {showSuggestionChips && chipStrip && !inlineChipActive && (
+            {/* The strip is an EMPTY-box affordance. A non-empty box draws its quoted
+                chip in the text flow instead; when the inline mode cannot run (a listen
+                owns the box, or one just committed text) the strip must not fall back
+                over the words — there is no reserved row for it any more. */}
+            {showSuggestionChips && chipStrip && !inlineChipActive && input === '' && (
               <InputSuggestionChips
                 listId={chipStripListId}
                 chips={chipStrip.chips}

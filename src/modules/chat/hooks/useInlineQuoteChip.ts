@@ -180,7 +180,17 @@ export function useInlineQuoteChip({
     }
 
     const applyHeight = () => {
-      const contentHeight = mirror.scrollHeight;
+      // The box's ordinary content height, measured with the plain auto-grow rule
+      // (`height: auto`, then `scrollHeight`). The floor matters: a one-line draft
+      // normally sits in the textarea's two-row default, taller than the mirror's
+      // own content, and following the mirror alone would SHRINK the box by a line
+      // the moment a selection appeared. The chip may grow the box by a line; it
+      // must never make it jump the other way.
+      const previousHeight = textarea.style.height;
+      textarea.style.height = 'auto';
+      const plainHeight = textarea.scrollHeight;
+      textarea.style.height = previousHeight;
+      const contentHeight = Math.max(mirror.scrollHeight, plainHeight);
       if (contentHeight > 0) {
         textarea.style.height = `${inlineChipTextareaHeight(contentHeight, readMaxHeightPx(textarea))}px`;
       }
