@@ -119,10 +119,16 @@ function findServerEchoForLocalUser(
  * on the socket before the next history refresh would otherwise be drawn twice —
  * the optimistic row beside its own persisted copy — which is exactly the
  * duplicate a retried send must never produce.
+ *
+ * `serverWindowStart` is the absolute subscript of `serverMessages[0]` in the
+ * full history. `replacesAfterRowCount` is absolute, so the page index it names
+ * is `floor - serverWindowStart`; without the origin, a window that slid between
+ * the cut and this read points the floor past the row it should retire.
  */
 export function removeOptimisticUserEchoes(
   serverMessages: NormalizedMessage[],
   realtimeMessages: NormalizedMessage[],
+  serverWindowStart = 0,
 ): NormalizedMessage[] {
   const claimedServerIds = new Set<string>();
 
@@ -146,9 +152,13 @@ export function removeOptimisticUserEchoes(
     // for it: a rewind that branches re-stamps every surviving turn to the moment
     // of the copy, so an earlier turn with the same words — "yes", "continue",
     // the typo being corrected — lands inside the window and would retire the
-    // message the user just sent. The floor is a count of server rows, so it
-    // applies only to the history-page candidate list.
-    const firstEligibleIndex = message.replacesAfterRowCount ?? 0;
+    // message the user just sent. The floor is an absolute history subscript, so
+    // it is translated into this page's coordinates before it becomes a lower
+    // bound; a window that starts after the floor simply has no eligible row.
+    const firstEligibleIndex = Math.max(
+      0,
+      (message.replacesAfterRowCount ?? 0) - serverWindowStart,
+    );
     const serverEcho = findServerEchoForLocalUser(
       message,
       serverMessages,

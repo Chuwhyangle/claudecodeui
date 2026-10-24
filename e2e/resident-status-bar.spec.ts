@@ -326,7 +326,7 @@ async function readPanel(page: Page): Promise<{ pid: string }> {
 
 /** The sidebar's mark for one session: its shape, its state and the exit detail when it has one. */
 async function readMark(page: Page, sessionId: string) {
-  const mark = page.locator(`a[href="/session/${sessionId}"]`).first().locator(MARK);
+  const mark = page.locator(`a[href="/session/${sessionId}"]:not([data-mode-switch-link])`).first().locator(MARK);
   await mark.waitFor({ state: 'attached', timeout: 15_000 });
   return {
     shape: (await mark.getAttribute('data-resident-mark')) ?? '',
@@ -351,7 +351,7 @@ async function explain(page: Page, what: string): Promise<never> {
 const projectRow = (page: Page, workspaceName: string): Locator =>
   page.getByRole('button', { name: new RegExp(`^${workspaceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first();
 
-const sessionRow = (page: Page, sessionId: string): Locator => page.locator(`a[href="/session/${sessionId}"]`).first();
+const sessionRow = (page: Page, sessionId: string): Locator => page.locator(`a[href="/session/${sessionId}"]:not([data-mode-switch-link])`).first();
 
 /** The sidebar mark for one session, as a locator — the row a four-state wait is addressed through. */
 const markOf = (page: Page, sessionId: string): Locator => sessionRow(page, sessionId).locator(MARK);

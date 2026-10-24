@@ -694,6 +694,7 @@ export const sessionsService = {
     if (!session.provider_session_id) {
       return {
         messages: [],
+        startIndex: 0,
         total: 0,
         hasMore: false,
         offset: options.offset ?? 0,
@@ -754,8 +755,17 @@ export const sessionsService = {
       });
     }
 
+    // The page's absolute origin. `offset` counts back from the newest row, so
+    // the page ending at `total - offset` starts `messages.length` before that;
+    // an unlimited read has offset 0 and returns the whole history from 0.
+    const pageStartIndex = Math.max(
+      0,
+      result.total - Math.max(0, result.offset ?? requestedOffset) - result.messages.length,
+    );
+
     return {
       ...result,
+      startIndex: pageStartIndex,
       messages: result.messages.map((message) => ({
         ...message,
         sessionId,
