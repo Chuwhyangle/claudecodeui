@@ -301,6 +301,54 @@ describe('every locale carries the cockpit copy', () => {
     expect(placeholders(reference.ordinalUnavailable)).toEqual(['n']);
   });
 
+  // The deployment strip's copy: its status sentences, the confirmation panel, the failure
+  // reading and the relative timestamps. Naming them keeps a rename from being "covered" by
+  // the generic loop while every locale silently falls back to English — and the count-bearing
+  // sentences keep their placeholders.
+  it('covers the deployment strip and its confirmation panel', () => {
+    const required = [
+      'deployStatus',
+      'deployFresh',
+      'deployPendingBuild',
+      'deployPendingBuildOne',
+      'deployBuiltPendingRestart',
+      'deployBuilding',
+      'deployRestarting',
+      'deployUnknown',
+      'deployAction',
+      'deployConfirmTitle',
+      'deployConfirmBody',
+      'deployConfirmRestartHint',
+      'deployConfirm',
+      'deployCancel',
+      'deployCommitTask',
+      'deployNoCommits',
+      'deployLastOk',
+      'deployLastFailed',
+      'deployLastFailedCheck',
+      'deployFailingStep',
+      'deployUnavailable',
+      'deployJustNow',
+      'deployMinutesAgo',
+      'deployHoursAgo',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(reference.deployPendingBuild)).toEqual(['n']);
+    expect(placeholders(reference.deployPendingBuildOne)).toEqual(['n']);
+    expect(placeholders(reference.deployCommitTask)).toEqual(['task']);
+    expect(placeholders(reference.deployLastOk)).toEqual(['sha', 'time']);
+    expect(placeholders(reference.deployLastFailed)).toEqual(['sha']);
+    expect(placeholders(reference.deployLastFailedCheck)).toEqual(['check']);
+    expect(placeholders(reference.deployFailingStep)).toEqual(['step']);
+    expect(placeholders(reference.deployUnavailable)).toEqual(['reason']);
+    for (const key of ['deployMinutesAgo', 'deployHoursAgo']) {
+      expect(placeholders(reference[key]), `cockpit.${key}`).toEqual(['n']);
+    }
+  });
+
   // Positive control: the same checker must reject a missing block, a blank value, a key-copied
   // value and a dropped placeholder. Without this the green above could not go red.
   it('rejects a missing, blank, key-copied or placeholder-dropping block (positive control)', () => {

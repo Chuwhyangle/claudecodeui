@@ -992,6 +992,10 @@ export const api = {
 
   system: {
     update: () => post('/api/system/update'),
+    /** What is running, what is built, and what a build would apply (the cockpit deploy strip). */
+    deployReadiness: () => get('/api/system/deploy-readiness'),
+    /** The one confirmed action: build, then restart only if the build succeeded. */
+    deploy: () => post('/api/system/deploy'),
   },
 };
 

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowDownIcon } from 'lucide-react';
 
 import { NextTaskBanner, useTasksSettings } from '@/modules/task-master';
+import { DeployReadiness } from '@/modules/cockpit';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import PermissionContext from '@/modules/chat/context/PermissionContext';
 import { MarkdownWorkspaceContext } from '@/modules/chat/context/MarkdownWorkspaceContext';
@@ -1118,6 +1119,11 @@ function ChatInterface({
             {t('messageNotFound', { defaultValue: 'No message with that id was found.' })}
           </p>
         )}
+
+        {/* Deployment news while it is news: the compact strip renders nothing when the running
+            build is current, so the transcript's first row is not spent on an all-green line.
+            A person who asked 「重启成功了吗」 sees the answer here without leaving the chat. */}
+        <DeployReadiness compact />
 
         <MarkdownWorkspaceContext.Provider value={markdownWorkspaceValue}>
           <ChatMessagesPane

@@ -33,6 +33,7 @@ import {
 } from '@/modules/cockpit/cockpitView';
 import type { CockpitProject, CockpitTiming, CockpitView } from '@/modules/cockpit/cockpitView';
 import DecisionQueue from '@/modules/cockpit/DecisionQueue';
+import DeployReadiness from '@/modules/cockpit/DeployReadiness';
 import InitiativeView from '@/modules/cockpit/InitiativeView';
 import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
 import { useCockpitPushToTalk } from '@/modules/cockpit/hooks/useCockpitPushToTalk';
@@ -1401,6 +1402,12 @@ export default function CockpitPage() {
           </div>
         )}
       </header>
+
+      {/* The deployment reading is chrome, not a view: it stays put across the wall, the fleet,
+          the initiatives and every project stage, the same way the header does. */}
+      <div className="border-b border-border/40 px-4 py-2">
+        <DeployReadiness />
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/*
