@@ -1,7 +1,7 @@
 ---
 id: chat-reply-items-addressable
 title: 回复条目可寻址：assistant 回复里的编号条目带标签与地址，「第 1 点 / 执行 1–2 / 按你的方案」在发送前预览并高亮
-status: todo
+status: ready
 labels:
   - chat
   - ui
