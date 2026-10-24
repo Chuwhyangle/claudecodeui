@@ -76,6 +76,16 @@ depends_on:
 - `src/modules/chat/transcript/ChatMessagesPane.tsx`
 - `src/modules/i18n/locales/en/chat.json`
 - `src/modules/i18n/locales/zh-CN/chat.json`
+- `src/modules/i18n/locales/de/chat.json`
+- `src/modules/i18n/locales/es/chat.json`
+- `src/modules/i18n/locales/fr/chat.json`
+- `src/modules/i18n/locales/id/chat.json`
+- `src/modules/i18n/locales/it/chat.json`
+- `src/modules/i18n/locales/ja/chat.json`
+- `src/modules/i18n/locales/ko/chat.json`
+- `src/modules/i18n/locales/ru/chat.json`
+- `src/modules/i18n/locales/tr/chat.json`
+- `src/modules/i18n/locales/zh-TW/chat.json`
 - `src/modules/chat/tests/useReplySuggestions.test.tsx`
 - `src/modules/chat/tests/useTranscriptSelection.test.tsx`
 - `src/modules/chat/tests/inputSuggestions.test.ts`
