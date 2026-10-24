@@ -52,6 +52,14 @@
  * (newest), a mid-conversation offset, and the oldest offset. Any change in the
  * route's default handling, the service's slice arithmetic, or the response
  * envelope makes the deep-equal red.
+ *
+ * `fetchHistory` later grew one field, `startIndex` — the page's absolute origin
+ * in the same oldest-first array — which a tail page needs to place itself in
+ * the full history (`gap-edit-replacement-absolute-floor`). It is pinned here
+ * from the *same* slice arithmetic (`max(0, total - offset - page.length)`)
+ * rather than copied from the response, so a page that reports a tail-relative
+ * or otherwise wrong origin still reds this arm; every pre-existing tail field
+ * remains byte-identical.
  */
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
@@ -389,7 +397,10 @@ test('the existing limit/offset pages are byte-identical to the unchanged sliceT
       for (const offset of offsets) {
         const actual = await sessionsService.fetchHistory(SESSION_ID, { limit, offset });
         const { page, hasMore } = sliceTailPage(full.messages, limit, offset);
-        const expected = { ...full, messages: page, hasMore, offset, limit };
+        // The absolute origin of this page, derived from the same arithmetic
+        // `sliceTailPage` applied (`start = max(0, end - limit)`).
+        const startIndex = Math.max(0, full.total - offset - page.length);
+        const expected = { ...full, messages: page, hasMore, offset, limit, startIndex };
         assert.deepEqual(actual, expected, `limit=${limit} offset=${offset} diverged from the tail contract`);
       }
 
