@@ -38,6 +38,27 @@ export type ReplySuggestionsUsageLog = {
 };
 
 /**
+ * The ONE observer the process composition root installs on this ledger.
+ *
+ * The ledger stays exactly what it was — its own file, its own rotation, its own
+ * field names — and the observer is a read-only tap: the context-event bridge
+ * mirrors `shown`/`picked`/`redrawn` into the host stream. Kept as a module-level
+ * seam because the reply-suggestions SERVICE constructs the writer internally;
+ * adding the tap here avoids a sibling-module import in either direction.
+ *
+ * A throwing observer is contained: the ledger write has already happened, and
+ * the usage readout must never be lost because a second consumer failed.
+ */
+let usageObserver: ((record: ReplySuggestionsUsageRecord) => void) | null = null;
+
+/** Installs (or clears, with `null`) the process-wide usage observer. */
+export function setReplySuggestionsUsageObserver(
+  observer: ((record: ReplySuggestionsUsageRecord) => void) | null,
+): void {
+  usageObserver = observer;
+}
+
+/**
  * Build a ledger writer for one file.
  *
  * `filePath` is injectable for criteria; production takes the default under
@@ -68,6 +89,11 @@ export function createReplySuggestionsUsageLog(
       }
 
       appendFileSync(filePath, line, { encoding: 'utf8', mode: 0o600 });
+      try {
+        usageObserver?.(record);
+      } catch {
+        // The ledger is the durable record; the tap is best-effort.
+      }
     },
   };
 }
