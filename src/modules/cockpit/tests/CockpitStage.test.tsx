@@ -1517,7 +1517,7 @@ describe('pulse strip', () => {
     const twoTasks: QuaySnapshot = {
       ...SNAPSHOT,
       inFlight: [
-        ...SNAPSHOT.inFlight,
+        ...(SNAPSHOT.inFlight ?? []),
         {
           taskId: 'task-b',
           phase: 'fan-in',
