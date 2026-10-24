@@ -34,6 +34,7 @@ const okJson = (data: unknown) => Promise.resolve({ ok: true, status: 200, json:
 
 const STATUS_ON = { enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120 };
 const STATUS_OFF = { enabled: false, expansion: 'off', maxChips: 3, maxChipChars: 120 };
+const STATUS_VARY = { enabled: true, expansion: 'vary', maxChips: 3, maxChipChars: 120 };
 
 type Args = {
   sessionId: string | null;
@@ -201,5 +202,133 @@ describe('useReplySuggestions', () => {
     assert.equal(redrawn.draw, 7);
     const sent = apiMocks.event.mock.calls[2][0] as Record<string, unknown>;
     assert.equal(sent.draw, 7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The expansion experiment: a second draw anchored on the draft
+// ---------------------------------------------------------------------------
+
+const expansionCalls = () => apiMocks.suggest.mock.calls
+  .map(([body]) => body as Record<string, unknown>)
+  .filter((body) => body.expand === true);
+
+describe('useReplySuggestions expansion', () => {
+  beforeEach(() => {
+    apiMocks.status.mockImplementation(() => okJson(STATUS_VARY));
+  });
+
+  it('(a) has no expansion request while the settings say expansion off', async () => {
+    apiMocks.status.mockImplementation(() => okJson(STATUS_ON));
+    const { result } = renderReply();
+    await settle(result);
+
+    act(() => {
+      result.current.requestExpansion({ seed: '一条已选定的回复' });
+    });
+    await flush();
+
+    assert.equal(result.current.expansionEnabled, false);
+    assert.equal(result.current.expansionChips.length, 0);
+    assert.equal(expansionCalls().length, 0, 'expansion off must not reach the server');
+  });
+
+  it('(b) sends one expand request with the seed and exposes the variants', async () => {
+    const { result } = renderReply();
+    await settle(result);
+    await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
+
+    apiMocks.suggest.mockImplementation(() => okJson({ chips: ['变体一', '变体二'], draw: 12 }));
+    act(() => {
+      result.current.requestExpansion({ seed: '  已选定的回复  ' });
+    });
+    await waitFor(() => assert.deepEqual(result.current.expansionChips, ['变体一', '变体二']));
+
+    const calls = expansionCalls();
+    assert.equal(calls.length, 1, 'one pick is one request');
+    assert.equal(calls[0].seed, '已选定的回复', 'the seed is trimmed');
+    assert.equal(result.current.expansionSource, 'seed');
+    assert.equal(result.current.expansionDepth, 1);
+    assert.equal(result.current.draw, 12, 'the chips carry the expansion draw id');
+  });
+
+  it('(c) sends a focus-anchored request when the seed is empty', async () => {
+    const { result } = renderReply();
+    await settle(result);
+    apiMocks.suggest.mockImplementation(() => okJson({ chips: ['回应一'], draw: 13 }));
+
+    act(() => {
+      result.current.requestExpansion({ focus: '  被引用的原文  ', seed: '' });
+    });
+    await waitFor(() => assert.deepEqual(result.current.expansionChips, ['回应一']));
+
+    const calls = expansionCalls();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].focus, '被引用的原文');
+    assert.equal('seed' in calls[0], false, 'an empty seed is not sent');
+    assert.equal(result.current.expansionSource, 'focus');
+  });
+
+  it('(d) stops at five expansion requests in one chain', async () => {
+    const { result } = renderReply();
+    await settle(result);
+    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => okJson({
+      chips: [`变体-${String(body.seed ?? '')}`, '另一条'],
+      draw: 20,
+    }));
+
+    for (let depth = 1; depth <= 5; depth += 1) {
+      act(() => {
+        result.current.requestExpansion({ seed: `seed-${depth}` });
+      });
+      await waitFor(() => assert.equal(result.current.expansionDepth, depth));
+    }
+    assert.equal(expansionCalls().length, 5);
+    assert.equal(result.current.canExpand, false);
+
+    act(() => {
+      result.current.requestExpansion({ seed: 'seed-6' });
+    });
+    await flush();
+    assert.equal(expansionCalls().length, 5, 'depth 5 is the cap');
+  });
+
+  it('(e) clearExpansion drops the chips and resets the chain', async () => {
+    const { result } = renderReply();
+    await settle(result);
+    act(() => {
+      result.current.requestExpansion({ seed: '已选定的回复' });
+    });
+    await waitFor(() => assert.equal(result.current.expansionChips.length, 2));
+
+    act(() => {
+      result.current.clearExpansion();
+    });
+    await flush();
+
+    assert.deepEqual(result.current.expansionChips, []);
+    assert.equal(result.current.expansionSource, null);
+    assert.equal(result.current.expansionDepth, 0);
+  });
+
+  it('(f) a session switch drops an expansion chain, and picked events carry the source', async () => {
+    const { result, rerender } = renderReply();
+    await settle(result);
+    act(() => {
+      result.current.requestExpansion({ seed: '已选定的回复' });
+    });
+    await waitFor(() => assert.equal(result.current.expansionChips.length, 2));
+
+    act(() => {
+      result.current.reportEvent('picked', 0, 'seed');
+    });
+    await flush();
+    const picked = apiMocks.event.mock.calls[0][0] as Record<string, unknown>;
+    assert.equal(picked.source, 'seed');
+
+    rerender(baseArgs({ sessionId: 'session-b' }));
+    await flush();
+    assert.deepEqual(result.current.expansionChips, [], 'another conversation owns another draft');
+    assert.equal(result.current.expansionDepth, 0);
   });
 });

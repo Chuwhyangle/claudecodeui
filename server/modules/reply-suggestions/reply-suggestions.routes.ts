@@ -5,15 +5,18 @@
  * `authenticateToken` by `server/index.ts`):
  *
  *   · `GET  /status` — the four-field public reading; no key and no path.
- *   · `POST /`       — `{ sessionId, redraw?, focus? }` -> `{ chips, draw }`.
- *   · `POST /events` — `{ sessionId, draw, event, index? }` -> 204.
+ *   · `POST /`       — `{ sessionId, redraw?, focus?, seed?, expand? }` -> `{ chips, draw }`.
+ *   · `POST /events` — `{ sessionId, draw, event, index?, source? }` -> 204.
  *
  * This file only parses transport input, calls one service method and formats
- * the answer. `focus` is passed through whatever its length: the service clips
- * it to `maxFocusChars`, so a long selection is a normal input rather than a
- * 400. `AppError`s from the injected transcript reader (404 for an unknown
- * session) and from the service (503 disabled, 429 over a limit, 502 upstream)
- * travel to the process error middleware unchanged.
+ * the answer. `focus` and `seed` are passed through whatever their length: the
+ * service clips them to `maxFocusChars` / `maxChipChars`, so a long value is a
+ * normal input rather than a 400. Whether `expand` is allowed at all is the
+ * service's decision (it owns the settings); an expansion request while
+ * `expansion` is `off` therefore answers 400 from there. `AppError`s from the
+ * injected transcript reader (404 for an unknown session) and from the service
+ * (503 disabled, 400 bad expansion, 429 over a limit, 502 upstream) travel to
+ * the process error middleware unchanged.
  *
  * Consumers: `reply-suggestions.module.ts` (production composition) and the
  * route criterion in `tests/reply-suggestions-routes.test.ts`.
@@ -25,11 +28,13 @@ import { AppError, asyncHandler } from '@/shared/utils.js';
 import type {
   ReplySuggestionsEventInput,
   ReplySuggestionsEventName,
+  ReplySuggestionsExpansionSource,
   ReplySuggestionsInput,
   ReplySuggestionsService,
 } from './reply-suggestions.service.js';
 
 const EVENT_NAMES: readonly ReplySuggestionsEventName[] = ['picked', 'cleared', 'redrawn', 'sent'];
+const EXPANSION_SOURCES: readonly ReplySuggestionsExpansionSource[] = ['seed', 'focus'];
 
 function invalidRequest(message: string): AppError {
   return new AppError(message, { code: 'INVALID_REQUEST', statusCode: 400 });
@@ -70,17 +75,25 @@ function readObjectBody(body: unknown): Record<string, unknown> {
   return body as Record<string, unknown>;
 }
 
+function optionalStringField(body: Record<string, unknown>, name: string): string | undefined {
+  const value = body[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw invalidRequest(`"${name}" must be a string`);
+  return value;
+}
+
 function readSuggestInput(body: unknown): ReplySuggestionsInput {
   const record = readObjectBody(body);
   const redraw = optionalBooleanField(record, 'redraw');
-  const focusValue = record.focus;
-  if (focusValue !== undefined && typeof focusValue !== 'string') {
-    throw invalidRequest('"focus" must be a string');
-  }
+  const expand = optionalBooleanField(record, 'expand');
+  const focus = optionalStringField(record, 'focus');
+  const seed = optionalStringField(record, 'seed');
   return {
     sessionId: requireStringField(record, 'sessionId'),
     ...(redraw === undefined ? {} : { redraw }),
-    ...(focusValue === undefined ? {} : { focus: focusValue as string }),
+    ...(expand === undefined ? {} : { expand }),
+    ...(focus === undefined ? {} : { focus }),
+    ...(seed === undefined ? {} : { seed }),
   };
 }
 
@@ -91,11 +104,16 @@ function readEventInput(body: unknown): ReplySuggestionsEventInput {
     throw invalidRequest(`"event" must be one of ${EVENT_NAMES.map((name) => `"${name}"`).join(', ')}`);
   }
   const index = optionalNonNegativeInteger(record, 'index');
+  const source = record.source;
+  if (source !== undefined && (typeof source !== 'string' || !(EXPANSION_SOURCES as readonly string[]).includes(source))) {
+    throw invalidRequest(`"source" must be one of ${EXPANSION_SOURCES.map((name) => `"${name}"`).join(', ')}`);
+  }
   return {
     sessionId: requireStringField(record, 'sessionId'),
     draw: requireNonNegativeInteger(record, 'draw'),
     event: event as ReplySuggestionsEventName,
     ...(index === undefined ? {} : { index }),
+    ...(source === undefined ? {} : { source: source as ReplySuggestionsExpansionSource }),
   };
 }
 

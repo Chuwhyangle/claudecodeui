@@ -84,8 +84,13 @@ default `600`). A longer selection is clipped, not rejected.
 `maxCallsPerMinute`, `maxCallsPerDay` — sliding-window upstream call caps
 (defaults `30` / `3000`). Over a cap answers `429`.
 
-`expansion` — `off` or `vary`. This server parses it and exposes it in
-`/status`; the expansion behaviour belongs to a later task.
+`expansion` — `off` or `vary`. With `vary`, picking a model chip asks for
+**variants** of that reply instead of sending it, and quoting a passage asks for
+**responses** to it; both arrive as dashed chips under the textarea and replace
+the body when clicked (a `> quoted` block is kept). `vary` also uses
+`redrawTemperature`, because genuine rewording is the point. Default `off`: an
+`expand` request is then refused `400` before any upstream call, and the
+composer behaves exactly as it did before the experiment.
 
 `usageLog` — write the local-only JSONL ledger (`true` by default). The ledger
 holds the server's `shown` rows and the client's `picked` / `cleared` /
@@ -109,7 +114,7 @@ authentication.
 path is exposed. `enabled` is the effective switch (a misconfigured file reads
 `false`).
 
-`POST /` with `{ sessionId, redraw?, focus? }` → `{ chips: string[], draw: number }`.
+`POST /` with `{ sessionId, redraw?, focus?, seed?, expand? }` → `{ chips: string[], draw: number }`.
 
 - The assistant text is read on the server from the injected transcript reader;
   the client never supplies it.
@@ -125,9 +130,32 @@ path is exposed. `enabled` is the effective switch (a misconfigured file reads
   share one upstream call.
 - No assistant message → `{ chips: [], draw: 0 }` with no upstream call.
 
-`POST /events` with `{ sessionId, draw, event, index? }` → `204`. `event` is
-`picked`, `cleared`, `redrawn` or `sent`; `index` is the chip's index when
-applicable. Appends one line to the usage ledger.
+### Expansion (`expand: true`)
+
+`expand: true` marks the experimental post-pick draw. It is only accepted when
+`expansion` is `vary`; otherwise the server answers `400`
+(`REPLY_SUGGESTIONS_EXPANSION_DISABLED`) and makes no upstream call. Without
+`expand`, a `seed` is a `400` too — `seed` only has meaning as an expansion
+anchor. An expansion needs at least one of `seed` / `focus`.
+
+- `seed` — the reply the person already picked. It is clipped to `maxChipChars`
+  and the prompt asks for 2–3 **variants** that keep its decision and intent and
+  differ only in wording or detail. The seed counts as already shown for this
+  draw: an answer identical to it, or with character-set overlap `>= 0.7`, is
+  filtered before it reaches the person.
+- `focus` with an empty `seed` — the passage the person quoted. The prompt asks
+  for 2–3 **responses** to that passage.
+- Expansion draws share the de-duplication, call caps, circuit breaker and
+  supplement-once behaviour of an ordinary draw. Their usage row carries
+  `expansion: "seed" | "focus"`; neither the seed nor the focus text is copied
+  into the ledger.
+- The client caps a chain at five expansion requests; the cap is a frontend
+  constant, not a server setting, so a direct API caller may ask for more.
+
+`POST /events` with `{ sessionId, draw, event, index?, source? }` → `204`.
+`event` is `picked`, `cleared`, `redrawn` or `sent`; `index` is the chip's index
+when applicable, and `source` is `seed` or `focus` when the picked chip came from
+an expansion draw. Appends one line to the usage ledger.
 
 Errors: malformed request `400`; unknown session `404` (the injected reader's
 `AppError` passes through); feature off `503`; over a call cap `429`; upstream
@@ -154,4 +182,7 @@ upstream failures open a 30-second circuit breaker** (constants in
   still slip through.
 - The gateway's price is not modelled locally; cost is reported as token counts
   only.
-- The experimental `expansion: "vary"` behaviour is not implemented here.
+- The experimental `expansion: "vary"` behaviour is off by default and exists
+  only to try the interaction; the offline data does not show it beats drawing
+  again. Its chain cap (5) lives in the frontend, so it is not enforced for a
+  direct API caller.

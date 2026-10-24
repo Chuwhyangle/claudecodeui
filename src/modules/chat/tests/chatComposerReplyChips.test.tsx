@@ -11,7 +11,7 @@ import { useChatComposerState } from '@/modules/chat/hooks/useChatComposerState'
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import { resetChatDrafts } from '@/shared/chatDrafts';
 import { buildSuggestionChips } from '@/modules/chat/utils/inputSuggestions';
-import type { PermissionMode, Project, ProjectSession } from '@/shared/types';
+import type { PermissionMode, Project, ProjectSession, ServerEvent } from '@/shared/types';
 
 /**
  * What each chip source does when it is clicked, and what the Suggest button is.
@@ -194,6 +194,8 @@ const composerBaseProps = (): Record<string, unknown> => ({
   replySuggestionsEnabled: true,
   replySuggestionsLoading: false,
   onRequestReplySuggestions: vi.fn(),
+  replyExpansionChips: [],
+  onAcceptReplyExpansionChip: vi.fn(),
 });
 
 const renderComposer = (overrides: Record<string, unknown> = {}) => {
@@ -264,6 +266,22 @@ describe('chip clicks at the composer surface', () => {
     assert.ok(preview, 'Tab selection must produce the second-line preview');
     assert.equal(preview.textContent, habitText);
   });
+
+  it('draws the expansion chips under the textarea and routes a click to its callback', () => {
+    const { view, props } = renderComposer({
+      replyExpansionChips: ['变体一', '变体二'],
+    });
+
+    const row = view.container.querySelector('[data-slot="reply-expansion-chips"]');
+    assert.ok(row, 'the expansion row is its own element, not the empty-box strip');
+    const buttons = row.querySelectorAll('button');
+    assert.equal(buttons.length, 2);
+    assert.equal(buttons[0].textContent, '变体一');
+
+    fireEvent.click(buttons[1]);
+    assert.deepEqual((props.onAcceptReplyExpansionChip as ReturnType<typeof vi.fn>).mock.calls, [[1]]);
+    assert.equal((props.onSubmit as ReturnType<typeof vi.fn>).mock.calls.length, 0, 'a variant is filled, not sent by the component');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -277,13 +295,31 @@ const PROJECT: Project = {
 };
 const SESSION: ProjectSession = { id: 'session-a' };
 
-const setupComposer = (quotedSelection: string | null = null) => {
+type ComposerSetupOptions = {
+  /** The settings' expansion switch the /status mock reports. */
+  expansion?: 'off' | 'vary';
+};
+
+const setupComposer = (quotedSelection: string | null = null, options: ComposerSetupOptions = {}) => {
+  if (options.expansion === 'vary') {
+    apiMocks.status.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ enabled: true, expansion: 'vary', maxChips: 3, maxChipChars: 120 }),
+    }));
+  }
   const sendMessage = vi.fn();
   const frames: FrameRequestCallback[] = [];
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frames.push(callback);
     return frames.length;
   });
+  // The delivery acknowledgement. `useSendDeliveryState` only settles after the
+  // server addresses a frame to the sending session; `deliver()` is that frame.
+  const listeners: Array<(event: ServerEvent) => void> = [];
+  const subscribe = (listener: (event: ServerEvent) => void) => {
+    listeners.push(listener);
+    return () => undefined;
+  };
   const view = renderHook(() => useChatComposerState({
     selectedProject: PROJECT,
     selectedSession: SESSION,
@@ -298,6 +334,7 @@ const setupComposer = (quotedSelection: string | null = null) => {
     canAbortSession: false,
     tokenBudget: null,
     sendMessage,
+    subscribe,
     scrollToBottom: () => undefined,
     addMessage: () => undefined,
     setIsUserScrolledUp: () => undefined,
@@ -305,8 +342,16 @@ const setupComposer = (quotedSelection: string | null = null) => {
     lastAssistantMessageId: 'assistant-1',
     quotedSelection,
   }));
-  return { view, sendMessage, frames };
+  const deliver = (sessionId = SESSION.id) => {
+    listeners.forEach((listener) => listener({ kind: 'chat.delta', sessionId }));
+  };
+  return { view, sendMessage, frames, deliver };
 };
+
+/** The expansion requests sent to the mocked endpoint (the first draw has no `expand`). */
+const expansionRequests = () => apiMocks.suggest.mock.calls
+  .map(([body]) => body as Record<string, unknown>)
+  .filter((body) => body.expand === true);
 
 describe('composer state chip acceptance', () => {
   it('fills AND sends the complete text when a model chip is accepted', async () => {
@@ -323,6 +368,7 @@ describe('composer state chip acceptance', () => {
     assert.equal(view.result.current.input, '模型一');
     assert.equal(sendMessage.mock.calls.length, 1, 'a model chip click is a send');
     assert.equal((sendMessage.mock.calls[0][0] as { content: string }).content, '模型一');
+    assert.equal(expansionRequests().length, 0, 'expansion off sends no second request');
   });
 
   it('pastes `> selection` plus a newline and focuses, without sending, for a quoted chip', () => {
@@ -390,5 +436,152 @@ describe('composer state chip acceptance', () => {
       ['quoted'],
       'the accepted quote stays as the only chip while the box is non-empty',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The expansion experiment: a picked chip becomes a seed, its variants replace
+// ---------------------------------------------------------------------------
+
+describe('composer state expansion', () => {
+  const waitForModelChip = (view: { result: { current: { replySuggestionsEnabled: boolean; suggestionChips: Array<{ source: string }> } } }) =>
+    waitFor(() => {
+      assert.equal(view.result.current.replySuggestionsEnabled, true);
+      assert.ok(view.result.current.suggestionChips.some((chip) => chip.source === 'model'));
+    });
+
+  it('(b) fills without sending and sends exactly one seed expansion request when expansion is vary', async () => {
+    const { view, sendMessage } = setupComposer(null, { expansion: 'vary' });
+    await waitForModelChip(view);
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['变体一', '变体二'], draw: 11 }),
+    }));
+
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一', '变体二']));
+
+    assert.equal(view.result.current.input, '模型一', 'the picked reply stays in the box');
+    assert.equal(sendMessage.mock.calls.length, 0, 'an expanded pick is not sent');
+    const requests = expansionRequests();
+    assert.equal(requests.length, 1, 'one pick is one expansion request');
+    assert.equal(requests[0].seed, '模型一');
+    assert.equal(requests[0].expand, true);
+  });
+
+  it('(c) accepting a variant replaces the body instead of appending it', async () => {
+    const { view } = setupComposer(null, { expansion: 'vary' });
+    await waitForModelChip(view);
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['变体一', '变体二'], draw: 11 }),
+    }));
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一', '变体二']));
+
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['变体三'], draw: 12 }),
+    }));
+    act(() => {
+      view.result.current.acceptReplyExpansionChip(0);
+    });
+
+    assert.equal(view.result.current.input, '变体一', 'replaced, not appended to the seed');
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体三']));
+    assert.equal(expansionRequests().length, 2, 'the variant became the next seed');
+  });
+
+  it('(e) a manual edit drops the variant chips', async () => {
+    const { view } = setupComposer(null, { expansion: 'vary' });
+    await waitForModelChip(view);
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['变体一'], draw: 11 }),
+    }));
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一']));
+
+    act(() => {
+      view.result.current.handleInputChange({
+        target: { value: '模型一，再补一句', selectionStart: 9, style: {} },
+      } as unknown as Parameters<typeof view.result.current.handleInputChange>[0]);
+    });
+
+    assert.deepEqual(view.result.current.replyExpansionChips, [], 'an edited draft has no variants to replace');
+  });
+
+  it('(f) sending the draft drops the variant chips', async () => {
+    const { view, deliver } = setupComposer(null, { expansion: 'vary' });
+    await waitForModelChip(view);
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['变体一'], draw: 11 }),
+    }));
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一']));
+
+    await act(async () => {
+      await view.result.current.handleSubmit({
+        preventDefault: () => undefined,
+      } as unknown as Parameters<typeof view.result.current.handleSubmit>[0]);
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(view.result.current.input, '', 'the delivered send empties the box'));
+    assert.deepEqual(view.result.current.replyExpansionChips, [], 'the sent message has no variants');
+  });
+
+  it('(g) quoting sends a focus expansion request with an empty seed', async () => {
+    const { view } = setupComposer('选中的原文', { expansion: 'vary' });
+    await waitForModelChip(view);
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['回应一', '回应二'], draw: 15 }),
+    }));
+
+    act(() => {
+      view.result.current.acceptQuotedSuggestion();
+    });
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['回应一', '回应二']));
+
+    const requests = expansionRequests();
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].focus, '选中的原文');
+    assert.equal('seed' in requests[0], false, 'the seed is empty right after the quote');
+  });
+
+  it('(h) accepting a response keeps the `> 原文` line and replaces only what follows it', async () => {
+    const { view } = setupComposer('选中的原文', { expansion: 'vary' });
+    await waitForModelChip(view);
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['回应一', '回应二'], draw: 15 }),
+    }));
+    act(() => {
+      view.result.current.acceptQuotedSuggestion();
+    });
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['回应一', '回应二']));
+
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['回应一的变体'], draw: 16 }),
+    }));
+    act(() => {
+      view.result.current.acceptReplyExpansionChip(0);
+    });
+
+    assert.equal(view.result.current.input, '> 选中的原文\n回应一');
+    assert.ok(view.result.current.input.startsWith('> 选中的原文'), 'the quotation survives the replacement');
   });
 });

@@ -397,3 +397,97 @@ test('(k) the usage ledger writes shown plus every event, and rotates past its c
 test('parseSuggestionChips is exported for the acceptance criterion', () => {
   assert.deepEqual(parseSuggestionChips('["x","y"]'), ['x', 'y']);
 });
+
+test('(l) expansion off refuses expand:true with 400 and never calls upstream', async (t) => {
+  const harness = makeHarness(t, { responder: () => chips('a', 'b', 'c') });
+  assert.equal(harness.settings.expansion, 'off');
+  await assert.rejects(
+    () => harness.service.suggest({ sessionId: 's-expand-off', expand: true, seed: 'picked reply' }),
+    (failure: { statusCode?: number; code?: string }) => {
+      assert.equal(failure.statusCode, 400);
+      assert.equal(failure.code, 'REPLY_SUGGESTIONS_EXPANSION_DISABLED');
+      return true;
+    },
+  );
+  await assert.rejects(
+    () => harness.service.suggest({ sessionId: 's-expand-off-focus', expand: true, focus: 'quoted passage' }),
+    (failure: { statusCode?: number }) => failure.statusCode === 400,
+  );
+  assert.equal(harness.calls.length, 0, 'a refused expansion never reaches upstream');
+});
+
+test('(m) a vary seed draw prompts with the seed and 变体, clips the seed, filters its near-duplicates, and marks the ledger', async (t) => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'reply-expand-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const ledger = path.join(directory, 'usage.jsonl');
+  const seed = 'AAAAABBBBB-VERY-LONG-SEED';
+  const harness = makeHarness(t, {
+    settings: { expansion: 'vary', maxChipChars: 10, usageLog: true },
+    responder: () => chips('AAAAABBBB', 'CCCCCDDDDD', 'EEEEEFFFFF'),
+    usageLog: { path: ledger },
+  });
+
+  const draw = await harness.service.suggest({
+    sessionId: 's-expand-seed',
+    expand: true,
+    seed,
+  });
+
+  const prompt = harness.calls[0].user;
+  assert.ok(prompt.includes('变体'), 'the seed prompt asks for 变体');
+  assert.ok(prompt.includes('AAAAABBBB'), 'the seed is present, clipped to maxChipChars');
+  assert.ok(!prompt.includes('VERY-LONG-SEED'), 'the seed is clipped, not sent whole');
+  assert.equal(harness.calls.length, 1, 'two surviving chips need no supplement');
+
+  // The exact seed's near-duplicate is filtered; the two new texts survive.
+  assert.deepEqual(draw.chips, ['CCCCCDDDDD', 'EEEEEFFFFF']);
+
+  const rows = readFileSync(ledger, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+  const shown = rows.find((row) => row.type === 'shown');
+  assert.ok(shown !== undefined);
+  assert.equal(shown.expansion, 'seed', 'the shown row names the expansion source');
+  assert.equal('seed' in shown, false, 'the marker never copies the seed text into the ledger');
+});
+
+test('(n) a vary draw with an empty seed and a focus prompts for 回应 to that passage', async (t) => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'reply-expand-focus-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const ledger = path.join(directory, 'usage.jsonl');
+  const harness = makeHarness(t, {
+    settings: { expansion: 'vary', usageLog: true },
+    responder: () => chips('回应一', '回应二'),
+    usageLog: { path: ledger },
+  });
+
+  await harness.service.suggest({
+    sessionId: 's-expand-focus',
+    expand: true,
+    seed: '',
+    focus: 'QUOTED-PASSAGE',
+  });
+
+  const prompt = harness.calls[0].user;
+  assert.ok(prompt.includes('QUOTED-PASSAGE'), 'the quoted passage is the focus');
+  assert.ok(prompt.includes('回应'), 'the focus prompt asks for 回应');
+  assert.equal(harness.calls.length, 1);
+
+  const rows = readFileSync(ledger, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+  assert.equal(rows[0].expansion, 'focus');
+});
+
+test('(o) a normal redraw with focus still works while expansion is off, and a seed without expand is refused', async (t) => {
+  const harness = makeHarness(t, {
+    settings: { expansion: 'off' },
+    responder: () => chips('一', '二', '三'),
+  });
+
+  const redraw = await harness.service.suggest({ sessionId: 's-normal-focus', redraw: true, focus: 'FOCUS-TEXT' });
+  assert.equal(redraw.chips.length, 3);
+  assert.ok(harness.calls[0].user.includes('FOCUS-TEXT'));
+
+  await assert.rejects(
+    () => harness.service.suggest({ sessionId: 's-seed-no-expand', seed: 'not-an-expansion' }),
+    (failure: { statusCode?: number }) => failure.statusCode === 400,
+  );
+  assert.equal(harness.calls.length, 1, 'the refused shape made no second upstream call');
+});

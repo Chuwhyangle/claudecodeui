@@ -39,7 +39,7 @@
   "maxCallsPerDay": 3000,
   "_maxCallsPerDay": "Sliding 24-hour upstream call cap (1-1000000). Over the cap answers 429.",
   "expansion": "off",
-  "_expansion": "Experimental post-selection expansion: \"off\" or \"vary\". This server only parses it and exposes it in /status; the behaviour belongs to a later task.",
+  "_expansion": "Experimental post-selection expansion: \"off\" (default) or \"vary\". With \"vary\", picking a model chip asks for variants of that reply, and quoting a passage asks for responses to it; both appear as chips under the textarea and replace the body when clicked. With \"off\" an expand request is refused 400 and the composer behaves as before.",
   "usageLog": true,
   "_usageLog": "Write the local-only JSONL usage ledger (~/.cloudcli/reply-suggestions-usage.jsonl). Rotation: a file that would exceed 5 MB is renamed to .1 and the older .1 is discarded.",
   "systemPrompt": "",

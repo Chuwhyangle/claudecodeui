@@ -3,9 +3,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/shared/api';
 import type {
   ReplySuggestionsEventName,
+  ReplySuggestionsExpansionSource,
   ReplySuggestionsResult,
   ReplySuggestionsStatus,
 } from '@/shared/types';
+
+/**
+ * How many consecutive expansion requests one pick chain may make. Clicking a
+ * chip can expand again from its own text; past this depth the chip is accepted
+ * as the draft and the chain stops.
+ */
+export const REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH = 5;
 
 /**
  * The composer's LLM-generated reply chips and their Suggest button.
@@ -22,6 +30,13 @@ import type {
  *   throws into the composer or draws an error.
  * - The ledger is a readout. `picked` / `cleared` / `redrawn` / `sent` posts are
  *   fire-and-forget, and a refused write never changes the surface.
+ *
+ * The experimental expansion (settings `expansion: "vary"`) is a second draw on
+ * the same message: a picked reply (`seed`) asks for variants, a quoted passage
+ * (`focus`) asks for responses. Its chips live in their own state because they
+ * answer the draft in the box, not the empty box the model batch is drawn for;
+ * the chain caps at {@link REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH} requests and is
+ * dropped whenever the draft is manually edited, cleared or sent.
  *
  * Consumers: `useChatComposerState` (which feeds the merged strip in
  * `useInputSuggestions`) and the reply-suggestions criterion.
@@ -57,8 +72,28 @@ export type UseReplySuggestionsResult = {
   loading: boolean;
   /** Asks for a completely new batch (with `focus` when a selection exists). */
   redraw: () => void;
-  /** Reports one ledger event; failures are swallowed. */
-  reportEvent: (event: ReplySuggestionsEventName, index?: number) => void;
+  /** Reports one ledger event; failures are swallowed. `source` marks an expansion pick. */
+  reportEvent: (event: ReplySuggestionsEventName, index?: number, source?: ReplySuggestionsExpansionSource) => void;
+  /** True when the settings say `expansion: "vary"` and the feature is otherwise on. */
+  expansionEnabled: boolean;
+  /** The variant/response chips for the draft in the box. Empty when no chain is live. */
+  expansionChips: string[];
+  /** Which anchor produced `expansionChips`: a picked reply or a quoted passage. */
+  expansionSource: ReplySuggestionsExpansionSource | null;
+  /** An expansion request is in flight. */
+  expansionLoading: boolean;
+  /** How many expansion requests this chain has made; resets when the chips are dropped. */
+  expansionDepth: number;
+  /** Whether another expansion may be requested (enabled and under the depth cap). */
+  canExpand: boolean;
+  /**
+   * Asks for variants of `seed`, or responses to `focus` when the seed is empty.
+   * A no-op while the feature is off, an expansion is already in flight, or the
+   * chain is at {@link REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH}.
+   */
+  requestExpansion: (request: { seed?: string; focus?: string }) => void;
+  /** Drops the expansion chips and resets the chain depth (manual edit, clear, send). */
+  clearExpansion: () => void;
 };
 
 /** Reads the server's `{ chips, draw }` defensively: a malformed answer is an empty batch. */
@@ -99,6 +134,13 @@ export function useReplySuggestions({
   // A redraw is in flight. State because the button draws from it; the ref is what
   // the synchronous re-entry guard checks.
   const [loading, setLoading] = useState(false);
+  // The expansion experiment's chips, separate from the model batch: they answer
+  // the draft in the box, so the empty-box strip cannot own them. `source` is
+  // what each pick reports and `depth` caps the chain.
+  const [expansionChips, setExpansionChips] = useState<string[]>([]);
+  const [expansionSource, setExpansionSource] = useState<ReplySuggestionsExpansionSource | null>(null);
+  const [expansionLoading, setExpansionLoading] = useState(false);
+  const [expansionDepth, setExpansionDepth] = useState(0);
 
   const statusRef = useRef<ReplySuggestionsStatus | null>(null);
   const sessionRef = useRef<string | null>(sessionId);
@@ -107,6 +149,13 @@ export function useReplySuggestions({
   const extractedRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
   const mountedRef = useRef(true);
+  // Synchronous guards for the expansion chain, for the same reason `loadingRef`
+  // exists: two clicks in one frame must not become two requests.
+  const expansionLoadingRef = useRef(false);
+  const expansionDepthRef = useRef(0);
+  // Bumped on every request and on every clear, so a late answer from a chain the
+  // person abandoned cannot repopulate the strip.
+  const expansionRequestSeqRef = useRef(0);
 
   // Set true in the effect BODY, not only initialized true: React's development
   // StrictMode mounts, cleans up and mounts again, so a cleanup that only ever writes
@@ -157,7 +206,26 @@ export function useReplySuggestions({
     setChips((previous) => (previous.length === 0 ? previous : []));
     setDraw((previous) => (previous === null ? previous : null));
     drawRef.current = null;
+    // The expansion chain belongs to one conversation's draft, never to the next one.
+    expansionRequestSeqRef.current += 1;
+    expansionLoadingRef.current = false;
+    expansionDepthRef.current = 0;
+    setExpansionLoading(false);
+    setExpansionDepth(0);
+    setExpansionSource(null);
+    setExpansionChips((previous) => (previous.length === 0 ? previous : []));
   }, [sessionId]);
+
+  /** Drops the expansion chips and resets the chain depth. A late answer is ignored. */
+  const clearExpansion = useCallback(() => {
+    expansionRequestSeqRef.current += 1;
+    expansionLoadingRef.current = false;
+    expansionDepthRef.current = 0;
+    setExpansionLoading(false);
+    setExpansionDepth(0);
+    setExpansionSource(null);
+    setExpansionChips((previous) => (previous.length === 0 ? previous : []));
+  }, []);
 
   const applyDraw = useCallback((body: unknown) => {
     const limit = statusRef.current?.maxChips ?? 3;
@@ -167,7 +235,11 @@ export function useReplySuggestions({
     drawRef.current = result.draw;
   }, []);
 
-  const reportEvent = useCallback((event: ReplySuggestionsEventName, index?: number) => {
+  const reportEvent = useCallback((
+    event: ReplySuggestionsEventName,
+    index?: number,
+    source?: ReplySuggestionsExpansionSource,
+  ) => {
     if (!sessionId) {
       return;
     }
@@ -176,6 +248,7 @@ export function useReplySuggestions({
       draw: drawRef.current ?? 0,
       event,
       ...(index === undefined ? {} : { index }),
+      ...(source === undefined ? {} : { source }),
     };
     void (async () => {
       try {
@@ -218,10 +291,83 @@ export function useReplySuggestions({
     };
   }, [active, applyDraw, lastAssistantMessageId, sessionId, status]);
 
+  /**
+   * One expansion draw. The two anchors are exclusive in practice: a picked reply
+   * wins (`seed`), otherwise the quoted passage is the anchor (`focus`). The
+   * response replaces the previous expansion chips wholesale.
+   */
+  const requestExpansion = useCallback((request: { seed?: string; focus?: string }) => {
+    const currentStatus = statusRef.current;
+    if (!currentStatus?.enabled || currentStatus.expansion !== 'vary' || !sessionId) {
+      return;
+    }
+    if (expansionLoadingRef.current || expansionDepthRef.current >= REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH) {
+      return;
+    }
+    const seed = request.seed?.trim() ?? '';
+    const focus = request.focus?.trim() ?? '';
+    if (seed === '' && focus === '') {
+      return;
+    }
+    const source: ReplySuggestionsExpansionSource = seed !== '' ? 'seed' : 'focus';
+    const depth = expansionDepthRef.current + 1;
+    expansionRequestSeqRef.current += 1;
+    const requestId = expansionRequestSeqRef.current;
+    expansionLoadingRef.current = true;
+    setExpansionLoading(true);
+    // The old chips answered the previous anchor; keeping them under a click that
+    // is already in flight would let a second pick race the request.
+    setExpansionChips((previous) => (previous.length === 0 ? previous : []));
+    setExpansionSource(null);
+    void (async () => {
+      try {
+        const response = await api.replySuggestions.suggest({
+          sessionId,
+          expand: true,
+          ...(seed === '' ? {} : { seed }),
+          ...(focus === '' ? {} : { focus }),
+        });
+        if (!response.ok) {
+          return;
+        }
+        const body = (await response.json()) as unknown;
+        if (
+          sessionRef.current !== sessionId
+          || expansionRequestSeqRef.current !== requestId
+          || !mountedRef.current
+        ) {
+          return;
+        }
+        const result = readDraw(body, statusRef.current?.maxChips ?? 3);
+        // The expansion batch is its own draw id: the `picked` event for one of
+        // its chips must name this draw, not the model batch it grew from.
+        drawRef.current = result.draw;
+        setDraw(result.draw);
+        setExpansionChips(result.chips);
+        setExpansionSource(result.chips.length > 0 ? source : null);
+        expansionDepthRef.current = depth;
+        setExpansionDepth(depth);
+      } catch {
+        // A failed expansion leaves the draft and the chain depth as they were;
+        // the person can still send what is in the box.
+      } finally {
+        if (expansionRequestSeqRef.current === requestId) {
+          expansionLoadingRef.current = false;
+          if (mountedRef.current) {
+            setExpansionLoading(false);
+          }
+        }
+      }
+    })();
+  }, [sessionId]);
+
   const redraw = useCallback(() => {
     if (!statusRef.current?.enabled || !sessionId || loadingRef.current) {
       return;
     }
+    // A fresh model batch answers the same message, not the draft: an expansion
+    // chain anchored on the old pick no longer describes anything on screen.
+    clearExpansion();
     loadingRef.current = true;
     setLoading(true);
     const trimmedFocus = focus?.trim() ?? '';
@@ -250,7 +396,7 @@ export function useReplySuggestions({
         }
       }
     })();
-  }, [applyDraw, focus, reportEvent, sessionId]);
+  }, [applyDraw, clearExpansion, focus, reportEvent, sessionId]);
 
   return {
     enabled: status?.enabled === true,
@@ -260,5 +406,15 @@ export function useReplySuggestions({
     loading,
     redraw,
     reportEvent,
+    expansionEnabled: status?.enabled === true && status.expansion === 'vary',
+    expansionChips,
+    expansionSource,
+    expansionLoading,
+    expansionDepth,
+    canExpand: status?.enabled === true
+      && status.expansion === 'vary'
+      && expansionDepth < REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH,
+    requestExpansion,
+    clearExpansion,
   };
 }

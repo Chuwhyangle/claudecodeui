@@ -3629,7 +3629,7 @@ export type CockpitStateFrame = {
 export type ReplySuggestionsStatus = {
   /** False means the composer neither extracts nor draws the Suggest button. */
   enabled: boolean;
-  /** The experimental post-pick expansion switch; the composer only reports it, it does not act on it. */
+  /** The experimental post-pick expansion switch: `vary` makes a picked chip expand into variants. */
   expansion: 'off' | 'vary';
   /** Most model chips one draw may return. */
   maxChips: number;
@@ -3645,6 +3645,14 @@ export type ReplySuggestionsResult = {
   draw: number;
 };
 
+/**
+ * The text an expansion draw is anchored on: `seed` is the reply the person
+ * already picked (it asks for variants), `focus` is the quoted passage with no
+ * reply of their own yet (it asks for responses). Reported on a `picked` event
+ * so the ledger can tell the two apart; the anchored text itself is not stored.
+ */
+export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
+
 /** The pointer/outcome events the composer reports on `POST /api/reply-suggestions/events`. */
 export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
 
@@ -3654,13 +3662,23 @@ export type ReplySuggestionsEventInput = {
   draw: number;
   event: ReplySuggestionsEventName;
   index?: number;
+  /** Present only when the picked chip came from an expansion draw. */
+  source?: ReplySuggestionsExpansionSource;
 };
 
-/** One request for a draw; `redraw` asks for a fresh batch, `focus` is the transcript text to centre on. */
+/**
+ * One request for a draw; `redraw` asks for a fresh batch, `focus` is the transcript text to centre on.
+ *
+ * `expand: true` marks the experimental post-pick expansion: `seed` then asks for
+ * variants of the picked reply, and a `focus` with no seed asks for responses to
+ * that passage. The server refuses both shapes unless `expansion` is `vary`.
+ */
 export type ReplySuggestionsRequest = {
   sessionId: string;
   redraw?: boolean;
   focus?: string;
+  seed?: string;
+  expand?: boolean;
 };
 
 // ---------------------------

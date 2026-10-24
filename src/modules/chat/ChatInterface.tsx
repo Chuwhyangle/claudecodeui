@@ -750,6 +750,8 @@ function ChatInterface({
     replySuggestionsEnabled,
     replySuggestionsLoading,
     redrawReplySuggestions,
+    replyExpansionChips,
+    acceptReplyExpansionChip,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
@@ -1340,6 +1342,8 @@ function ChatInterface({
           replySuggestionsEnabled={replySuggestionsEnabled}
           replySuggestionsLoading={replySuggestionsLoading}
           onRequestReplySuggestions={redrawReplySuggestions}
+          replyExpansionChips={replyExpansionChips}
+          onAcceptReplyExpansionChip={acceptReplyExpansionChip}
         />
             </>
           )}

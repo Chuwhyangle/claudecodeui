@@ -235,3 +235,77 @@ test('the module assembly mounts the router and serves a draw over a fake reader
   assert.deepEqual(response.body, { chips: ['first', 'second'], draw: 1 });
   assert.ok(harness.calls[0].user.includes('真实注入的助手消息'));
 });
+
+test('POST / refuses expansion requests with 400 while the settings say off', async (t) => {
+  const harness = await start(t);
+  const withSeed = await post(harness.baseUrl, '/api/reply-suggestions', {
+    sessionId: 's-expand-off',
+    expand: true,
+    seed: 'picked reply',
+  });
+  assert.equal(withSeed.status, 400);
+  assert.equal((withSeed.body as { error: { code: string } }).error.code, 'REPLY_SUGGESTIONS_EXPANSION_DISABLED');
+
+  const withFocus = await post(harness.baseUrl, '/api/reply-suggestions', {
+    sessionId: 's-expand-off',
+    expand: true,
+    focus: 'quoted passage',
+  });
+  assert.equal(withFocus.status, 400);
+  assert.equal(harness.calls.length, 0, 'a refused expansion never reaches upstream');
+});
+
+test('POST / with expansion vary sends the seed prompt and the focus prompt to upstream', async (t) => {
+  const harness = await start(t, { settings: { expansion: 'vary' } });
+
+  const withSeed = await post(harness.baseUrl, '/api/reply-suggestions', {
+    sessionId: 's-expand-seed',
+    expand: true,
+    seed: '已被选中的回复',
+  });
+  assert.equal(withSeed.status, 200);
+  assert.ok(harness.calls[0].user.includes('已被选中的回复'));
+  assert.ok(harness.calls[0].user.includes('变体'));
+
+  const withFocus = await post(harness.baseUrl, '/api/reply-suggestions', {
+    sessionId: 's-expand-focus',
+    expand: true,
+    focus: '被引用的那一段',
+    seed: '',
+  });
+  assert.equal(withFocus.status, 200);
+  assert.ok(harness.calls[1].user.includes('被引用的那一段'));
+  assert.ok(harness.calls[1].user.includes('回应'));
+});
+
+test('POST / still serves an ordinary redraw with focus while expansion is off', async (t) => {
+  const harness = await start(t);
+  const response = await post(harness.baseUrl, '/api/reply-suggestions', {
+    sessionId: 's-normal-focus',
+    redraw: true,
+    focus: '普通重抽的焦点',
+  });
+  assert.equal(response.status, 200);
+  assert.ok(harness.calls[0].user.includes('普通重抽的焦点'));
+});
+
+test('POST /events accepts an expansion source and rejects an unknown one', async (t) => {
+  const harness = await start(t);
+  const valid = await post(harness.baseUrl, '/api/reply-suggestions/events', {
+    sessionId: 's-events',
+    draw: 2,
+    event: 'picked',
+    index: 0,
+    source: 'seed',
+  });
+  assert.equal(valid.status, 204);
+
+  const invalid = await post(harness.baseUrl, '/api/reply-suggestions/events', {
+    sessionId: 's-events',
+    draw: 2,
+    event: 'picked',
+    index: 0,
+    source: 'somewhere',
+  });
+  assert.equal(invalid.status, 400);
+});

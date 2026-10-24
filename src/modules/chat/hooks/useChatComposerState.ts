@@ -174,6 +174,32 @@ const createFakeSubmitEvent = () => {
   return { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>;
 };
 
+/**
+ * Split a quoted draft into the part a response must keep and the part it
+ * replaces.
+ *
+ * A quotation is pasted as one or more `> …` lines. An expansion chip for that
+ * quotation replaces what the person wrote AFTER it, never the quotation itself,
+ * so the prefix runs through the last `> ` line (and its newline). A draft with
+ * no quotation has an empty prefix and the chip replaces all of it.
+ */
+function splitQuotedPrefix(text: string): { prefix: string; rest: string } {
+  const lines = text.split('\n');
+  let lastQuotedLine = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index].trimStart().startsWith('>')) {
+      lastQuotedLine = index;
+    }
+  }
+  if (lastQuotedLine < 0) {
+    return { prefix: '', rest: text };
+  }
+  return {
+    prefix: `${lines.slice(0, lastQuotedLine + 1).join('\n')}\n`,
+    rest: lines.slice(lastQuotedLine + 1).join('\n'),
+  };
+}
+
 const getNotificationSessionSummary = (
   selectedSession: ProjectSession | null,
   fallbackInput: string,
@@ -423,6 +449,13 @@ export function useChatComposerState({
     loading: replySuggestionsLoading,
     redraw: redrawReplySuggestions,
     reportEvent: reportReplySuggestionEvent,
+    expansionEnabled: replyExpansionEnabled,
+    expansionChips: replyExpansionChips,
+    expansionSource: replyExpansionSource,
+    expansionLoading: replyExpansionLoading,
+    canExpand: replyExpansionCanExpand,
+    requestExpansion: requestReplyExpansion,
+    clearExpansion: clearReplyExpansion,
   } = useReplySuggestions({
     sessionId: currentSessionId,
     lastAssistantMessageId,
@@ -440,8 +473,16 @@ export function useChatComposerState({
   // the person can answer it; a habit is the original fill-only behaviour.
   const acceptSuggestionChip = useCallback((chip: SuggestionChip) => {
     if (chip.source === 'model') {
-      modelChipFillRef.current = chip.text;
       reportReplySuggestionEvent('picked', chip.index);
+      if (replyExpansionEnabled) {
+        // The experiment keeps the picked reply in the box so it can be expanded:
+        // filling and sending would leave nothing for the variants to replace.
+        modelChipFillRef.current = null;
+        setInputFromHistory(chip.text);
+        requestReplyExpansion({ seed: chip.text });
+        return;
+      }
+      modelChipFillRef.current = chip.text;
       setInputFromHistory(chip.text);
       // The send path reads `inputValueRef`, not render state, so the fill above is
       // already visible to it on this same tick.
@@ -457,6 +498,11 @@ export function useChatComposerState({
       setPinnedQuote(chip.text);
       lastChipFillRef.current = { before: current, after: next };
       setInputFromHistory(next);
+      // With expansion on, the quotation is the anchor: the first chips are
+      // responses to it, and there is no seed because nothing follows it yet.
+      if (replyExpansionEnabled) {
+        requestReplyExpansion({ focus: chip.text, seed: '' });
+      }
       requestAnimationFrame(() => {
         const textarea = textareaRef.current;
         if (!textarea) {
@@ -471,6 +517,8 @@ export function useChatComposerState({
   }, [
     acceptSuggestion,
     inputValueRef,
+    replyExpansionEnabled,
+    requestReplyExpansion,
     reportReplySuggestionEvent,
     setInputFromHistory,
     submitComposer,
@@ -505,12 +553,72 @@ export function useChatComposerState({
     if (text === undefined) {
       return;
     }
+    reportReplySuggestionEvent('picked', index);
+    if (replyExpansionEnabled) {
+      modelChipFillRef.current = null;
+      lastChipFillRef.current = { before: inputValueRef.current, after: text };
+      setInputFromHistory(text);
+      requestReplyExpansion({ seed: text });
+      return;
+    }
     modelChipFillRef.current = text;
     lastChipFillRef.current = { before: inputValueRef.current, after: text };
-    reportReplySuggestionEvent('picked', index);
     setInputFromHistory(text);
     submitComposer();
-  }, [inputValueRef, replySuggestionChips, reportReplySuggestionEvent, setInputFromHistory, submitComposer]);
+  }, [
+    inputValueRef,
+    replyExpansionEnabled,
+    replySuggestionChips,
+    reportReplySuggestionEvent,
+    requestReplyExpansion,
+    setInputFromHistory,
+    submitComposer,
+  ]);
+
+  /**
+   * Accepts one variant/response chip from the expansion experiment.
+   *
+   * The chip REPLACES the body — `> 原文` lines are the only part that survives a
+   * quoted draft — and, while the chain has depth left, becomes the seed of the
+   * next expansion so the person can keep refining. At the cap the chip is simply
+   * accepted and the strip goes away.
+   */
+  const acceptReplyExpansionChip = useCallback((index: number) => {
+    const text = replyExpansionChips[index];
+    if (text === undefined) {
+      return;
+    }
+    reportReplySuggestionEvent('picked', index, replyExpansionSource ?? undefined);
+    const current = inputValueRef.current;
+    const { prefix } = splitQuotedPrefix(current);
+    const next = prefix === '' ? text : `${prefix}${text}`;
+    modelChipFillRef.current = null;
+    lastChipFillRef.current = { before: current, after: next };
+    setInputFromHistory(next);
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) {
+        return;
+      }
+      textarea.focus();
+      textarea.setSelectionRange(next.length, next.length);
+    });
+    if (replyExpansionCanExpand) {
+      requestReplyExpansion({ seed: text });
+    } else {
+      clearReplyExpansion();
+    }
+  }, [
+    clearReplyExpansion,
+    inputValueRef,
+    replyExpansionCanExpand,
+    replyExpansionChips,
+    replyExpansionSource,
+    reportReplySuggestionEvent,
+    requestReplyExpansion,
+    setInputFromHistory,
+    textareaRef,
+  ]);
 
   /**
    * Pastes a quotation as `> text` on its own line(s) and focuses. Never sends.
@@ -680,6 +788,7 @@ export function useChatComposerState({
 
         queuedDraftSessionRef.current = queuedSessionKey;
         setQueuedDraft(durableDraft);
+        clearReplyExpansion();
         setInput('');
         inputValueRef.current = '';
         setAttachedFiles([]);
@@ -914,6 +1023,9 @@ export function useChatComposerState({
         }
         modelChipFillRef.current = null;
         recordSentMessage(currentInput, targetSessionId);
+        // The message left the box; the variants that answered it are no longer
+        // about anything on screen.
+        clearReplyExpansion();
         // The box itself is cleared only while it still shows the scope the
         // message came from; a scope that has moved on (a new chat) already
         // shows its own, empty draft.
@@ -991,6 +1103,7 @@ export function useChatComposerState({
       selectedSession,
       attachedFiles,
       buildSendOptions,
+      clearReplyExpansion,
       currentSessionId,
       editingAnchorId,
       executeCommand,
@@ -1034,6 +1147,10 @@ export function useChatComposerState({
       const newValue = event.target.value;
       const cursorPos = event.target.selectionStart;
 
+      // A manual edit is not the draft an expansion chip was drawn for: the
+      // variants would replace text the person just changed by hand.
+      clearReplyExpansion();
+
       // Carry the voice insertion range through the edit before it lands in state.
       remapVoiceRangeOnEdit(inputValueRef.current, newValue);
 
@@ -1055,6 +1172,7 @@ export function useChatComposerState({
       handleCommandInputChange(newValue, cursorPos);
     },
     [
+      clearReplyExpansion,
       handleCommandInputChange,
       inputValueRef,
       remapVoiceRangeOnEdit,
@@ -1086,6 +1204,7 @@ export function useChatComposerState({
     inputValueRef.current = '';
     setPinnedQuote(null);
     lastChipFillRef.current = null;
+    clearReplyExpansion();
     resetCommandMenuState();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -1093,6 +1212,7 @@ export function useChatComposerState({
     }
     setIsTextareaExpanded(false);
   }, [
+    clearReplyExpansion,
     inputValueRef,
     reportReplySuggestionEvent,
     resetCommandMenuState,
@@ -1283,16 +1403,18 @@ export function useChatComposerState({
   const beginEditMessage = useCallback((message: ChatMessage) => {
     if (!message.transcriptAnchorId) return;
     setEditingAnchorId(message.transcriptAnchorId);
+    clearReplyExpansion();
     setInput(message.content || '');
     inputValueRef.current = message.content || '';
     textareaRef.current?.focus();
-  }, [inputValueRef, setInput, textareaRef]);
+  }, [clearReplyExpansion, inputValueRef, setInput, textareaRef]);
 
   const cancelEditMessage = useCallback(() => {
     setEditingAnchorId(null);
+    clearReplyExpansion();
     setInput('');
     inputValueRef.current = '';
-  }, [inputValueRef, setInput]);
+  }, [clearReplyExpansion, inputValueRef, setInput]);
 
   return {
     input,
@@ -1337,6 +1459,9 @@ export function useChatComposerState({
     replySuggestionsEnabled,
     replySuggestionsLoading,
     redrawReplySuggestions,
+    replyExpansionChips,
+    replyExpansionLoading,
+    acceptReplyExpansionChip,
     getRootProps,
     getInputProps,
     isDragActive,

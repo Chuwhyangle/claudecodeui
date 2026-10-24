@@ -48,7 +48,7 @@ import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import ComposerPermissionMenu from '@/modules/chat/composer/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
-import { suggestionOptionId } from '@/modules/chat/utils/inputSuggestions';
+import { suggestionOptionId, truncateSuggestionLabel } from '@/modules/chat/utils/inputSuggestions';
 import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
 
 /** How long the occupied notice's copy control says "copied" before returning to its label. */
@@ -261,6 +261,14 @@ type ChatComposerProps = {
   replySuggestionsLoading?: boolean;
   /** Asks for a whole new batch of model chips. */
   onRequestReplySuggestions?: () => void;
+  /**
+   * The expansion experiment's variant/response chips for the draft in the box.
+   * Drawn as their own row under the textarea (the empty-box strip cannot carry
+   * them: they appear AFTER a chip has filled the body).
+   */
+  replyExpansionChips?: string[];
+  /** Accepts one variant/response chip: replaces the body, keeping a `> quote` prefix. */
+  onAcceptReplyExpansionChip?: (index: number) => void;
 };
 
 /**
@@ -356,6 +364,8 @@ export default function ChatComposer({
   replySuggestionsEnabled = false,
   replySuggestionsLoading = false,
   onRequestReplySuggestions,
+  replyExpansionChips = [],
+  onAcceptReplyExpansionChip,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   /*
@@ -1035,6 +1045,34 @@ export default function ChatComposer({
                 // must focus the input instead of being eaten by the listbox.
                 onBackgroundPress={() => textareaRef.current?.focus()}
               />
+            )}
+            {/*
+              The expansion experiment's chips. They appear only after a chip has
+              filled the body, so they cannot use the empty-box strip above; this
+              row sits AFTER the textarea in flow (never over it) and scrolls on
+              one line at narrow widths, exactly like the other chips. A press
+              neither moves the caret nor steals focus from the textarea.
+            */}
+            {replyExpansionChips.length > 0 && (
+              <div
+                data-slot="reply-expansion-chips"
+                className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap px-4 pb-2 [scrollbar-width:none]"
+              >
+                {replyExpansionChips.map((text, index) => (
+                  <button
+                    key={`${index}:${text}`}
+                    type="button"
+                    data-expansion-chip-index={index}
+                    title={text}
+                    tabIndex={-1}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => onAcceptReplyExpansionChip?.(index)}
+                    className="h-6 shrink-0 rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+                  >
+                    {truncateSuggestionLabel(text)}
+                  </button>
+                ))}
+              </div>
             )}
             {/* Inline tier only: the row below is a sibling of this body, and the form is a row on
                 that tier, so a sibling here would become a third column of its own. It moves into

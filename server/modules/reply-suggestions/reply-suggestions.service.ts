@@ -21,6 +21,14 @@
  * duration, outcome and token counts the upstream reported — never conversation
  * text, chip text or the key.
  *
+ * THE EXPANSION EXPERIMENT. When the settings say `expansion: "vary"`, a request
+ * carrying `expand: true` is a second kind of draw: with a `seed` it asks for
+ * variants of the reply the person already picked (the seed counts as already
+ * shown, so an identical or near-duplicate answer is filtered before it reaches
+ * them); with a quoted `focus` and no seed it asks for responses to that passage.
+ * With `expansion: "off"` those requests are refused `400` before any upstream
+ * call. The usage ledger's `shown` row names which of the two anchored the draw.
+ *
  * Consumers: `reply-suggestions.routes.ts` (the HTTP face) and the service
  * criterion in `tests/reply-suggestions-service.test.ts`.
  */
@@ -56,22 +64,42 @@ export type LastAssistantMessage = {
   text: string;
 };
 
+/**
+ * What an expansion draw is anchored on: `seed` is the reply the person picked
+ * (variants of it), `focus` is the quoted passage with no reply written yet
+ * (responses to it). The value is written into the usage ledger so a replay can
+ * tell the two apart without storing either text twice.
+ */
+export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
+
 /** Input the route has already parsed and validated. */
 export type ReplySuggestionsInput = {
   sessionId: string;
   redraw?: boolean;
   focus?: string;
+  /**
+   * The reply the person already picked. Only meaningful together with
+   * `expand: true`; clipped to `maxChipChars` by the service.
+   */
+  seed?: string;
+  /**
+   * True for an expansion draw. Distinguishes it from an ordinary first draw or
+   * redraw, which may also carry `focus`; the service refuses it unless the
+   * settings say `expansion: "vary"`.
+   */
+  expand?: boolean;
 };
 
 /** The pointer-click ledger event names the client reports. */
 export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
 
-/** One `/events` posting. */
+/** One `/events` posting. `source` is present only when an expansion chip was picked. */
 export type ReplySuggestionsEventInput = {
   sessionId: string;
   draw: number;
   event: ReplySuggestionsEventName;
   index?: number;
+  source?: ReplySuggestionsExpansionSource;
 };
 
 /** The reading `GET /status` exposes — no paths and no key. */
@@ -180,6 +208,59 @@ function buildUserPrompt(options: {
 }
 
 /**
+ * The built-in system prompt for an expansion draw.
+ *
+ * A seed draw asks for rewrites of a reply the person already picked; a focus
+ * draw asks for replies to a passage they quoted. Both keep the same "no invented
+ * facts" rule as the ordinary prompt, and both name the requested shape in the
+ * user prompt as well, so a custom system prompt cannot silently drop it.
+ */
+function builtInExpansionSystemPrompt(maxChipChars: number, source: ReplySuggestionsExpansionSource): string {
+  return [
+    '你在为用户起草聊天输入框里可直接发送的回复。',
+    source === 'seed'
+      ? '用户已经选定了一条回复；请给出同话题的另一种写法（变体），保持它的决定与意图。'
+      : '用户选中了助手消息里的一段；请给出针对这一段的回应。',
+    '给出 2 到 3 条互不相同的完整回复，用用户的语言和简短风格，第 2、3 条必须在措辞或详略上与第 1 条不同。',
+    `每条不超过 ${maxChipChars} 个字符。`,
+    '不得编造消息里没有的事实、数字或测量值：可以替人做决定，不可以编造事实。',
+    '只输出 JSON：{"chips": ["…", "…", "…"]}',
+  ].join('\n');
+}
+
+/**
+ * The user prompt for an expansion draw: the same assistant tail, the quoted
+ * passage when there is one, and either the picked reply (seed, variants) or the
+ * instruction to respond to the quotation.
+ *
+ * `avoid` lists the chips already shown in this draw, exactly as the redraw
+ * prompt does, so a supplement never repeats the first answer.
+ */
+function buildExpansionPrompt(options: {
+  tail: string;
+  focus: string;
+  seed: string;
+  avoid: readonly string[];
+}): string {
+  const lines: string[] = ['助手最后一条消息（末尾节选，可能被截断）：', '"""', options.tail, '"""'];
+  if (options.focus !== '') {
+    lines.push('', '用户选中了消息里的这一段：', '"""', options.focus, '"""');
+  }
+  if (options.seed !== '') {
+    lines.push('', '用户选定的回复（seed）：', '"""', options.seed, '"""');
+    lines.push('', '请基于这条 seed 给出同话题的变体：保持它的决定与意图，只在措辞或详略上不同。');
+  } else {
+    lines.push('', '请针对上面选中的这一段给出 2 到 3 条回应。');
+  }
+  const avoid = options.avoid.slice(-REPLY_SUGGESTIONS_REDRAW_MEMORY);
+  if (avoid.length > 0) {
+    lines.push('', '不要重复以下已经展示过的回复：');
+    for (const chip of avoid) lines.push(`- ${chip}`);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Parse the model's answer into a raw chip list.
  *
  * Accepts `{"chips": [...]}`, a bare array and either wrapped in a ``` fence.
@@ -278,6 +359,19 @@ function upstreamError(category: string): AppError {
     code: 'REPLY_SUGGESTIONS_UPSTREAM_FAILED',
     statusCode: 502,
   });
+}
+
+/** `expand: true` while the settings say `expansion: "off"`; refused before any upstream call. */
+function expansionDisabledError(): AppError {
+  return new AppError('reply-suggestions expansion is not enabled', {
+    code: 'REPLY_SUGGESTIONS_EXPANSION_DISABLED',
+    statusCode: 400,
+  });
+}
+
+/** A structurally inconsistent expansion request (`expand` without a seed or focus, a seed without `expand`). */
+function invalidInputError(message: string): AppError {
+  return new AppError(message, { code: 'INVALID_REQUEST', statusCode: 400 });
 }
 
 /**
@@ -401,11 +495,22 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
 
     const redraw = input.redraw === true;
     const focus = input.focus === undefined ? '' : truncateCodePoints(input.focus, settings.maxFocusChars);
+    // An expansion draw is one of two shapes: variants of the picked reply (a
+    // non-empty seed wins) or responses to the quoted passage. `seed` is clipped
+    // to maxChipChars because it is chip text, the same budget as the answer.
+    const expand = input.expand === true;
+    const seed = expand && input.seed !== undefined
+      ? truncateCodePoints(input.seed.trim(), settings.maxChipChars)
+      : '';
+    const expansionSource: ReplySuggestionsExpansionSource | null = expand
+      ? (seed !== '' ? 'seed' : 'focus')
+      : null;
     const inflightKey = [
       input.sessionId,
       message.id,
       redraw ? 'redraw' : 'first',
       focus,
+      expansionSource === null ? '' : `${expansionSource}:${seed}`,
     ].join('\u0000');
     const alreadyRunning = inflight.get(inflightKey);
     if (alreadyRunning !== undefined) return alreadyRunning;
@@ -419,7 +524,9 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
       const draw = state.draw + 1;
       const tail = tailCodePoints(message.text, settings.maxTailChars);
       const avoid = redraw ? state.shown.slice(-REPLY_SUGGESTIONS_REDRAW_MEMORY) : [];
-      const temperature = redraw ? settings.redrawTemperature : settings.temperature;
+      // An expansion is a diversification draw: the redraw temperature produces
+      // genuinely different wording, which is the point of offering variants.
+      const temperature = redraw || expansionSource !== null ? settings.redrawTemperature : settings.temperature;
       const config = {
         protocol: settings.protocol,
         baseUrl: settings.baseUrl,
@@ -429,33 +536,40 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
         disableThinking: settings.disableThinking,
         timeoutMs: settings.timeoutMs,
       };
+      const system = settings.systemPrompt.trim() !== ''
+        ? settings.systemPrompt
+        : expansionSource === null
+          ? builtInSystemPrompt(settings.maxChipChars)
+          : builtInExpansionSystemPrompt(settings.maxChipChars, expansionSource);
+      const buildUser = (avoided: readonly string[], isRedraw: boolean): string =>
+        expansionSource === null
+          ? buildUserPrompt({ tail, focus, avoid: avoided, redraw: isRedraw })
+          : buildExpansionPrompt({ tail, focus, seed, avoid: avoided });
       const request: ReplySuggestionsCompletionRequest = {
         config,
-        system: settings.systemPrompt.trim() === '' ? builtInSystemPrompt(settings.maxChipChars) : settings.systemPrompt,
-        user: buildUserPrompt({ tail, focus, avoid, redraw }),
+        system,
+        user: buildUser(avoid, redraw),
         temperature,
         maxOutputTokens: settings.maxOutputTokens,
       };
 
       const first = await callUpstream(request, settings);
       const firstChips = parseChipsOrUpstreamFailure(first.text);
-      let selected = selectChips(firstChips, state.shown, settings);
+      // The seed is "already shown" for this draw by definition: a variant that
+      // repeats it exactly, or nearly so, is not a variant at all.
+      const seenBefore = expansionSource === 'seed' ? [...state.shown, seed] : state.shown;
+      let selected = selectChips(firstChips, seenBefore, settings);
 
       // Fewer than two usable chips is a failed draw: supplement exactly ONCE.
       if (settings.maxChips >= 2 && selected.length < 2) {
         const supplement = await callUpstream(
           {
             ...request,
-            user: buildUserPrompt({
-              tail,
-              focus,
-              avoid: [...avoid, ...firstChips],
-              redraw: true,
-            }),
+            user: buildUser([...avoid, ...firstChips], true),
           },
           settings,
         );
-        selected = selectChips([...firstChips, ...parseChipsOrUpstreamFailure(supplement.text)], state.shown, settings);
+        selected = selectChips([...firstChips, ...parseChipsOrUpstreamFailure(supplement.text)], seenBefore, settings);
       }
 
       state.draw = draw;
@@ -471,6 +585,9 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
           model: settings.model,
           protocol: settings.protocol,
           version: settings.version,
+          // The marker a replay reads to know this draw was an expansion, and
+          // which text anchored it. The text itself is not copied into the ledger.
+          ...(expansionSource === null ? {} : { expansion: expansionSource }),
           chips: selected,
         });
       }
@@ -498,6 +615,16 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
     async suggest(input: ReplySuggestionsInput): Promise<{ chips: string[]; draw: number }> {
       const settings = deps.readSettings();
       if (!settings.enabled) throw disabledError();
+      if (input.expand === true) {
+        if (settings.expansion !== 'vary') throw expansionDisabledError();
+        const seed = input.seed?.trim() ?? '';
+        const focus = input.focus?.trim() ?? '';
+        if (seed === '' && focus === '') {
+          throw invalidInputError('an expansion request needs a "seed" or a "focus"');
+        }
+      } else if ((input.seed?.trim() ?? '') !== '') {
+        throw invalidInputError('"seed" is only valid with "expand": true');
+      }
       return generate(input, settings);
     },
 
@@ -510,6 +637,7 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
         sessionId: input.sessionId,
         draw: input.draw,
         ...(input.index === undefined ? {} : { index: input.index }),
+        ...(input.source === undefined ? {} : { source: input.source }),
       });
     },
   };
