@@ -1683,8 +1683,11 @@ export type NormalizedMessage = {
    */
   replacesAnchorId?: string;
   /**
-   * How many persisted rows survived the cut this echo was sent for, stamped
-   * when the truncation is applied.
+   * The **absolute history subscript** of the cut this echo was sent for — its
+   * position in the complete normalized history, not an index into whichever
+   * page happened to be on screen when the truncation was applied. Stamped when
+   * the truncation is applied; the consumer subtracts the current window's
+   * origin before using it as a lower bound on the page it holds.
    *
    * The echo is retired once the provider persists it, and that is decided by
    * matching text and attachments inside a time window. That is enough until a
@@ -1693,6 +1696,9 @@ export type NormalizedMessage = {
    * with the same words then sits inside the window and retires the message
    * the user just sent. The replacement can only be a row that was not there
    * when the cut was made, so this is where those rows begin.
+   *
+   * Kept under this name for the duration of the coordinate fix; the identity
+   * phase removes the field entirely.
    */
   replacesAfterRowCount?: number;
   sessionId: string;

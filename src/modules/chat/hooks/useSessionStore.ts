@@ -129,6 +129,13 @@ function createEmptySlot(): SessionSlot {
 
 type SessionHistoryPage = {
   messages: NormalizedMessage[];
+  /**
+   * Absolute subscript of `messages[0]` in the full normalized history. The
+   * server returns it so a page carries its own origin instead of leaving the
+   * client to reconstruct one from `total` and an offset that may not describe
+   * the page it just received.
+   */
+  startIndex: number;
   total: number;
   hasMore: boolean;
   tokenUsage?: unknown;
@@ -161,6 +168,11 @@ async function requestSessionHistoryPage(
 
   return {
     messages,
+    // Older servers (and test doubles) do not send an origin; a page that ends
+    // at the tail starts `total - length` rows back.
+    startIndex: typeof data.startIndex === 'number'
+      ? data.startIndex
+      : Math.max(0, (typeof data.total === 'number' ? data.total : messages.length) - messages.length),
     total: typeof data.total === 'number' ? data.total : messages.length,
     hasMore: Boolean(data.hasMore),
     ...(
@@ -610,6 +622,7 @@ function pruneRealtimeSupersededByServer(
   serverMessages: NormalizedMessage[],
   realtimeMessages: NormalizedMessage[],
   blockKeyByRowId: Map<string, string>,
+  serverWindowStart = 0,
 ): { serverMessages: NormalizedMessage[]; realtimeMessages: NormalizedMessage[] } {
   for (const message of realtimeMessages) {
     if (message.blockKey && !blockKeyByRowId.has(message.id)) {
@@ -625,7 +638,11 @@ function pruneRealtimeSupersededByServer(
   }
 
   const serverIds = new Set(serverMessages.map((message) => message.id));
-  const reconciledRealtimeMessages = removeOptimisticUserEchoes(serverMessages, realtimeMessages);
+  const reconciledRealtimeMessages = removeOptimisticUserEchoes(
+    serverMessages,
+    realtimeMessages,
+    serverWindowStart,
+  );
   // A server page that now carries the turn a resident pending row stands for
   // reclaims that row here, exactly as it reclaims an optimistic echo above —
   // the message is on disk, so the client's own copy of it is done.
@@ -901,7 +918,11 @@ function retireDeliveredResidentPending(
   });
 }
 
-function computeMerged(serverSource: NormalizedMessage[], realtimeSource: NormalizedMessage[]): NormalizedMessage[] {
+function computeMerged(
+  serverSource: NormalizedMessage[],
+  realtimeSource: NormalizedMessage[],
+  serverWindowStart = 0,
+): NormalizedMessage[] {
   const server = withoutServedLifecycleRows(serverSource);
   // Retire a pending row before the branches below, so a realtime list that is
   // nothing but a now-delivered pending row falls through to the server rows
@@ -923,7 +944,7 @@ function computeMerged(serverSource: NormalizedMessage[], realtimeSource: Normal
   }
 
   const serverIds = new Set(server.map((message) => message.id));
-  const reconciledRealtime = removeOptimisticUserEchoes(server, realtime);
+  const reconciledRealtime = removeOptimisticUserEchoes(server, realtime, serverWindowStart);
   const extra = reconciledRealtime.filter((message) => {
     if (serverIds.has(message.id)) {
       return false;
@@ -1027,8 +1048,9 @@ export function applyCommandLifecycleToRows(
 export function mergeSessionRows(
   server: NormalizedMessage[],
   realtime: NormalizedMessage[],
+  serverWindowStart = 0,
 ): NormalizedMessage[] {
-  return computeMerged(server, realtime);
+  return computeMerged(server, realtime, serverWindowStart);
 }
 
 // ─── Pending deliveries, as the activity snapshot states them ────────────────
@@ -1241,7 +1263,11 @@ function recomputeMergedIfNeeded(slot: SessionSlot): boolean {
   const realtime = slot.attached && slot.deliveryRows.length > 0
     ? [...slot.deliveryRows, ...realtimeSource]
     : realtimeSource;
-  slot.merged = computeMerged(slot.serverMessages, realtime);
+  // `serverMessages` describes a window, not the whole transcript, so the
+  // absolute floor stamped on an edited echo only becomes a page subscript
+  // once the window's own origin is subtracted. Pass it on every recompute:
+  // the window slides between the cut and the refresh that retires the echo.
+  slot.merged = computeMerged(slot.serverMessages, realtime, slot.startIndex);
   return true;
 }
 
@@ -1406,6 +1432,7 @@ async function refreshLatestSlotFromServer(
     slot.serverMessages,
     slot.realtimeMessages,
     slot.blockKeyByRowId,
+    slot.startIndex,
   ));
   recomputeMergedIfNeeded(slot);
 
@@ -1485,9 +1512,13 @@ export function useSessionStore() {
         slot.total = data.total;
         slot.hasMore = data.hasMore;
         slot.offset = (requestOptions.offset ?? 0) + data.messages.length;
-        // The tail page is counted back from the newest row, so its absolute start
-        // is `total - offset`, not `total - length` (those agree only at offset 0).
-        slot.startIndex = Math.max(0, slot.total - slot.offset);
+        // The page carries its own absolute origin; `total - offset` is the
+        // same number on a tail page and stays as the fallback for a server
+        // that predates the field.
+        slot.startIndex = Math.max(
+          0,
+          typeof data.startIndex === 'number' ? data.startIndex : slot.total - slot.offset,
+        );
         slot.endIndex = slot.total;
         slot.attached = true;
         slot.anchorIndex = Math.max(slot.startIndex, slot.endIndex - 1);
@@ -1500,6 +1531,7 @@ export function useSessionStore() {
           slot.serverMessages,
           slot.realtimeMessages,
           slot.blockKeyByRowId,
+          slot.startIndex,
         ));
         recomputeMergedIfNeeded(slot);
         if (data.tokenUsage !== undefined) {
@@ -1609,11 +1641,34 @@ export function useSessionStore() {
     const slot = storeRef.current.get(sessionId);
     if (!slot) return;
 
+    // The replacement is looked up first: when the anchor itself is not in the
+    // window we still have one, and it is what tells us a cut happened at all.
+    const replacements = slot.realtimeMessages.filter(
+      (message) => message.replacesAnchorId === anchorId,
+    );
     const cutIndex = slot.serverMessages.findIndex(
       (message) => message.transcriptAnchorId === anchorId,
     );
-    if (cutIndex < 0) return;
 
+    // The anchor is outside the window this client holds — it was edited from
+    // a detached/older page, or it exists only as a live row. There is no old
+    // server row here to drop, but the replacement still needs a floor: it can
+    // only be persisted after every row the window ends on, so the absolute
+    // cut is the window's own end. An anchor with no replacement at all names
+    // no cut this client can honour; leave the store untouched.
+    if (cutIndex < 0) {
+      if (replacements.length === 0) return;
+      slot.realtimeMessages = [
+        { ...replacements[replacements.length - 1], replacesAfterRowCount: slot.endIndex },
+      ];
+      recomputeMergedIfNeeded(slot);
+      notify(sessionId);
+      return;
+    }
+
+    // Absolute history subscript, not a page subscript: the page this cut is
+    // applied to is not the page the persisted replacement will be read from.
+    const absoluteCut = slot.startIndex + cutIndex;
     slot.serverMessages = slot.serverMessages.slice(0, cutIndex);
     // Anything already streamed belonged to the turn being replaced — except
     // the replacement itself. The client that made the edit appends its
@@ -1623,14 +1678,11 @@ export function useSessionStore() {
     // Only the last one: a send that was refused leaves its echo behind, so a
     // second attempt at the same message would otherwise survive the cut
     // alongside the abandoned first and show the user both.
-    const replacements = slot.realtimeMessages.filter(
-      (message) => message.replacesAnchorId === anchorId,
-    );
     slot.realtimeMessages = replacements.length > 0
       // Stamped here because this is the only place that knows how much of the
       // conversation survived, which is what tells the echo apart from the
       // turns it now sits after.
-      ? [{ ...replacements[replacements.length - 1], replacesAfterRowCount: cutIndex }]
+      ? [{ ...replacements[replacements.length - 1], replacesAfterRowCount: absoluteCut }]
       : EMPTY;
     // `total` counts what the server would serve; it is about to be re-fetched
     // anyway, but leaving it high makes the pager offer pages that do not exist.
@@ -2168,7 +2220,10 @@ export function useSessionStore() {
         slot.total = data.total;
         slot.hasMore = data.hasMore;
         slot.offset = data.messages.length;
-        slot.startIndex = Math.max(0, data.total - data.messages.length);
+        slot.startIndex = Math.max(
+          0,
+          typeof data.startIndex === 'number' ? data.startIndex : data.total - data.messages.length,
+        );
         slot.endIndex = data.total;
         slot.attached = true;
         slot.anchorIndex = Math.max(slot.startIndex, slot.endIndex - 1);
@@ -2183,6 +2238,7 @@ export function useSessionStore() {
           slot.serverMessages,
           slot.realtimeMessages,
           slot.blockKeyByRowId,
+          slot.startIndex,
         ));
         recomputeMergedIfNeeded(slot);
         notify(sessionId);

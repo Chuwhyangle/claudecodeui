@@ -166,3 +166,51 @@ test('two real same-text sends with one persisted echo keep the unpaired row', (
     [secondLocal, persisted],
   );
 });
+
+/**
+ * The floor an edited echo carries is an absolute history subscript, while
+ * `serverMessages` is only the window the client currently holds. These cases
+ * pin the translation: the same absolute floor means different page indices
+ * depending on where the window starts.
+ */
+test('retires an edited echo whose absolute floor is inside a shifted window', () => {
+  const windowStart = 18;
+  const absoluteFloor = 36;
+
+  // A twenty-row page starting at absolute 18. The persisted replacement sits
+  // at absolute 36 — page index 18 — which is where the floor starts looking.
+  const page = Array.from({ length: 20 }, (_, offset) => createUserMessage(
+    `server_${windowStart + offset}`,
+    new Date(Date.UTC(2026, 9, 2, 9, 50, offset)).toISOString(),
+    { content: windowStart + offset === absoluteFloor ? 'edited text' : `turn ${windowStart + offset}` },
+  ));
+  const echo = createUserMessage('local_edited', '2026-10-02T09:50:17.500Z', {
+    content: 'edited text',
+    replacesAnchorId: 'u-cut',
+    replacesAfterRowCount: absoluteFloor,
+  });
+
+  assert.equal(page[absoluteFloor - windowStart]?.content, 'edited text');
+  assert.deepEqual(removeOptimisticUserEchoes(page, [echo], windowStart), []);
+});
+
+test('keeps an edited echo whose absolute floor is past the window', () => {
+  const windowStart = 18;
+  const absoluteFloor = 50;
+
+  // Same page, but the cut happened after every row the window holds: the
+  // translated floor (50 - 18 = 32) is past the end, so the look-alike row in
+  // the page must not be mistaken for the persisted replacement.
+  const page = Array.from({ length: 20 }, (_, offset) => createUserMessage(
+    `server_${windowStart + offset}`,
+    new Date(Date.UTC(2026, 9, 2, 9, 50, offset)).toISOString(),
+    { content: windowStart + offset === 36 ? 'edited text' : `turn ${windowStart + offset}` },
+  ));
+  const echo = createUserMessage('local_edited', '2026-10-02T09:50:17.500Z', {
+    content: 'edited text',
+    replacesAnchorId: 'u-cut',
+    replacesAfterRowCount: absoluteFloor,
+  });
+
+  assert.deepEqual(removeOptimisticUserEchoes(page, [echo], windowStart), [echo]);
+});

@@ -237,3 +237,50 @@ test('history pages are sliced from the cached full transcript and see appended 
     await rm(transcriptDirectory, { recursive: true, force: true });
   }
 });
+
+test('history pages carry the absolute subscript of their first row', { concurrency: false }, async () => {
+  const transcriptDirectory = await mkdtemp(path.join(os.tmpdir(), 'sessions-service-start-index-'));
+  const sessionId = 'claude-history-start-index-session';
+  const transcriptPath = path.join(transcriptDirectory, `${sessionId}.jsonl`);
+
+  try {
+    await withIsolatedDatabase(async () => {
+      const rows = [
+        claudeTextRow(sessionId, 'user', 'one', 0),
+        claudeTextRow(sessionId, 'assistant', 'reply one', 1),
+        claudeTextRow(sessionId, 'user', 'two', 2),
+        claudeTextRow(sessionId, 'assistant', 'reply two', 3),
+        claudeTextRow(sessionId, 'user', 'three', 4),
+      ];
+      await writeFile(transcriptPath, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
+      sessionsDb.createSession(
+        sessionId,
+        'claude',
+        '/tmp/history-start-index-project',
+        'History start index conversation',
+        '2026-01-01T00:00:00.000Z',
+        '2026-01-01T00:00:10.000Z',
+        transcriptPath,
+      );
+
+      // A limited tail page starts `messages.length` rows back from `total`.
+      const tail = await sessionsService.fetchHistory(sessionId, { limit: 2, offset: 0 });
+      assert.equal(tail.total, 5);
+      assert.equal(tail.messages.length, 2);
+      assert.equal(tail.startIndex, tail.total - tail.messages.length);
+      assert.equal(tail.startIndex, 3);
+
+      // An unlimited read is the whole history, so it starts at zero.
+      const full = await sessionsService.fetchHistory(sessionId, {});
+      assert.equal(full.messages.length, 5);
+      assert.equal(full.startIndex, 0);
+
+      // An older page counts its own rows back from the edge it ends at.
+      const older = await sessionsService.fetchHistory(sessionId, { limit: 2, offset: 2 });
+      assert.deepEqual(older.messages.map((message) => message.content), ['reply one', 'two']);
+      assert.equal(older.startIndex, 1);
+    });
+  } finally {
+    await rm(transcriptDirectory, { recursive: true, force: true });
+  }
+});
