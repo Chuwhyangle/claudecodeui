@@ -47,8 +47,8 @@ fleet 侧的数据（每项目 `.quay/gate-events.jsonl`、`~/.quay-fleet/decisi
 
 ## Touches
 
-- scripts/contraction-candidates/scan.mjs
-- scripts/contraction-candidates/scan.test.mjs
-- scripts/contraction-candidates/testdata/fixture-repo/README.md
-- docs/proposals/contraction-candidates.md
+- scripts/contraction-candidates/scan.mjs (new)
+- scripts/contraction-candidates/scan.test.mjs (new)
+- scripts/contraction-candidates/testdata/fixture-repo/README.md (new)
+- docs/proposals/contraction-candidates.md (new)
 - tasks/contraction-candidates-signal-inventory-and-design.md
