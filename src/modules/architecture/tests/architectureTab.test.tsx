@@ -1926,6 +1926,127 @@ test('the minimap sits in the canvas beside the zoom cluster and remembers being
   );
 });
 
+/**
+ * Reading: the zoom percentage is stated ONCE on the page.
+ *
+ * The defect printed it twice — in the in-flow tier row above the canvas and
+ * again inside the on-canvas zoom cluster. The reading is counted from the
+ * rendered text nodes, not from a selector, so a future surface that prints a
+ * bare percentage fails this case too.
+ */
+test('the zoom percentage is stated exactly once on the page', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  const host = await waitForDiagram();
+  sizeHost(host, 640, 420);
+  await waitFor(() => assert.ok(host.querySelector('svg')));
+  triggerResize();
+
+  const percentages = [...document.querySelectorAll('[data-architecture-panel] *')].filter((element) => {
+    if (element.children.length > 0) return false;
+    if (!/^\d+%$/.test((element.textContent ?? '').trim())) return false;
+    return getComputedStyle(element).display !== 'none';
+  });
+  assert.equal(
+    percentages.length,
+    1,
+    `one drawing states one percentage; got ${percentages.map((element) => element.textContent).join(', ')}`,
+  );
+  assert.equal(percentages[0], document.querySelector('[data-architecture-zoom-level]'), 'the in-flow row owns it');
+  assert.equal(document.querySelector('[data-architecture-zoom-cluster-level]'), null, 'the cluster is buttons only');
+});
+
+/**
+ * Reading: the hover reading and the selection pill share the bottom band
+ * without sharing screen space, and a clipped reading still gives every word
+ * back through its title.
+ *
+ * jsdom has no layout, so the live rectangles are pinned by hand — the same
+ * shapes a phone produces: a bottom-left pill and a bottom-right corner slot.
+ */
+test('the hover reading clears the selection pill and ellipsizes with the full text in title', async () => {
+  type Rect = { left: number; top: number; right: number; bottom: number };
+  const overlaps = (a: Rect, b: Rect): boolean =>
+    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  const originalRect = Element.prototype.getBoundingClientRect;
+  const box = (left: number, top: number, width: number, height: number): DOMRect => ({
+    left, top, width, height, right: left + width, bottom: top + height, x: left, y: top,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  const pillRect = { left: 8, top: 560, right: 198, bottom: 588 };
+  const minimapRect = { left: 700, top: 470, right: 860, bottom: 570 };
+  const clusterRect = { left: 828, top: 578, right: 860, bottom: 678 };
+  Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+    if (this.hasAttribute('data-architecture-canvas-region')) return box(0, 0, 900, 600);
+    if (this.matches('.uml-package[data-package-id] > path')) return box(0, 0, 900, 40);
+    if (this.hasAttribute('data-architecture-node-name')) return box(0, 70, 260, 18);
+    if (this.hasAttribute('data-architecture-hover')) return box(0, 0, 420, 22);
+    if (this.hasAttribute('data-architecture-tray-pill')) {
+      return box(pillRect.left, pillRect.top, pillRect.right - pillRect.left, pillRect.bottom - pillRect.top);
+    }
+    if (this.hasAttribute('data-architecture-minimap')) {
+      return box(minimapRect.left, minimapRect.top, minimapRect.right - minimapRect.left, minimapRect.bottom - minimapRect.top);
+    }
+    if (this.hasAttribute('data-architecture-zoom-cluster')) {
+      return box(clusterRect.left, clusterRect.top, clusterRect.right - clusterRect.left, clusterRect.bottom - clusterRect.top);
+    }
+    return box(0, 0, 0, 0);
+  };
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    const host = await waitForDiagram();
+    // Give the canvas a small box so the drawing overflows it and the minimap
+    // is actually drawn — the reading below pins its live rectangle by hand.
+    sizeHost(host, 160, 120);
+    await waitFor(() => assert.ok(host.querySelector('svg')));
+    triggerResize();
+    await waitFor(() => assert.ok(
+      document.querySelector('[data-architecture-minimap]') instanceof HTMLElement,
+      'this case needs the corner slot on screen',
+    ));
+    const nodes = [...host.querySelectorAll('.uml-node[data-entity-id]')];
+    assert.ok(nodes.length >= 2, 'this case needs two entities: one selected, one hovered');
+
+    // A selection draws the pill; the dock opening is irrelevant to the geometry.
+    fireEvent.click(nodes[0]);
+    await waitFor(() => assert.ok(
+      document.querySelector('[data-architecture-tray-pill]') instanceof HTMLElement,
+      'a selection must draw its pill',
+    ));
+
+    fireEvent.mouseOver(nodes[1]);
+    const wrapper = await waitFor(() => {
+      const node = document.querySelector('[data-architecture-hover-hint]');
+      assert.ok(node instanceof HTMLElement, 'hovering a node draws the reading');
+      // Wait for the MEASURED placement, not the pinned fallback corner.
+      assert.ok(Number.parseFloat(node.style.top) > 100, 'the reading must be placed by the measured rule');
+      return node;
+    });
+    const placed = {
+      left: Number.parseFloat(wrapper.style.left),
+      top: Number.parseFloat(wrapper.style.top),
+      right: Number.parseFloat(wrapper.style.left) + 420,
+      bottom: Number.parseFloat(wrapper.style.top) + 22,
+    };
+    assert.equal(overlaps(placed, pillRect), false, `the reading must clear the pill; got ${JSON.stringify(placed)}`);
+    assert.equal(overlaps(placed, minimapRect), false, `the reading must clear the minimap; got ${JSON.stringify(placed)}`);
+    assert.equal(overlaps(placed, clusterRect), false, `the reading must clear the zoom controls; got ${JSON.stringify(placed)}`);
+
+    // A captured hover is ONE line that may be ellipsized — never hard-clipped
+    // — and its title is the whole reading.
+    const span = wrapper.querySelector('[data-architecture-hover]');
+    assert.ok(span instanceof HTMLElement, 'the reading is the hover span');
+    assert.equal(span.style.textOverflow, 'ellipsis');
+    assert.equal(span.style.overflow, 'hidden');
+    assert.equal(span.style.whiteSpace, 'nowrap');
+    assert.equal(span.getAttribute('title'), span.textContent, 'the title restates every word');
+    assert.ok((span.getAttribute('title') ?? '').length > 0, 'the title is not empty');
+  } finally {
+    Element.prototype.getBoundingClientRect = originalRect;
+  }
+});
+
 test('the zoom cluster grows to 44px targets on a coarse pointer', async () => {
   const originalMatchMedia = window.matchMedia;
   Object.defineProperty(window, 'matchMedia', {
@@ -2240,11 +2361,15 @@ test('a semantic drawing states ONE scale — its geometry scale — with no CSS
   // The readout IS the semantic proportion, on the root and on the SVG.
   assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), semanticScale);
   assert.equal(Number(root.getAttribute('data-architecture-semantic-scale')), semanticScale);
+  // ONE reading: the in-flow row above the canvas owns it on the desktop tier
+  // and the on-canvas cluster does not print a second percentage.
   const tierReadout = document.querySelector('[data-architecture-zoom-level]');
-  const clusterReadout = document.querySelector('[data-architecture-zoom-cluster-level]');
   assert.ok(tierReadout instanceof HTMLElement);
-  assert.ok(clusterReadout instanceof HTMLElement);
-  assert.equal(tierReadout.textContent, clusterReadout.textContent, 'tier and cluster print the same number');
+  assert.equal(
+    document.querySelector('[data-architecture-zoom-cluster-level]'),
+    null,
+    'the cluster must not print a second percentage for the same drawing',
+  );
   assert.equal(tierReadout.textContent, `${Math.round(semanticScale * 100)}%`);
 
   // The drawing the engine produced fits the canvas the test pinned.
