@@ -468,9 +468,10 @@ export function useChatComposerState({
   // than about a click.
   const modelChipFillRef = useRef<string | null>(null);
 
-  // Accepts one merged chip. The sources deliberately differ: a model reply is
-  // complete, so clicking it fills AND sends; a quotation is pasted and focused so
-  // the person can answer it; a habit is the original fill-only behaviour.
+  // Accepts one merged chip. Every source fills only — clicking a chip is a draft,
+  // not a send; the person confirms by pressing send themselves. A quotation is
+  // pasted and focused so the person can answer it, and a habit or model reply is
+  // written to both stores with the caret at the end so the next Enter sends it.
   const acceptSuggestionChip = useCallback((chip: SuggestionChip) => {
     if (chip.source === 'model') {
       reportReplySuggestionEvent('picked', chip.index);
@@ -483,10 +484,9 @@ export function useChatComposerState({
         return;
       }
       modelChipFillRef.current = chip.text;
-      setInputFromHistory(chip.text);
-      // The send path reads `inputValueRef`, not render state, so the fill above is
-      // already visible to it on this same tick.
-      submitComposer();
+      // Same fill path as a habit chip: both stores written, focused, caret at the
+      // end — and deliberately no `submitComposer()`, so the text waits in the box.
+      acceptSuggestion(chip.text);
       return;
     }
     if (chip.source === 'quoted') {
@@ -521,7 +521,6 @@ export function useChatComposerState({
     requestReplyExpansion,
     reportReplySuggestionEvent,
     setInputFromHistory,
-    submitComposer,
     textareaRef,
   ]);
 
@@ -563,16 +562,16 @@ export function useChatComposerState({
     }
     modelChipFillRef.current = text;
     lastChipFillRef.current = { before: inputValueRef.current, after: text };
-    setInputFromHistory(text);
-    submitComposer();
+    // Fill only: the next Enter (or the send button) is the person's confirmation.
+    acceptSuggestion(text);
   }, [
+    acceptSuggestion,
     inputValueRef,
     replyExpansionEnabled,
     replySuggestionChips,
     reportReplySuggestionEvent,
     requestReplyExpansion,
     setInputFromHistory,
-    submitComposer,
   ]);
 
   /**
@@ -1150,6 +1149,13 @@ export function useChatComposerState({
       // A manual edit is not the draft an expansion chip was drawn for: the
       // variants would replace text the person just changed by hand.
       clearReplyExpansion();
+
+      // An edit also forfeits the `sent` attribution. Only an unedited model-chip
+      // fill is that chip's text going out; once the person changes it, whatever
+      // they send is their own message, even if they later type the fill back.
+      if (modelChipFillRef.current !== null && newValue !== modelChipFillRef.current) {
+        modelChipFillRef.current = null;
+      }
 
       // Carry the voice insertion range through the edit before it lands in state.
       remapVoiceRangeOnEdit(inputValueRef.current, newValue);

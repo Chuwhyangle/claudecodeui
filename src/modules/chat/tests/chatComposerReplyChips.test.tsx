@@ -18,9 +18,9 @@ import type { PermissionMode, Project, ProjectSession, ServerEvent } from '@/sha
  *
  * Two layers, because the click semantics live in two places: the component
  * routes a press to the callback that owns the source, and the composer state
- * turns that callback into a draft/send. The component cases prove the routing;
- * the hook cases prove that a model chip really fills AND sends while a quoted
- * chip pastes `> text` and focuses without sending.
+ * turns that callback into a draft. The component cases prove the routing; the
+ * hook cases prove that every chip — model replies included — only FILLS the
+ * draft and focuses it, while a quoted chip pastes `> text`; none of them send.
  */
 
 const apiMocks = vi.hoisted(() => ({
@@ -353,22 +353,240 @@ const expansionRequests = () => apiMocks.suggest.mock.calls
   .map(([body]) => body as Record<string, unknown>)
   .filter((body) => body.expand === true);
 
+/** The `sent` ledger rows the composer reported (one per delivered, unedited chip fill). */
+const sentEvents = () => apiMocks.event.mock.calls
+  .map(([payload]) => payload as Record<string, unknown>)
+  .filter((payload) => payload.event === 'sent');
+
+/** Waits until the first draw has arrived and the strip shows a model chip. */
+const waitForModelChip = (view: {
+  result: {
+    current: {
+      replySuggestionsEnabled: boolean;
+      suggestionChips: Array<{ source: string }>;
+    };
+  };
+}) => waitFor(() => {
+  assert.equal(view.result.current.replySuggestionsEnabled, true);
+  assert.ok(view.result.current.suggestionChips.some((chip) => chip.source === 'model'));
+});
+
+type ComposerKeyEvent = Parameters<ReturnType<typeof useChatComposerState>['handleKeyDown']>[0];
+
+/**
+ * A textarea the composer can focus, place its caret in, and (as the page does)
+ * submit through — mounted, never inside the render tree.
+ *
+ * `onRequestSubmit` is what the surrounding form's `requestSubmit()` would run;
+ * the composer's Enter branch reaches the send path through it, which is the
+ * same entry a click on the send button takes.
+ */
+const attachTextarea = (
+  view: { result: { current: { textareaRef: unknown } } },
+  onRequestSubmit?: () => void,
+) => {
+  const textarea = document.createElement('textarea');
+  if (onRequestSubmit) {
+    Object.defineProperty(textarea, 'form', { value: { requestSubmit: onRequestSubmit } });
+  }
+  document.body.appendChild(textarea);
+  (view.result.current.textareaRef as { current: HTMLTextAreaElement | null }).current = textarea;
+  return textarea;
+};
+
+/** The subset of a React keyboard event the composer's handlers read. */
+const keyEvent = (key: string, currentTarget: EventTarget | { value: string } = { value: '' }) => {
+  const event = {
+    key,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    defaultPrevented: false,
+    preventDefault() {
+      event.defaultPrevented = true;
+    },
+    stopPropagation() {
+      // The page-level abort handler is not part of this harness.
+    },
+    nativeEvent: { isComposing: false },
+    currentTarget,
+  };
+  return event;
+};
+
 describe('composer state chip acceptance', () => {
-  it('fills AND sends the complete text when a model chip is accepted', async () => {
-    const { view, sendMessage } = setupComposer();
-    await waitFor(() => {
-      assert.equal(view.result.current.replySuggestionsEnabled, true);
-      assert.ok(view.result.current.suggestionChips.some((chip) => chip.source === 'model'));
+  it('(a) fills, focuses and puts the caret at the end on a model chip click, without sending', async () => {
+    const { view, sendMessage, frames } = setupComposer();
+    const submitted = vi.fn();
+    const textarea = attachTextarea(view, submitted);
+    await waitForModelChip(view);
+
+    // The merged-strip callback first: it is the acceptance ChatComposer wires for
+    // the keyboard route (and the fallback when no index callback is passed), so
+    // this is the leg the refutation arm flips back to `submitComposer()`.
+    act(() => {
+      view.result.current.acceptInputSuggestion(0);
     });
+    // The controlled textarea receives the new value on the render that follows
+    // the fill; commit it here, before the deferred focus/caret callback runs.
+    textarea.value = view.result.current.input;
+    act(() => {
+      frames.forEach((callback) => callback(0));
+    });
+
+    assert.equal(view.result.current.input, '模型一');
+    assert.equal(document.activeElement, textarea, 'the caret stays in the composer');
+    assert.equal(textarea.selectionStart, '模型一'.length, 'the caret sits after the filled text');
+    assert.equal(sendMessage.mock.calls.length, 0, 'accepting a model chip never sends');
+    assert.equal(submitted.mock.calls.length, 0, 'and it never submits the composer form');
+    assert.equal(expansionRequests().length, 0, 'expansion off sends no second request');
+
+    // Then the index callback the chip press itself reaches: the same fill-only
+    // outcome, still nothing sent.
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    assert.equal(view.result.current.input, '模型一');
+    assert.equal(sendMessage.mock.calls.length, 0, 'the chip press does not send either');
+    assert.equal(submitted.mock.calls.length, 0);
+
+    textarea.remove();
+  });
+
+  it('(b) accepts a Tab-selected model chip on Enter by filling, not sending', async () => {
+    const { view, sendMessage, frames } = setupComposer();
+    const textarea = attachTextarea(view);
+    await waitForModelChip(view);
+
+    act(() => {
+      view.result.current.handleKeyDown(keyEvent('Tab', textarea) as unknown as ComposerKeyEvent);
+    });
+    assert.equal(view.result.current.selectedInputSuggestionIndex, 0, 'Tab walks onto the first chip');
+
+    const enter = keyEvent('Enter', textarea);
+    act(() => {
+      view.result.current.handleKeyDown(enter as unknown as ComposerKeyEvent);
+    });
+    textarea.value = view.result.current.input;
+    act(() => {
+      frames.forEach((callback) => callback(0));
+    });
+
+    assert.equal(enter.defaultPrevented, true, 'this Enter belongs to the chip, not the composer');
+    assert.equal(view.result.current.input, '模型一');
+    assert.equal(document.activeElement, textarea);
+    assert.equal(textarea.selectionStart, '模型一'.length);
+    assert.equal(sendMessage.mock.calls.length, 0, 'Enter accepts the chip; it does not send');
+
+    textarea.remove();
+  });
+
+  it('(c) sends the filled draft on the next send and reports exactly one `sent`', async () => {
+    const { view, sendMessage, deliver } = setupComposer();
+    const submit = () => {
+      void view.result.current.handleSubmit({
+        preventDefault: () => undefined,
+      } as unknown as Parameters<ReturnType<typeof useChatComposerState>['handleSubmit']>[0]);
+    };
+    const textarea = attachTextarea(view, submit);
+    await waitForModelChip(view);
 
     act(() => {
       view.result.current.acceptModelSuggestion(0);
     });
+    assert.equal(sendMessage.mock.calls.length, 0, 'the fill alone sends nothing');
 
-    assert.equal(view.result.current.input, '模型一');
-    assert.equal(sendMessage.mock.calls.length, 1, 'a model chip click is a send');
+    await act(async () => {
+      view.result.current.handleKeyDown(keyEvent('Enter', textarea) as unknown as ComposerKeyEvent);
+      await Promise.resolve();
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(sendMessage.mock.calls.length, 1, 'the next Enter is the send'));
     assert.equal((sendMessage.mock.calls[0][0] as { content: string }).content, '模型一');
-    assert.equal(expansionRequests().length, 0, 'expansion off sends no second request');
+    await waitFor(() => assert.equal(sentEvents().length, 1, 'one delivered, unedited fill is one `sent`'));
+
+    textarea.remove();
+  });
+
+  it('(d) reports no `sent` when the filled draft was edited before sending', async () => {
+    const { view, sendMessage, deliver } = setupComposer();
+    await waitForModelChip(view);
+    attachTextarea(view);
+
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    act(() => {
+      view.result.current.handleInputChange({
+        target: { value: '模型一，再补一句', selectionStart: 9, style: {} },
+      } as unknown as Parameters<ReturnType<typeof useChatComposerState>['handleInputChange']>[0]);
+    });
+
+    await act(async () => {
+      await view.result.current.handleSubmit({
+        preventDefault: () => undefined,
+      } as unknown as Parameters<ReturnType<typeof useChatComposerState>['handleSubmit']>[0]);
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(sendMessage.mock.calls.length, 1));
+    assert.equal((sendMessage.mock.calls[0][0] as { content: string }).content, '模型一，再补一句');
+    await waitFor(() => assert.equal(sentEvents().length, 0, 'an edited draft is the person’s text, not the chip’s'));
+  });
+
+  it('(e) forgets the previous fill when another chip is picked and judges the send against the new one', async () => {
+    const { view, sendMessage, deliver } = setupComposer();
+    await waitForModelChip(view);
+    attachTextarea(view);
+
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    assert.equal(view.result.current.input, '模型一');
+
+    act(() => {
+      view.result.current.acceptModelSuggestion(1);
+    });
+    assert.equal(view.result.current.input, '模型二', 'the second pick replaces the draft');
+
+    await act(async () => {
+      await view.result.current.handleSubmit({
+        preventDefault: () => undefined,
+      } as unknown as Parameters<ReturnType<typeof useChatComposerState>['handleSubmit']>[0]);
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(sendMessage.mock.calls.length, 1));
+    assert.equal((sendMessage.mock.calls[0][0] as { content: string }).content, '模型二');
+    await waitFor(() => assert.equal(sentEvents().length, 1, 'the send is attributed to the chip that filled it'));
+  });
+
+  it('(f) keeps the expansion branch as it was: fills, asks for variants, never sends', async () => {
+    const { view, sendMessage } = setupComposer(null, { expansion: 'vary' });
+    await waitForModelChip(view);
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ chips: ['变体一', '变体二'], draw: 11 }),
+    }));
+
+    act(() => {
+      view.result.current.acceptModelSuggestion(0);
+    });
+    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一', '变体二']));
+
+    assert.equal(view.result.current.input, '模型一', 'the picked reply stays in the box as the seed');
+    assert.equal(sendMessage.mock.calls.length, 0, 'an expanded pick is not sent');
+    const requests = expansionRequests();
+    assert.equal(requests.length, 1, 'one pick is one expansion request');
+    assert.equal(requests[0].seed, '模型一');
   });
 
   it('pastes `> selection` plus a newline and focuses, without sending, for a quoted chip', () => {
@@ -444,12 +662,6 @@ describe('composer state chip acceptance', () => {
 // ---------------------------------------------------------------------------
 
 describe('composer state expansion', () => {
-  const waitForModelChip = (view: { result: { current: { replySuggestionsEnabled: boolean; suggestionChips: Array<{ source: string }> } } }) =>
-    waitFor(() => {
-      assert.equal(view.result.current.replySuggestionsEnabled, true);
-      assert.ok(view.result.current.suggestionChips.some((chip) => chip.source === 'model'));
-    });
-
   it('(b) fills without sending and sends exactly one seed expansion request when expansion is vary', async () => {
     const { view, sendMessage } = setupComposer(null, { expansion: 'vary' });
     await waitForModelChip(view);
