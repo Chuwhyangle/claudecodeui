@@ -184,6 +184,25 @@ const MENTIONED_HINT_ID = 'architecture-filter-mentioned-hint';
  */
 const DOCK_LAYOUT_LOCK_MS = 200;
 
+/**
+ * Where the portrait phone's summary remembers whether it is expanded.
+ *
+ * `sessionStorage`, not `localStorage`: the requirement is "remembered within
+ * the session", and a fresh browser session must start collapsed again — the
+ * phone's scarce height is why the default is the one-line form.
+ */
+const READOUT_EXPANDED_SESSION_KEY = 'architecture-readout-expanded';
+
+/** The session's remembered expansion; storage being blocked reads as collapsed. */
+const readReadoutExpandedInSession = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(READOUT_EXPANDED_SESSION_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
 /** The remembered knobs for one project; `projectId` keys the loaded pair. */
 type ArchitectureDisplaySettings = {
   readonly projectId: string | null;
@@ -395,7 +414,7 @@ export default function ArchitecturePanel({
   // The pointer/size tier. On a narrow screen the export action moves into the
   // graph's overflow menu (one menu, not two), and on a coarse pointer every
   // header control grows to a 44px target.
-  const { coarsePointer, compactToolbar, shortTouch } = useTouchLayout();
+  const { coarsePointer, compactToolbar, portraitPhone, shortTouch } = useTouchLayout();
   // The dock's structural form. On the landscape-phone tier the DEV-only
   // `drawer` override restores the old overlay for the criterion's control arm;
   // every normal render gets the in-flow side column.
@@ -410,6 +429,12 @@ export default function ArchitecturePanel({
   // The explicit 44px box on every compact-row control; on a coarse pointer the
   // reading must not depend on the stylesheet (see TOUCH_TARGET_STYLE).
   const compactTargetStyle = coarsePointer ? TOUCH_TARGET_STYLE : undefined;
+  // The portrait row packs the view switch, Text and Adjust into 390px: the
+  // 12px horizontal padding the other compact tiers afford is 8px there, while
+  // the 44px hit box stays. Anything wider pushes Adjust off the 390px line.
+  const compactHeaderButtonClass = portraitPhone
+    ? 'rounded-md px-2 text-sm font-medium'
+    : headerButtonClass;
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch. The class
   // diagram is the shipped default (the entity subgraph is the one that has
@@ -883,8 +908,21 @@ export default function ArchitecturePanel({
     [displayNeighbourhood, detail, layoutPinnedIds],
   );
   // The one-line readout's expanded state: the explanation and the two knobs
-  // ("raise detail", "reduce scope") live behind this toggle.
-  const [readoutOpen, setReadoutOpen] = useState(false);
+  // ("raise detail", "reduce scope") live behind this toggle. Why state: the
+  // portrait tier must start collapsed (its height budget) yet keep the
+  // reader's expansion across a tab round trip, so the initial value reads the
+  // session store and the effect below writes every change back.
+  const [readoutOpen, setReadoutOpen] = useState<boolean>(
+    () => portraitPhone && readReadoutExpandedInSession(),
+  );
+  useEffect(() => {
+    if (!portraitPhone) return;
+    try {
+      window.sessionStorage.setItem(READOUT_EXPANDED_SESSION_KEY, readoutOpen ? 'true' : 'false');
+    } catch {
+      // Private mode: the choice still holds for this mount.
+    }
+  }, [portraitPhone, readoutOpen]);
   // The `?` legend popover; shut by default so the drawing owns the canvas.
   const [legendOpen, setLegendOpen] = useState(false);
   // The disclosure that opened the legend, so Escape can return focus to it.
@@ -2040,7 +2078,7 @@ export default function ArchitecturePanel({
       }}
       data-architecture-text-toggle="true"
       style={compactTargetStyle}
-      className={`${headerButtonClass} border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
+      className={`${compactHeaderButtonClass} border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
     >
       {t('architecture.text.open', { defaultValue: 'Text' })}
     </button>
@@ -2097,7 +2135,7 @@ export default function ArchitecturePanel({
       onClick={() => setSheetOpen(true)}
       data-architecture-sheet-toggle="true"
       style={compactTargetStyle}
-      className="rounded-lg border border-border px-3 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+      className={`${compactHeaderButtonClass} rounded-lg border border-border text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
     >
       {t('architecture.sheet.open', { defaultValue: 'Adjust' })}
     </button>
@@ -2161,6 +2199,26 @@ export default function ArchitecturePanel({
     </button>
   );
 
+  /**
+   * The same door in the portrait Adjust sheet. The sheet stacks full-width
+   * rows, so the entry states its name instead of the toolbar's icon alone —
+   * an unlabelled external-link glyph is not a readable "Open in new tab".
+   */
+  const openInNewTabSheetButton = (
+    <button
+      type="button"
+      onClick={openInNewTab}
+      disabled={sessionId === null}
+      aria-label={t('architecture.standalone.openInNewTab', { defaultValue: 'Open in new tab' })}
+      data-architecture-open-in-new-tab="true"
+      style={compactTargetStyle}
+      className={`${headerButtonClass} inline-flex items-center justify-start gap-2 border border-border text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
+    >
+      <ExternalLink className="h-4 w-4" aria-hidden="true" />
+      <span>{t('architecture.standalone.openInNewTab', { defaultValue: 'Open in new tab' })}</span>
+    </button>
+  );
+
   const truncation = truncationReading(result, granularity);
   // How many nodes the server's node budget left out of this subgraph. The
   // compact toolbar badge and the marker's data attributes read it; the
@@ -2217,7 +2275,7 @@ export default function ArchitecturePanel({
         onClick={() => changeGranularity('entity')}
         data-architecture-view-option="entity"
         style={compactTargetStyle}
-        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+        className={`${compactHeaderButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
           granularity === 'entity' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
@@ -2230,7 +2288,7 @@ export default function ArchitecturePanel({
         onClick={() => changeGranularity('file')}
         data-architecture-view-option="file"
         style={compactTargetStyle}
-        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+        className={`${compactHeaderButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
           granularity === 'file' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
@@ -3778,19 +3836,25 @@ export default function ArchitecturePanel({
       <div
         data-architecture-toolbar="true"
         data-architecture-toolbar-short-touch={shortTouch ? 'true' : undefined}
+        data-architecture-toolbar-portrait={portraitPhone ? 'true' : undefined}
         // On the overlay the compact row is ONE 56px line (a 44px target plus
         // the row's 2×6px padding): `nowrap` and the stated height are the
         // contract that keeps a second row from covering the drawing again.
         // The landscape-phone tier states the same `nowrap` contract at 52px
         // (a 44px target plus the row's 2×4px padding), because its scarce axis
-        // is height and a wrapped second row would cost the drawing ~44px.
+        // is height and a wrapped second row would cost the drawing ~44px. The
+        // portrait tier states it at 56px: its scarce axis is WIDTH, but the row
+        // it replaces wrapped into two 56px bands, so the pinned height is what
+        // buys the 12.5% of the viewport the canvas share is read against.
         style={
           compactToolbar
             ? fullscreen.active
               ? { gap: TOUCH_CONTROL_GAP_PX, height: 56, flexWrap: 'nowrap' }
               : shortTouch
                 ? { gap: TOUCH_CONTROL_GAP_PX, height: 52, flexWrap: 'nowrap' }
-                : { gap: TOUCH_CONTROL_GAP_PX }
+                : portraitPhone
+                  ? { gap: TOUCH_CONTROL_GAP_PX, height: 56, flexWrap: 'nowrap' }
+                  : { gap: TOUCH_CONTROL_GAP_PX }
             : undefined
         }
         // Over the overlay the row is chrome ON TOP of a viewport-sized
@@ -3815,6 +3879,19 @@ export default function ArchitecturePanel({
               <span className="flex-1" />
               {openInNewTabButton}
               {fullscreenButton}
+              {adjustButton}
+            </>
+          ) : portraitPhone ? (
+            // The portrait-phone row: the view switch, the Text door and the
+            // one Adjust menu. Fullscreen and "Open in new tab" live INSIDE
+            // that sheet (see the Adjust section below) because a second entry
+            // is exactly what wrapped this row in the pre-task chrome. The
+            // standalone page's Back door travels with them for the same
+            // reason: it is a fifth 44px target otherwise.
+            <>
+              {granularityGroup}
+              <span className="flex-1" />
+              {textToggle}
               {adjustButton}
             </>
           ) : shortTouch ? (
@@ -3968,6 +4045,16 @@ export default function ArchitecturePanel({
               <div className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
                 {fullscreenButton}
                 {sidebarCollapseButton}
+              </div>
+            )}
+            {/* The portrait row keeps only the view switch, Text and Adjust, so
+                the entries it gave up live here: the standalone Back door, the
+                second-screen door and the fullscreen overlay. */}
+            {portraitPhone && !fullscreen.active && (
+              <div className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+                {standaloneBackButton}
+                {openInNewTabSheetButton}
+                {fullscreenButton}
               </div>
             )}
             {/* The renderer's own view chrome (tier, scale, readable mode, Back,

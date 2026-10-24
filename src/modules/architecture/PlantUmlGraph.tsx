@@ -49,6 +49,7 @@ import {
   SEMANTIC_MIN_FONT_PX,
 } from '@/modules/architecture/semanticZoomPlan';
 import {
+  PORTRAIT_CONTROL_BAND_PX,
   TOUCH_CONTROL_GAP_PX,
   TOUCH_TARGET_STYLE,
   useCanvasHeaderSlot,
@@ -717,7 +718,14 @@ export function PlantUmlGraph({
   const hostRef = useRef<HTMLDivElement | null>(null);
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
   // collect the toolbar into one overflow menu (see `useTouchLayout`).
-  const { touchUi, coarsePointer, compactToolbar, shortTouch } = useTouchLayout();
+  const {
+    touchUi,
+    coarsePointer,
+    compactToolbar,
+    portraitControlsOverlay,
+    portraitPhone,
+    shortTouch,
+  } = useTouchLayout();
   // The semantic layout runs from imperative callbacks, so the pointer tier
   // that picks the minimum font size is mirrored into a ref.
   const coarsePointerRef = useRef(coarsePointer);
@@ -1152,6 +1160,11 @@ export function PlantUmlGraph({
   // Bumped whenever the semantic pass rewrites the geometry, so the minimap
   // re-reads its boxes instead of blitting the previous scale's bitmap.
   const [drawnRevision, setDrawnRevision] = useState(0);
+  // Whether the portrait phone's zoom cluster is open. Why state: the tier
+  // ships ONE 44px button by default (its drawing owns the height), and the
+  // reader's open is what reveals the ±/Fit row. Not persisted: the compact
+  // default is part of the tier, not a per-reader preference.
+  const [clusterExpanded, setClusterExpanded] = useState(false);
 
   /**
    * Write one semantic layout onto the captured drawing, INCLUDING the folded
@@ -3096,6 +3109,16 @@ export function PlantUmlGraph({
   // drawing), not in the toolbar: they act on the drawing, so they belong on
   // it. 32px targets on a fine pointer, 44px on a coarse one.
   const clusterTargetStyle = touchUi ? TOUCH_TARGET_STYLE : ZOOM_CLUSTER_TARGET_STYLE;
+  /**
+   * The bottom band the portrait phone keeps clear for its corner controls.
+   * Zero on every other tier (and for the DEV arm that restores the pre-task
+   * floating controls), so the existing fit is unchanged there.
+   */
+  const portraitControlBandPx = portraitPhone && !portraitControlsOverlay && !shortTouch
+    ? PORTRAIT_CONTROL_BAND_PX
+    : 0;
+  /** The portrait cluster's shipped form is the one 44px button. */
+  const portraitClusterCollapsed = portraitPhone && !clusterExpanded && !portraitControlsOverlay;
 
   /**
    * The canvas pill. It has two reasons to exist, and neither is a Focus notice:
@@ -3361,9 +3384,21 @@ export function PlantUmlGraph({
             alignItems: 'flex-start',
             // The coarse drawer overlays the canvas' bottom band. Reserving it
             // as padding makes the flex centring use the area ABOVE the drawer,
-            // so a fitted drawing is never half-hidden behind it.
-            ...(bottomObscuredPx > 0
-              ? { paddingBottom: `${(touchUi ? 4 : 12) + bottomObscuredPx}px` }
+            // so a fitted drawing is never half-hidden behind it. The portrait
+            // phone reserves its collapsible zoom controls' band in the SAME
+            // bottom region: the controls float over the canvas, so the drawing
+            // is fitted ABOVE them instead of under them. The two bands are
+            // measured from the same bottom edge, so they compose as a maximum
+            // rather than a sum — an open drawer already covers the controls'
+            // footprint, and reserving both would lift the drawing 80px higher
+            // than either surface needs. Padding (not a chrome row) is
+            // deliberate — `clientHeight` still counts it, so the canvas-share
+            // reading loses nothing.
+            ...(bottomObscuredPx + portraitControlBandPx > 0
+              ? {
+                paddingBottom: `${(touchUi ? 4 : 12)
+                  + Math.max(bottomObscuredPx, portraitControlBandPx)}px`,
+              }
               : {}),
             // The overlay's chrome (toolbar + readout rows) is drawn OVER the
             // viewport-sized canvas. Reserving it as padding makes the flex
@@ -3632,30 +3667,75 @@ export function PlantUmlGraph({
             style={{
               gap: shortTouch ? 4 : touchUi ? TOUCH_CONTROL_GAP_PX : 4,
               flexDirection: touchUi ? 'row' : 'column',
-              height: shortTouch ? '44px' : touchUi ? '52px' : undefined,
+              height: portraitClusterCollapsed
+                ? '44px'
+                : shortTouch
+                  ? '44px'
+                  : touchUi
+                    ? '52px'
+                    : undefined,
             }}
             className={`pointer-events-auto flex items-center rounded-lg border border-border/60 bg-background/90 shadow-sm ${touchUi ? 'p-0' : 'flex-col p-1'}`}
           >
-            {zoomInButton}
-            {zoomOutButton}
-            {fitButton}
-            {/* The cluster states the same scale reading as the tier bar above
-                the canvas: both are `displayScale`, so a reader never sees two
-                percentages for one drawing. */}
-            <span
-              data-architecture-zoom-cluster-level="true"
-              className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground"
-            >
-              {Math.round(displayScale * 100)}%
-            </span>
-            {lodDepth !== null && (
-              <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-                {lodDepth === 2
-                  ? t('architecture.plantuml.lod.tierNames', { defaultValue: 'Names' })
-                  : lodDepth === 1
-                    ? t('architecture.plantuml.lod.tierFrames', { defaultValue: 'Frames' })
-                    : t('architecture.plantuml.lod.tierPackages', { defaultValue: 'Packages' })}
-              </span>
+            {portraitClusterCollapsed ? (
+              // ONE 44px button by default. It states the same percentage the
+              // expanded row does, so the collapsed form is still a reading,
+              // and it is the only corner control that can touch the drawing —
+              // which the host's reserved band keeps it from doing.
+              <button
+                type="button"
+                aria-expanded={false}
+                aria-label={t('architecture.plantuml.zoomControls.show', {
+                  defaultValue: 'Show zoom controls',
+                })}
+                onClick={() => setClusterExpanded(true)}
+                data-architecture-zoom-cluster-toggle="true"
+                style={TOUCH_TARGET_STYLE}
+                className={TOOLBAR_BUTTON_CLASS}
+              >
+                {Math.round(displayScale * 100)}%
+              </button>
+            ) : (
+              <>
+                {zoomInButton}
+                {zoomOutButton}
+                {fitButton}
+                {/* The cluster states the same scale reading as the tier bar above
+                    the canvas: both are `displayScale`, so a reader never sees two
+                    percentages for one drawing. */}
+                <span
+                  data-architecture-zoom-cluster-level="true"
+                  className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground"
+                >
+                  {Math.round(displayScale * 100)}%
+                </span>
+                {lodDepth !== null && (
+                  <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                    {lodDepth === 2
+                      ? t('architecture.plantuml.lod.tierNames', { defaultValue: 'Names' })
+                      : lodDepth === 1
+                        ? t('architecture.plantuml.lod.tierFrames', { defaultValue: 'Frames' })
+                        : t('architecture.plantuml.lod.tierPackages', { defaultValue: 'Packages' })}
+                  </span>
+                )}
+                {portraitPhone && (
+                  // The way back to the small form, stated as its own 44px
+                  // target so it is never mistaken for a zoom-out step.
+                  <button
+                    type="button"
+                    aria-expanded
+                    aria-label={t('architecture.plantuml.zoomControls.hide', {
+                      defaultValue: 'Hide zoom controls',
+                    })}
+                    onClick={() => setClusterExpanded(false)}
+                    data-architecture-zoom-cluster-collapse="true"
+                    style={TOUCH_TARGET_STYLE}
+                    className={TOOLBAR_BUTTON_CLASS}
+                  >
+                    ▾
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

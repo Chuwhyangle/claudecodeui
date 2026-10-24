@@ -1,7 +1,7 @@
 ---
 id: architecture-phone-chrome-compaction
 title: 手机架构图外壳压缩：竖屏画布高度占比 ≥ 74%，控制件不盖住图与包标签页
-status: ready
+status: done
 labels:
   - feature
 parent: null

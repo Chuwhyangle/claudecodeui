@@ -2036,6 +2036,162 @@ test('the landscape-phone tier folds the summary into a one-row toolbar and hugs
   }
 });
 
+test('the portrait-phone tier keeps one toolbar row, a remembered summary and a collapsed zoom cluster', async () => {
+  const originalMatchMedia = window.matchMedia;
+  const originalInnerWidth = window.innerWidth;
+  const originalInnerHeight = window.innerHeight;
+  const originalExpanded = window.sessionStorage.getItem('architecture-readout-expanded');
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 844 });
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query === '(pointer: coarse)' || query === '(pointer: coarse) and (hover: none)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+  try {
+    window.sessionStorage.removeItem('architecture-readout-expanded');
+    const { unmount } = render(
+      <ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />,
+    );
+    await waitForDiagram();
+
+    const toolbar = document.querySelector('[data-architecture-toolbar]') as HTMLElement | null;
+    assert.ok(toolbar instanceof HTMLElement);
+    assert.equal(toolbar.getAttribute('data-architecture-toolbar-portrait'), 'true');
+    // ONE row by contract: `nowrap` plus the pinned 56px line (44px targets +
+    // 2×6px padding). The browser arm reads the actual button `top` values;
+    // jsdom has no layout engine, so this test pins the structure that makes a
+    // second row impossible and the entries that row must carry.
+    assert.equal(toolbar.style.flexWrap, 'nowrap');
+    assert.equal(toolbar.style.height, '56px');
+    assert.ok(toolbar.querySelector('[data-architecture-view-control]'), 'the view switch stays in the row');
+    assert.ok(toolbar.querySelector('[data-architecture-text-toggle]'), 'the Text door stays in the row');
+    assert.ok(toolbar.querySelector('[data-architecture-sheet-toggle]'), 'the Adjust door stays in the row');
+    // The two secondary entries are in the Adjust sheet, not the row.
+    assert.equal(toolbar.querySelector('[data-architecture-fullscreen-toggle]'), null);
+    assert.equal(toolbar.querySelector('[data-architecture-open-in-new-tab]'), null);
+
+    // The summary is the standing one-line row, collapsed by default.
+    const readout = document.querySelector('[data-architecture-readout]') as HTMLElement | null;
+    assert.ok(readout instanceof HTMLElement);
+    assert.equal(readout.style.height, '44px');
+    assert.equal(document.querySelector('[data-architecture-readout-detail]'), null);
+    fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+    await waitFor(() => assert.ok(document.querySelector('[data-architecture-readout-detail]')));
+    assert.equal(window.sessionStorage.getItem('architecture-readout-expanded'), 'true');
+    // A remount in the same session reads the expanded choice back.
+    unmount();
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+    await waitForDiagram();
+    assert.ok(
+      document.querySelector('[data-architecture-readout-detail]'),
+      'the expanded summary is remembered for the session',
+    );
+    fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+    await waitFor(() =>
+      assert.equal(window.sessionStorage.getItem('architecture-readout-expanded'), 'false'),
+    );
+
+    // The zoom cluster ships as ONE 44px button; the host reserves the band it
+    // floats in, so the collapsed control cannot cover the drawing.
+    const cluster = zoomCluster();
+    assert.equal(cluster.style.height, '44px');
+    const clusterToggle = cluster.querySelector('[data-architecture-zoom-cluster-toggle]');
+    assert.ok(clusterToggle instanceof HTMLElement, 'the collapsed cluster is one control');
+    assert.equal(getComputedStyle(clusterToggle).minHeight, '44px');
+    assert.equal(cluster.querySelector('[data-architecture-zoom-in]'), null);
+    const host = document.querySelector('[data-testid="plantuml-host"]') as HTMLElement | null;
+    assert.ok(host instanceof HTMLElement);
+    assert.ok(
+      (Number.parseFloat(host.style.paddingBottom) || 0) >= 80,
+      `the host reserves the control band (padding-bottom ${host.style.paddingBottom})`,
+    );
+
+    // Adjust carries the entries the one-row toolbar gave up. Re-query the
+    // toolbar: the `toolbar` const above belongs to the pre-remount tree.
+    fireEvent.click(
+      document.querySelector('[data-architecture-toolbar] [data-architecture-sheet-toggle]') as Element,
+    );
+    await waitFor(() => assert.ok(document.querySelector('[data-architecture-sheet]')));
+    const sheet = document.querySelector('[data-architecture-sheet]') as HTMLElement;
+    assert.ok(sheet.querySelector('[data-architecture-fullscreen-toggle]'), 'Fullscreen lives in Adjust');
+    assert.ok(sheet.querySelector('[data-architecture-open-in-new-tab]'), '"Open in new tab" lives in Adjust');
+  } finally {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: originalInnerWidth });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: originalInnerHeight });
+    if (originalExpanded === null) window.sessionStorage.removeItem('architecture-readout-expanded');
+    else window.sessionStorage.setItem('architecture-readout-expanded', originalExpanded);
+  }
+});
+
+test('desktop and the landscape-phone tier do not take the portrait layout', async () => {
+  const originalMatchMedia = window.matchMedia;
+  const originalInnerWidth = window.innerWidth;
+  const originalInnerHeight = window.innerHeight;
+  try {
+    // Desktop: a wide viewport, a fine pointer.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1440 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 900 });
+    let first = render(
+      <ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />,
+    );
+    await waitForDiagram();
+    const desktopToolbar = document.querySelector('[data-architecture-toolbar]') as HTMLElement;
+    assert.equal(desktopToolbar.getAttribute('data-architecture-toolbar-portrait'), null);
+    first.unmount();
+
+    // Landscape phone: 844px wide (clears the 480px ceiling) and 390px tall.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 844 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 390 });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: query === '(pointer: coarse)' || query === '(pointer: coarse) and (hover: none)',
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    first = render(
+      <ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />,
+    );
+    await waitForDiagram();
+    const landscapeToolbar = document.querySelector('[data-architecture-toolbar]') as HTMLElement;
+    assert.equal(landscapeToolbar.getAttribute('data-architecture-toolbar-short-touch'), 'true');
+    assert.equal(landscapeToolbar.getAttribute('data-architecture-toolbar-portrait'), null);
+    // The collapsed-cluster default is the portrait tier's alone.
+    assert.ok(document.querySelector('[data-architecture-zoom-in]'), 'landscape keeps its zoom controls visible');
+    first.unmount();
+  } finally {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: originalInnerWidth });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: originalInnerHeight });
+  }
+});
+
 test('a stale stored focus choice is ignored and never written back', async () => {
   // The retired store key, left behind by a previous release. Nothing in the
   // canvas may read it (which would bring Focus back) or rewrite it (which

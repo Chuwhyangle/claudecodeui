@@ -417,25 +417,42 @@ function losslessEntityCount(variant: ArchitectureFixtureVariant): number | null
  * drawing, whose width is the sum of its tabs' minimum widths. That many packages
  * with long directory names make that sum many canvases wide on a 1440×765
  * screen — the state the reported 573-function project was in — which is what
- * the folded tier exists to answer. Every function is chained to the next so
- * none is isolated (the default filter would drop it before "Show all" could
+ * the folded tier exists to answer. Every function hangs off its module's
+ * class, and the twelve classes form a ring, so nothing the default filter
+ * keeps is isolated (an isolated node would be dropped before "Show all" could
  * matter) and the drawing is one connected neighbourhood from any seed.
  */
 function buildFunctionEntities(): FixtureEntity[] {
   const entities: FixtureEntity[] = [];
+  // The twelve module classes, pre-computed so each can name the NEXT one as a
+  // parent. The classes form one ring: after the default kind filter removes
+  // their 384 functions, every class still has a class neighbour, so none is
+  // isolated. With `parents: []` the client's default "hide isolated nodes"
+  // dropped all twelve, the entity view opened on the empty state, and the
+  // readout's "Show all" — the whole point of this fixture — could not be
+  // reached at all.
+  const moduleClasses = Array.from({ length: 12 }, (_, module) => {
+    const moduleDir = `src/modules/module${String(module).padStart(2, '0')}`;
+    const serviceName = `Module${String(module).padStart(2, '0')}Service`;
+    return {
+      id: `${moduleDir}/${serviceName}.ts.${serviceName}`,
+      name: serviceName,
+      file: `${moduleDir}/${serviceName}.ts`,
+      moduleDir,
+    };
+  });
   for (let module = 0; module < 12; module += 1) {
     // One CLASS per module: the shipped filter shows it, so the tab opens on a
     // real drawing (an all-hidden payload would open on the empty state, and
     // "Show all" would then have nothing to widen).
-    const moduleDir = `src/modules/module${String(module).padStart(2, '0')}`;
-    const serviceName = `Module${String(module).padStart(2, '0')}Service`;
+    const service = moduleClasses[module];
     entities.push({
-      id: `${moduleDir}/${serviceName}.ts.${serviceName}`,
-      name: serviceName,
-      file: `${moduleDir}/${serviceName}.ts`,
+      id: service.id,
+      name: service.name,
+      file: service.file,
       type: 'class',
       isAbstract: false,
-      parents: [],
+      parents: [moduleClasses[(module + 1) % moduleClasses.length].id],
       members: [],
     });
     // Eight units of four functions: 384 functions in 96 leaf packages. The
@@ -445,7 +462,7 @@ function buildFunctionEntities(): FixtureEntity[] {
     for (let unit = 0; unit < 8; unit += 1) {
       for (let step = 0; step < 4; step += 1) {
         const index = entities.length;
-        const dir = `${moduleDir}/unit${String(unit)}`;
+        const dir = `${service.moduleDir}/unit${String(unit)}`;
         const name = `handleFrameBudgetStep${String(index).padStart(3, '0')}`;
         entities.push({
           id: `${dir}/${name}.ts.${name}`,
@@ -454,12 +471,12 @@ function buildFunctionEntities(): FixtureEntity[] {
           type: 'function',
           isAbstract: false,
           // EVERY function hangs off its module's class. That is what makes the
-          // whole 372-entity drawing reachable in ONE hop from the twelve class
+          // whole 396-entity drawing reachable in ONE hop from the twelve class
           // seeds: the server seeds identifiers from the session text under a
           // hard cap (40), so a chain would leave most of the fixture outside
           // the neighbourhood and the criterion would measure a 50-box drawing
           // instead of the large one this fixture exists for.
-          parents: [`${moduleDir}/${serviceName}.ts.${serviceName}`],
+          parents: [service.id],
         });
       }
     }

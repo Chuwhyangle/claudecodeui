@@ -264,6 +264,10 @@ beforeEach(() => {
   window.localStorage.removeItem('architecture.filter.project-1');
   window.localStorage.removeItem('architecture.touchHint.dismissed');
   window.localStorage.removeItem('architecture.minimap.collapsed');
+  // The portrait tier remembers the summary's expansion for the browser
+  // session, so a case that opens it decides the next mount's starting value
+  // unless the store is cleared here too.
+  window.sessionStorage.removeItem('architecture-readout-expanded');
   setViewport(1024, 768);
   stubMatchMedia(() => false);
 });
@@ -542,9 +546,11 @@ test('the minimap starts collapsed above the zoom cluster and opens to 96×64 wi
   assert.ok(clusterRect.left - mapRect.right >= 8, 'the map and the cluster keep an 8px gap');
   assert.equal(clusterRect.height, 52, 'the phone zoom cluster is one 52px row');
 
-  // The row's own height contract: one horizontal row of 44px targets.
+  // The row's own height contract: the portrait tier ships the cluster as ONE
+  // 44px button (the ±/Fit row is behind it), so the corner chrome is a single
+  // 44px-tall row whether or not the map is open.
   assert.equal(cluster.style.flexDirection, 'row');
-  assert.equal(cluster.style.height, '52px');
+  assert.equal(cluster.style.height, '44px');
 });
 
 test('the phone readout collapses to one 44px line and expands in document flow', async () => {
@@ -585,7 +591,7 @@ test('the phone readout collapses to one 44px line and expands in document flow'
   );
 });
 
-test('the phone zoom cluster is one horizontal 52px row of 44px targets', async () => {
+test('the phone zoom cluster ships collapsed as one 44px button and opens to a horizontal 52px row', async () => {
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
@@ -594,6 +600,17 @@ test('the phone zoom cluster is one horizontal 52px row of 44px targets', async 
   assert.ok(cluster instanceof HTMLElement);
   assert.match(cluster.className, /flex/, 'the cluster is a flex row');
   assert.equal(cluster.style.flexDirection, 'row', 'the phone cluster is horizontal');
+  // The shipped portrait form is ONE 44px button: the drawing owns the height,
+  // and the expanded ±/Fit row is what the reader opens on demand.
+  assert.equal(cluster.style.height, '44px', 'the collapsed form is one 44px target');
+  assert.equal(cluster.querySelector('[data-architecture-zoom-in]'), null, 'the row starts closed');
+  const toggle = cluster.querySelector('[data-architecture-zoom-cluster-toggle]');
+  assert.ok(toggle instanceof HTMLElement, 'the collapsed form is the toggle');
+  assert.equal(toggle.style.minHeight, '44px');
+  assert.equal(toggle.style.minWidth, '44px');
+
+  fireEvent.click(toggle);
+  await waitFor(() => assert.equal(cluster.querySelector('[data-architecture-zoom-in]') !== null, true));
   assert.equal(cluster.style.height, '52px', 'one 44px row plus 4px a side');
   for (const attribute of ['data-architecture-zoom-in', 'data-architecture-zoom-out', 'data-architecture-zoom-fit']) {
     const button = cluster.querySelector(`[${attribute}]`) as HTMLElement | null;
@@ -690,8 +707,10 @@ test('every architecture control keeps a 44×44 target and an 8px gap from its n
   }
 
   // Pairwise geometry for the zoom cluster: on the phone its buttons are one
-  // horizontal row with that gap, not the desktop's stacked column.
+  // horizontal row with that gap, not the desktop's stacked column. The
+  // portrait tier opens the row through its shipped toggle first.
   const cluster = document.querySelector('[data-architecture-zoom-cluster]') as HTMLElement;
+  fireEvent.click(cluster.querySelector('[data-architecture-zoom-cluster-toggle]') as Element);
   assert.equal(cluster.style.flexDirection, 'row', 'the phone cluster is one row');
   assert.equal(cluster.style.height, '52px', 'the row is 44px targets + 4px a side');
   const clusterButtons = [...cluster.querySelectorAll('button')];
@@ -752,7 +771,16 @@ test('compact fullscreen toolbar is one row holding only Exit fullscreen and Adj
   assert.ok(readoutRow instanceof HTMLElement);
   readoutRow.getBoundingClientRect = () => ({ bottom: 100 }) as unknown as DOMRect;
 
-  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  // The portrait tier keeps Fullscreen inside the Adjust sheet (the one-row
+  // toolbar gives it up), so entering the overlay goes through that door.
+  fireEvent.click(document.querySelector('[data-architecture-sheet-toggle]') as Element);
+  const portalSheet = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-sheet]');
+    assert.ok(node instanceof HTMLElement, 'Adjust opens its dialog');
+    return node;
+  });
+  fireEvent.click(portalSheet.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  fireEvent.click(portalSheet.querySelector('[data-architecture-sheet-close]') as Element);
   await waitFor(() => assert.equal(panelRoot().getAttribute('data-architecture-fullscreen'), 'true'));
 
   // The viewport-sized drawing reserves the chrome band, so its fitted content
@@ -809,13 +837,26 @@ test('exactly one zoom percentage is on the page, in the tab and in the overlay'
   await waitForDiagram();
 
   // A zoom reading is a leaf whose whole text is the percentage; anything else
-  // ("Whole graph at 92%", the minimap's label) is prose, not a reading.
-  const percentageLeaves = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('span')]
-    .filter((element) => element.children.length === 0 && /^\d+%$/.test((element.textContent ?? '').trim()));
+  // ("Whole graph at 92%", the minimap's label) is prose, not a reading. The
+  // portrait tier's collapsed zoom control states the same reading on a
+  // BUTTON (it is the one 44px door to the ±/Fit row), so buttons count as
+  // leaves too.
+  const percentageLeaves = (): HTMLElement[] => [
+    ...document.querySelectorAll<HTMLElement>('span, button'),
+  ].filter((element) => element.children.length === 0 && /^\d+%$/.test((element.textContent ?? '').trim()));
 
   assert.equal(percentageLeaves().length, 1, 'the tab states the drawing scale once');
 
-  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  // Enter the overlay through the Adjust sheet, where the one-row portrait
+  // toolbar keeps the Fullscreen entry.
+  fireEvent.click(document.querySelector('[data-architecture-sheet-toggle]') as Element);
+  const portalSheet = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-sheet]');
+    assert.ok(node instanceof HTMLElement, 'Adjust opens its dialog');
+    return node;
+  });
+  fireEvent.click(portalSheet.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  fireEvent.click(portalSheet.querySelector('[data-architecture-sheet-close]') as Element);
   await waitFor(() => assert.equal(panelRoot().getAttribute('data-architecture-fullscreen'), 'true'));
   assert.equal(percentageLeaves().length, 1, 'the overlay does not add a second zoom reading');
 });

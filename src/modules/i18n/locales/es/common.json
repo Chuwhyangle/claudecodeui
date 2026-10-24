@@ -143,7 +143,11 @@
         "hide": "Contraer la vista general del diagrama"
       },
       "zoomTier": "Nivel de zoom",
-      "touchHintBubble": "Arrastra con un dedo para desplazar, pellizca para zoom, doble toque para profundizar."
+      "touchHintBubble": "Arrastra con un dedo para desplazar, pellizca para zoom, doble toque para profundizar.",
+      "zoomControls": {
+        "show": "Mostrar controles de zoom",
+        "hide": "Ocultar controles de zoom"
+      }
     },
     "title": "Arquitectura",
     "noSession": "Selecciona una sesión para ver la arquitectura de los archivos que tocó.",
