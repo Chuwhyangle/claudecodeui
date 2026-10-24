@@ -2,7 +2,7 @@
 id: gap-voice-error-classification-residue-guard-gitignored-file-globs
 title: AC-152 判据的 no-residue 守卫只读整目录形式的 .gitignore 规则，文件级 `*.log` 面没被排除 ⇒ 线上
   server.log 被并发追写就假红；本轮按 gitignore 语义（含 `!` 反包含）覆盖文件级规则，守卫的牙仍在
-status: todo
+status: ready
 labels:
   - gap
   - defect
