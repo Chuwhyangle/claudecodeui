@@ -26,6 +26,9 @@ export type {
   ReplySuggestionsProtocol,
   ReplySuggestionsSettingsSource,
 } from './reply-suggestions-settings.js';
+// consumer: server/modules/observation/session-digest-llm.ts (wraps its own resolved gateway
+// key for the shared completion client, which reveals it only when building auth headers)
+export { ApiCredential } from './reply-suggestions-settings.js';
 // consumer: server/index.ts (installs the context-event tap on the usage ledger); the
 // observation digest tier and the context-events wiring criterion share the same ledger.
 export {

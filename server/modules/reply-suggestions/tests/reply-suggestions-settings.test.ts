@@ -3,7 +3,7 @@
  *
  * Each leg drives the real reader against a temp file: defaults, explicit-path
  * reporting, validation fallbacks, the key-file grammar, the modification-time
- * cache, key hygiene and the mode check.
+ * cache, key hygiene, credential opacity and the mode check.
  *
  * Run directly:
  *   npx tsx --tsconfig server/tsconfig.json --test \
@@ -14,9 +14,11 @@ import { chmodSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } f
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { format, inspect } from 'node:util';
 
 import { createReplySuggestionsService } from '../reply-suggestions.service.js';
 import {
+  ApiCredential,
   createReplySuggestionsSettingsSource,
   REPLY_SUGGESTIONS_SETTINGS_PATH_ENV,
   type ReplySuggestionsSettings,
@@ -38,39 +40,47 @@ function read(settingsPath: string | null, homeDir: string): ReplySuggestionsSet
   return createReplySuggestionsSettingsSource({ settingsPath, homeDir }).read();
 }
 
-/** The defaults table, spelled once so the omitted-key leg can compare every field. */
+/** The defaults table, spelled once so the omitted-key leg can compare every group. */
 const EXPECTED_DEFAULTS = {
   version: 'example-1',
   enabled: false,
-  configuredEnabled: false,
-  protocol: 'anthropic',
-  baseUrl: '',
-  model: '',
-  authScheme: '',
-  apiKeyFile: '',
-  apiKeyVar: '',
-  disableThinking: true,
-  temperature: 0.3,
-  redrawTemperature: 1.0,
-  maxOutputTokens: 400,
-  timeoutMs: 5000,
-  maxChips: 3,
-  maxChipChars: 120,
-  maxTailChars: 1500,
-  maxFocusChars: 600,
-  maxCallsPerMinute: 30,
-  maxCallsPerDay: 3000,
-  expansion: 'off',
+  upstream: {
+    protocol: 'anthropic',
+    baseUrl: '',
+    model: '',
+    authScheme: '',
+    disableThinking: true,
+    timeoutMs: 5000,
+  },
+  generation: {
+    temperature: 0.3,
+    redrawTemperature: 1.0,
+    maxOutputTokens: 400,
+    maxChips: 3,
+    maxChipChars: 120,
+    maxTailChars: 1500,
+    maxFocusChars: 600,
+    expansion: 'off',
+    systemPrompt: '',
+  },
+  limits: {
+    maxCallsPerMinute: 30,
+    maxCallsPerDay: 3000,
+  },
   usageLog: true,
-  systemPrompt: '',
+  diagnostics: {
+    configuredEnabled: false,
+    apiKeyFile: '',
+    apiKeyVar: '',
+  },
 } as const;
 
 test('(a) no settings file at all: feature off, problems empty', (t) => {
   const home = temporaryDirectory(t, 'reply-settings-a-');
   const settings = read(null, home);
   assert.equal(settings.enabled, false);
-  assert.deepEqual(settings.problems, []);
-  assert.equal(settings.source, 'default');
+  assert.deepEqual(settings.diagnostics.problems, []);
+  assert.equal(settings.diagnostics.source, 'default');
 });
 
 test('(b) an explicitly named path that cannot be read reports the problem and stays off', (t) => {
@@ -78,22 +88,36 @@ test('(b) an explicitly named path that cannot be read reports the problem and s
   const missing = path.join(directory, 'does-not-exist.json');
   const settings = read(missing, directory);
   assert.equal(settings.enabled, false);
-  assert.equal(settings.problems.length, 1);
-  assert.match(settings.problems[0], /could not read/);
-  assert.ok(settings.problems[0].includes(missing), 'the problem names the path that could not be read');
+  assert.equal(settings.diagnostics.problems.length, 1);
+  assert.match(settings.diagnostics.problems[0], /could not read/);
+  assert.ok(settings.diagnostics.problems[0].includes(missing), 'the problem names the path that could not be read');
 });
 
 test('(c) an empty settings object reads every key at its shipped default', (t) => {
   const directory = temporaryDirectory(t, 'reply-settings-c-');
   const file = writeJson(path.join(directory, 'settings.json'), {});
   const settings = read(file, directory);
-  assert.deepEqual(settings.problems, []);
-  for (const [key, expected] of Object.entries(EXPECTED_DEFAULTS)) {
-    assert.equal((settings as unknown as Record<string, unknown>)[key], expected, `default for ${key}`);
-  }
-  assert.equal(settings.source, 'file');
-  assert.equal(settings.path, file);
-  assert.equal(settings.apiKey, '');
+  assert.deepEqual(settings.diagnostics.problems, []);
+  assert.equal(settings.version, EXPECTED_DEFAULTS.version);
+  assert.equal(settings.enabled, EXPECTED_DEFAULTS.enabled);
+  assert.deepEqual(
+    { ...settings.upstream, credential: undefined },
+    { ...EXPECTED_DEFAULTS.upstream, credential: undefined },
+  );
+  assert.deepEqual(settings.generation, EXPECTED_DEFAULTS.generation);
+  assert.deepEqual(settings.limits, EXPECTED_DEFAULTS.limits);
+  assert.equal(settings.usageLog, EXPECTED_DEFAULTS.usageLog);
+  assert.deepEqual(
+    {
+      configuredEnabled: settings.diagnostics.configuredEnabled,
+      apiKeyFile: settings.diagnostics.apiKeyFile,
+      apiKeyVar: settings.diagnostics.apiKeyVar,
+    },
+    EXPECTED_DEFAULTS.diagnostics,
+  );
+  assert.equal(settings.diagnostics.source, 'file');
+  assert.equal(settings.diagnostics.path, file);
+  assert.equal(settings.upstream.credential.reveal(), '');
 });
 
 test('(d) an invalid known key falls back to its default and names itself; an unknown key is ignored', (t) => {
@@ -106,11 +130,11 @@ test('(d) an invalid known key falls back to its default and names itself; an un
     unknownKnob: 42,
   });
   const settings = read(file, directory);
-  assert.equal(settings.temperature, 0.3);
-  assert.equal(settings.protocol, 'anthropic');
-  assert.equal(settings.maxChips, 3);
-  assert.equal(settings.expansion, 'off');
-  const problems = settings.problems.join('\n');
+  assert.equal(settings.generation.temperature, 0.3);
+  assert.equal(settings.upstream.protocol, 'anthropic');
+  assert.equal(settings.generation.maxChips, 3);
+  assert.equal(settings.generation.expansion, 'off');
+  const problems = settings.diagnostics.problems.join('\n');
   for (const key of ['temperature', 'protocol', 'maxChips', 'expansion']) {
     assert.ok(problems.includes(`\`${key}\``), `problems name ${key}: ${problems}`);
   }
@@ -127,9 +151,9 @@ test('(e1) enabled without baseUrl reads as off and names baseUrl', (t) => {
     apiKeyFile: keyFile,
   });
   const settings = read(file, directory);
-  assert.equal(settings.configuredEnabled, true);
+  assert.equal(settings.diagnostics.configuredEnabled, true);
   assert.equal(settings.enabled, false);
-  assert.ok(settings.problems.join('\n').includes('`baseUrl`'));
+  assert.ok(settings.diagnostics.problems.join('\n').includes('`baseUrl`'));
 });
 
 test('(e2) enabled without model reads as off and names model', (t) => {
@@ -143,7 +167,7 @@ test('(e2) enabled without model reads as off and names model', (t) => {
   });
   const settings = read(file, directory);
   assert.equal(settings.enabled, false);
-  assert.ok(settings.problems.join('\n').includes('`model`'));
+  assert.ok(settings.diagnostics.problems.join('\n').includes('`model`'));
 });
 
 test('(e3) enabled without a key reads as off and names the key source', (t) => {
@@ -155,7 +179,7 @@ test('(e3) enabled without a key reads as off and names the key source', (t) => 
   });
   const settings = read(file, directory);
   assert.equal(settings.enabled, false);
-  const problems = settings.problems.join('\n');
+  const problems = settings.diagnostics.problems.join('\n');
   assert.ok(problems.includes('`apiKeyFile`'), problems);
 });
 
@@ -199,7 +223,7 @@ function readKeyFor(homeDir: string, apiKeyFile: string, apiKeyVar: string): str
       apiKeyFile,
       apiKeyVar,
     });
-    return createReplySuggestionsSettingsSource({ settingsPath: file, homeDir }).read().apiKey;
+    return createReplySuggestionsSettingsSource({ settingsPath: file, homeDir }).read().upstream.credential.reveal();
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -213,19 +237,19 @@ test('(g) a changed modification time re-reads; an unchanged one keeps the cache
   writeJson(file, { temperature: 0.5 });
   const firstMtime = 1_780_000_000;
   utimesSync(file, firstMtime, firstMtime);
-  assert.equal(source.read().temperature, 0.5);
+  assert.equal(source.read().generation.temperature, 0.5);
 
   writeJson(file, { temperature: 1.5 });
   const secondMtime = firstMtime + 5;
   utimesSync(file, secondMtime, secondMtime);
-  assert.equal(source.read().temperature, 1.5, 'a changed mtime re-reads the file');
+  assert.equal(source.read().generation.temperature, 1.5, 'a changed mtime re-reads the file');
 
   // Change the CONTENT but force the previous mtime back: the reader must keep
   // the cached reading (the documented "mtime unchanged -> no re-read" rule).
   writeJson(file, { temperature: 1.7 });
   utimesSync(file, secondMtime, secondMtime);
   assert.equal(statSync(file).mtimeMs, Math.trunc(secondMtime * 1000));
-  assert.equal(source.read().temperature, 1.5, 'an unchanged mtime must not re-read');
+  assert.equal(source.read().generation.temperature, 1.5, 'an unchanged mtime must not re-read');
 });
 
 test('(h) the key never reaches problems or the public status object', (t) => {
@@ -242,9 +266,9 @@ test('(h) the key never reaches problems or the public status object', (t) => {
   });
   const source = createReplySuggestionsSettingsSource({ settingsPath: file, homeDir: directory });
   const settings = source.read();
-  assert.equal(settings.apiKey, secret);
-  assert.ok(settings.problems.length > 0);
-  assert.ok(!settings.problems.join('\n').includes(secret), 'problems must not echo the key');
+  assert.equal(settings.upstream.credential.reveal(), secret);
+  assert.ok(settings.diagnostics.problems.length > 0);
+  assert.ok(!settings.diagnostics.problems.join('\n').includes(secret), 'problems must not echo the key');
 
   const service = createReplySuggestionsService({
     readSettings: () => source.read(),
@@ -266,7 +290,7 @@ test('(i) a key file wider than mode 600 is reported but is not fatal', (t) => {
   });
   const settings = read(file, directory);
   assert.equal(settings.enabled, true, 'the mode problem does not disable the feature');
-  const problems = settings.problems.join('\n');
+  const problems = settings.diagnostics.problems.join('\n');
   assert.match(problems, /600/);
   assert.ok(problems.includes(keyFile), problems);
   assert.ok(!problems.includes('sk-wide'), 'the problem names the file, never the key');
@@ -280,4 +304,76 @@ test('the environment names the file when no explicit path is passed', (t) => {
     env: { [REPLY_SUGGESTIONS_SETTINGS_PATH_ENV]: file } as NodeJS.ProcessEnv,
   });
   assert.equal(source.read().version, 'from-env');
+});
+
+// ---------------------------------------------------------------------------
+// Credential opacity: the secret cannot leave through serialisation or printing
+// ---------------------------------------------------------------------------
+
+/** A full reading whose credential carries `secret`. */
+function readingWithSecret(t: { after(callback: () => void): void }): {
+  settings: ReplySuggestionsSettings;
+  secret: string;
+} {
+  const directory = temporaryDirectory(t, 'reply-settings-credential-');
+  const secret = 'sk-credential-opacity-secret';
+  const keyFile = path.join(directory, 'key.txt');
+  writeFileSync(keyFile, `${secret}\n`, { mode: 0o600 });
+  const file = writeJson(path.join(directory, 'settings.json'), {
+    enabled: true,
+    baseUrl: 'http://gateway.invalid',
+    model: 'test-model',
+    apiKeyFile: keyFile,
+  });
+  return { settings: read(file, directory), secret };
+}
+
+test('(credential-a) JSON.stringify of the whole reading and its upstream group carries no key', (t) => {
+  const { settings, secret } = readingWithSecret(t);
+  assert.ok(!JSON.stringify(settings).includes(secret));
+  assert.ok(!JSON.stringify(settings.upstream).includes(secret));
+  assert.match(JSON.stringify(settings.upstream), /"credential":"\[redacted\]"/);
+});
+
+test('(credential-b) util.inspect of the whole reading carries no key', (t) => {
+  const { settings, secret } = readingWithSecret(t);
+  const printed = inspect(settings, { depth: null });
+  assert.ok(!printed.includes(secret), 'the inspected reading must not carry the key');
+  assert.ok(printed.includes('[redacted]'), 'the credential is shown as [redacted]');
+});
+
+test('(credential-c) String() and a template literal both answer [redacted]', (t) => {
+  const { settings, secret } = readingWithSecret(t);
+  assert.equal(String(settings.upstream.credential), '[redacted]');
+  assert.equal(`${settings.upstream.credential}`, '[redacted]');
+  assert.ok(!`${settings.upstream.credential}`.includes(secret));
+});
+
+test('(credential-d) reveal() returns the original value', (t) => {
+  const { settings, secret } = readingWithSecret(t);
+  assert.equal(settings.upstream.credential.reveal(), secret);
+});
+
+test('(credential-e) console.log formatting of the reading carries no key', (t) => {
+  const { settings, secret } = readingWithSecret(t);
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...args: unknown[]) => {
+    lines.push(format(...args));
+  };
+  try {
+    console.log(settings);
+  } finally {
+    console.log = original;
+  }
+  const printed = lines.join('\n');
+  assert.ok(!printed.includes(secret), 'the console-formatted reading must not carry the key');
+  assert.ok(printed.includes('[redacted]'));
+});
+
+test('ApiCredential is constructible from a bare value and hides it by construction', () => {
+  const credential = new ApiCredential('sk-standalone');
+  assert.equal(credential.reveal(), 'sk-standalone');
+  assert.equal(JSON.stringify([credential]), '["[redacted]"]');
+  assert.equal(inspect(credential), '[redacted]');
 });

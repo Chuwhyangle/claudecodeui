@@ -12,26 +12,21 @@
  * accepted by the local gateway, and both ignore the reasoning half here — only
  * the answer text is a suggestion.
  *
- * NOTHING HERE KNOWS THE KEY IS SECRET; the caller owns that. What this file
- * guarantees is that the key travels in a header and is never copied into an
- * error message: a failure carries its CATEGORY and, for HTTP failures, the
- * status code — never the request or response body.
+ * THE KEY IS REVEALED HERE, ONCE. The config is the settings' `upstream` group,
+ * and its credential is an opaque value; `authHeaders` below is the single
+ * production call site of `reveal()`. The key travels in a header and is never
+ * copied into an error message: a failure carries its CATEGORY and, for HTTP
+ * failures, the status code — never the request or response body.
  *
- * Consumers: `reply-suggestions.service.ts` (the default `complete` seam) and
- * the client criterion in `tests/reply-suggestions-client.test.ts`.
+ * Consumers: `reply-suggestions.service.ts` (the default `complete` seam),
+ * `server/modules/observation/session-digest-llm.ts` (the same completion call
+ * for the digest tier) and the client criterion in
+ * `tests/reply-suggestions-client.test.ts`.
  */
-import type { ReplySuggestionsAuthScheme, ReplySuggestionsProtocol } from './reply-suggestions-settings.js';
+import type { ReplySuggestionsProtocol, ReplySuggestionsUpstream } from './reply-suggestions-settings.js';
 
-/** What the client needs to know about the gateway and this reading's limits. */
-export type ReplySuggestionsClientConfig = {
-  protocol: ReplySuggestionsProtocol;
-  baseUrl: string;
-  model: string;
-  authScheme: ReplySuggestionsAuthScheme;
-  apiKey: string;
-  disableThinking: boolean;
-  timeoutMs: number;
-};
+/** What the client needs to know about the gateway: exactly the settings' `upstream` group. */
+export type ReplySuggestionsClientConfig = ReplySuggestionsUpstream;
 
 /** One completion request: the resolved prompt and the decoding knobs. */
 export type ReplySuggestionsCompletionRequest = {
@@ -74,10 +69,13 @@ function authHeaders(config: ReplySuggestionsClientConfig): Record<string, strin
   const scheme = config.authScheme === ''
     ? (config.protocol === 'anthropic' ? 'x-api-key' : 'bearer')
     : config.authScheme;
+  // The ONLY production call to `reveal()`: the secret leaves the opaque value
+  // here, into the header of the one request that needs it.
+  const apiKey = config.credential.reveal();
   if (scheme === 'x-api-key') {
-    return { 'x-api-key': config.apiKey };
+    return { 'x-api-key': apiKey };
   }
-  return { authorization: `Bearer ${config.apiKey}` };
+  return { authorization: `Bearer ${apiKey}` };
 }
 
 /**

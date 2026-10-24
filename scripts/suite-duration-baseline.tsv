@@ -210,6 +210,11 @@
 #   `npx tsx --tsconfig server/tsconfig.json --test <file>` (durations below; each is its own new
 #   criterion and no green round contains them yet — the rows also keep the 90% coverage floor green
 #   now that the tree collects 412 server test files).
+#   and the three reply-suggestions rows (guard, draw-store and usage-log) by
+#   gap-reply-suggestions-backend-encapsulation, measured one file at a time on 2026-10-24 with
+#   `npx tsx --tsconfig server/tsconfig.json --test <file>` (durations below; each is its own new
+#   criterion and no green round contains them yet — the rows also keep the 90% coverage floor green
+#   now that the tree collects 430 server test files).
 #   and the three observation rows (store, routes and producer-liveness) by
 #   observation-object-model-seen-cursor-and-delta, measured one file at a time on 2026-10-24 with
 #   `npx tsx --tsconfig server/tsconfig.json --test <file>` (durations below; each is its own new
@@ -602,6 +607,9 @@
 2090	server/modules/reply-suggestions/tests/reply-suggestions-client.test.ts
 1658	server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts
 1924	server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts
+1931	server/modules/reply-suggestions/tests/reply-suggestions-guard.test.ts
+1768	server/modules/reply-suggestions/tests/reply-suggestions-draw-store.test.ts
+2011	server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts
 3495	server/modules/observation/tests/observation-store.test.ts
 3023	server/modules/observation/tests/observation-routes.test.ts
 3289	server/modules/observation/tests/producer-liveness.test.ts

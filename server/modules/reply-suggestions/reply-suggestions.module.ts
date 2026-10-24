@@ -22,6 +22,7 @@ import {
   type LastAssistantMessage,
 } from './reply-suggestions.service.js';
 import { createReplySuggestionsSettingsSource } from './reply-suggestions-settings.js';
+import { createReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js';
 
 /**
  * The seams the process composition root binds.
@@ -45,6 +46,9 @@ export type ReplySuggestionsModuleDeps = {
 /**
  * Build the module's router over the injected reader.
  *
+ * The usage ledger's construction (path, size cap, home directory) belongs
+ * here, not in the service: the service receives a ready writer.
+ *
  * Consumers: `server/index.ts` only.
  */
 export function createReplySuggestionsModule(deps: ReplySuggestionsModuleDeps): Router {
@@ -52,16 +56,20 @@ export function createReplySuggestionsModule(deps: ReplySuggestionsModuleDeps): 
     ...(deps.settingsPath === undefined ? {} : { settingsPath: deps.settingsPath }),
     ...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
   });
+  const usageLog = createReplySuggestionsUsageLog({
+    ...(deps.usageLogPath === undefined ? {} : { filePath: deps.usageLogPath }),
+    ...(deps.usageLogMaxBytes === undefined ? {} : { maxBytes: deps.usageLogMaxBytes }),
+    ...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
+  });
 
   return createReplySuggestionsRoutes(
     createReplySuggestionsService({
       readSettings: () => settings.read(),
       readLastAssistantMessage: deps.readLastAssistantMessage,
+      usageLog,
       ...(deps.now === undefined ? {} : { now: deps.now }),
       ...(deps.logger === undefined ? {} : { logger: deps.logger }),
       ...(deps.complete === undefined ? {} : { complete: deps.complete }),
-      ...(deps.usageLogPath === undefined ? {} : { usageLogPath: deps.usageLogPath }),
-      ...(deps.usageLogMaxBytes === undefined ? {} : { usageLogMaxBytes: deps.usageLogMaxBytes }),
     }),
   );
 }

@@ -1,11 +1,13 @@
 /**
- * The local usage ledger for reply suggestions.
+ * The local usage ledger for reply suggestions, and the ONE typed vocabulary of
+ * the rows it holds.
  *
  * WHAT IT IS FOR. The chips a model offers are only half the story; whether a
  * person clicked one, cleared it, redrew or sent is the long-lived ground truth
  * an offline benchmark replays. This file appends one JSON object per line to a
- * local-only JSONL file under the project's existing local data directory
- * (`~/.cloudcli`, the same root the attachment and browser-profile stores use).
+ * local-only JSONL file under `~/.cloudcli` (the same root the attachment and
+ * browser-profile stores use). Field names are the replay's contract: they are
+ * unchanged from before this file owned the types.
  *
  * WHAT IT DOES NOT HOLD. The text a person ultimately sent is NOT stored: it can
  * be recovered from the session transcript, and copying it here would create a
@@ -23,22 +25,116 @@
  * rotated ONCE to `<file>.1`, replacing (and thereby discarding) the older
  * rotation. There is never a growing `.2`.
  *
- * Consumers: `reply-suggestions.service.ts`, which writes the `shown` record on
- * every extraction and the `picked`/`cleared`/`redrawn`/`sent` records from
- * `POST /events`; the service criterion in
- * `tests/reply-suggestions-service.test.ts` drives rotation and field names.
+ * Consumers: `reply-suggestions.service.ts` (the row builders and the writer);
+ * the context-events tap in `server/index.ts` (the observer callback); the
+ * service criterion and the context-events wiring criterion drive rotation and
+ * field names.
  */
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { ReplySuggestionsProtocol } from './reply-suggestions-settings.js';
+
 /** The default cap for one ledger file: 5 MB, as the task's protection clause says. */
 export const REPLY_SUGGESTIONS_USAGE_LOG_MAX_BYTES = 5 * 1024 * 1024;
 
-/** One line of the ledger. `type` separates the server's `shown` row from the client events. */
-export type ReplySuggestionsUsageRecord = Record<string, unknown> & { type: string };
+/** How a `shown` row was produced: a real upstream call or a cache hit. */
+export type ReplySuggestionsServed = 'upstream' | 'cache';
 
-/** The writer seam the service depends on. */
+/**
+ * What an expansion draw was anchored on: `seed` is the reply the person picked
+ * (variants of it), `focus` is the quoted passage with no reply written yet.
+ * Written into the ledger so a replay can tell the two apart without storing
+ * either text twice.
+ */
+export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
+
+/** The pointer-click ledger event names the client reports. */
+export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
+
+/** One display of a batch. `expansion` is present only for an expansion draw. */
+export type ReplySuggestionsShownRecord = {
+  at: string;
+  type: 'shown';
+  sessionId: string;
+  draw: number;
+  model: string;
+  protocol: ReplySuggestionsProtocol;
+  version: string;
+  served: ReplySuggestionsServed;
+  expansion?: ReplySuggestionsExpansionSource;
+  chips: string[];
+};
+
+/** One client event. `index` is the chip position; `source` names an expansion. */
+export type ReplySuggestionsEventRecord = {
+  at: string;
+  type: ReplySuggestionsEventName;
+  sessionId: string;
+  draw: number;
+  index?: number;
+  source?: ReplySuggestionsExpansionSource;
+};
+
+/** The discriminated union every ledger line is one of. */
+export type ReplySuggestionsUsageRecord = ReplySuggestionsShownRecord | ReplySuggestionsEventRecord;
+
+/**
+ * Build one `shown` row. `chips` is copied so a caller mutating its array cannot
+ * rewrite a row that has already been handed to the writer.
+ *
+ * Consumers: `reply-suggestions.service.ts` (`writeShownRow`).
+ */
+export function shownRecord(options: {
+  at: string;
+  sessionId: string;
+  draw: number;
+  model: string;
+  protocol: ReplySuggestionsProtocol;
+  version: string;
+  served: ReplySuggestionsServed;
+  expansion?: ReplySuggestionsExpansionSource;
+  chips: readonly string[];
+}): ReplySuggestionsShownRecord {
+  return {
+    at: options.at,
+    type: 'shown',
+    sessionId: options.sessionId,
+    draw: options.draw,
+    model: options.model,
+    protocol: options.protocol,
+    version: options.version,
+    served: options.served,
+    ...(options.expansion === undefined ? {} : { expansion: options.expansion }),
+    chips: [...options.chips],
+  };
+}
+
+/**
+ * Build one client-event row.
+ *
+ * Consumers: `reply-suggestions.service.ts` (`recordEvent`).
+ */
+export function eventRecord(options: {
+  at: string;
+  sessionId: string;
+  draw: number;
+  event: ReplySuggestionsEventName;
+  index?: number;
+  source?: ReplySuggestionsExpansionSource;
+}): ReplySuggestionsEventRecord {
+  return {
+    at: options.at,
+    type: options.event,
+    sessionId: options.sessionId,
+    draw: options.draw,
+    ...(options.index === undefined ? {} : { index: options.index }),
+    ...(options.source === undefined ? {} : { source: options.source }),
+  };
+}
+
+/** The writer seam the service depends on. `write` accepts only a typed row. */
 export type ReplySuggestionsUsageLog = {
   readonly path: string;
   write(record: ReplySuggestionsUsageRecord): void;
@@ -50,7 +146,7 @@ export type ReplySuggestionsUsageLog = {
  * The ledger stays exactly what it was — its own file, its own rotation, its own
  * field names — and the observer is a read-only tap: the context-event bridge
  * mirrors `shown`/`picked`/`redrawn` into the host stream. Kept as a module-level
- * seam because the reply-suggestions SERVICE constructs the writer internally;
+ * seam because the reply-suggestions service writes through the injected log;
  * adding the tap here avoids a sibling-module import in either direction.
  *
  * A throwing observer is contained: the ledger write has already happened, and
@@ -58,7 +154,12 @@ export type ReplySuggestionsUsageLog = {
  */
 let usageObserver: ((record: ReplySuggestionsUsageRecord) => void) | null = null;
 
-/** Installs (or clears, with `null`) the process-wide usage observer. */
+/**
+ * Installs (or clears, with `null`) the process-wide usage observer.
+ *
+ * Consumers: `server/index.ts` (installs the context-events tap) and the
+ * context-events wiring criterion.
+ */
 export function setReplySuggestionsUsageObserver(
   observer: ((record: ReplySuggestionsUsageRecord) => void) | null,
 ): void {
@@ -68,9 +169,13 @@ export function setReplySuggestionsUsageObserver(
 /**
  * Build a ledger writer for one file.
  *
- * `filePath` is injectable for criteria; production takes the default under
- * `~/.cloudcli`. The parent directory is created on the first write, so the
- * server's start-up never does filesystem work for a feature that is off.
+ * `filePath`/`maxBytes`/`homeDir` are injected by the module composition root
+ * (criteria pass their own). The parent directory is created on the first write,
+ * so the server's start-up never does filesystem work for a feature that is off.
+ *
+ * Consumers: `reply-suggestions.module.ts` (production), `reply-suggestions.service.ts`
+ * (the default when a criterion does not inject one) and the context-events
+ * wiring criterion (its own temp file).
  */
 export function createReplySuggestionsUsageLog(
   options: { filePath?: string; maxBytes?: number; homeDir?: string } = {},
