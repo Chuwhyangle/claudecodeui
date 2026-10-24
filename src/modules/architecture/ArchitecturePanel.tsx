@@ -305,6 +305,13 @@ type ArchitecturePanelRenderer = ComponentType<
     readonly onMultiSelectStart?: (node: ArchitectureRendererNode) => void;
     readonly multiSelectMode?: boolean;
     /**
+     * Whether the panel is the page-internal fullscreen overlay. The renderer
+     * measures the chrome painted over the viewport-sized canvas and fits
+     * inside what is left; the standalone page (which shares the full-bleed
+     * geometry) keeps the ordinary Fit reading.
+     */
+    readonly fullscreen?: boolean;
+    /**
      * The project whose graph is drawn; the renderer remembers the reader's
      * explicit readable mode per project under it.
      */
@@ -4329,9 +4336,12 @@ export default function ArchitecturePanel({
                       dockTier === 'drawer' && dockOpen && !shortTouch ? touchDrawerHeight : 0
                     }
                     // On the overlay the chrome is painted OVER the viewport-
-                    // sized canvas; the drawing reserves that band so a fitted
-                    // graph is fully visible below it.
+                    // sized canvas. The renderer measures the actual chrome
+                    // rectangles and fits inside what is left; the standalone
+                    // page keeps its own reserved-band reading (`fullscreen`
+                    // stays false there).
                     topObscuredPx={topChromePx}
+                    fullscreen={fullscreen.active}
                     // Which project the drawing belongs to; the renderer uses it
                     // to remember the reader's explicit readable mode.
                     projectId={projectId}

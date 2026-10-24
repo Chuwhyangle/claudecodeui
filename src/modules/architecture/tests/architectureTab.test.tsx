@@ -7119,3 +7119,83 @@ test('the 55-entity graph in tier B drops the member rows from the class bodies'
     'the full-body drawing would overflow this canvas at the fitted scale',
   );
 });
+
+/** A DOMRect stand-in for the layout jsdom does not perform. */
+function domRect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+test('fullscreen Fit measures the chrome over the host instead of reserving the non-fullscreen margin', async () => {
+  rememberDefaultWithMentionedFunctions();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  sizeHost(host, 400, 300);
+  triggerResize();
+
+  const root = graphRoot();
+  const fitViewport = (): string | null => root.getAttribute('data-architecture-fit-viewport');
+  // The in-tab reading is the host's content box (jsdom pins no padding).
+  await waitFor(() => assert.equal(fitViewport(), '400x300'));
+
+  // The readout row is the last in-flow chrome row; on the overlay it floats
+  // over the viewport. jsdom performs no layout, so its band is pinned here.
+  const header = document.querySelector('[data-architecture-canvas-header]');
+  assert.ok(header instanceof HTMLElement);
+  header.getBoundingClientRect = () => domRect(0, 0, 1440, 60);
+
+  // The corner slot (minimap + zoom cluster) sits 12 px inside the bottom-right
+  // corner. Pin its boxes so the solve has real chrome to subtract.
+  const overlays = document.querySelector('[data-architecture-canvas-overlays]');
+  assert.ok(overlays instanceof HTMLElement);
+  const cornerBoxes = [...overlays.children] as HTMLElement[];
+  assert.ok(cornerBoxes.length >= 1, 'the corner slot must hold the minimap/cluster');
+  const pinCorner = (width: number, height: number): void => {
+    for (const box of cornerBoxes) {
+      box.getBoundingClientRect = () => domRect(1440 - 12 - width, 765 - 12 - height, width, height);
+    }
+  };
+  pinCorner(60, 200);
+
+  // Enter the overlay with a viewport-sized host.
+  sizeHost(host, 1440, 765);
+  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-fullscreen="true"]')));
+
+  // area = 1440×765 − the 60 px readout band − the corner's 72 px right band
+  // (its 212 px height is the more expensive axis), less the one pixel the
+  // semantic writer rounds up. The non-fullscreen reserved margin would have
+  // answered 1416×681 instead.
+  await waitFor(() => assert.equal(fitViewport(), '1367x704'), { timeout: 4000 });
+  assert.equal(host.style.paddingTop, '60px');
+  assert.equal(host.style.paddingRight, '72px');
+  assert.equal(host.style.paddingBottom, '0px');
+  assert.equal(host.style.paddingLeft, '0px');
+
+  // Opening the minimap widens the corner slot past the cost of the bottom
+  // band: the SAME 150 ms debounce re-solves against the area above it.
+  pinCorner(300, 200);
+  triggerResize();
+  await waitFor(() => assert.equal(fitViewport(), '1439x492'), { timeout: 4000 });
+
+  // Leaving the overlay restores the ordinary reading and the in-flow padding.
+  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  await waitFor(() => assert.equal(document.querySelector('[data-architecture-fullscreen]'), null));
+  sizeHost(host, 400, 300);
+  triggerResize();
+  await waitFor(() => assert.equal(fitViewport(), '400x300'));
+  assert.equal(host.style.paddingTop, '');
+  assert.equal(host.style.paddingRight, '');
+  assert.equal(host.style.paddingBottom, '');
+  assert.equal(host.style.paddingLeft, '');
+});

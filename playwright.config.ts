@@ -510,6 +510,18 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // 167.6s. 600_000 keeps ~3.6x over that reading, the same load-slowed
   // fan-in headroom the sibling architecture criteria declare.
   'architecture-fit-contract.spec.ts': 600_000,
+  // The fullscreen Fit criterion: the L fixture (55 classes) on four
+  // viewports — 1440×765, 1920×900, 390×844, 844×390 — each entering the
+  // overlay and pressing Fit, one reading of the host/drawing/chrome geometry,
+  // plus a control arm that pulls the DEV-only reserved-margins lever and
+  // re-reads through the same function. MEASURED 2026-10-24 on this worktree:
+  // `5 passed (1.3m)` for the whole invocation (config evaluation, both
+  // webServers' boot, the browser launch, the fixture and every reading
+  // included); the four main-arm cases closed at 18.5s / 29.2s / 42.4s / 57.2s
+  // and the control arm followed them. 360_000 clears the ~78s reading ~4.6x,
+  // the same load-slowed fan-in headroom the sibling architecture criteria
+  // declare.
+  'architecture-fullscreen-fit.spec.ts': 360_000,
   // The overlay-layout criterion: the 55-entity L fixture on THREE viewports
   // (PC 1440×765, phone portrait 390×844, landscape 844×390), each zoomed in
   // until the minimap is drawn, then read after a selection and a hover; plus
@@ -2818,6 +2830,10 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // reasons (a transcript naming the seeds, and a project that offers the
   // Architecture tab). It writes its own 55-entity `.archguard` tree.
   'architecture-overlay-layout.spec.ts',
+  // The fullscreen Fit criterion: the same fixture home (a transcript naming
+  // the seeds, and a project that offers the Architecture tab). It writes its
+  // own 55-entity `.archguard` tree and measures the overlay's chrome.
+  'architecture-fullscreen-fit.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second
