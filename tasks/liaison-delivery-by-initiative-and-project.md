@@ -1,7 +1,7 @@
 ---
 id: liaison-delivery-by-initiative-and-project
 title: M3 联络投递：按（倡议, 项目）经 fleet registry 解析联络会话并投递，不在则进倡议收件箱、恢复后补投
-status: todo
+status: ready
 labels:
   - initiative
   - liaison
