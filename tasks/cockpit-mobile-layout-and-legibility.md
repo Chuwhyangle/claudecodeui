@@ -1,7 +1,7 @@
 ---
 id: cockpit-mobile-layout-and-legibility
 title: 驾驶舱走查（布局/视觉）：手机沿用两栏、状态条透字遮挡、开发读数占主界面、READ-ONLY 失实、低对比小字、二维码常驻页头
-status: todo
+status: superseded
 labels:
   - cockpit
   - ui
@@ -73,3 +73,6 @@ depends_on:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/cockpit-mobile-layout-and-legibility.md
+
+
+2026-10-24 用户确认：由 observation-wall-ui（观察墙 T5）取代；其中在新模型下仍成立的条目已并入该任务。
