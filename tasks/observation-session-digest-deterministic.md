@@ -36,10 +36,10 @@ depends_on:
 
 ## Touches
 
-- server/modules/observation/session-digest.ts
-- server/modules/observation/session-digest.producer.ts
-- server/modules/observation/tests/session-digest.test.ts
-- server/modules/observation/tests/fixtures/session-transcript.jsonl
+- server/modules/observation/session-digest.ts (new)
+- server/modules/observation/session-digest.producer.ts (new)
+- server/modules/observation/tests/session-digest.test.ts (new)
+- server/modules/observation/tests/fixtures/session-transcript.jsonl (new)
 - server/modules/observation/index.ts
 - server/modules/websocket/services/chat-run-registry.service.ts
 - tasks/observation-session-digest-deterministic.md
