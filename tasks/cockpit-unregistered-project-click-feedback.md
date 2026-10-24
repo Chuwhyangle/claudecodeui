@@ -1,7 +1,7 @@
 ---
 id: cockpit-unregistered-project-click-feedback
 title: 驾驶舱项目条：点击未登记 / 驱动不可用的项目无任何反馈，需置灰并给出原因，序号寻址与磁贴编号对齐
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
