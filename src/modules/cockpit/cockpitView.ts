@@ -217,6 +217,34 @@ export type InitiativeDecidePort = (
   request: InitiativeDecisionRequest,
 ) => Promise<InitiativeDecisionOutcome>;
 
+/**
+ * One generated 「反方」(counter-voice) for a pending ruling, or the reason none was produced.
+ *
+ * The server produces it from a fresh context — the question, its options and the evidence
+ * references only — so it is a `kind: llm` suggestion, never a fact. `state: 'unavailable'`
+ * carries the engine's own sentence (e.g. 「未生成：限额」) and must leave the ruling usable.
+ * Mirrors `GET /api/quay/initiatives/:attentionId/counter-voice`.
+ */
+export type InitiativeCounterVoiceReading =
+  | {
+      state: 'ready';
+      kind: 'llm';
+      /** What the leaning direction ignores. At least one line. */
+      ignored: string[];
+      /** The strongest counter-example or objection to the preferred option. */
+      strongestCounter: string;
+      /** The result that would falsify the preferred option. */
+      falsifier: string;
+      /** The always-present 「仅作建议」 annotation the server attaches. */
+      advisory: string;
+    }
+  | { state: 'unavailable'; kind: 'none'; reason: string };
+
+/** The counter-voice seam; the page binds it to the HTTP route, a criterion stubs it. */
+export type InitiativeCounterVoicePort = (
+  attentionId: string,
+) => Promise<InitiativeCounterVoiceReading>;
+
 /** Circled ordinals ①…⑳ — the short spoken label a focusable object carries, same as the Quay wall. */
 const CIRCLED_ORDINALS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 

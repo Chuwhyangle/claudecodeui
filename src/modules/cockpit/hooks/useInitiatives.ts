@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/shared/api';
 import type {
+  InitiativeCounterVoicePort,
+  InitiativeCounterVoiceReading,
   InitiativeDecisionOutcome,
   InitiativeDecisionRequest,
   InitiativeReadingAnswer,
@@ -71,6 +73,55 @@ export async function decideInitiative(
 export type InitiativeReadingConnection = {
   view: InitiativeReadingView;
   reload: () => Promise<void>;
+};
+
+/** A reason the card can state verbatim; the server's own sentences start the same way. */
+function counterVoiceFailure(reason: string): InitiativeCounterVoiceReading {
+  return { state: 'unavailable', kind: 'none', reason: `未生成：${reason}` };
+}
+
+/**
+ * Asks the server for one pending ruling's 「反方」.
+ *
+ * The transport never throws: a failed request, a non-JSON body or an unexpected shape answers
+ * a stated reason, so the queue can draw the card and keep its ruling buttons usable. A
+ * `ready` reading keeps the server's `advisory` (「仅作建议」) untouched — the annotation is the
+ * engine's, not a label this client may drop.
+ */
+export const requestInitiativeCounterVoice: InitiativeCounterVoicePort = async (attentionId) => {
+  let response: Response;
+  try {
+    response = await api.quayInitiativeCounterVoice(attentionId);
+  } catch (error) {
+    return counterVoiceFailure(error instanceof Error ? error.message : 'request failed');
+  }
+
+  const body = (await response.json().catch(() => null)) as unknown;
+  if (body !== null && typeof body === 'object') {
+    const record = body as Record<string, unknown>;
+    if (
+      record.state === 'ready' &&
+      record.kind === 'llm' &&
+      Array.isArray(record.ignored) &&
+      record.ignored.every((line) => typeof line === 'string') &&
+      typeof record.strongestCounter === 'string' &&
+      typeof record.falsifier === 'string' &&
+      typeof record.advisory === 'string'
+    ) {
+      return {
+        state: 'ready',
+        kind: 'llm',
+        ignored: record.ignored as string[],
+        strongestCounter: record.strongestCounter,
+        falsifier: record.falsifier,
+        advisory: record.advisory,
+      };
+    }
+    if (record.state === 'unavailable' && typeof record.reason === 'string') {
+      return { state: 'unavailable', kind: 'none', reason: record.reason };
+    }
+  }
+  return counterVoiceFailure(`HTTP ${response.status}`);
 };
 
 export function useInitiativeReading(isActive: boolean): InitiativeReadingConnection {

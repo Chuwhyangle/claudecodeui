@@ -404,6 +404,14 @@ export const api = {
   /** Records one human ruling through the fleet's own `initiative decide` (by=human, kind=fact). */
   quayInitiativeDecide: (slug: string, body: unknown) =>
     post(`/api/quay/initiatives/${encodeURIComponent(slug)}/decide`, body),
+  /**
+   * One pending ruling's 「反方」(counter-voice). The server looks the item up in its own queue
+   * reading (never from this request), generates on the first ask, caches per item and answers
+   * `{state:'unavailable', reason}` when the feature is off, over budget or the model failed —
+   * the ruling itself never waits on it.
+   */
+  quayInitiativeCounterVoice: (attentionId: string) =>
+    get(`/api/quay/initiatives/${encodeURIComponent(attentionId)}/counter-voice`),
   quaySnapshot: (
     projectId: string,
     { refresh = false, hours }: { refresh?: boolean; hours?: number } = {},

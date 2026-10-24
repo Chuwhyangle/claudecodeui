@@ -912,7 +912,15 @@
     "deployUnavailable": "デプロイの読み取りを利用できません: {{reason}}",
     "deployJustNow": "たった今",
     "deployMinutesAgo": "{{n}} 分前",
-    "deployHoursAgo": "{{n}} 時間前"
+    "deployHoursAgo": "{{n}} 時間前",
+    "counterVoice": "反対意見",
+    "counterVoiceCollapse": "反対意見を閉じる",
+    "counterVoiceLoading": "反対意見を生成中…",
+    "counterVoiceIgnored": "見落としていること",
+    "counterVoiceStrongest": "最強の反例",
+    "counterVoiceFalsifier": "何がそれを反証するか",
+    "counterVoiceSeen": "反対意見を確認済み",
+    "counterVoiceSeenMarker": "（反対意見を確認済み）"
   },
   "replyReference": {
     "item": "{{label}}「{{excerpt}}」",

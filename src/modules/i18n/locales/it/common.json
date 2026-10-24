@@ -912,7 +912,15 @@
     "deployUnavailable": "Lettura della distribuzione non disponibile: {{reason}}",
     "deployJustNow": "adesso",
     "deployMinutesAgo": "{{n}} minuti fa",
-    "deployHoursAgo": "{{n}} ore fa"
+    "deployHoursAgo": "{{n}} ore fa",
+    "counterVoice": "Contro-voce",
+    "counterVoiceCollapse": "Nascondi la contro-voce",
+    "counterVoiceLoading": "Generazione della contro-voce…",
+    "counterVoiceIgnored": "Ciò che ignora",
+    "counterVoiceStrongest": "Controesempio più forte",
+    "counterVoiceFalsifier": "Cosa la falsificherebbe",
+    "counterVoiceSeen": "Contro-voce esaminata",
+    "counterVoiceSeenMarker": "(contro-voce esaminata)"
   },
   "replyReference": {
     "item": "{{label}}«{{excerpt}}»",

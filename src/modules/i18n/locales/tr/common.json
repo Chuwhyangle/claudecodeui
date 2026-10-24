@@ -912,7 +912,15 @@
     "deployUnavailable": "Dağıtım okuması kullanılamıyor: {{reason}}",
     "deployJustNow": "az önce",
     "deployMinutesAgo": "{{n}} dakika önce",
-    "deployHoursAgo": "{{n}} saat önce"
+    "deployHoursAgo": "{{n}} saat önce",
+    "counterVoice": "Karşı görüş",
+    "counterVoiceCollapse": "Karşı görüşü gizle",
+    "counterVoiceLoading": "Karşı görüş oluşturuluyor…",
+    "counterVoiceIgnored": "Neyi göz ardı ediyor",
+    "counterVoiceStrongest": "En güçlü karşı örnek",
+    "counterVoiceFalsifier": "Neyin onu çürüteceği",
+    "counterVoiceSeen": "Karşı görüş incelendi",
+    "counterVoiceSeenMarker": "(karşı görüş incelendi)"
   },
   "replyReference": {
     "item": "{{label}}«{{excerpt}}»",

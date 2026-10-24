@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/shared/utils';
 import type {
   InitiativeAuditDecision,
+  InitiativeCounterVoicePort,
+  InitiativeCounterVoiceReading,
   InitiativeDecidePort,
   InitiativeQueueItem,
 } from '@/modules/cockpit/cockpitView';
@@ -66,6 +68,9 @@ type Draft = {
   optionId: string;
 };
 
+/** One card's 「反方」 slot: still being generated, or the server's answer. */
+type CounterVoiceEntry = { state: 'loading' } | InitiativeCounterVoiceReading;
+
 export type DecisionQueueProps = {
   items: readonly InitiativeQueueItem[];
   /** Every `kind ∈ {inference, llm}` decision the server relayed; the sample is drawn here. */
@@ -74,6 +79,11 @@ export type DecisionQueueProps = {
   auditRatio: number;
   /** The only write: one human ruling, recorded through the fleet's own decide verb. */
   decide: InitiativeDecidePort;
+  /**
+   * The 「反方」 seam. Asked once per visible card (the server generates on the first ask and
+   * caches), never awaited before a ruling; an unavailable answer is drawn as its reason.
+   */
+  counterVoice: InitiativeCounterVoicePort;
 };
 
 /** The decision queue and its spot-check group. */
@@ -82,6 +92,7 @@ export default function DecisionQueue({
   audit,
   auditRatio,
   decide,
+  counterVoice,
 }: DecisionQueueProps) {
   const { t } = useTranslation();
   // The item whose preview is open, and the option the person picked. `null` means nothing is
@@ -101,20 +112,79 @@ export default function DecisionQueue({
   // Each audit row's objection note, keyed by its ledger address. Agreeing needs no note; an
   // objection's note is what makes the human decision explain itself.
   const [objectionNotes, setObjectionNotes] = useState<Record<string, string>>({});
+  // Each queue card's 「反方」, keyed by attentionId. `loading` is its own state so an expanded
+  // card can say work is in flight rather than draw an empty body; `unavailable` carries the
+  // server's reason and leaves the ruling untouched.
+  const [counterVoices, setCounterVoices] = useState<Record<string, CounterVoiceEntry>>({});
+  // The cards whose 「反方」 body is open. Default collapsed: the entry is an offer, not a wall.
+  const [openCounterVoices, setOpenCounterVoices] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // 「已看反方」 per card. When ticked, the ruling's rationale carries the marker, so the
+  // decision ledger can tell 「看过反方后仍然这么裁」 from a ruling that never opened it.
+  const [seenCounterVoices, setSeenCounterVoices] = useState<Record<string, boolean>>({});
+  // The ids already asked for. A ref, not state: re-reading it must neither render nor restart
+  // the request, and a card that leaves and returns keeps its one generated answer.
+  const counterVoiceRequested = useRef<Set<string>>(new Set());
 
   const sampledAudit = useMemo(
     () => sampleAuditDecisions(audit, auditRatio),
     [audit, auditRatio],
   );
 
-  const visibleItems = items.filter((item) => !ruled.has(item.attentionId));
+  const visibleItems = useMemo(
+    () => items.filter((item) => !ruled.has(item.attentionId)),
+    [items, ruled],
+  );
   const visibleAudit = sampledAudit.filter(
     (decision) => !ruled.has(auditKey(decision)),
   );
 
+  // ASK ON FIRST DISPLAY, NOT ON FIRST CLICK. The server generates from a fresh context and
+  // caches per item; starting the ask when the card appears means the body is usually ready by
+  // the time someone opens it. The ask is never awaited here, so no ruling waits for a model.
+  useEffect(() => {
+    for (const item of visibleItems) {
+      if (counterVoiceRequested.current.has(item.attentionId)) continue;
+      counterVoiceRequested.current.add(item.attentionId);
+      setCounterVoices((previous) => ({
+        ...previous,
+        [item.attentionId]: { state: 'loading' },
+      }));
+      void counterVoice(item.attentionId)
+        .then((reading) => {
+          setCounterVoices((previous) => ({ ...previous, [item.attentionId]: reading }));
+        })
+        .catch((error: unknown) => {
+          setCounterVoices((previous) => ({
+            ...previous,
+            [item.attentionId]: {
+              state: 'unavailable',
+              kind: 'none',
+              reason: `未生成：${error instanceof Error ? error.message : 'request failed'}`,
+            },
+          }));
+        });
+    }
+  }, [counterVoice, visibleItems]);
+
+  const toggleCounterVoice = useCallback((attentionId: string) => {
+    setOpenCounterVoices((previous) => {
+      const next = new Set(previous);
+      if (next.has(attentionId)) {
+        next.delete(attentionId);
+      } else {
+        next.add(attentionId);
+      }
+      return next;
+    });
+  }, []);
+
   const openPreview = useCallback((item: InitiativeQueueItem, optionId: string) => {
     setDraft({ item, optionId });
     setRationale('');
+    // A fresh preview starts with no claim about having read the counter-voice.
+    setSeenCounterVoices((previous) => ({ ...previous, [item.attentionId]: false }));
     setNotice(null);
   }, []);
 
@@ -124,12 +194,19 @@ export default function DecisionQueue({
     if (trimmed === '') return;
     setPending(true);
     try {
+      // 「已看反方」 is recorded IN the rationale rather than beside it: the fleet's ledger row
+      // carries one sentence, and the marker travelling with it is what makes the claim
+      // legible after the fact.
+      const seenMarker =
+        seenCounterVoices[draft.item.attentionId] === true
+          ? ` ${t('cockpit.counterVoiceSeenMarker')}`
+          : '';
       const outcome = await decide({
         initiative: draft.item.initiative,
         question: draft.item.question,
         options: draft.item.options,
         chosen: draft.optionId,
-        rationale: trimmed,
+        rationale: `${trimmed}${seenMarker}`,
         refs: draft.item.evidence,
         by: 'human',
         kind: 'fact',
@@ -155,7 +232,7 @@ export default function DecisionQueue({
     } finally {
       setPending(false);
     }
-  }, [decide, draft, pending, rationale, t]);
+  }, [decide, draft, pending, rationale, seenCounterVoices, t]);
 
   const ruleAudit = useCallback(
     async (decision: InitiativeAuditDecision, objection: boolean) => {
@@ -201,6 +278,75 @@ export default function DecisionQueue({
     },
     [decide, objectionNotes, pending, t],
   );
+
+  /**
+   * One card's counter-voice: a collapsed 「反方」 entry, and when opened the three segments —
+   * what the leaning direction ignores, the strongest counter-example, and what would falsify
+   * it — or the honest reason none was produced. Nothing here gates the option buttons beside
+   * it: the ruling is the person's, and the counter-voice is an offer.
+   */
+  const renderCounterVoice = (item: InitiativeQueueItem) => {
+    const entry = counterVoices[item.attentionId];
+    const open = openCounterVoices.has(item.attentionId);
+    return (
+      <div className="mt-1" data-testid="decision-counter-voice" data-attention-id={item.attentionId}>
+        <button
+          type="button"
+          onClick={() => toggleCounterVoice(item.attentionId)}
+          aria-expanded={open}
+          className="rounded border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-accent"
+          data-testid="decision-counter-voice-toggle"
+        >
+          {open ? t('cockpit.counterVoiceCollapse') : t('cockpit.counterVoice')}
+        </button>
+        {open && (
+          <div
+            className="mt-1 rounded border border-border/40 bg-muted/30 p-2"
+            data-testid="decision-counter-voice-body"
+            data-kind={entry !== undefined && entry.state === 'ready' ? entry.kind : 'none'}
+          >
+            {entry === undefined || entry.state === 'loading' ? (
+              <p className="text-muted-foreground" data-testid="decision-counter-voice-loading">
+                {t('cockpit.counterVoiceLoading')}
+              </p>
+            ) : entry.state === 'unavailable' ? (
+              <p
+                className="text-amber-700 dark:text-amber-300"
+                data-testid="decision-counter-voice-unavailable"
+              >
+                {entry.reason}
+              </p>
+            ) : (
+              <div className="space-y-1">
+                <p
+                  className="text-[11px] text-muted-foreground"
+                  data-testid="decision-counter-voice-advisory"
+                >
+                  {entry.advisory} · {entry.kind}
+                </p>
+                <div data-testid="counter-voice-ignored">
+                  <p className="font-medium text-foreground">{t('cockpit.counterVoiceIgnored')}</p>
+                  <ul className="list-disc pl-4 text-muted-foreground">
+                    {entry.ignored.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div data-testid="counter-voice-strongest">
+                  <p className="font-medium text-foreground">{t('cockpit.counterVoiceStrongest')}</p>
+                  <p className="text-muted-foreground">{entry.strongestCounter}</p>
+                </div>
+                <div data-testid="counter-voice-falsifier">
+                  <p className="font-medium text-foreground">{t('cockpit.counterVoiceFalsifier')}</p>
+                  <p className="text-muted-foreground">{entry.falsifier}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-col gap-3 overflow-y-auto p-3" data-testid="decision-queue">
@@ -257,6 +403,7 @@ export default function DecisionQueue({
                     ))}
                   </ul>
                 )}
+                {renderCounterVoice(item)}
               </li>
             ))}
           </ul>
@@ -288,6 +435,20 @@ export default function DecisionQueue({
                 className="mt-0.5 w-full rounded border border-border/60 bg-background p-1 text-xs text-foreground"
                 data-testid="decision-rationale"
               />
+            </label>
+            <label className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={seenCounterVoices[draft.item.attentionId] === true}
+                onChange={(event) =>
+                  setSeenCounterVoices((previous) => ({
+                    ...previous,
+                    [draft.item.attentionId]: event.target.checked,
+                  }))
+                }
+                data-testid="decision-counter-seen"
+              />
+              {t('cockpit.counterVoiceSeen')}
             </label>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <button

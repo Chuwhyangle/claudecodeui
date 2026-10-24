@@ -6,6 +6,8 @@ import { i18n } from '@/modules/i18n';
 import DecisionQueue, { sampleAuditDecisions } from '@/modules/cockpit/DecisionQueue';
 import type {
   InitiativeAuditDecision,
+  InitiativeCounterVoicePort,
+  InitiativeCounterVoiceReading,
   InitiativeDecidePort,
   InitiativeQueueItem,
 } from '@/modules/cockpit/cockpitView';
@@ -22,6 +24,9 @@ import type {
  *   - the spot-check group draws a deterministic fraction (the configured ratio, 1/5 here) of
  *     `kind ∈ {inference, llm}` ledger rows and never a `fact` row;
  *   - 「有异议」 produces one human decision call, carrying the objection note as its rationale.
+ *   - each card offers a COLLAPSED 「反方」 that opens the three generated segments; an
+ *     unavailable counter-voice states its reason and leaves the ruling fully usable; ticking
+ *     「已看反方」 puts the marker into the ruling's rationale.
  *
  * The decide port is a stub here: the criterion is about what the QUEUE asks for, and the
  * server's own criterion proves the transport pins the same provenance.
@@ -89,6 +94,20 @@ function auditLedger(): InitiativeAuditDecision[] {
 
 const okDecide: InitiativeDecidePort = vi.fn(async () => ({ ok: true } as const));
 
+/** The three-segment reading the server answers for a generated counter-voice. */
+const READY_COUNTER_VOICE: InitiativeCounterVoiceReading = {
+  state: 'ready',
+  kind: 'llm',
+  ignored: ['The cost of a second queue surface is not in the evidence.'],
+  strongestCounter: 'Two queues drift, and the person then rules on the stale one.',
+  falsifier: 'A week of rulings where the fleet UI is the only surface opened.',
+  advisory: '仅作建议',
+};
+
+const okCounterVoice: InitiativeCounterVoicePort = vi.fn(
+  async () => READY_COUNTER_VOICE,
+);
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -99,15 +118,23 @@ function renderQueue({
   audit = [],
   auditRatio = 1 / 5,
   decide = okDecide,
+  counterVoice = okCounterVoice,
 }: {
   items?: InitiativeQueueItem[];
   audit?: InitiativeAuditDecision[];
   auditRatio?: number;
   decide?: InitiativeDecidePort;
+  counterVoice?: InitiativeCounterVoicePort;
 } = {}) {
   return render(
     <I18nextProvider i18n={i18n}>
-      <DecisionQueue items={items} audit={audit} auditRatio={auditRatio} decide={decide} />
+      <DecisionQueue
+        items={items}
+        audit={audit}
+        auditRatio={auditRatio}
+        decide={decide}
+        counterVoice={counterVoice}
+      />
     </I18nextProvider>,
   );
 }
@@ -238,5 +265,81 @@ describe('the decision queue', () => {
 
     await waitFor(() => expect(screen.getAllByTestId('decision-audit-item')).toHaveLength(1));
     expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('offers a collapsed counter-voice and renders its three segments when opened', async () => {
+    const counterVoice = vi.fn<InitiativeCounterVoicePort>(async () => READY_COUNTER_VOICE);
+    renderQueue({ counterVoice });
+
+    const first = screen.getAllByTestId('decision-queue-item')[0]!;
+    const toggle = within(first).getByTestId('decision-counter-voice-toggle');
+    // The entry is collapsed by default: the offer is visible, the body is not.
+    expect(toggle.textContent).toBe(i18n.t('cockpit.counterVoice'));
+    expect(within(first).queryByTestId('decision-counter-voice-body')).toBeNull();
+
+    // Generation starts when the card is first displayed, not when it is opened.
+    await waitFor(() => expect(counterVoice).toHaveBeenCalled());
+
+    fireEvent.click(toggle);
+    const body = within(first).getByTestId('decision-counter-voice-body');
+    await waitFor(() => expect(within(body).getByTestId('counter-voice-ignored')).toBeTruthy());
+    expect(body.getAttribute('data-kind')).toBe('llm');
+    expect(within(body).getByTestId('counter-voice-ignored').textContent).toContain(
+      READY_COUNTER_VOICE.state === 'ready' ? READY_COUNTER_VOICE.ignored[0]! : '',
+    );
+    expect(within(body).getByTestId('counter-voice-strongest').textContent).toContain(
+      READY_COUNTER_VOICE.state === 'ready' ? READY_COUNTER_VOICE.strongestCounter : '',
+    );
+    expect(within(body).getByTestId('counter-voice-falsifier').textContent).toContain(
+      READY_COUNTER_VOICE.state === 'ready' ? READY_COUNTER_VOICE.falsifier : '',
+    );
+    expect(within(body).getByTestId('decision-counter-voice-advisory').textContent).toContain(
+      '仅作建议',
+    );
+  });
+
+  it('states the reason when no counter-voice was produced and leaves the ruling usable', async () => {
+    const counterVoice = vi.fn<InitiativeCounterVoicePort>(
+      async () => ({ state: 'unavailable', kind: 'none', reason: '未生成：限额' }) as const,
+    );
+    const decide = vi.fn<InitiativeDecidePort>(async () => ({ ok: true } as const));
+    renderQueue({ counterVoice, decide });
+
+    const first = screen.getAllByTestId('decision-queue-item')[0]!;
+    fireEvent.click(within(first).getByTestId('decision-counter-voice-toggle'));
+    await waitFor(() =>
+      expect(
+        within(first).getByTestId('decision-counter-voice-unavailable').textContent,
+      ).toContain('未生成：限额'),
+    );
+
+    // 「不影响裁定」: the options and the preview still work with no counter-voice.
+    fireEvent.click(within(first).getAllByTestId('decision-option')[0]!);
+    fireEvent.change(screen.getByTestId('decision-rationale'), {
+      target: { value: 'Proceed without the counter-voice.' },
+    });
+    fireEvent.click(screen.getByTestId('decision-confirm'));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    expect(decide.mock.calls[0]![0].rationale).toBe('Proceed without the counter-voice.');
+  });
+
+  it('records 「已看反方」 in the rationale when the box is ticked', async () => {
+    const decide = vi.fn<InitiativeDecidePort>(async () => ({ ok: true } as const));
+    renderQueue({ decide });
+
+    const first = screen.getAllByTestId('decision-queue-item')[0]!;
+    fireEvent.click(within(first).getAllByTestId('decision-option')[0]!);
+    fireEvent.click(screen.getByTestId('decision-counter-seen'));
+    fireEvent.change(screen.getByTestId('decision-rationale'), {
+      target: { value: 'The counter-example does not apply here.' },
+    });
+    fireEvent.click(screen.getByTestId('decision-confirm'));
+
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    const marker = i18n.t('cockpit.counterVoiceSeenMarker');
+    expect(marker.trim().length).toBeGreaterThan(0);
+    expect(decide.mock.calls[0]![0].rationale).toBe(
+      `The counter-example does not apply here. ${marker}`,
+    );
   });
 });

@@ -882,7 +882,15 @@
     "deployUnavailable": "Bereitstellungslesung nicht verfügbar: {{reason}}",
     "deployJustNow": "gerade eben",
     "deployMinutesAgo": "vor {{n}} Minuten",
-    "deployHoursAgo": "vor {{n}} Stunden"
+    "deployHoursAgo": "vor {{n}} Stunden",
+    "counterVoice": "Gegenstimme",
+    "counterVoiceCollapse": "Gegenstimme ausblenden",
+    "counterVoiceLoading": "Gegenstimme wird erzeugt…",
+    "counterVoiceIgnored": "Was sie ignoriert",
+    "counterVoiceStrongest": "Stärkstes Gegenbeispiel",
+    "counterVoiceFalsifier": "Was sie widerlegen würde",
+    "counterVoiceSeen": "Gegenstimme geprüft",
+    "counterVoiceSeenMarker": "(Gegenstimme geprüft)"
   },
   "replyReference": {
     "item": "{{label}}„{{excerpt}}“",

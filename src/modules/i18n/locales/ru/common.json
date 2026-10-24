@@ -882,7 +882,15 @@
     "deployUnavailable": "Чтение развёртывания недоступно: {{reason}}",
     "deployJustNow": "только что",
     "deployMinutesAgo": "{{n}} минут назад",
-    "deployHoursAgo": "{{n}} часов назад"
+    "deployHoursAgo": "{{n}} часов назад",
+    "counterVoice": "Контраргумент",
+    "counterVoiceCollapse": "Скрыть контраргумент",
+    "counterVoiceLoading": "Формирование контраргумента…",
+    "counterVoiceIgnored": "Что он упускает",
+    "counterVoiceStrongest": "Сильнейший контрпример",
+    "counterVoiceFalsifier": "Что его опровергнет",
+    "counterVoiceSeen": "Контраргумент изучен",
+    "counterVoiceSeenMarker": "(контраргумент изучен)"
   },
   "replyReference": {
     "item": "{{label}}«{{excerpt}}»",

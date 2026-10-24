@@ -912,7 +912,15 @@
     "deployUnavailable": "Lecture du déploiement indisponible : {{reason}}",
     "deployJustNow": "à l’instant",
     "deployMinutesAgo": "il y a {{n}} minutes",
-    "deployHoursAgo": "il y a {{n}} heures"
+    "deployHoursAgo": "il y a {{n}} heures",
+    "counterVoice": "Contre-voix",
+    "counterVoiceCollapse": "Masquer la contre-voix",
+    "counterVoiceLoading": "Génération d’une contre-voix…",
+    "counterVoiceIgnored": "Ce qu’elle ignore",
+    "counterVoiceStrongest": "Contre-exemple le plus fort",
+    "counterVoiceFalsifier": "Ce qui la réfuterait",
+    "counterVoiceSeen": "Contre-voix examinée",
+    "counterVoiceSeenMarker": "(contre-voix examinée)"
   },
   "replyReference": {
     "item": "{{label}}« {{excerpt}} »",

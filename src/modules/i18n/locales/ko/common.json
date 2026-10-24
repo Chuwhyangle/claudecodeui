@@ -912,7 +912,15 @@
     "deployUnavailable": "배포 읽기를 사용할 수 없습니다: {{reason}}",
     "deployJustNow": "방금",
     "deployMinutesAgo": "{{n}}분 전",
-    "deployHoursAgo": "{{n}}시간 전"
+    "deployHoursAgo": "{{n}}시간 전",
+    "counterVoice": "반대 의견",
+    "counterVoiceCollapse": "반대 의견 접기",
+    "counterVoiceLoading": "반대 의견 생성 중…",
+    "counterVoiceIgnored": "놓치고 있는 것",
+    "counterVoiceStrongest": "가장 강력한 반례",
+    "counterVoiceFalsifier": "무엇이 그것을 반증하는가",
+    "counterVoiceSeen": "반대 의견 확인함",
+    "counterVoiceSeenMarker": "(반대 의견 확인함)"
   },
   "replyReference": {
     "item": "{{label}}「{{excerpt}}」",

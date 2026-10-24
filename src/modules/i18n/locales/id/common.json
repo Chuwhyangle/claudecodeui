@@ -995,7 +995,15 @@
     "deployUnavailable": "Pembacaan penyebaran tidak tersedia: {{reason}}",
     "deployJustNow": "baru saja",
     "deployMinutesAgo": "{{n}} menit lalu",
-    "deployHoursAgo": "{{n}} jam lalu"
+    "deployHoursAgo": "{{n}} jam lalu",
+    "counterVoice": "Suara kontra",
+    "counterVoiceCollapse": "Sembunyikan suara kontra",
+    "counterVoiceLoading": "Membuat suara kontra…",
+    "counterVoiceIgnored": "Yang diabaikannya",
+    "counterVoiceStrongest": "Kontra-contoh terkuat",
+    "counterVoiceFalsifier": "Apa yang akan menyangkalnya",
+    "counterVoiceSeen": "Suara kontra ditinjau",
+    "counterVoiceSeenMarker": "(suara kontra ditinjau)"
   },
   "replyReference": {
     "item": "{{label}}«{{excerpt}}»",

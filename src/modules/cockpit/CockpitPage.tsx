@@ -39,6 +39,7 @@ import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
 import { useCockpitPushToTalk } from '@/modules/cockpit/hooks/useCockpitPushToTalk';
 import {
   decideInitiative,
+  requestInitiativeCounterVoice,
   useInitiativeReading,
 } from '@/modules/cockpit/hooks/useInitiatives';
 import {
@@ -1606,6 +1607,7 @@ export default function CockpitPage() {
                   audit={initiative.view.status === 'loaded' ? initiative.view.reading.audit : []}
                   auditRatio={initiative.view.reading.auditRatio}
                   decide={decidePort}
+                  counterVoice={requestInitiativeCounterVoice}
                 />
               ) : (
                 <p className="p-3 text-xs text-muted-foreground" data-testid="decision-queue-idle">

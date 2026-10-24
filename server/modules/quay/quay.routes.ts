@@ -23,6 +23,7 @@ import express from 'express';
 
 import { asyncHandler } from '@/shared/utils.js';
 
+import { createCounterVoice, type CounterVoiceService } from './counter-voice.js';
 import type { QuayFleetRegistryService } from './quay-fleet-registry.js';
 import { createQuayInitiatives } from './quay-initiatives.js';
 import type {
@@ -55,6 +56,12 @@ type QuayRouterDependencies = {
    * with the shipped sampling ratio; a criterion injects an exec seam instead.
    */
   initiatives?: QuayInitiativesService;
+  /**
+   * The decision queue's 「反方」 seam. Absent composes the production service (the server
+   * settings file's `cockpit.counterVoice` block, the reply-suggestions gateway and its usage
+   * ledger); a criterion injects a stub completion instead.
+   */
+  counterVoice?: CounterVoiceService;
   /**
    * The session → task flow chain reading. Absent answers `session-task-chain-unavailable`
    * for a display-only composition; production (`quay.module.ts`) always binds it.
@@ -166,6 +173,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
   const fleetRegistry = dependencies.fleetRegistry ?? UNAVAILABLE_FLEET;
   const readLastOpenedSession = dependencies.readLastOpenedSession ?? (() => null);
   const initiatives = dependencies.initiatives ?? createQuayInitiatives();
+  const counterVoice = dependencies.counterVoice ?? createCounterVoice();
   const router = express.Router();
 
   // Declared before the `/:projectId/...` routes so the static segment is never mistaken
@@ -258,6 +266,41 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
       }
       const result = await initiatives.decide(slug, parsed.value);
       return res.status(result.ok ? 200 : 502).json(result);
+    }),
+  );
+
+  /**
+   * The counter-voice (「反方」) for one pending ruling.
+   *
+   * The subject is looked up in the SERVER's own queue reading rather than accepted from the
+   * caller: the model must see the question, options and evidence references exactly as the
+   * queue holds them, never text a request could inject into its prompt. The reading is
+   * generated on first ask and cached by the service, so the card can poll without paying
+   * again; a spent budget or a failed call is answered as `{state:'unavailable', reason}` and
+   * the ruling itself stays available.
+   */
+  router.get(
+    '/initiatives/:attentionId/counter-voice',
+    asyncHandler(async (req, res) => {
+      const attentionId = typeof req.params.attentionId === 'string' ? req.params.attentionId : '';
+      if (attentionId === '') {
+        return res.status(400).json({ state: 'unavailable', kind: 'none', reason: '未生成：缺少裁定项 id' });
+      }
+      const reading = await initiatives.read();
+      const item = reading.decisionQueue.find((candidate) => candidate.attentionId === attentionId);
+      if (item === undefined) {
+        return res
+          .status(404)
+          .json({ state: 'unavailable', kind: 'none', reason: '未生成：未知的裁定项' });
+      }
+      const counter = await counterVoice.read({
+        attentionId: item.attentionId,
+        initiative: item.initiative,
+        question: item.question,
+        options: item.options,
+        evidence: item.evidence,
+      });
+      return res.json(counter);
     }),
   );
 

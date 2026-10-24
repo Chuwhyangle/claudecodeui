@@ -912,7 +912,15 @@
     "deployUnavailable": "无法读取部署状态：{{reason}}",
     "deployJustNow": "刚刚",
     "deployMinutesAgo": "{{n}} 分钟前",
-    "deployHoursAgo": "{{n}} 小时前"
+    "deployHoursAgo": "{{n}} 小时前",
+    "counterVoice": "反方",
+    "counterVoiceCollapse": "收起反方",
+    "counterVoiceLoading": "正在生成反方…",
+    "counterVoiceIgnored": "它忽略了什么",
+    "counterVoiceStrongest": "最强反例",
+    "counterVoiceFalsifier": "什么会证伪",
+    "counterVoiceSeen": "已看反方",
+    "counterVoiceSeenMarker": "（已看反方）"
   },
   "replyReference": {
     "item": "{{label}}「{{excerpt}}」",

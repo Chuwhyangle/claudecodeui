@@ -1003,7 +1003,15 @@
     "deployUnavailable": "Deployment reading unavailable: {{reason}}",
     "deployJustNow": "just now",
     "deployMinutesAgo": "{{n}} minutes ago",
-    "deployHoursAgo": "{{n}} hours ago"
+    "deployHoursAgo": "{{n}} hours ago",
+    "counterVoice": "Counter-voice",
+    "counterVoiceCollapse": "Hide counter-voice",
+    "counterVoiceLoading": "Generating a counter-voice…",
+    "counterVoiceIgnored": "What it ignores",
+    "counterVoiceStrongest": "Strongest counter-example",
+    "counterVoiceFalsifier": "What would falsify it",
+    "counterVoiceSeen": "Reviewed the counter-voice",
+    "counterVoiceSeenMarker": "(counter-voice reviewed)"
   },
   "replyReference": {
     "item": "{{label}}“{{excerpt}}”",

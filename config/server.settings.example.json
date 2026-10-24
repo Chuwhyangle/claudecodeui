@@ -25,6 +25,15 @@
     "auditRatio": 0.2
   },
   "_initiative": "How many liaison self-decisions (`kind` inference or llm) surface in the cockpit's decision-queue spot-check group, as a fraction in (0, 1]. The shipped 0.2 means one in five. Zero is refused (it would silently mean 「never spot-check anything」); a malformed value falls back to the shipped default and is reported in the server log.",
+  "cockpit": {
+    "counterVoice": {
+      "enabled": false,
+      "model": "",
+      "maxPerHour": 12,
+      "apiKeyFile": ""
+    }
+  },
+  "_counterVoice": "The decision queue's 「反方」(counter-voice): one model call per pending ruling, produced from a fresh context (only the question, its options and the evidence references — never a conversation transcript), then cached per queue item. It never blocks a ruling and ships OFF. `model` empty means the reply-suggestions model; the gateway (baseUrl/protocol/timeout/key) is the reply-suggestions setting, not a second copy here. `maxPerHour` is the per-process ceiling; past it a card reads 「未生成：限额」. `apiKeyFile` optionally names a key file (a bare key or a NAME=value line) and is empty to reuse the reply-suggestions key. Every call appends one usage record to the reply-suggestions usage ledger. The output is marked `kind: llm` and carries 「仅作建议」.",
   "_viewEvents": "The local UI view-event log the browser posts to `/api/observation/view-events`: session/tab opens, dwell and where the reader came from. `enabled` ships true; with it false the endpoint answers 204 and writes nothing. `path` is appended one JSON object per line and never leaves this machine — it is not a database table and does not sync across devices. Omit the block to keep both defaults. A malformed value falls back field by field and is reported in the server log.",
   "_sessionDigest": "The observation wall's second digest tier, which asks a model for a one-sentence conclusion, reply options and a drift note after a watched session's turn. It ships OFF. `model` is the model name (empty means the reply-suggestions model); `maxPerHour` is the per-process call ceiling; turns whose readable conclusion is shorter than `minTurnChars` are not sent; `apiKeyFile` optionally names a key file (a bare key or a NAME=value line) and is empty to reuse the reply-suggestions key. The gateway (baseUrl/protocol/timeout) is the reply-suggestions setting, not a second copy here. Every call appends one usage record (time, session, model, tokens, duration, outcome) to the reply-suggestions usage ledger. A skipped or failed call keeps the deterministic digest and says why on the object; a successful one is marked `tier: llm` and its drift note carries 「语义判断，仅作建议」."
 }
