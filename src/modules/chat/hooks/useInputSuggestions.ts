@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
+import type { SuggestionChip } from '@/shared/types';
 import { readAllInputHistory } from '@/modules/chat/hooks/useInputHistory';
 import { buildInputSuggestions, buildSuggestionChips, suggestionConditionsHold } from '@/modules/chat/utils/inputSuggestions';
-import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
 
 /**
  * State and keyboard semantics for the empty-composer suggestion chips.
@@ -114,8 +114,6 @@ type UseInputSuggestionsOptions = {
 };
 
 export type UseInputSuggestionsResult = {
-  /** Ranked habit labels; may be non-empty while `visible` is false. */
-  candidates: string[];
   /** The merged strip (quoted > model > habit), already filtered by the display conditions. */
   chips: SuggestionChip[];
   selectedIndex: number | null;
@@ -123,7 +121,6 @@ export type UseInputSuggestionsResult = {
   listId: string;
   /** Every display condition currently holds and at least one chip exists. */
   visible: boolean;
-  accept: (index: number) => void;
   /** Returns true when the event was consumed by the chips. */
   handleKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>, composing: boolean) => boolean;
 };
@@ -305,5 +302,5 @@ export function useInputSuggestions({
     [accept, chips.length, selectedIndex, visible],
   );
 
-  return { candidates, chips, selectedIndex, listId, visible, accept, handleKeyDown };
+  return { chips, selectedIndex, listId, visible, handleKeyDown };
 }

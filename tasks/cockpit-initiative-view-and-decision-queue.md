@@ -60,6 +60,10 @@ depends_on:
 - config/server.settings.example.json
 - scripts/contraction-candidates/scan.mjs (landing-gap guard: develop reds typecheck)
 - scripts/contraction-candidates/scan.test.mjs (landing-gap guard: same)
+- server/shared/ports/initiative-audit-ratio.port.ts (keeps modules/quay out of AC-394 G1)
+- server/index.ts (installs the audit-ratio port at the composition root)
+- server/shared/tests/quay-test-script.test.ts (collateral: server test-file count pin for this task's new criterion)
+- scripts/suite-duration-baseline.tsv (collateral: AC7 coverage row for the new criterion)
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/es/common.json
@@ -89,6 +93,14 @@ Server — `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/t
 DoD — isolated instance: `DATABASE_PATH=/tmp/cockpit-initiative-verify/auth.db`, `HOME=/tmp/cockpit-initiative-verify/home`, `SERVER_SETTINGS_PATH` with `{"residentRestore":{"enabled":false},"initiative":{"auditRatio":0.2}}`, real fleet seeded through `quay-fleet initiative create/link/edge/escalate/decide` under `QUAY_FLEET_HOME=/tmp/cockpit-initiative-verify/fleet-home`. No resident-restore pass ran (the log carries no `resident-restore` line). Real browser (Playwright chromium) at PC 1440×900 and mobile 390×844, real `GET /api/quay/initiatives`: one row for `cockpit-observation-wall`, two project cells (1 task/1 goal and 2 tasks/0 goals), a blocked `blocks` edge with its duration, one typed queue item, two sampled self-decisions; preview → confirm recorded the ruling (`data-notice-kind=done`, queue 0). Screenshots: `tmp/initiative-view-pc.png`, `tmp/initiative-view-mobile.png`, `tmp/initiative-decision-preview-pc.png`, `tmp/initiative-decision-confirmed-pc.png`; readings in `tmp/initiative-dod-report.json`. The pin route accepted and removed `quay://fleet/initiative/cockpit-observation-wall` (PUT/DELETE 200).
 
 Baseline red carried — the merge of develop brought `scripts/contraction-candidates/scan.mjs` + `scan.test.mjs` (landed by `contraction-candidates-signal-inventory-and-design`), whose implicit-any parameters red `npm run typecheck` for every branch on develop. Both files carry a file-local `@ts-nocheck` with a removal note; typing them belongs to their owning follow-up, not to this task. `npm run typecheck` is green with the guard.
+
+### CONTINUE round 2026-10-24 — the suite red was three things, one of them real
+
+(1) **Branch lag, not this task**: the branch was 187 commits behind develop and carried develop's pre-fix `maxPerKind` parameters, which red repo lint; develop's `5dfa416d6` marks them `_maxPerKind` and the `git merge develop` this round cleared the lint row with no edit of ours. The `@ts-nocheck` landing guard was re-tested by stripping it — `tsc -p scripts/tsconfig.json` still reds on implicit-any, so the guard stays.
+
+(2) **Collateral count pins** (this task's new server criterion): `find server -name '*.test.ts' -o -name '*.test.js'` = 427, one more than the pinned 426, so `quay-test-script.test.ts` was bumped to `known=3 unknown=424` / `known=1 unknown=426` and the AC7 coverage floor recomputed — the appended `1877  server/modules/quay/tests/quay-initiatives.test.ts` row takes it to 385/427 = 90.16% (floor 384.3). Post-fix single-file run: 14/14 passed. Both collateral files are declared in `## Touches`.
+
+(3) **The real defect — AC-394 G1 widened from 3 to 10**: composing the initiatives reading with `loadServerSettings()` made `modules/quay -> modules/settings`, and `settings -> mcp-gateway -> quay` closed a ten-member SCC (providers, providers/list/claude, providers/services, projects, projects/services, quay, settings, mcp-gateway, websocket, websocket/services). That red `server-import-cycle-budget.test.ts` and both port-break criteria. Fix: the boot-time `initiative.auditRatio` is installed by `server/index.ts` through the new `server/shared/ports/initiative-audit-ratio.port.ts`; an uninstalled port answers `null` and the initiatives service keeps its shipped 1/5. Measured after the fix (same scanner the criterion uses): the SCC is exactly the pinned `[providers, providers/list/claude, providers/services]`. Verified on the merged tree: `server-import-cycle-budget.test.ts` 13/13, `providers-websocket-cycle.test.ts` + `projects-session-fetch-cycle.test.ts` 2/2, `quay-test-script.test.ts` 14/14, `quay-initiatives.test.ts` 4/4, cockpit vitest 12 files / 146 tests, `npm run typecheck` exit 0, `npm run lint` exit 0.
 
 ## Blocker
 

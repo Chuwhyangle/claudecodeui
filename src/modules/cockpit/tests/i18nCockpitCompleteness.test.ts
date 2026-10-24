@@ -206,6 +206,29 @@ describe('every locale carries the cockpit copy', () => {
     }
   });
 
+  // The project strip's refusal copy: a project the fleet cannot address (or whose driver is
+  // down) stays clickable and answers with a reason and a next step. Naming the keys here keeps
+  // the generic loop above from silently "covering" a rename with the English fallback.
+  it('covers the unopenable-project feedback copy', () => {
+    const required = [
+      'projectNotRegistered',
+      'projectDriverUnavailable',
+      'projectOpenRefused',
+      'projectUnregisteredNext',
+      'projectDriverUnavailableNext',
+      'fleetCliMissingNext',
+      'ordinalsRegisteredOnly',
+      'ordinalUnavailable',
+      'ordinalUnavailableNext',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(reference.projectOpenRefused)).toEqual(['name']);
+    expect(placeholders(reference.ordinalUnavailable)).toEqual(['n']);
+  });
+
   // Positive control: the same checker must reject a missing block, a blank value, a key-copied
   // value and a dropped placeholder. Without this the green above could not go red.
   it('rejects a missing, blank, key-copied or placeholder-dropping block (positive control)', () => {

@@ -280,7 +280,7 @@ describe('the chips obey the dock turn reading', () => {
       setPendingPermissionRequests: () => undefined,
     }));
 
-    assert.equal(view.result.current.inputSuggestionsVisible, false);
+    assert.equal(view.result.current.chipStrip.visible, false);
     const tab = suggestionKeyEvent('Tab');
     const composerEvent = {
       ...tab.event,
@@ -298,7 +298,7 @@ describe('the chips obey the dock turn reading', () => {
       1,
       'Tab must fall through to the composer permission-mode branch exactly once',
     );
-    assert.equal(view.result.current.selectedInputSuggestionIndex, null);
+    assert.equal(view.result.current.chipStrip.selectedIndex, null);
   });
 });
 
@@ -442,11 +442,18 @@ const composerBaseProps = (): Record<string, unknown> => ({
   onTextareaInput: () => undefined,
   placeholder: 'Ask anything',
   isTextareaExpanded: false,
-  inputSuggestionCandidates: [],
-  inputSuggestionsVisible: false,
-  selectedInputSuggestionIndex: null,
-  inputSuggestionListId: 'suggestion-list',
-  onAcceptInputSuggestion: () => undefined,
+  chipStrip: {
+    visible: false,
+    selectedIndex: null,
+    listId: 'suggestion-list',
+    chips: [],
+    onAccept: () => undefined,
+    suggestionsEnabled: false,
+    suggestionsLoading: false,
+    onRequestSuggestions: () => undefined,
+    expansionChips: [],
+    onAcceptExpansionChip: () => undefined,
+  },
 });
 
 /**
@@ -490,11 +497,7 @@ const ComposerIntegrationHarness = ({ sessionId }: { sessionId: string }) => {
     onTextareaScrollSync: state.syncInputOverlayScroll,
     onClearInput: state.handleClearInput,
     onSubmit: state.handleSubmit,
-    inputSuggestionCandidates: state.inputSuggestionCandidates,
-    inputSuggestionsVisible: state.inputSuggestionsVisible,
-    selectedInputSuggestionIndex: state.selectedInputSuggestionIndex,
-    inputSuggestionListId: state.inputSuggestionListId,
-    onAcceptInputSuggestion: state.acceptInputSuggestion,
+    chipStrip: state.chipStrip,
   } as unknown as React.ComponentProps<typeof ChatComposer>);
 };
 
