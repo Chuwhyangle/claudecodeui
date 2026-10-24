@@ -24,11 +24,11 @@ extra:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——fleet 摘要夹具含 1 个已登记、1 个未登记、1 个驱动不可用项目：后两者的项目条按钮带 `aria-disabled="true"` 与含原因的 title；已登记项目不带。
-- [ ] AC2: 同一测试文件——点击未登记项目：视图与焦点不变，回声出现且为 refused 类型（data 属性），文本含原因与下一步；点击已登记项目照常进入 board（既有行为不弱化）。
-- [ ] AC3: 同一测试文件——fleet 视图含说明「编号只给已登记项目」的文案节点；按未编号对应的数字键产生回声而非静默。
-- [ ] AC4: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` exit 0——新增文案键在 12 个 locale 齐全。
-- [ ] AC5: `npm run typecheck` 通过。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——fleet 摘要夹具含 1 个已登记、1 个未登记、1 个驱动不可用项目：后两者的项目条按钮带 `aria-disabled="true"` 与含原因的 title；已登记项目不带。
+- [x] AC2: 同一测试文件——点击未登记项目：视图与焦点不变，回声出现且为 refused 类型（data 属性），文本含原因与下一步；点击已登记项目照常进入 board（既有行为不弱化）。
+- [x] AC3: 同一测试文件——fleet 视图含说明「编号只给已登记项目」的文案节点；按未编号对应的数字键产生回声而非静默。
+- [x] AC4: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` exit 0——新增文案键在 12 个 locale 齐全。
+- [x] AC5: `npm run typecheck` 通过。
 
 ## DoD
 
