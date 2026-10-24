@@ -407,6 +407,13 @@ function openDoors(): string[] {
  * cannot be keyed on `mtime`. The `.gitignore`-derived tail keeps the class list from going stale as
  * the loop grows new runtime directories, while the named entries above state the classes that
  * `git check-ignore` / `git status` do NOT report.
+ *
+ * THE DERIVED TAIL HAS TWO HALVES. The whole-directory rules (`x/`, `x/*`, `x/**`) below skip a
+ * TREE; the file-level rules (`*.log`, `*.pid`, the npm-debug family) cannot skip a tree without
+ * hiding real source, so they are consulted per FILE in `isIgnoredFile`. Both are read from the same
+ * `.gitignore`, because git's answer for `server.log` is the `.gitignore:46 *.log` line — and the
+ * running server appends to that file for as long as it lives, so a reading that recorded it as
+ * ordinary check state would red on a write THIS run never made (see `fileIgnoreRules`).
  */
 function gitignoredTopLevelDirs(): string[] {
   let text: string;
@@ -425,6 +432,93 @@ function gitignoredTopLevelDirs(): string[] {
     if (wholeDir?.[1] !== undefined) names.add(wholeDir[1]);
   }
   return [...names];
+}
+
+/**
+ * The `.gitignore` FILE-level rules, in file order, translated to git's matching semantics.
+ *
+ * This is the half the whole-directory derivation above cannot see. A rule that names a file pattern
+ * (`*.log`, `*.pid`, the npm-debug family) is not a tree this walk can skip, but git still refuses to
+ * report a matching file — and `git status --porcelain` is exactly the fact `AC1` claims to read
+ * (see the comment above). Without this list a live `server.log`, which the running server appends to
+ * continuously, is recorded as an ordinary `path:size` entry and one append inside the run's one or
+ * two seconds reds a criterion that says "nothing THIS run could have written is changed".
+ *
+ * Semantics, from the repository-root `.gitignore`:
+ *   - a pattern with NO `/` matches a BASENAME at any depth (`*.log` hits `server.log` and
+ *     `src/shared/tests/x.log`);
+ *   - a pattern containing `/` is anchored at the repository root (`/artifacts/*`,
+ *     `orchestration/inner-idle-log.jsonl`, and `.quay-parse-cache.json` when written with a leading
+ *     double-star segment, which means "at any depth");
+ *   - `*`, `?` and `**` are git's wildcards; a trailing `/` is DIRECTORY-only and never matches a
+ *     file here;
+ *   - `!` RE-INCLUDES and the LAST matching rule wins — which is what keeps
+ *     `!scripts/__fixtures__/*.log` (a committed fixture) OUT of the skip set even though `*.log`
+ *     matched it first. That negation is load-bearing in the other direction too: a fixture log is
+ *     residue if the run writes it.
+ *
+ * ⛔ File rules are never applied to DIRECTORIES (`treeSnapshot` consults this list only on a file):
+ * a `*.log` rule must not hide `src/shared/tests/` merely because a probe log was written there.
+ */
+type IgnoreRule = { readonly pattern: RegExp; readonly negated: boolean };
+
+function globToRegExp(glob: string): RegExp {
+  let source = '';
+  for (let index = 0; index < glob.length; index += 1) {
+    const char = glob[index];
+    if (char === '*') {
+      if (glob[index + 1] === '*') {
+        index += 1;
+        // `**/` spans zero or more path segments; a trailing `**` spans everything below.
+        if (glob[index + 1] === '/') {
+          index += 1;
+          source += '(?:.*/)?';
+        } else {
+          source += '.*';
+        }
+      } else {
+        source += '[^/]*';
+      }
+    } else if (char === '?') {
+      source += '[^/]';
+    } else {
+      source += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    }
+  }
+  return new RegExp(`^${source}$`);
+}
+
+function fileIgnoreRules(): IgnoreRule[] {
+  let text: string;
+  try {
+    text = readFileSync(join(REPO_ROOT, '.gitignore'), 'utf8');
+  } catch {
+    return [];
+  }
+  const rules: IgnoreRule[] = [];
+  for (const raw of text.split('\n')) {
+    const trimmed = raw.trim();
+    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    const negated = trimmed.startsWith('!');
+    const pattern = (negated ? trimmed.slice(1) : trimmed).replace(/^\//, '');
+    if (pattern === '' || pattern.endsWith('/')) continue; // directory-only rule
+    rules.push({ pattern: globToRegExp(pattern), negated });
+  }
+  return rules;
+}
+
+const FILE_IGNORE_RULES = fileIgnoreRules();
+
+/** Whether git would ignore this repository-relative FILE path, read off the ordered rule list. */
+function isIgnoredFile(relativePath: string): boolean {
+  const basename = relativePath.slice(relativePath.lastIndexOf('/') + 1);
+  let ignored = false;
+  for (const rule of FILE_IGNORE_RULES) {
+    // A root-anchored pattern cannot match a basename (it contains `/`); a basename pattern matches
+    // at any depth, so testing both readings applies each rule exactly where git would.
+    if (rule.pattern.test(relativePath) || rule.pattern.test(basename)) ignored = !rule.negated;
+  }
+  return ignored;
 }
 
 function treeSnapshot(): string[] {
@@ -456,6 +550,8 @@ function treeSnapshot(): string[] {
       if (stat.isDirectory()) {
         walk(path);
       } else if (stat.isFile()) {
+        const relativePath = path.startsWith(`${REPO_ROOT}/`) ? path.slice(REPO_ROOT.length + 1) : path;
+        if (isIgnoredFile(relativePath)) continue;
         entries.push(`${path.replace(REPO_ROOT, '')}:${stat.size}`);
       }
     }
