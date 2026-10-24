@@ -11,6 +11,8 @@
  */
 
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
 import { describe, test } from 'vitest';
 
@@ -132,6 +134,7 @@ describe('resolveReplyReference', () => {
     ['1-3', 'items', [1, 2, 3]],
     ['1、3', 'items', [1, 3]],
     ['第 1 和第 3 点', 'items', [1, 3]],
+    ['现在执行 1–2 并把 3 排成定时重启', 'items', [1, 2, 3]],
     ['前三条', 'items', [1, 2, 3]],
     ['最后一条', 'items', [4]],
     ['最后两条', 'items', [3, 4]],
@@ -171,16 +174,38 @@ describe('resolveReplyReference', () => {
     assert.equal(resolveReplyReference('按你的方案做', FOUR_ITEMS).kind, 'reply');
     assert.equal(resolveReplyReference('按上面的来', FOUR_ITEMS).kind, 'reply');
     assert.equal(resolveReplyReference('上述方案可以', FOUR_ITEMS).kind, 'reply');
+    assert.equal(resolveReplyReference('按你的意见，作者层改写', FOUR_ITEMS).kind, 'reply');
+    assert.equal(resolveReplyReference('讨论应用这一方案的计划', FOUR_ITEMS).kind, 'reply');
   });
 
   test('time, verb phrases and first-times are not references', () => {
-    for (const text of ['十二点开会', '一起看看', '第一次']) {
+    for (const text of ['十二点开会', '一起看看', '第一次', '第一句的问题是']) {
       assert.equal(resolveReplyReference(text, FOUR_ITEMS).kind, 'none', text);
     }
   });
 
   test('an empty input references nothing', () => {
     assert.equal(resolveReplyReference('', FOUR_ITEMS).kind, 'none');
+  });
+});
+
+describe('replyReference copy', () => {
+  test('every shipped locale carries every preview key', () => {
+    const localesDir = path.resolve(process.cwd(), 'src/modules/i18n/locales');
+    const locales = readdirSync(localesDir).sort();
+    assert.equal(locales.length, 12, 'all twelve locales are shipped');
+    for (const locale of locales) {
+      const common = JSON.parse(
+        readFileSync(path.join(localesDir, locale, 'common.json'), 'utf8'),
+      ) as { replyReference?: Record<string, unknown> };
+      for (const key of ['item', 'itemsRange', 'itemsList', 'wholeReply', 'mismatch']) {
+        assert.equal(
+          typeof common.replyReference?.[key],
+          'string',
+          `${locale}/common.json is missing replyReference.${key}`,
+        );
+      }
+    }
   });
 });
 

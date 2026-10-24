@@ -392,6 +392,15 @@ describe('reply reference preview', () => {
     assert.equal(previewRow!.querySelector('[data-reply-reference-item="3"]'), null);
   });
 
+  test('a single point reads as one item, not a degenerate range', () => {
+    const { container } = view();
+    typeDraft(container, '第 2 点展开说说');
+
+    const text = preview(container)?.textContent ?? '';
+    assert.match(text, /Items 2/);
+    assert.equal(text.includes('2–2'), false);
+  });
+
   test('an out-of-range point reports the reply item count instead of guessing', () => {
     const { container } = view();
     typeDraft(container, '执行第 6 点');

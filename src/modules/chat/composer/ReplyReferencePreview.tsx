@@ -70,7 +70,8 @@ export default function ReplyReferencePreview({ reference, items }: ReplyReferen
     );
   }
 
-  const referenceLabel = isContiguous(reference.ordinals)
+  // One ordinal reads as 「第 2 点」, not the degenerate range 「第 2–2 点」.
+  const referenceLabel = reference.ordinals.length > 1 && isContiguous(reference.ordinals)
     ? t('replyReference.itemsRange', {
         ns: 'common',
         from: reference.ordinals[0],

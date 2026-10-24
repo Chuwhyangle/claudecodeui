@@ -284,7 +284,14 @@ function parseCount(token: string): number | null {
 }
 
 const COUNT_TOKEN = '(\\d{1,3}|[零一二两三四五六七八九十百]+)';
-const ITEM_UNIT = '(?:条|点|项|个|句|段|步)';
+/**
+ * The counters a spoken reference uses for one point of a reply.
+ *
+ * Deliberately excludes 「句」/「段」: in the probe's real utterances 「第一句」
+ * points at a sentence of what the person themselves just said, not at an item
+ * of the reply, and treating it as item 1 would be exactly the wrong guess.
+ */
+const ITEM_UNIT = '(?:条|点|项|个|步)';
 
 /** 「上述 5 项」「这 5 条」 — a count of the whole reply's items. */
 const ALL_COUNT_PATTERN = new RegExp(`(?:上述|上面|这|那|本|此)\\s*(?:的\\s*)?${COUNT_TOKEN}\\s*${ITEM_UNIT}`);
@@ -292,20 +299,28 @@ const ALL_COUNT_PATTERN = new RegExp(`(?:上述|上面|这|那|本|此)\\s*(?:�
 const FIRST_COUNT_PATTERN = new RegExp(`前\\s*${COUNT_TOKEN}\\s*${ITEM_UNIT}`);
 /** 「最后一条」「最后两个」 — the last N items. */
 const LAST_COUNT_PATTERN = new RegExp(`最后\\s*(?:${COUNT_TOKEN}\\s*)?${ITEM_UNIT}`);
-/** 「1–2」「1-3」「一到三」 — an inclusive range. */
-const RANGE_PATTERN = /(?<![\d.])(\d{1,2})\s*[–—~〜\-至到]\s*(\d{1,2})(?![\d.])/;
-const CHINESE_RANGE_PATTERN = /([一二两三四五六七八九十]+)\s*[–—~〜\-至到]\s*([一二两三四五六七八九十]+)/;
+/** 「1–2」「1-3」 — an inclusive range of item numbers. */
+const RANGE_PATTERN = /(?<![\d.])(\d{1,2})\s*[–—~〜\-至到]\s*(\d{1,2})(?![\d.])/g;
 /** 「第 1 点」「第三条」「②」 — explicit single ordinals. */
 const NUMBERED_ORDINAL_PATTERN = new RegExp(`第\\s*${COUNT_TOKEN}\\s*${ITEM_UNIT}`, 'g');
 /** 「1、3」「1 和 3」「第 1 和第 3 点」 — a run of numbers joined by separators. */
 const JOINED_ORDINAL_PATTERN = /(\d{1,2})(?:\s*[、,，和与及]\s*(?:第\s*)?\d{1,2})+/g;
+/**
+ * 「把 3 排成定时重启」「将 2 删掉」 — a bare numeral that is the object of an
+ * action. The probe's own flagship utterance mixes forms (「执行 1–2 并把 3
+ * 排成…」), so the trailing number has no 第 and would otherwise be dropped.
+ */
+const ACTION_OBJECT_PATTERN = /(?:把|将)\s*(?:第\s*)?(\d{1,2})(?![\d.])/g;
 const CIRCLED_PATTERN = /[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/g;
 
 /** 「按你的方案」「按上面的」「上述方案」 — the whole reply. */
 const REPLY_PHRASE_PATTERNS = [
-  /(?:按|照|依|根据)\s*(?:你的?|您)?\s*(?:方案|建议|思路|计划|想法|意思|说法|办法)/,
+  /(?:按|照|依|根据)\s*(?:你的?|您)?\s*(?:方案|建议|思路|计划|想法|意思|说法|办法|意见)/,
   /(?:按|照|依|根据)\s*(?:上面|上述|上文|前面)\s*(?:的)?\s*(?:方案|建议|说法|意思|来|做|办)?/,
   /(?:上述|上面|上文)\s*(?:的)?\s*(?:方案|建议|说法|内容|计划)/,
+  // 「这一方案」「该方案」 — the demonstrative alone names the reply being
+  // discussed; the probe's real utterances use this as often as 「上述」.
+  /(?:这|该|此)(?:一|个)?\s*(?:方案|建议|计划|想法|意见)/,
 ];
 
 /** Full-width digits and dashes the same phrase can arrive in. */
@@ -354,32 +369,6 @@ export function resolveReplyReference(text: string, items: readonly ReplyItem[])
     }
   }
 
-  // 「1–2」「一到三」
-  const range = RANGE_PATTERN.exec(normalized);
-  if (range) {
-    const from = Number(range[1]);
-    const to = Number(range[2]);
-    if (Number.isFinite(from) && Number.isFinite(to) && from <= to) {
-      const ordinals: number[] = [];
-      for (let ordinal = from; ordinal <= to; ordinal += 1) {
-        ordinals.push(ordinal);
-      }
-      return itemsOrMismatch(ordinals, items);
-    }
-  }
-  const chineseRange = CHINESE_RANGE_PATTERN.exec(normalized);
-  if (chineseRange) {
-    const from = parseCount(chineseRange[1]);
-    const to = parseCount(chineseRange[2]);
-    if (from !== null && to !== null && from <= to) {
-      const ordinals: number[] = [];
-      for (let ordinal = from; ordinal <= to; ordinal += 1) {
-        ordinals.push(ordinal);
-      }
-      return itemsOrMismatch(ordinals, items);
-    }
-  }
-
   // 「前三条」
   const firstCount = FIRST_COUNT_PATTERN.exec(normalized);
   if (firstCount) {
@@ -414,38 +403,41 @@ export function resolveReplyReference(text: string, items: readonly ReplyItem[])
     }
   }
 
-  // A run of numbers first: 「第 1 和第 3 点」 only matches the joined form
-  // (the first number is followed by 「和」, not by a unit), so it has to be
-  // read before the single-ordinal form or it would resolve to [3] alone.
-  const joined = normalized.match(JOINED_ORDINAL_PATTERN);
-  if (joined) {
-    const ordinals = [...joined[0].matchAll(/\d{1,2}/g)].map((match) => Number(match[0]));
-    if (ordinals.length > 0) {
-      return itemsOrMismatch(ordinals, items);
+  // Every ordinal form the sentence uses, merged. One utterance commonly mixes
+  // them — 「执行 1–2 并把 3 排成定时重启」 — and stopping at the first match
+  // would silently drop the number that follows it.
+  const ordinals: number[] = [];
+  for (const match of normalized.matchAll(RANGE_PATTERN)) {
+    const from = Number(match[1]);
+    const to = Number(match[2]);
+    if (Number.isFinite(from) && Number.isFinite(to) && from <= to) {
+      for (let ordinal = from; ordinal <= to; ordinal += 1) {
+        ordinals.push(ordinal);
+      }
     }
   }
-
-  // Explicit ordinals: 「第 1 点」「第三条」, then circled marks 「②」.
-  const explicit: number[] = [];
+  for (const match of normalized.matchAll(JOINED_ORDINAL_PATTERN)) {
+    for (const number of match[0].matchAll(/\d{1,2}/g)) {
+      ordinals.push(Number(number[0]));
+    }
+  }
   for (const match of normalized.matchAll(NUMBERED_ORDINAL_PATTERN)) {
     const ordinal = parseCount(match[1]);
     if (ordinal !== null) {
-      explicit.push(ordinal);
+      ordinals.push(ordinal);
     }
   }
-  if (explicit.length > 0) {
-    return itemsOrMismatch(explicit, items);
+  for (const match of normalized.matchAll(ACTION_OBJECT_PATTERN)) {
+    ordinals.push(Number(match[1]));
   }
-
-  const circled: number[] = [];
   for (const match of normalized.matchAll(CIRCLED_PATTERN)) {
     const ordinal = CIRCLED_LABELS.indexOf(match[0]) + 1;
     if (ordinal > 0) {
-      circled.push(ordinal);
+      ordinals.push(ordinal);
     }
   }
-  if (circled.length > 0) {
-    return itemsOrMismatch(circled, items);
+  if (ordinals.length > 0) {
+    return itemsOrMismatch(ordinals, items);
   }
 
   for (const pattern of REPLY_PHRASE_PATTERNS) {
