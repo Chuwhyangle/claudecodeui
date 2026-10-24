@@ -46,9 +46,11 @@ depends_on:
 - src/modules/architecture/ArchitecturePanel.tsx
 - src/modules/architecture/PlantUmlGraph.tsx
 - src/modules/architecture/ArchitectureExportMenu.tsx
+- src/modules/architecture/hooks/useTouchLayout.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
 - e2e/architecture-canvas-layout.spec.ts
+- e2e/support/architectureFixture.ts
 - playwright.config.ts
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
