@@ -6,10 +6,13 @@ import {
   buildSemanticPackageTree,
   densestWindowAnchor,
   evaluateSemanticTiers,
+  FIT_SOLVE_MAX_ITERATIONS,
   lodDepthForTier,
+  MAX_FIT_SCALE,
   semanticCompactionAlpha,
   semanticContentBounds,
   SEMANTIC_CONTENT_MARGIN_PX,
+  solveFitScale,
   solveSemanticZoom,
   type SemanticDrawingGeometry,
   type SemanticRect,
@@ -21,6 +24,7 @@ import {
   type SemanticNodeGeometry,
   type SemanticPackageGeometry,
 } from '@/modules/architecture/semanticZoomRead';
+import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
 import { TWENTY_SIX_PACKAGE_HIERARCHY } from '@/modules/architecture/tests/layoutFixtures';
 
 /**
@@ -708,6 +712,119 @@ describe('the folded tier (D): C cannot fit, so the levels collapse', () => {
     assert.deepEqual(
       digest(solveSemanticZoom(deep, { scale: deepScale, viewport: CANVAS })),
       digest(solveSemanticZoom(deep, { scale: deepScale, viewport: CANVAS })),
+    );
+  });
+});
+
+/* ── Fit is a solve: the ONE scale the semantic canvas applies ─────────────────────────────── */
+
+describe('solveFitScale: the largest monotone scale whose mapped content fits', () => {
+  test('the solved layout fits, and one step larger does not', () => {
+    const canvas = { width: 700, height: 500 };
+    const solution = solveFitScale(geometry, { viewport: canvas });
+    assert.equal(solution.fits, true, 'the fixture is flexible enough to fit this canvas');
+    assert.ok(solution.scale >= MIN_ZOOM_SCALE - 1e-9);
+    assert.ok(solution.scale <= MAX_FIT_SCALE + 1e-9);
+    assert.ok(
+      solution.layout.content.width <= canvas.width + 0.5
+        && solution.layout.content.height <= canvas.height + 0.5,
+      `the mapped content must fit the canvas: ${JSON.stringify(solution.layout.content)} in ${JSON.stringify(canvas)}`,
+    );
+    // The same solve the engine applies: one visible step wider overflows. The
+    // bisection resolves well below 0.01, so a hundredth is a real step.
+    const wider = solveSemanticZoom(geometry, {
+      scale: solution.scale + 0.01,
+      viewport: canvas,
+      previousTier: null,
+      // Match the Fit solver's bracket: folding is its own fallback, not a
+      // mid-search answer (a packed map does not shrink with `s`).
+      autoFold: false,
+    });
+    assert.ok(
+      wider.content.width > canvas.width + 0.5 || wider.content.height > canvas.height + 0.5,
+      `a larger scale must overflow: ${JSON.stringify(wider.content)} in ${JSON.stringify(canvas)}`,
+    );
+  });
+
+  test('the mapped content is monotone non-decreasing in the scale', () => {
+    // Without a viewport the folded tier never triggers, so this reads the
+    // engine's own map at each scale rather than the fold rule.
+    const scales = [0.2, 0.35, 0.5, 0.7, 0.9, 1.2];
+    let previous = -1;
+    for (const scale of scales) {
+      const layout = solveSemanticZoom(geometry, { scale, viewport: null });
+      assert.ok(
+        layout.content.width >= previous - 1e-6,
+        `content width must not shrink as the scale grows: ${scale} → ${layout.content.width}`,
+      );
+      previous = layout.content.width;
+    }
+  });
+
+  test('the upper bound is MAX_FIT_SCALE, and a small drawing is enlarged to it', () => {
+    const single: SemanticDrawingGeometry = {
+      width: geometry.width,
+      height: geometry.height,
+      nodes: geometry.nodes.slice(0, 1),
+      packages: [],
+      edges: [],
+    };
+    const solution = solveFitScale(single, { viewport: { width: 5000, height: 5000 } });
+    assert.equal(MAX_FIT_SCALE, 1.5);
+    assert.equal(solution.scale, MAX_FIT_SCALE, 'a tiny drawing is shown at the ceiling, not 100 %');
+    assert.equal(solution.fits, true);
+  });
+
+  test('the solve is deterministic and never spends more than the iteration budget', () => {
+    const canvas = { width: 640, height: 420 };
+    const first = solveFitScale(geometry, { viewport: canvas });
+    const second = solveFitScale(geometry, { viewport: canvas });
+    assert.equal(first.scale, second.scale);
+    assert.deepEqual(first.layout.content, second.layout.content);
+    assert.ok(
+      first.iterations <= FIT_SOLVE_MAX_ITERATIONS,
+      `the solve spent ${first.iterations} evaluations; the contract caps it at ${FIT_SOLVE_MAX_ITERATIONS}`,
+    );
+  });
+
+  test('when the floor cannot fit, the folded tier answers at the floor scale', () => {
+    const canvas = { width: 900, height: 300 };
+    const solution = solveFitScale(deepWideGeometry(), { viewport: canvas });
+    assert.equal(solution.fits, true);
+    assert.equal(solution.scale, MIN_ZOOM_SCALE, 'the fold is the fallback at the floor scale');
+    assert.equal(solution.layout.tier, 'D');
+    assert.ok(solution.foldDepth !== null && solution.foldDepth >= 1);
+    assert.ok(
+      solution.layout.content.width <= canvas.width + 0.5
+        && solution.layout.content.height <= canvas.height + 0.5,
+      'the packed map really fits',
+    );
+  });
+
+  test('when even the folded map cannot fit, the floor scale is kept and the drawing scrolls', () => {
+    // One package whose NAME alone is wider than the canvas: no fold level can
+    // shrink a tab below its own text.
+    const longLabel = 'package'.repeat(20);
+    const impossible: SemanticDrawingGeometry = {
+      width: 100_000,
+      height: 4_000,
+      nodes: [],
+      packages: [{
+        id: 'p',
+        rect: { x: 0, y: 0, width: 100_000, height: 4_000 },
+        rawLabel: longLabel,
+        tabWidth: 900,
+        tabHeight: 18,
+        tabClosed: true,
+      }],
+      edges: [],
+    };
+    const solution = solveFitScale(impossible, { viewport: { width: 300, height: 200 } });
+    assert.equal(solution.fits, false, 'the caller must keep the drawing scrollable');
+    assert.equal(solution.scale, MIN_ZOOM_SCALE, 'the scale is clamped at the floor');
+    assert.ok(
+      solution.layout.content.width > 300 + 0.5,
+      'the truth is stated: the drawing does not fit',
     );
   });
 });

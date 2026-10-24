@@ -36,8 +36,8 @@ import {
   type OrientationDecision,
   type OrientationSize,
 } from '@/modules/architecture/layoutOrientation';
-import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import {
+  solveFitScale,
   solveSemanticZoom,
   semanticContentBounds,
   lodDepthForTier,
@@ -56,17 +56,7 @@ import {
   useTouchLayout,
   ZOOM_CLUSTER_TARGET_STYLE,
 } from '@/modules/architecture/hooks/useTouchLayout';
-import {
-  buildSeedHierarchy,
-  decideReadableZoom,
-  fitControlReading,
-  READABLE_ZOOM_SCALE,
-  readStoredReadableMode,
-  shortPackageName,
-  writeStoredReadableMode,
-  type ReadableZoomDecision,
-  type ReadableZoomMode,
-} from '@/modules/architecture/readableZoom';
+import { canvasIsTooWide, READABLE_ZOOM_SCALE } from '@/modules/architecture/readableZoom';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererNode,
@@ -91,11 +81,9 @@ import {
   createSvgTouchGestures,
   createSvgViewport,
   fitPlacementAvoidingCorners,
-  fitZoomScale,
   applyZoomScale,
   measureViewportSize,
   MIN_READABLE_ZOOM_SCALE,
-  MIN_USEFUL_OVERVIEW_SCALE,
   MIN_ZOOM_SCALE,
   readSvgNaturalSize,
   ZOOM_STEP,
@@ -120,7 +108,6 @@ import {
   applySelectionStyles,
   boxCandidates,
   captureSemanticDrawing,
-  centerOnPackage,
   clearHighlight,
   defaultViewOf,
   drawSemanticLayout,
@@ -146,7 +133,6 @@ import {
   type PlantUmlApplyView,
   type PlantUmlRenderDetailed,
   type PlantUmlToPlantUml,
-  type ReadableView,
   type SemanticCapture,
 } from '@/modules/architecture/graphDom';
 import {
@@ -293,19 +279,6 @@ export function renderWithMemberDetail(
   // it (the package reads the key at runtime).
   const detailedOptions = { ...options, detail: PLANTUML_MEMBER_DETAIL };
   return render(puml, detailedOptions as Parameters<PlantUmlRenderDetailed>[1]);
-}
-
-/** The real browser store, or `null` where accessing it throws (private mode). */
-function localReadableStorage(): {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-} | null {
-  try {
-    return typeof window === 'undefined' ? null : window.localStorage;
-  } catch {
-    return null;
-  }
 }
 
 /** The class the keyboard cursor paints on the drawn box it stands on. */
@@ -592,9 +565,8 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
    */
   readonly onBoxSelect?: (selections: readonly ArchitectureSelection[]) => void;
   /**
-   * The project whose graph is drawn. The reader's explicit readable mode is
-   * remembered per project under this id; absent (an embedded renderer with no
-   * panel) means the choice is kept for this visit only.
+   * The project whose graph is drawn. Retained for embedders that still pass
+   * it; the readable-mode choice it used to key is retired, so nothing reads it.
    */
   readonly projectId?: string | null;
   /**
@@ -607,26 +579,83 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
 };
 
 /**
- * The pressed state of one toggle drawn with {@link TOOLBAR_BUTTON_CLASS}.
+ * The diagram's presentation scale and whether it follows the canvas.
  *
- * `aria-pressed` states the mode to assistive technology, but the shared button
- * class painted pressed and unpressed identically, so a reader could not see
- * which of Focus / Overview was in force. Weight AND fill change, so the
- * reading never depends on colour alone.
- */
-const TOOLBAR_BUTTON_PRESSED_CLASS = 'bg-accent font-semibold text-foreground shadow-inner';
-
-/**
- * The diagram's presentation scale and why it has that value: `fit` follows the
- * container whenever it resizes, while `custom` is a scale the user chose with
- * the toolbar or the wheel. A view switch re-derives the scale (a new diagram
- * has a new natural size) but keeps this mode, so a fit user stays fitted and a
- * manual user is not silently moved into fit-on-resize.
+ * `auto` is the sticky fit state: every canvas size change (window resize,
+ * fullscreen, the inspector/drawer/tray opening, phone rotation, a re-layout)
+ * re-solves the scale after a short debounce. Any EXPLICIT zoom — a button, the
+ * wheel, a pinch, the keyboard, a package click — flips the state to `manual`,
+ * which keeps the reader's `scale` and only clamps the scroll. Pressing Fit
+ * returns to `auto`.
  */
 type DiagramZoom = {
   readonly scale: number;
-  readonly mode: 'fit' | 'custom';
+  readonly fit: 'auto' | 'manual';
 };
+
+/** How long a canvas size change must settle before an `auto` fit re-solves. */
+const AUTO_FIT_DEBOUNCE_MS = 150;
+
+/**
+ * The DEV-only lever the e2e control arm pulls to re-create the retired
+ * fit-time CSS factor. It makes every semantic Fit multiply the semantic scale
+ * by a factor the same way the shipped defect did, so the arm can prove its
+ * min-font reading lands on the failing side. DEV-gated like the other levers:
+ * a production build does not contain this branch.
+ */
+const FIT_CSS_FACTOR_STORAGE_KEY = 'architecture-fit-css-factor';
+
+/** The control-arm CSS factor, or `null` when the shipped path runs. */
+function forcedFitCssFactor(): number | null {
+  if (import.meta.env.DEV) {
+    try {
+      const stored = window.localStorage.getItem(FIT_CSS_FACTOR_STORAGE_KEY);
+      if (stored === null) return null;
+      const value = Number.parseFloat(stored);
+      return Number.isFinite(value) && value > 0 && value < 1 ? value : null;
+    } catch {
+      // Private mode: the shipped path applies.
+    }
+  }
+  return null;
+}
+
+/**
+ * The DEV-only lever that restores the retired "unreadable fit opens focused"
+ * rule: the drawing opens at the readable floor instead of the solved fit, the
+ * state the control arm measures as overflow on the Quay fixture.
+ */
+const DEFAULT_FOCUS_STORAGE_KEY = 'architecture-default-focus';
+
+/** Whether this build's control arm asked for the retired focus default. */
+function forcedDefaultFocus(): boolean {
+  if (import.meta.env.DEV) {
+    try {
+      return window.localStorage.getItem(DEFAULT_FOCUS_STORAGE_KEY) === 'on';
+    } catch {
+      // Private mode: the shipped path applies.
+    }
+  }
+  return false;
+}
+
+/**
+ * The DEV-only lever that suppresses the `auto` re-solve, so the control arm can
+ * prove the resize criterion goes red when the ResizeObserver path is off.
+ */
+const AUTO_FIT_STORAGE_KEY = 'architecture-auto-fit';
+
+/** Whether this build's control arm disabled auto refit. */
+function autoFitDisabled(): boolean {
+  if (import.meta.env.DEV) {
+    try {
+      return window.localStorage.getItem(AUTO_FIT_STORAGE_KEY) === 'off';
+    } catch {
+      // Private mode: auto refit stays on.
+    }
+  }
+  return false;
+}
 
 /**
  * Renders one architecture neighbourhood as a lazily loaded PlantUML/ELK
@@ -681,7 +710,6 @@ export function PlantUmlGraph({
   multiSelectMode = false,
   onMultiSelectStart,
   onBoxSelect,
-  projectId = null,
   bottomObscuredPx = 0,
   topObscuredPx = 0,
 }: PlantUmlGraphProps) {
@@ -848,10 +876,11 @@ export function PlantUmlGraph({
     onViewChange?.(view);
   }, [onViewChange, view]);
 
-  // The viewed scale and its mode (see DiagramZoom). Rendering reads it for the
-  // toolbar readout and the next attach; the SVG itself is resized imperatively
-  // through `viewportRef`, so scaling never re-enters the drawing path.
-  const [zoom, setZoom] = useState<DiagramZoom>({ scale: 1, mode: 'fit' });
+  // The viewed scale and whether it follows the canvas (see DiagramZoom).
+  // Rendering reads it for the toolbar readout; the semantic path rewrites the
+  // geometry at this scale and the ordinary path resizes the SVG imperatively,
+  // so neither re-enters the drawing path.
+  const [zoom, setZoom] = useState<DiagramZoom>({ scale: 1, fit: 'auto' });
   // Mirror of `zoom` for the async render / wheel / resize handlers, which run
   // outside the render that last committed the state.
   const zoomRef = useRef(zoom);
@@ -880,6 +909,9 @@ export function PlantUmlGraph({
     return drawing === null ? null : readSvgNaturalSize(drawing);
   }, []);
   const applyZoom = useCallback((next: DiagramZoom): void => {
+    // A settle that re-derives the same state must not re-render (the semantic
+    // pass writes the solved scale back after every application).
+    if (next.scale === zoomRef.current.scale && next.fit === zoomRef.current.fit) return;
     zoomRef.current = next;
     setZoom(next);
   }, []);
@@ -935,25 +967,14 @@ export function PlantUmlGraph({
   }, []);
 
   /**
-   * The scale to write for a readable decision. Overview is a whole-graph fit,
-   * so it is the one that must clear the floating corner chrome; focus is
-   * deliberately larger than its box (a pannable, legible crop), where shrinking
-   * to avoid a fixed corner would undo the readability the mode exists for.
+   * The whole-graph fit placement for a CSS-scaled (non-semantic) drawing: the
+   * geometric fit, moved off-centre when the floating corner chrome would
+   * otherwise cover it. The semantic path never uses a CSS factor, so this is
+   * only consulted when no semantic capture exists.
    */
-  const placementForDecision = useCallback(
-    (
-      natural: SvgViewportSize | null,
-      box: SvgViewportSize | null,
-      decision: ReadableZoomDecision,
-    ): SvgFitPlacement | null => (
-      decision.mode === 'overview' && natural !== null && box !== null
-        // The placement clears the chrome by TRANSLATING the drawing first and
-        // only shrinking when no translation can. Returning the offset is what
-        // lets a centred fit that is merely clipped in one corner stay at full
-        // size instead of shrinking symmetrically.
-        ? fitPlacementAvoidingCorners(natural, box, cornerRects(), MIN_ZOOM_SCALE)
-        : null
-    ),
+  const fitPlacementFor = useCallback(
+    (natural: SvgViewportSize, box: SvgViewportSize): SvgFitPlacement =>
+      fitPlacementAvoidingCorners(natural, box, cornerRects(), MIN_ZOOM_SCALE),
     [cornerRects],
   );
 
@@ -995,25 +1016,29 @@ export function PlantUmlGraph({
     const frame = drawnPackageFrame(host, packageId);
     const box = measureViewportSize(host);
     if (frame === null || box === null) return;
-    const fitToFrame = Math.min(
+    const multiplier = Math.min(
       (box.width * 0.9) / frame.width,
       (box.height * 0.9) / frame.height,
     );
-    const scale = clampZoomScale(Math.max(fitToFrame, MIN_READABLE_ZOOM_SCALE));
-    const applied = viewport.zoomTo(scale);
-    applyZoom({ scale: applied, mode: 'custom' });
-    // The fit placement pins explicit margins; a zoomed package is centred by
-    // the scroll offsets below instead, so hand the drawing back to `auto`.
-    applyPlacement(host.querySelector('svg'), null);
     if (semanticCaptureRef.current !== null) {
-      // The geometry is about to be rewritten for the new scale; apply it now
-      // (the debounced pass would otherwise fire 200 ms later) and let the
-      // semantic pass centre the requested frame once it has the mapped rect.
+      // The frame's attributes are already in the CURRENT map's screen units,
+      // so the multiplier is relative to the scale on screen. The new scale is
+      // solved by the same engine as Fit (its floor-font rule keeps every label
+      // readable), and the geometry is rewritten now rather than 200 ms later.
+      const current = appliedLayoutRef.current?.scale ?? zoomRef.current.scale;
+      const solved = clampZoomScale(Math.max(current * multiplier, MIN_ZOOM_SCALE));
+      applyZoom({ scale: solved, fit: 'manual' });
       centerPackageOnApplyRef.current = packageId;
-      applyLodRef.current?.(applied);
+      applySemanticRef.current?.({ fit: false, scale: solved });
       setPackageFocus(packageId);
       return;
     }
+    const scale = clampZoomScale(Math.max(multiplier, MIN_READABLE_ZOOM_SCALE));
+    const applied = viewport.zoomTo(scale);
+    applyZoom({ scale: applied, fit: 'manual' });
+    // The fit placement pins explicit margins; a zoomed package is centred by
+    // the scroll offsets below instead, so hand the drawing back to `auto`.
+    applyPlacement(host.querySelector('svg'), null);
     const origin = drawingOrigin();
     const offsets = centeredScrollForDrawingRect(box, {
       left: frame.x - origin.x,
@@ -1026,42 +1051,6 @@ export function PlantUmlGraph({
     setPackageFocus(packageId);
   }, [applyPlacement, applyZoom, drawingOrigin]);
 
-  // The readable default applied to the drawing on screen: focus or overview,
-  // the package focus centres, and the overview hint (if any). Rendering reads
-  // it for the toolbar toggle and the two notice lines; the SCALE itself lives
-  // in `zoom`, because it is the same value the +/- controls manipulate.
-  const [readableView, setReadableView] = useState<ReadableView | null>(null);
-  // The user's EXPLICIT toolbar choice, remembered per project. `null` means
-  // "nothing chosen yet": the drawing then opens at the whole-graph overview.
-  // A new view/drawing does not invent a choice — it re-reads this project's
-  // remembered one, so the reader's Focus survives a reload and never leaks
-  // into another project.
-  const [readableMode, setReadableMode] = useState<ReadableZoomMode | null>(
-    () => readStoredReadableMode(localReadableStorage(), projectId),
-  );
-  const readableModeRef = useRef<ReadableZoomMode | null>(readableMode);
-  // Switching projects switches which remembered choice applies. The effect is
-  // keyed on the project id only: an in-visit choice is already in state.
-  useEffect(() => {
-    const remembered = readStoredReadableMode(localReadableStorage(), projectId);
-    readableModeRef.current = remembered;
-    setReadableMode(remembered);
-  }, [projectId]);
-  // The seed hierarchy of the payload on screen, so a resize or a mode switch
-  // can re-decide the focus without rebuilding the tree.
-  const seedHierarchyRef = useRef<ArchitectureHierarchyIndex | null>(null);
-  /**
-   * The reader's scale, carried across a drill transition (into an entity's
-   * neighbourhood and back out of it).
-   *
-   * A ref rather than a value read at the drill itself because the transition
-   * often takes TWO layout runs: the drill's own run can be cancelled by the
-   * re-layout its new drawing schedules (the aspect debounce), and the run that
-   * finally draws would then see "same drawing" and re-fit — the jump this task
-   * removes. The scale is consumed by the first run that actually applies it,
-   * so a later Fit or zoom is never overridden by it.
-   */
-  const drillScaleRef = useRef<number | null>(null);
   // Set when a drawing was too wide for its container and was collapsed to the
   // directory overview; the notice stays until the user asks for the explosion
   // view again.
@@ -1137,22 +1126,12 @@ export function PlantUmlGraph({
    */
   const [layoutStatusNodes, setLayoutStatusNodes] = useState<number | null>(null);
   /**
-   * The adaptation in force for the drawing on screen, when it differs from the
-   * reader's zoom: the factor the map had to be shown at so the whole thing is
-   * visible, and (for the folded tier) how many package levels it kept. `null`
-   * when the drawing is shown at its own semantic size.
-   *
-   * This is state, not a derived value: the factor is computed from the canvas
-   * the layout was measured against, which nothing in the render output records.
+   * How many package levels the folded tier kept for the drawing on screen, or
+   * `null` for every other tier. State, not a derived value: it is the semantic
+   * pass's reading of the geometry it just rewrote, and nothing in the render
+   * output can reconstruct it.
    */
-  const [drawnFit, setDrawnFit] = useState<{ readonly factor: number; readonly foldDepth: number | null } | null>(null);
-  /**
-   * Set by the Fit control so the next settled-zoom pass knows the reader asked
-   * for a WHOLE drawing, not merely a new zoom level: only then may the map be
-   * shrunk to the canvas (see `applySemanticLayout`). A ref, because it is a
-   * one-shot instruction consumed by an effect that runs on a later frame.
-   */
-  const fitRequestedRef = useRef(false);
+  const [foldDepth, setFoldDepth] = useState<number | null>(null);
   // The last layout applied to the captured drawing, plus the font it was
   // planned at. The scroll listener re-reads them to keep the sticky package
   // names at the viewport's top edge as the reader pans.
@@ -1164,9 +1143,10 @@ export function PlantUmlGraph({
   // The neighbourhood's centre entity, re-marked after every rewrite (the
   // rewrite rebuilds the node groups' children from the captured drawing).
   const neighborCenterRef = useRef<string | null>(null);
-  // The settled-zoom application, reachable from `zoomToPackage` (defined
-  // above it) so the "tap a package" gesture rewrites and centres in one go.
-  const applyLodRef = useRef<((scale: number) => void) | null>(null);
+  // The semantic application, reachable from `zoomToPackage` (defined above it)
+  // so the "tap a package" gesture rewrites and centres in one go, and from the
+  // debounced resize / zoom paths.
+  const applySemanticRef = useRef<((options: { readonly fit: boolean; readonly scale: number }) => void) | null>(null);
   const lodSchedulerRef = useRef<ExplosionLodScheduler | null>(null);
   const [lodDepth, setLodDepth] = useState<0 | 1 | 2 | null>(null);
   // Bumped whenever the semantic pass rewrites the geometry, so the minimap
@@ -1175,31 +1155,26 @@ export function PlantUmlGraph({
 
   /**
    * Write one semantic layout onto the captured drawing, INCLUDING the folded
-   * tier's omissions, and answer the factor the drawing had to be shown at.
+   * tier's omissions.
    *
-   * `drawSemanticLayout` draws the frames it is given and hides the class boxes
-   * it is not; the folded tier also drops whole sub-packages and every relation,
-   * and it owns the drawing's final size (`C`'s package-only map is one drawing,
-   * `D`'s packed grid is another). Those three consequences live here rather
-   * than in the DOM writer because they are the CALLER's view of the layout, and
-   * because the drawing helper must stay one pure application of one layout.
+   * The scale is the drawing's ONLY scale: `drawSemanticLayout` bakes the
+   * engine's map into the geometry and sizes the SVG to the mapped content, so
+   * the element is shown 1:1 (`k = 1`). No CSS factor is ever applied on top —
+   * the retired Fit path multiplied the already-mapped drawing by
+   * `min(1, canvas ÷ content)`, which is what made a 17 % map print 74 % and
+   * push 10 px floor text down to 7.4 px.
    *
-   * `fitToCanvas` is what the reader asked for with the Fit control, and what the
-   * folded tier always needs: the semantic map is drawn 1:1 from its own extent,
-   * and the map's own stretch can leave it a few per cent (or, before the fold,
-   * several canvases) larger than the box. When it is set, the drawing is shown
-   * at the REAL adaptation `min(1, canvas ÷ content)` — the size it takes for the
-   * whole map to be visible — and that factor is what the toolbar prints. The
-   * folded tier cannot honour a 1:1 claim at all when even its least-folded grid
-   * misses the canvas, so it always takes the factor.
+   * `drawSemanticLayout` also hands the folded tier the drawings it owns (it
+   * drops whole sub-packages and every relation); those consequences live here
+   * rather than in the DOM writer because they are the CALLER's view of the
+   * layout.
    */
   const applySemanticLayout = useCallback((
     host: HTMLElement,
     capture: SemanticCapture,
     layout: SemanticZoomLayout,
     fontPx: number,
-    fitToCanvas: boolean,
-  ): number => {
+  ): void => {
     drawSemanticLayout(host, capture, layout, fontPx);
     // The rewritten drawing rebuilds every node group's children, so the
     // coarse-pointer hit rectangles are laid down again on the geometry that is
@@ -1215,8 +1190,7 @@ export function PlantUmlGraph({
     for (const canvasRect of host.querySelectorAll<SVGRectElement>('svg .uml-canvas')) {
       canvasRect.setAttribute('fill', 'none');
     }
-    const folded = layout.foldDepth !== null;
-    if (folded) {
+    if (layout.foldDepth !== null) {
       const drawnPackages = new Set(layout.packages.map((entry) => entry.id));
       for (const group of host.querySelectorAll('.uml-package[data-package-id]')) {
         if (!drawnPackages.has(group.getAttribute('data-package-id') ?? '')) {
@@ -1229,47 +1203,56 @@ export function PlantUmlGraph({
         (group as SVGGElement).style.display = 'none';
       }
     }
-    if (!folded && !fitToCanvas) return 1;
-    const box = measureViewportSize(host);
-    const width = Math.max(1, layout.content.width);
-    const height = Math.max(1, layout.content.height);
-    const fit = box === null
-      ? 1
-      : Math.min(1, box.width / width, box.height / height);
-    if (fit < 0.999) applyZoomScale(capture.svg, fit);
-    return fit;
+    // The DEV-only control-arm lever. Production builds do not contain this
+    // branch; when an arm asks for it, the retired CSS factor is re-applied so
+    // the arm can prove its min-font reading lands on the failing side.
+    const controlFactor = forcedFitCssFactor();
+    if (controlFactor !== null) applyZoomScale(capture.svg, controlFactor);
   }, []);
 
-  // Re-evaluate the semantic layout after the zoom settles; the previous tier
-  // is passed so the 8 % dead band applies at the boundary.
-  const applyLod = useCallback((scale: number): void => {
+  // Apply a semantic solve: `fit` asks the engine for the largest scale whose
+  // mapped content fits the canvas; otherwise the reader's explicit scale is
+  // honoured. Both paths draw 1:1 (see `applySemanticLayout`).
+  const applySemantic = useCallback((options: { readonly fit: boolean; readonly scale: number }): void => {
     const host = hostRef.current;
     const capture = semanticCaptureRef.current;
     if (host === null || capture === null) return;
     const box = measureViewportSize(host);
-    const layout = solveSemanticZoom(capture.geometry, {
-      scale,
-      viewport: box,
-      previousTier: semanticTierRef.current,
-      minFontPx: coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
-    });
+    const fontPx = coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
+    let layout: SemanticZoomLayout;
+    let solvedScale: number;
+    if (options.fit) {
+      const forcedFocus = forcedDefaultFocus();
+      const fit = solveFitScale(capture.geometry, { viewport: box, minFontPx: fontPx });
+      if (forcedFocus && fit.fits) {
+        // The control arm's retired rule: the "unreadable fit" opened at the
+        // readable floor instead of the solved scale, overflowing the canvas.
+        layout = solveSemanticZoom(capture.geometry, {
+          scale: Math.max(fit.scale, READABLE_ZOOM_SCALE),
+          viewport: box,
+          previousTier: null,
+          minFontPx: fontPx,
+        });
+        solvedScale = layout.scale;
+      } else {
+        layout = fit.layout;
+        solvedScale = fit.scale;
+      }
+    } else {
+      layout = solveSemanticZoom(capture.geometry, {
+        scale: options.scale,
+        viewport: box,
+        previousTier: semanticTierRef.current,
+        minFontPx: fontPx,
+      });
+      solvedScale = layout.scale;
+    }
     semanticTierRef.current = layout.tier;
     appliedLayoutRef.current = layout;
-    appliedFontRef.current = coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
-    // A Fit the reader pressed is answered HERE, once this layout is on screen:
-    // the flag is consumed so a later ambient zoom never inherits it.
-    const fitting = fitRequestedRef.current;
-    fitRequestedRef.current = false;
-    const drawnFactor = applySemanticLayout(
-      host,
-      capture,
-      layout,
-      coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
-      fitting,
-    );
-    setDrawnFit(drawnFactor < 0.999 || layout.foldDepth !== null
-      ? { factor: drawnFactor, foldDepth: layout.foldDepth }
-      : null);
+    appliedFontRef.current = fontPx;
+    applySemanticLayout(host, capture, layout, fontPx);
+    setFoldDepth(layout.foldDepth);
+    applyZoom({ scale: solvedScale, fit: options.fit ? 'auto' : 'manual' });
     // A rewritten SVG is a fresh set of elements: re-pin the selection and the
     // unselectable declaration, exactly as the render effect does.
     applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
@@ -1307,8 +1290,8 @@ export function PlantUmlGraph({
     // behind (the defect this task fixes).
     drawStickyLabels(host, layout, appliedFontRef.current);
     positionOverviewHint(host);
-  }, [applySemanticLayout]);
-  applyLodRef.current = applyLod;
+  }, [applySemanticLayout, applyZoom]);
+  applySemanticRef.current = applySemantic;
   // One controller per mount: it survives the renderer replacing the SVG (each
   // render re-attaches), so the mode and scale outlive a single drawing.
   useEffect(() => {
@@ -1359,7 +1342,7 @@ export function PlantUmlGraph({
     const viewport = viewportRef.current;
     if (host === null || viewport === null) return;
     const gestures = createSvgTouchGestures(host, viewport, {
-      onZoom: (scale) => applyZoom({ scale, mode: 'custom' }),
+      onZoom: (scale) => applyZoom({ scale, fit: 'manual' }),
     });
     return () => gestures.destroy();
   }, [applyZoom]);
@@ -1587,46 +1570,15 @@ export function PlantUmlGraph({
     if (host === null) return;
 
     let cancelled = false;
-    // Is this run a re-layout of the SAME drawing (the container's shape
-    // changed), rather than a new view/graph? Only the former may keep a
-    // reader-chosen scale: a new drawing has its own natural size.
+    // The drawing identity is recorded so a re-layout of the SAME view can
+    // carry the semantic tier over inside the engine's dead band.
     const viewKey = drawingKeyOf(view);
-    const previousLayoutInput = layoutInputRef.current;
-    const sameDrawing = previousLayoutInput !== null
-      && previousLayoutInput.graph === graph
-      && previousLayoutInput.viewKey === viewKey
-      && previousLayoutInput.idShape === idShape
-      && previousLayoutInput.entityGraph === entityGraph;
-    // Drilling into an entity's neighbourhood (and stepping back out of it) is
-    // the same mental place — the reader is looking at the same entities, one
-    // hop narrower or wider — so it is the one view change that must not
-    // re-derive the zoom. Re-fitting there moved the percentage from 72% to
-    // 75% over a drawing that had barely changed, which read as an unexplained
-    // jump (the same complaint the "Back" breadcrumb already answers).
-    const wasNeighbourhood = previousLayoutInput?.viewKey.startsWith('neighborhood:') ?? false;
-    const isNeighbourhood = viewKey.startsWith('neighborhood:');
-    const drillTransition = previousLayoutInput !== null && wasNeighbourhood !== isNeighbourhood;
-    if (drillTransition) {
-      drillScaleRef.current = zoomRef.current.scale > 0 ? zoomRef.current.scale : null;
-    } else if (!sameDrawing) {
-      // A new drawing that is not part of a drill (another session, the
-      // explosion view, an expanded group) has its own natural size.
-      drillScaleRef.current = null;
-    }
     layoutInputRef.current = { graph, viewKey, idShape, entityGraph };
     // A pending application belongs to the drawing being replaced; the new one
     // is applied synchronously below.
     lodSchedulerRef.current?.cancel();
     setFailure(null);
     hoverCallbackRef.current?.(null);
-    // A NEW view keeps the reader's remembered choice: it is an explicit
-    // preference for this project, not a property of one drawing. Re-read it so
-    // a change made in another tab (or another project) is honoured.
-    if (drawingKeyOf(view) !== drawnKeyRef.current) {
-      const remembered = readStoredReadableMode(localReadableStorage(), projectId);
-      readableModeRef.current = remembered;
-      setReadableMode(remembered);
-    }
     // A reloaded graph may not contain the previously selected entity.
     if (selectedRef.current !== null && !graph.nodes.some((node) => node.id === selectedRef.current)) {
       selectedRef.current = null;
@@ -1896,71 +1848,37 @@ export function PlantUmlGraph({
           drawing.style.flex = 'none';
         }
         const viewport = viewportRef.current;
-        let drawnScale = zoomRef.current.scale;
-        let readout: ReadableView | null = null;
-        let matchReading: ReadableZoomDecision | null = null;
         if (drawing !== null && viewport !== null) {
           viewport.attach(drawing);
-          const seedHierarchy = buildSeedHierarchy(graph, idShape);
-          seedHierarchyRef.current = seedHierarchy;
           const natural = naturalOfDrawing(drawing);
           const box = measureViewportSize(host);
-          const fitScale = natural !== null && box !== null
-            ? fitZoomScale(natural, box, MIN_ZOOM_SCALE)
-            : 1;
-          const decision = decideReadableZoom({
-            fitScale,
-            natural: natural ?? { width: 0, height: 0 },
-            viewport: box,
-            hierarchy: seedHierarchy,
-            selectedEntityIds: [
-              selectedRef.current,
-              view.kind === 'neighborhood' ? view.entityId : null,
-            ],
-            mode: readableModeRef.current ?? undefined,
-          });
           // A canvas several times wider than its container is a band, not a
           // diagram: collapse it to the directory overview and say so. Only the
           // file graph's explosion view can reach this — its overview is the
           // coarser drawing. The class view has NO coarser drawing to fall back
-          // to (its overview is the same entity document), so it keeps the
-          // hierarchy and lets the readable focus place a legible region.
-          if (view.kind === 'hierarchy' && !entityGraph && decision.collapsedForAspect) {
+          // to, so it keeps its hierarchy.
+          const aspectBounds = capture === null ? natural : semanticContentBounds(capture.geometry);
+          if (view.kind === 'hierarchy' && !entityGraph
+            && aspectBounds !== null && box !== null && canvasIsTooWide(aspectBounds, box)) {
             setCollapsedNotice(true);
             setView({ kind: 'overview' });
           } else if (view.kind === 'hierarchy') {
             setCollapsedNotice(false);
           }
-          const placement = placementForDecision(natural, box, decision);
-          // An aspect re-layout keeps the scale the reader chose; a new
-          // drawing re-derives it from its own natural size. `applyPlacement`
-          // still re-centres the drawing inside the new container.
-          //
-          // A drill transition is the exception: it keeps the reader's scale
-          // ACROSS the new drawing (see `drillScaleRef`), and the mode becomes
-          // `custom` so the tier stops claiming the new drawing is fitted — the
-          // reader can still ask for Fit explicitly.
-          const carried = drillScaleRef.current;
-          const keepReaderScale = carried !== null && carried > 0;
-          drawnScale = keepReaderScale
-            ? viewport.zoomTo(carried)
-            : sameDrawing && zoomRef.current.mode === 'custom'
-              ? zoomRef.current.scale
-              : viewport.zoomTo(placement?.scale ?? decision.scale);
-          // Consumed: only the drawing the drill carried it INTO keeps it.
-          if (keepReaderScale) drillScaleRef.current = null;
-          applyPlacement(drawing, placement);
-          applyZoom({ scale: drawnScale, mode: keepReaderScale ? 'custom' : zoomRef.current.mode });
-          readout = {
-            mode: decision.mode,
-            focusPackageId: decision.focusPackageId,
-            hint: decision.overviewHint,
-          };
-          setReadableView(readout);
-          // A fresh drawing is a new whole-graph view; a package zoom from the
-          // previous one no longer names a frame on screen.
-          setPackageFocus(null);
-          matchReading = decision;
+          if (capture === null) {
+            // The ordinary CSS-scaled drawing (a grouped directory map). `auto`
+            // fits the whole drawing down to the manual floor; `manual` keeps
+            // the reader's own scale. Either way the placement re-centres it.
+            const placement = natural === null ? null : fitPlacementFor(natural, box ?? { width: 0, height: 0 });
+            const drawnScale = zoomRef.current.fit === 'auto'
+              ? viewport.zoomTo(placement?.scale ?? zoomRef.current.scale)
+              : viewport.zoomTo(zoomRef.current.scale);
+            applyPlacement(drawing, placement);
+            applyZoom({ scale: drawnScale, fit: zoomRef.current.fit });
+            // A fresh drawing is a new whole-graph view; a package zoom from
+            // the previous one no longer names a frame on screen.
+            setPackageFocus(null);
+          }
         }
         // A fresh SVG has no highlight classes; re-pin the current selection.
         highlightSelection(host, selectedRef.current);
@@ -1976,10 +1894,9 @@ export function PlantUmlGraph({
           }
         }
         // A new drawing gets its semantic layout applied synchronously, so it
-        // never flashes at the wrong detail before the debouncer fires. A
-        // re-layout of the SAME view (the container's shape changed) is not a
-        // new drawing in the reader's eyes: keep the tier they were reading.
-        // Any other drawing derives the tier from the fresh fit scale.
+        // never flashes at the wrong detail before the debouncer fires. The
+        // sticky fit state decides how: `auto` re-solves the scale against the
+        // new drawing's canvas, `manual` keeps the reader's scale.
         const drawingKey = drawingKeyOf(view);
         const carriedTier = drawingKey === drawnKeyRef.current ? semanticTierRef.current : null;
         drawnKeyRef.current = drawingKey;
@@ -1987,53 +1904,20 @@ export function PlantUmlGraph({
           semanticTierRef.current = null;
           appliedLayoutRef.current = null;
           setLodDepth(null);
-          setDrawnFit(null);
+          setFoldDepth(null);
           // A drawing with no semantic pass still needs its coarse-pointer hit
           // rectangles; the captured path lays them down inside
           // `applySemanticLayout`, after the rewrite rebuilt the nodes.
           addNodeHitTargets(host, coarsePointer);
         } else {
           semanticTierRef.current = carriedTier;
-          const layout = solveSemanticZoom(capture.geometry, {
-            scale: drawnScale,
-            viewport: measureViewportSize(host),
-            previousTier: carriedTier,
-            minFontPx: coarsePointer ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
-          });
-          semanticTierRef.current = layout.tier;
-          const fontPx = coarsePointer ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
-          appliedLayoutRef.current = layout;
-          appliedFontRef.current = fontPx;
-          // A fresh drawing is not a Fit the reader asked for: it is shown at
-          // its own semantic size (the folded tier excepted, which sizes itself
-          // to the canvas by construction).
-          const drawnFactor = applySemanticLayout(host, capture, layout, fontPx, false);
-          setDrawnFit(layout.foldDepth !== null
-            ? { factor: drawnFactor, foldDepth: layout.foldDepth }
-            : null);
-          applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
-          highlightSelection(host, selectedRef.current);
-          markDrawingUnselectable(host);
-          if (neighborCenterRef.current !== null) {
-            nodeElement(host, neighborCenterRef.current)?.classList.add('arch-center');
-          }
-          setLodDepth(lodDepthForTier(layout.tier));
-          setDrawnRevision((revision) => revision + 1);
-          const hostWidth = host.clientWidth;
-          const hostHeight = host.clientHeight;
-          if (hostWidth > 0 && hostHeight > 0) {
-            host.scrollLeft = Math.max(0, layout.anchor.x - hostWidth / 2);
-            host.scrollTop = Math.max(0, layout.anchor.y - hostHeight / 2);
-          }
+          // The new drawing is applied through ONE path, so the draw and the
+          // settled-zoom/resize paths can never disagree about which scale is
+          // on screen.
+          applySemantic({ fit: zoomRef.current.fit === 'auto', scale: zoomRef.current.scale });
         }
-        // The readable default's focus jump runs AFTER the LOD application:
-        // the LOD only recentres on a level cross, so this is the one scroll
-        // that places a freshly focused package after a new drawing.
-        if (matchReading !== null && matchReading.mode === 'focus' && readout !== null && readout.focusPackageId !== null) {
-          centerOnPackage(host, readout.focusPackageId);
-        }
-        // A focus request (search hit) is centred LAST, after the readable
-        // default's package jump: the reader asked for THIS node, so it wins.
+        // A focus request (search hit) is centred LAST: the reader asked for
+        // THIS node, so it wins.
         // The marker is what tests and sibling panels read; the scroll is the
         // actual "jump to it".
         if (focusNodeId !== null) {
@@ -2069,7 +1953,7 @@ export function PlantUmlGraph({
         // The layout ended — badly — so the status that described it must not
         // outlive it; the failure line below is the reader's explanation.
         setLayoutStatusNodes(null);
-        setDrawnFit(null);
+        setFoldDepth(null);
         // The previous drawing is gone; the text page must not keep describing it.
         drawnLayoutRef.current = null;
         drawnCallbackRef.current?.(null);
@@ -2088,7 +1972,7 @@ export function PlantUmlGraph({
       // decides again whether to announce (and clears it again when it ends).
       setLayoutStatusNodes(null);
     };
-  }, [applyPlacement, applySemanticLayout, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, naturalOfDrawing, placementForDecision, projectId, view]);
+  }, [applyPlacement, applySemantic, applySemanticLayout, applyZoom, coarsePointer, entityGraph, fitPlacementFor, focusNodeId, graph, idShape, layoutAspect, naturalOfDrawing, view]);
 
   /**
    * Keep the SELECTED box inside the visible canvas.
@@ -2471,7 +2355,7 @@ export function PlantUmlGraph({
       const factor = Math.exp(-event.deltaY * unit * 0.0015);
       applyZoom({
         scale: viewport.zoomBy(factor, { clientX: event.clientX, clientY: event.clientY }),
-        mode: 'custom',
+        fit: 'manual',
       });
     };
 
@@ -2481,15 +2365,48 @@ export function PlantUmlGraph({
     return () => host.removeEventListener('wheel', onWheel);
   }, [applyZoom]);
 
-  // A fit diagram follows the container; a manually zoomed one keeps the size
-  // the user chose. The scale is compared before writing state so a burst of
-  // observer callbacks cannot re-render in a loop.
+  // The auto-fit debounce: a canvas size change settles for 150ms before the
+  // scale is re-solved. One timer per mount; the latest reading wins.
+  const autoFitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (autoFitTimerRef.current !== null) clearTimeout(autoFitTimerRef.current);
+    autoFitTimerRef.current = null;
+  }, []);
+  const scheduleAutoFit = useCallback((): void => {
+    if (zoomRef.current.fit !== 'auto') return;
+    if (autoFitTimerRef.current !== null) clearTimeout(autoFitTimerRef.current);
+    autoFitTimerRef.current = setTimeout(() => {
+      autoFitTimerRef.current = null;
+      // Read the state at FIRE time: an explicit zoom in the meantime cancels
+      // the pending refit even if the timer already fired its scheduling.
+      if (zoomRef.current.fit !== 'auto' || autoFitDisabled()) return;
+      if (semanticCaptureRef.current !== null) {
+        applySemanticRef.current?.({ fit: true, scale: zoomRef.current.scale });
+        return;
+      }
+      const host = hostRef.current;
+      const viewport = viewportRef.current;
+      if (host === null || viewport === null) return;
+      const drawing = host.querySelector('svg');
+      const natural = naturalOfDrawing(drawing);
+      const box = measureViewportSize(host);
+      if (natural === null || box === null) return;
+      const placement = fitPlacementFor(natural, box);
+      const scale = viewport.zoomTo(placement.scale);
+      applyPlacement(drawing, placement);
+      applyZoom({ scale, fit: 'auto' });
+    }, AUTO_FIT_DEBOUNCE_MS);
+  }, [applyPlacement, applyZoom, fitPlacementFor, naturalOfDrawing]);
+
+  // Every canvas size change — window resize, fullscreen, the inspector/drawer/
+  // tray opening, a phone rotation, a re-layout — reaches this observer. Under
+  // `auto` it re-solves the fit; under `manual` the reader's scale is kept and
+  // only the selected box is panned back into view.
   //
-  // The same observer is where a SHAPE change is noticed: a resize that only
-  // re-fits is cheap, but one that turns the container landscape/portrait makes
-  // the drawing's proportions wrong, which only a new layout fixes. That path is
-  // behind `shouldRelayoutForAspect`'s threshold and a debounce, so a drag pays
-  // for one layout, not one per frame.
+  // The same observer notices a SHAPE change: a resize that only re-fits is
+  // cheap, but one that turns the container landscape/portrait makes the
+  // drawing's proportions wrong, which only a new layout fixes. That path is
+  // behind `shouldRelayoutForAspect`'s threshold and its own debounce.
   useEffect(() => {
     const host = hostRef.current;
     if (host === null || typeof ResizeObserver !== 'function') return;
@@ -2498,213 +2415,82 @@ export function PlantUmlGraph({
       if (shouldRelayoutForAspect(drawnAspectRef.current, measured, { locked: relayoutLockedRef.current }) && measured !== null) {
         scheduleAspectRelayout(measured);
       }
-      // A resize can narrow the canvas without changing the fit — focus mode
-      // deliberately keeps its scale — so the selected box has to be panned
-      // back into view here, before the `fit`-only branch below.
       revealSelectedRef.current?.();
-      if (zoomRef.current.mode !== 'fit') return;
-      const viewport = viewportRef.current;
-      if (viewport === null) return;
-      const drawing = host.querySelector('svg');
-      const natural = naturalOfDrawing(drawing);
-      const box = measureViewportSize(host);
-      if (natural === null || box === null) return;
-      const currentView = viewRef.current;
-      const decision = decideReadableZoom({
-        fitScale: fitZoomScale(natural, box, MIN_ZOOM_SCALE),
-        natural,
-        viewport: box,
-        hierarchy: seedHierarchyRef.current,
-        selectedEntityIds: [
-          selectedRef.current,
-          currentView.kind === 'neighborhood' ? currentView.entityId : null,
-        ],
-        mode: readableModeRef.current ?? undefined,
-      });
-      // A container that shrinks can cross the readable floor, which must move
-      // the drawing from overview to focus (and back on growth), so the mode is
-      // re-decided here rather than frozen at the drawing's first fit.
-      setReadableView((current) => (
-        current !== null
-          && current.mode === decision.mode
-          && current.focusPackageId === decision.focusPackageId
-          && current.hint?.packageId === decision.overviewHint?.packageId
-          && current.hint?.packageCount === decision.overviewHint?.packageCount
-          && current.hint?.zoomPercent === decision.overviewHint?.zoomPercent
-          ? current
-          : { mode: decision.mode, focusPackageId: decision.focusPackageId, hint: decision.overviewHint }
-      ));
-      const placement = placementForDecision(natural, box, decision);
-      const scale = viewport.zoomTo(placement?.scale ?? decision.scale);
-      applyPlacement(drawing, placement);
-      if (Math.abs(scale - zoomRef.current.scale) < 1e-6) return;
-      applyZoom({ scale, mode: 'fit' });
+      scheduleAutoFit();
     });
     observer.observe(host);
-    // The corner chrome is measured by the fit, and the minimap mounts a beat
-    // after the drawing does (it needs the drawn node rectangles). Observing
-    // the overlay column re-runs the fit once that chrome has a size, so the
-    // overview clears the map as well as the zoom cluster.
+    // The corner chrome decides the CSS-scaled fit, and the minimap mounts a
+    // beat after the drawing does (it needs the drawn node rectangles).
+    // Observing the overlay column re-runs the fit once that chrome has a size.
     const overlays = host.parentElement?.querySelector<HTMLElement>('[data-architecture-canvas-overlays]');
     if (overlays !== undefined && overlays !== null) observer.observe(overlays);
     return () => observer.disconnect();
-  }, [applyPlacement, applyZoom, naturalOfDrawing, placementForDecision, scheduleAspectRelayout]);
+  }, [scheduleAspectRelayout, scheduleAutoFit]);
 
   // The zoom is read through `zoomRef` when the debounced application runs, so
-  // a burst of wheel/resize updates coalesces into one visibility toggle rather
-  // than walking every intermediate level.
+  // a burst of wheel updates coalesces into one rewrite rather than walking
+  // every intermediate level. Auto-fit re-solves are driven by the resize path
+  // above; this effect only answers explicit (manual) scales.
   useEffect(() => {
+    if (zoom.fit !== 'manual') return;
     const scheduler = lodSchedulerRef.current;
     if (scheduler === null) return;
-    scheduler.request(() => applyLod(zoomRef.current.scale));
-  }, [applyLod, zoom.scale]);
+    scheduler.request(() => applySemanticRef.current?.({ fit: false, scale: zoomRef.current.scale }));
+  }, [zoom.fit, zoom.scale]);
 
   const zoomToScale = (scale: number): void => {
+    if (semanticCaptureRef.current !== null) {
+      const applied = clampZoomScale(scale);
+      applyZoom({ scale: applied, fit: 'manual' });
+      applySemanticRef.current?.({ fit: false, scale: applied });
+      return;
+    }
     const viewport = viewportRef.current;
-    applyZoom({ scale: viewport?.zoomTo(scale) ?? scale, mode: 'custom' });
+    applyZoom({ scale: viewport?.zoomTo(scale) ?? scale, fit: 'manual' });
   };
 
   const zoomByStep = (factor: number): void => {
+    if (semanticCaptureRef.current !== null) {
+      const applied = clampZoomScale(zoomRef.current.scale * factor);
+      applyZoom({ scale: applied, fit: 'manual' });
+      applySemanticRef.current?.({ fit: false, scale: applied });
+      return;
+    }
     const viewport = viewportRef.current;
-    applyZoom({ scale: viewport?.zoomBy(factor) ?? 1, mode: 'custom' });
+    applyZoom({ scale: viewport?.zoomBy(factor) ?? 1, fit: 'manual' });
   };
 
-  /** Re-apply the readable mode's scale to the drawing already on screen. */
-  const applyReadableMode = useCallback((mode: ReadableZoomMode): void => {
-    readableModeRef.current = mode;
-    setReadableMode(mode);
-    setPackageFocus(null);
-    // The toolbar click is the EXPLICIT choice this project remembers; an
-    // automatic default is never written here.
-    writeStoredReadableMode(localReadableStorage(), projectId, mode);
-    const host = hostRef.current;
-    const viewport = viewportRef.current;
-    if (host === null || viewport === null) return;
-    const drawing = host.querySelector('svg');
-    const natural = naturalOfDrawing(drawing);
-    const box = measureViewportSize(host);
-    if (natural === null || box === null) return;
-    const currentView = viewRef.current;
-    const decision = decideReadableZoom({
-      fitScale: fitZoomScale(natural, box, MIN_ZOOM_SCALE),
-      natural,
-      viewport: box,
-      hierarchy: seedHierarchyRef.current,
-      selectedEntityIds: [
-        selectedRef.current,
-        currentView.kind === 'neighborhood' ? currentView.entityId : null,
-      ],
-      mode,
-    });
-    const placement = placementForDecision(natural, box, decision);
-    const before = zoomRef.current.scale;
-    const fittedScale = viewport.zoomTo(placement?.scale ?? decision.scale);
-    applyZoom({ scale: fittedScale, mode: 'fit' });
-    applyPlacement(drawing, placement);
-    // Choosing a readable mode is a whole-graph request too, and a fit at the
-    // scale already in force settles no zoom for a later pass to consume: answer
-    // it against the layout on screen right now.
-    const onScreen = appliedLayoutRef.current;
-    if (onScreen !== null && Math.abs(before - fittedScale) < 1e-9) {
-      const contentWidth = Math.max(1, onScreen.content.width);
-      const contentHeight = Math.max(1, onScreen.content.height);
-      const factor = Math.min(1, box.width / contentWidth, box.height / contentHeight);
-      const current = host.querySelector('svg');
-      if (current !== null) applyZoomScale(current, factor);
-      setDrawnFit(factor < 0.999 ? { factor, foldDepth: null } : null);
-    }
-    setReadableView({
-      mode: decision.mode,
-      focusPackageId: decision.focusPackageId,
-      hint: decision.overviewHint,
-    });
-    if (decision.mode === 'focus' && decision.focusPackageId !== null) {
-      centerOnPackage(host, decision.focusPackageId);
-    }
-  }, [applyPlacement, applyZoom, naturalOfDrawing, placementForDecision, projectId]);
-
+  /**
+   * Fit: return to the sticky `auto` state and solve the largest scale whose
+   * mapped content fits the canvas. A semantic drawing never takes a CSS factor
+   * here — the solved scale is written into the geometry and shown 1:1.
+   */
   const fitDiagram = (): void => {
-    const host = hostRef.current;
-    const viewport = viewportRef.current;
     // A fit is the whole-graph reading: the package zoom the hint offered is
     // over, and its row must not keep asking the reader to go back.
     setPackageFocus(null);
+    if (semanticCaptureRef.current !== null) {
+      applyZoom({ scale: zoomRef.current.scale, fit: 'auto' });
+      applySemanticRef.current?.({ fit: true, scale: zoomRef.current.scale });
+      return;
+    }
+    const host = hostRef.current;
+    const viewport = viewportRef.current;
     if (host === null || viewport === null) {
-      applyZoom({ scale: 1, mode: 'fit' });
+      applyZoom({ scale: 1, fit: 'auto' });
       return;
     }
-    // The folded tier needs no scale of its own. Its drawing is the packed
-    // whole graph, sized against this very canvas and shown at the factor that
-    // puts it all on screen (`applySemanticLayout`); asking for a fit of the
-    // ORIGINAL bounds here would hand back the 5 % floor that made the canvas
-    // lie, and re-entering the tier at that scale would keep the fold while
-    // claiming to be a fit. The scroll is reset so "fitted" means the whole
-    // packed map is on screen from its first row.
-    const applied = appliedLayoutRef.current;
-    if (applied !== null && applied.foldDepth !== null) {
-      const box = measureViewportSize(host);
-      const width = Math.max(1, applied.content.width);
-      const height = Math.max(1, applied.content.height);
-      const factor = box === null ? 1 : Math.min(1, box.width / width, box.height / height);
-      const drawing = host.querySelector('svg');
-      if (drawing !== null) applyZoomScale(drawing, factor);
-      host.scrollLeft = 0;
-      host.scrollTop = 0;
-      setDrawnFit({ factor, foldDepth: applied.foldDepth });
-      return;
-    }
-    // Any other semantic drawing: the map may still be a few per cent larger
-    // than the canvas (the tier's stretch is a readability budget, not a size
-    // budget). The fit the reader just asked for is carried to the settled-zoom
-    // pass, which applies `min(1, canvas ÷ content)` to the drawing it puts on
-    // screen — and, when the scale does not change at all, is applied here.
-    if (applied !== null) fitRequestedRef.current = true;
-    // "Fit to view" follows the readable mode in force: the whole-graph fit in
-    // overview, the readable fit (plus its focus) in focus mode.
     const drawing = host.querySelector('svg');
     const natural = naturalOfDrawing(drawing);
     const box = measureViewportSize(host);
     if (natural === null || box === null) {
-      applyZoom({ scale: viewport.fit(), mode: 'fit' });
+      applyZoom({ scale: viewport.fitAll(), fit: 'auto' });
       return;
     }
-    const currentView = viewRef.current;
-    const decision = decideReadableZoom({
-      fitScale: fitZoomScale(natural, box, MIN_ZOOM_SCALE),
-      natural,
-      viewport: box,
-      hierarchy: seedHierarchyRef.current,
-      selectedEntityIds: [
-        selectedRef.current,
-        currentView.kind === 'neighborhood' ? currentView.entityId : null,
-      ],
-      mode: readableModeRef.current ?? undefined,
-    });
-    const placement = placementForDecision(natural, box, decision);
-    const before = zoomRef.current.scale;
-    const fittedScale = viewport.zoomTo(placement?.scale ?? decision.scale);
-    applyZoom({ scale: fittedScale, mode: 'fit' });
+    const placement = fitPlacementFor(natural, box);
+    const scale = viewport.zoomTo(placement.scale);
     applyPlacement(drawing, placement);
-    // A fit at the scale already in force settles no zoom, so no later pass
-    // consumes the request: answer it against the layout on screen right now
-    // (the drawing's own stretch can still leave it a few per cent too wide).
-    if (applied !== null && Math.abs(before - fittedScale) < 1e-9) {
-      fitRequestedRef.current = false;
-      const contentWidth = Math.max(1, applied.content.width);
-      const contentHeight = Math.max(1, applied.content.height);
-      const factor = Math.min(1, box.width / contentWidth, box.height / contentHeight);
-      const current = host.querySelector('svg');
-      if (current !== null) applyZoomScale(current, factor);
-      setDrawnFit(factor < 0.999 ? { factor, foldDepth: null } : null);
-    }
-    setReadableView({
-      mode: decision.mode,
-      focusPackageId: decision.focusPackageId,
-      hint: decision.overviewHint,
-    });
-    if (decision.mode === 'focus' && decision.focusPackageId !== null) {
-      centerOnPackage(host, decision.focusPackageId);
-    }
+    applyZoom({ scale, fit: 'auto' });
   };
 
   // The panel is told whether the drawing follows the container, because that
@@ -2714,8 +2500,8 @@ export function PlantUmlGraph({
   const onZoomModeChangeRef = useRef(onZoomModeChange);
   onZoomModeChangeRef.current = onZoomModeChange;
   useEffect(() => {
-    onZoomModeChangeRef.current?.(zoom.mode);
-  }, [zoom.mode]);
+    onZoomModeChangeRef.current?.(zoom.fit === 'auto' ? 'fit' : 'custom');
+  }, [zoom.fit]);
 
   // A fit request comes from the PANEL's own size change (the fullscreen
   // overlay swaps the region's `flex-1` for `fixed; inset: 0`). The renderer
@@ -2729,7 +2515,7 @@ export function PlantUmlGraph({
     if (fitRequest === null) return;
     if (answeredFitTokenRef.current === fitRequest.token) return;
     answeredFitTokenRef.current = fitRequest.token;
-    if (zoomRef.current.mode !== 'fit') return;
+    if (zoomRef.current.fit !== 'auto') return;
     fitDiagramRef.current();
   }, [fitRequest]);
 
@@ -3218,115 +3004,20 @@ export function PlantUmlGraph({
   const canDrill = selectedByTouch && selectedId !== null && !selectionAlreadyOpen;
 
   const zoomGroupLabel = t('architecture.plantuml.zoomGroup', { defaultValue: 'Diagram zoom' });
-  // The toggle's pressed state follows the user's last explicit choice; before
-  // any choice the drawing's own default (readableView) is what is on screen.
-  const activeReadableMode: ReadableZoomMode = readableMode ?? readableView?.mode ?? 'overview';
-  // What the fit control really does right now. The readable floor raises a
-  // geometric fit that would smear the labels, and in that state the control
-  // must not claim the whole drawing is on screen (see `fitControlReading`).
-  const fitReading = fitControlReading(readableView, zoom.mode);
   /**
-   * The percentage every surface states: the reader's zoom, EXCEPT in the
-   * folded tier, where the drawing is not a scaled original but a repacked map
-   * whose real adaptation to the canvas is the fold's fit factor. Printing
-   * `zoom.scale` there was the lie this task is about — "5 %" over a drawing
-   * four canvases wide. One value, read by the tier bar, the zoom cluster and
-   * the hint, so the canvas never shows two percentages for one drawing.
+   * The percentage every surface states. For a semantic drawing this is the
+   * engine's own scale `s` — the ONE proportion, baked into the geometry and
+   * shown 1:1 — so it equals the SVG's `data-architecture-semantic-scale`.
+   * For a grouped directory map it is the CSS scale the viewport applied.
    */
-  const displayScale = drawnFit?.factor ?? zoom.scale;
+  const displayScale = zoom.scale;
 
-  /**
-   * Whether the scale control is pressed. It used to say "pressed" whenever the
-   * zoom was a fit — including the 25 % whole-graph fit whose labels are 3 px
-   * tall. A control that promises a readable view must not claim to be applied
-   * while the view on screen is unreadable: an explicitly chosen overview below
-   * the readable floor is a fit, but the pressed state now belongs to the
-   * readable focus instead. A semantic (LOD) drawing carries its own ≥ 9 px font
-   * floor, so it always reads and keeps the pressed state.
-   */
-  const fitPressed = fitReading.pressed
-    && !(fitReading.mode === 'overview'
-      && semanticCaptureRef.current === null
-      && displayScale < READABLE_ZOOM_SCALE);
-
-  /** The 聚焦 / 全貌 switch: focus at the readable floor, or the whole drawing. */
-  const readableModeGroup = (
-    <span
-      role="group"
-      aria-label={t('architecture.plantuml.readable.group', { defaultValue: 'Readable zoom mode' })}
-      data-architecture-readable-toggle="true"
-      style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
-      className="pointer-events-auto flex items-center rounded border border-border/60 bg-background/90 p-0.5"
-    >
-      <button
-        type="button"
-        aria-pressed={activeReadableMode === 'focus'}
-        onClick={() => applyReadableMode('focus')}
-        data-architecture-readable-focus-mode="true"
-        style={touchTargetStyle}
-        className={`${TOOLBAR_BUTTON_CLASS} ${
-          activeReadableMode === 'focus' ? TOOLBAR_BUTTON_PRESSED_CLASS : ''
-        }`}
-      >
-        {t('architecture.plantuml.readable.focus', { defaultValue: 'Focus' })}
-      </button>
-      <button
-        type="button"
-        aria-pressed={activeReadableMode === 'overview'}
-        onClick={() => applyReadableMode('overview')}
-        data-architecture-readable-overview-mode="true"
-        style={touchTargetStyle}
-        className={`${TOOLBAR_BUTTON_CLASS} ${
-          activeReadableMode === 'overview' ? TOOLBAR_BUTTON_PRESSED_CLASS : ''
-        }`}
-      >
-        {t('architecture.plantuml.readable.overview', { defaultValue: 'Overview' })}
-      </button>
-    </span>
-  );
-
-  /**
-   * The tier bar's ONE explanatory sentence. The review found the same reading
-   * split across two sentences — a "Readable zoom is on … choose Overview"
-   * escape notice and a "Zoom N% · zoom in on <package> and N other
-   * package(s)" hint — which could appear together and repeat the tier label
-   * a third time. They are merged here, and only the Focus tier shows them:
-   * Overview needs no explanation because it already is the whole graph.
-   *
-   * Two defects are fixed at this one sentence: a graph with no OTHER package
-   * to switch to printed "(0 other package(s))", which reads as a function that
-   * returned nothing — that case uses the existing focus-only wording; and the
-   * sentence sat in the toolbar row, so a long package name truncated it AND
-   * made the row taller when it appeared, pushing the canvas down. It is drawn
-   * as an OVERLAY over the canvas now (see the render below), wraps instead of
-   * truncating, and therefore cannot move the canvas' top edge.
-   */
-  const focusPackage = readableView?.focusPackageId ?? readableView?.hint?.packageId ?? null;
-  const otherPackageCount = readableView?.hint?.packageCount ?? 0;
+  /** The collapsed-to-overview notice: the only reading banner the canvas keeps. */
   const readableNotice = collapsedNotice ? (
     <span data-architecture-readable-collapsed="true" className="text-amber-600 dark:text-amber-400">
       {t('architecture.plantuml.readable.collapsed', {
         defaultValue: 'The graph is too wide, so it was collapsed to the directory overview.',
       })}
-    </span>
-  ) : activeReadableMode === 'focus' ? (
-    <span
-      data-architecture-readable-focus-summary="true"
-      title={focusPackage ?? undefined}
-      // Wrapping, never truncating: the sentence must stay readable in full.
-      className="min-w-0 whitespace-normal break-words"
-    >
-      {focusPackage === null || otherPackageCount <= 0
-        ? t('architecture.plantuml.readable.focusOnly', {
-            defaultValue: 'Readable zoom is on — choose Overview to see the whole graph.',
-          })
-        : t('architecture.plantuml.readable.focusSummary', {
-            defaultValue:
-              'Readable zoom is on: focused on {{package}} at {{zoom}}% — choose Overview to see the whole graph ({{count}} other package(s)).',
-            package: shortPackageName(focusPackage),
-            zoom: Math.round(displayScale * 100),
-            count: otherPackageCount,
-          })}
     </span>
   ) : null;
 
@@ -3407,36 +3098,24 @@ export function PlantUmlGraph({
   const clusterTargetStyle = touchUi ? TOUCH_TARGET_STYLE : ZOOM_CLUSTER_TARGET_STYLE;
 
   /**
-   * The overview hint: shown while the WHOLE graph is too small to read (the
-   * fit / a manual zoom-out below `MIN_USEFUL_OVERVIEW_SCALE`) on any pointer
-   * tier, and kept on screen after the reader taps a package so the row carries
-   * the way back. Focus mode is a readable crop already, so it never shows one.
+   * The canvas pill. It has two reasons to exist, and neither is a Focus notice:
+   *  · the folded tier always states what the reader is looking at — a map of
+   *    collapsed package tabs — because the drawing no longer shows entities;
+   *  · after the reader taps a package the row carries the "back to the whole
+   *    graph" action.
    *
-   * The folded tier ALWAYS shows it, whatever the scale: the drawing on screen
-   * is a map of collapsed package tabs, and the one sentence that says so is
-   * the only thing that explains what the reader is looking at (and how to get
-   * back the entities). It is deliberately not a percentage: a re-packed map
-   * has no meaningful scale against the original drawing.
+   * The retired "whole graph at N % — tap a package" hint is gone with Focus:
+   * `auto` fit always shows the whole graph on purpose, so a sentence telling
+   * the reader it is too small had no action to offer that the palette did not.
    */
-  const overviewTooSmall = zoom.scale < MIN_USEFUL_OVERVIEW_SCALE;
-  const foldedDepth = drawnFit?.foldDepth ?? null;
-  const showOverviewHint = foldedDepth !== null || (readableView !== null
-    && readableView.mode === 'overview'
-    && (overviewTooSmall || packageFocus !== null));
+  const foldedDepth = foldDepth;
+  const showOverviewHint = foldedDepth !== null || packageFocus !== null;
   const overviewHintText = foldedDepth !== null
     ? t('architecture.plantuml.readable.folded', {
         defaultValue: 'Collapsed to {{depth}} levels — tap a package to zoom in',
         depth: foldedDepth,
       })
-    : packageFocus === null
-      ? t('architecture.plantuml.readable.overviewTooSmall', {
-          defaultValue: 'Whole graph at {{zoom}}% — tap a package to zoom in',
-          zoom: Math.round(displayScale * 100),
-        })
-      : t('architecture.plantuml.readable.focusHint', {
-          defaultValue: 'Focused on {{package}}',
-          package: shortPackageName(packageFocus),
-        });
+    : null;
   // The pill may only cover the drawing where no package tab is painted. It is
   // measured after every commit that can move either side (the drawing was
   // rewritten, the pill's wording changed, or a package zoom re-scrolled).
@@ -3444,7 +3123,7 @@ export function PlantUmlGraph({
     const host = hostRef.current;
     if (host === null || !showOverviewHint) return;
     positionOverviewHint(host);
-  }, [showOverviewHint, drawnRevision, zoom.scale, packageFocus, readableView, foldedDepth]);
+  }, [showOverviewHint, drawnRevision, zoom.scale, packageFocus, foldedDepth]);
 
   const zoomOutButton = (
     <button
@@ -3476,16 +3155,11 @@ export function PlantUmlGraph({
     <button
       type="button"
       onClick={fitDiagram}
-      aria-pressed={fitPressed}
+      aria-pressed={zoom.fit === 'auto'}
       data-architecture-zoom-fit="true"
-      // The honest reading of what this control applies. `zoom-mode` above keeps
-      // its existing fit/custom vocabulary; this is the view the fit lands on.
-      data-architecture-zoom-fit-mode={fitReading.mode}
       style={clusterTargetStyle}
       className={TOOLBAR_BUTTON_CLASS}
     >
-      {/* The scale action is named "Fit", not after the tier it lands on: the
-          tier is stated once, by the zoom-tier group above. */}
       {t('architecture.plantuml.zoomFit', { defaultValue: 'Fit to view' })}
     </button>
   );
@@ -3504,10 +3178,9 @@ export function PlantUmlGraph({
     )
     : null;
 
-  // The single zoom-tier group. It carries ONE Focus | Overview segmented
-  // control plus ONE scale reading — the review found the tier stated three
-  // times (a label, the toggle, and a sentence). A breadcrumb appears only
-  // from a real drill-down, and the focus explanation only in the Focus tier.
+  // The single zoom-tier group: ONE scale reading plus the breadcrumb/drill
+  // actions. The Focus | Overview switch that used to sit here is retired with
+  // the focus policy itself.
   const zoomTierGroup = (
     <div
       data-architecture-zoom-tier="true"
@@ -3516,12 +3189,6 @@ export function PlantUmlGraph({
       style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
       className="pointer-events-auto flex max-w-full flex-wrap items-center rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
     >
-      {/* On the compact tier the switch is a standing capsule ON THE CANVAS
-          (see the render below), not an entry inside the Adjust sheet: the
-          reader who opens an unreadable overview must be able to return to a
-          readable view without discovering a menu. Every other tier keeps it in
-          this row, where it was. */}
-      {compactToolbar ? null : readableModeGroup}
       {zoomReadout}
       {neighbourhoodStatus !== null && (
         <span
@@ -3596,22 +3263,30 @@ export function PlantUmlGraph({
       data-architecture-hops={view.kind === 'neighborhood' ? view.hops : undefined}
       data-architecture-visible-nodes={drawn?.view === view ? drawn.nodes : 0}
       data-architecture-visible-edges={drawn?.view === view ? drawn.edges : 0}
-      data-architecture-zoom-mode={zoom.mode}
-      // The percentage the reader can see, not the internal tier input: in the
-      // folded tier those differ (see `displayScale`).
+      // `fit`/`custom` keeps the panel's existing vocabulary: `auto` is the
+      // sticky fit that follows the canvas, `manual` is a scale the reader set.
+      data-architecture-zoom-mode={zoom.fit === 'auto' ? 'fit' : 'custom'}
+      data-architecture-fit={zoom.fit}
+      // The ONE proportion on screen. For a semantic drawing it equals the
+      // SVG's own `data-architecture-semantic-scale`; there is no CSS factor.
       data-architecture-zoom-scale={displayScale}
-      data-architecture-fold-depth={drawnFit?.foldDepth ?? undefined}
+      data-architecture-semantic-scale={semanticCaptureRef.current !== null ? displayScale : undefined}
+      data-architecture-fold-depth={foldDepth ?? undefined}
       data-architecture-lod-depth={lodDepth ?? undefined}
       data-architecture-layout-ms={layoutMs ?? undefined}
       // The layout readout's direction and reason: WHICH orientation the
       // drawing was laid out in, and why the policy chose it.
       data-architecture-layout-direction={layoutDirection ?? undefined}
       data-architecture-layout-direction-reason={layoutDirectionReason ?? undefined}
-      data-architecture-readable-mode={readableView?.mode}
-      data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
       <style data-architecture-canvas-selection-style="true">{CANVAS_UNSELECTABLE_STYLE}</style>
+      {/* The renderer's own legend is NOT part of the semantic rewrite, so its
+          fixed 10px text would be the one label below the phone floor. The
+          floor is stated here, in screen pixels, because k = 1. */}
+      <style data-architecture-legend-floor="true">
+        {`[data-architecture-plantuml] svg .uml-legend text { font-size: ${touchUi ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX}px; }`}
+      </style>
       {canvasHeaderSlot !== null ? (
         createPortal(headerControls, canvasHeaderSlot)
       ) : compactToolbar ? null : (
@@ -3984,20 +3659,6 @@ export function PlantUmlGraph({
             )}
           </div>
         </div>
-        {/* The standing Focus / Overview capsule on the compact tier. It lives
-            ON the drawing because the phone opens on the focus view whenever
-            the geometric fit is unreadable: the way back to the whole graph
-            must be one visible tap, not an entry inside the Adjust sheet. The
-            desktop tier keeps the same switch in its header row. */}
-        {compactToolbar && (
-          <div
-            data-architecture-canvas-readable-toggle="true"
-            style={{ position: 'absolute', zIndex: 24, left: 8, bottom: shortTouch ? 4 : 12 }}
-            className="pointer-events-auto"
-          >
-            {readableModeGroup}
-          </div>
-        )}
       </div>
       {failure !== null && (
         <p data-architecture-plantuml-error="true" role="alert" className="px-4 pb-2 text-xs text-destructive">

@@ -54,11 +54,9 @@ import {
   nodeSizeMemberSignature,
 } from '@/../e2e/support/architectureFixture';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
-import {
-  MIN_READABLE_FONT_PX,
-  READABLE_ZOOM_SCALE,
-  RENDERED_LABEL_FONT_PX,
-} from '@/modules/architecture/readableZoom';
+import { MAX_FIT_SCALE } from '@/modules/architecture/semanticZoomLayout';
+import { SEMANTIC_MIN_FONT_MOBILE_PX } from '@/modules/architecture/semanticZoomPlan';
+import { RENDERED_LABEL_FONT_PX } from '@/modules/architecture/readableZoom';
 import { ORIENTATION_REASON } from '@/modules/architecture/layoutOrientation';
 import { placeHoverHint } from '@/modules/architecture/hoverHintPlacement';
 
@@ -269,63 +267,6 @@ const RESULT: ArchitectureGraphResult = {
     cacheHit: false,
   },
 };
-
-/**
- * A 120-file drawing (40 packages × 3 files), the payload size the phone review
- * opened when it found a 25 % whole-graph default with ~3 px labels. Forty is
- * `OVERVIEW_GROUP_LIMIT`, so the directory overview really draws forty package
- * boxes — a wide drawing on a 390 px canvas — instead of collapsing to a
- * handful. The first package carries the seeds, so the readable focus has a
- * package to centre.
- */
-const LARGE_FILE_RESULT: ArchitectureGraphResult = (() => {
-  const packages = 40;
-  const filesPerPackage = 3;
-  const nodes: { id: string; label: string; distance: number }[] = [];
-  const edges: { from: string; to: string; relationType: 'dependency' }[] = [];
-  for (let packageIndex = 0; packageIndex < packages; packageIndex += 1) {
-    for (let fileIndex = 0; fileIndex < filesPerPackage; fileIndex += 1) {
-      const index = packageIndex * filesPerPackage + fileIndex;
-      const id = `src/modules/pkg${String(packageIndex).padStart(2, '0')}/file${String(fileIndex).padStart(2, '0')}.ts`;
-      nodes.push({
-        id,
-        label: id,
-        distance: packageIndex === 0 ? 0 : 1 + (fileIndex % 2),
-      });
-      if (index > 0) {
-        edges.push({ from: id, to: nodes[index - 1].id, relationType: 'dependency' });
-      }
-    }
-  }
-  return {
-    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
-    graph: {
-      file: { nodes, edges },
-      entity: { nodes: [], edges: [] },
-    },
-    stats: {
-      entityNodes: 0,
-      fileNodes: nodes.length,
-      entityEdges: 0,
-      fileEdges: edges.length,
-      truncated: false,
-      entityTruncated: false,
-      fileTruncated: false,
-      entityTotal: 0,
-      fileTotal: nodes.length,
-      seedFiles: filesPerPackage,
-      seedIdentifiers: 0,
-      nodeCount: nodes.length,
-      edgeCount: edges.length,
-      unresolved: { files: [], identifiers: [] },
-    },
-    provenance: {
-      generatedAt: GENERATED_AT,
-      fingerprints: [],
-      cacheHit: false,
-    },
-  };
-})();
 
 /** Run `fn` with a coarse pointer, i.e. the compact toolbar tier. */
 async function withCoarsePointer(fn: () => Promise<void>): Promise<void> {
@@ -1326,19 +1267,14 @@ test('the diagram opens fitted, and the canvas cluster plus Ctrl+wheel resize th
   triggerResize();
 
   const root = graphRoot();
-  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit', 'a fresh diagram opens in fit mode');
-  // This host's geometric fit is far below the readable floor, so the drawing
-  // opens on the readable focus instead of a 5 % smear. The whole-graph reading
-  // is one tap away through the standing Overview switch.
-  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
-  assert.equal(
-    root.querySelector('[data-architecture-zoom-fit]')?.getAttribute('data-architecture-zoom-fit-mode'),
-    'focus',
-    'the fit control names the focused fit it applies',
-  );
-  const readableGroup = screen.getByRole('group', { name: 'Readable zoom mode' });
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
-  assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview');
+  assert.equal(root.getAttribute('data-architecture-fit'), 'auto', 'a fresh diagram opens in the sticky fit state');
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
+  // The Focus / Overview switch is retired: the drawing opens on the whole
+  // graph, and there is no control promising a readable crop.
+  assert.equal(document.querySelector('[data-architecture-readable-focus-mode]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-overview-mode]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-toggle]'), null);
+
   const fitted = await waitForFit(host);
   const natural = svgViewBoxSize(host.querySelector('svg') as Element);
   assert.ok(fitted < natural.width, 'fit shrinks a diagram larger than its container');
@@ -1353,30 +1289,18 @@ test('the diagram opens fitted, and the canvas cluster plus Ctrl+wheel resize th
   const openedSvg = host.querySelector('svg');
   assert.ok(openedSvg !== null);
   assert.ok(
-    Number(openedSvg.getAttribute('width')) <= host.clientWidth + 0.5,
+    Number(openedSvg.getAttribute('width')) <= host.clientWidth + 1.5,
     'the whole drawing fits the canvas width on open',
   );
   assert.ok(
-    Number(openedSvg.getAttribute('height')) <= host.clientHeight + 0.5,
+    Number(openedSvg.getAttribute('height')) <= host.clientHeight + 1.5,
     'the whole drawing fits the canvas height on open',
   );
 
-  // The toolbar's Focus choice lands on the readable floor, larger than the
-  // whole-graph fit, and the same Fit control re-applies THAT view.
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Focus' }));
-  assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus');
-  assert.equal(root.getAttribute('data-architecture-readable-package'), 'src/modules/alpha');
-  const focusedWidth = svgWidth(host);
-  assert.ok(focusedWidth > fitted, 'focus is larger than the whole-graph fit');
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
-  assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview');
-  assert.ok(Math.abs(svgWidth(host) - fitted) < 0.05, 'Overview restores the whole-graph fit');
-  // Leave the drawing on its default for the scale checks below.
-  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
-
-  // + / − step by the documented factor and switch to the user's own scale.
+  // + / − step by the documented factor and switch to the reader's own scale.
   fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+  assert.equal(root.getAttribute('data-architecture-fit'), 'manual');
   assert.ok(Math.abs(svgWidth(host) - fitted * 1.25) < 0.05, 'zoom in applies one 1.25× step');
   fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
   assert.ok(Math.abs(svgWidth(host) - fitted) < 0.05, 'zoom out takes the same step back');
@@ -1388,10 +1312,9 @@ test('the diagram opens fitted, and the canvas cluster plus Ctrl+wheel resize th
   assert.equal(svgWidth(host), natural.width);
   assert.equal(Number(host.querySelector('svg')?.getAttribute('height')), natural.height);
 
-  // Fit returns to the container-derived size. In this host the fit is a
-  // readable focus, so the control is named "Focus" (see the dedicated case
-  // below); read it by its data attribute so this check stays about the scale.
+  // Fit returns to the container-derived size and, crucially, back to `auto`.
   fireEvent.click(root.querySelector('[data-architecture-zoom-fit]') as Element);
+  assert.equal(root.getAttribute('data-architecture-fit'), 'auto');
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
   assert.equal(await waitForFit(host), fitted);
 
@@ -2113,207 +2036,153 @@ test('the landscape-phone tier folds the summary into a one-row toolbar and hugs
   }
 });
 
-test('an explicit readable-mode choice is remembered for its project across mounts and does not leak', async () => {
-  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-  const host = await screen.findByTestId('plantuml-host');
-  sizeHost(host, 160, 120);
-  await waitFor(() => assert.ok(host.querySelector('svg')));
-  triggerResize();
-  // This host's fit is unreadable, so the drawing opens on the automatic focus
-  // without any stored choice.
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-readable-mode'), 'focus'));
-
-  const readableGroup = screen.getByRole('group', { name: 'Readable zoom mode' });
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
-  assert.equal(graphRoot().getAttribute('data-architecture-readable-mode'), 'overview');
-  assert.equal(
-    window.localStorage.getItem('architecture.readableMode.v1:project-1'),
-    'overview',
-    'the explicit choice is written for this project',
-  );
-  first.unmount();
-
-  // Re-opening the SAME project restores the reader's choice.
-  const reopened = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-  const reopenedHost = await screen.findByTestId('plantuml-host');
-  sizeHost(reopenedHost, 160, 120);
-  await waitFor(() => assert.ok(reopenedHost.querySelector('svg')));
-  triggerResize();
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-readable-mode'), 'overview'));
-  reopened.unmount();
-
-  // ANOTHER project starts at the drawing's own default (focus here), not at
-  // this project's explicit whole-graph choice: the choice is isolated.
-  const other = render(<ArchitecturePanel projectId="project-2" sessionId="session-1" initialGranularity="file" />);
-  const otherHost = await screen.findByTestId('plantuml-host');
-  sizeHost(otherHost, 160, 120);
-  await waitFor(() => assert.ok(otherHost.querySelector('svg')));
-  triggerResize();
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-readable-mode'), 'focus'));
-  other.unmount();
-});
-
-test('the readable toggle shows one merged focus summary only in Focus, and one scale reading', async () => {
+test('a stale stored focus choice is ignored and never written back', async () => {
+  // The retired store key, left behind by a previous release. Nothing in the
+  // canvas may read it (which would bring Focus back) or rewrite it (which
+  // would claim the choice still exists).
+  window.localStorage.setItem('architecture.readableMode.v1:project-1', 'focus');
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
   await waitFor(() => assert.ok(host.querySelector('svg')));
   triggerResize();
 
-  const root = graphRoot();
-  // This host's geometric fit is unreadable, so the DEFAULT is the readable
-  // focus. Focus needs the one merged sentence: it is not the whole graph and
-  // the reader must know the way back.
-  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
-  const focusedScale = Number(root.getAttribute('data-architecture-zoom-scale'));
-  assert.ok(
-    document.querySelector('[data-architecture-readable-focus-summary]') instanceof HTMLElement,
-    'the Focus tier states what the reader is looking at',
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'auto'));
+  assert.equal(document.querySelector('[data-architecture-readable-focus-mode]'), null, 'no Focus control');
+  assert.equal(document.querySelector('[data-architecture-readable-overview-mode]'), null, 'no Overview control');
+  assert.equal(document.querySelector('[data-architecture-readable-focus-summary]'), null, 'no Focus banner');
+  assert.equal(
+    window.localStorage.getItem('architecture.readableMode.v1:project-1'),
+    'focus',
+    'the retired key is not rewritten by the canvas',
   );
+});
 
-  // One tier control set: exactly one Focus and one Overview button, and no
-  // separate label-style tier text.
-  const tier = document.querySelector('[data-architecture-zoom-tier]');
-  assert.ok(tier instanceof HTMLElement, 'the zoom tier lives on the canvas');
-  assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null, 'no label-style tier text');
-  assert.equal(tier.querySelectorAll('[data-architecture-readable-focus-mode]').length, 1);
-  assert.equal(tier.querySelectorAll('[data-architecture-readable-overview-mode]').length, 1);
+test('a semantic drawing states ONE scale — its geometry scale — with no CSS factor and no Focus chrome', async () => {
+  rememberDefaultWithMentionedFunctions();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  sizeHost(host, 640, 420);
+  triggerResize();
 
-  // The tier's reading and the zoom cluster's reading are ONE value: both
-  // derive from the applied zoom state.
+  const root = graphRoot();
+  await waitFor(() => {
+    const svg = host.querySelector('svg');
+    assert.ok(svg?.getAttribute('data-architecture-semantic') !== null, 'the class drawing takes the semantic engine');
+  });
+  const svg = host.querySelector('svg') as Element;
+  const semanticScale = Number(svg.getAttribute('data-architecture-semantic-scale'));
+  assert.ok(semanticScale > 0 && semanticScale <= MAX_FIT_SCALE + 1e-9);
+
+  // k = 1: the element is sized to its own mapped viewBox; there is no second,
+  // CSS factor on the drawing (the defect printed 74 % for a 17 % map).
+  const box = svgViewBoxSize(svg);
+  assert.equal(Number(svg.getAttribute('width')), box.width, 'the semantic SVG is shown 1:1 with its mapped viewBox');
+  assert.equal(Number(svg.getAttribute('height')), box.height);
+
+  // The readout IS the semantic proportion, on the root and on the SVG.
+  assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), semanticScale);
+  assert.equal(Number(root.getAttribute('data-architecture-semantic-scale')), semanticScale);
   const tierReadout = document.querySelector('[data-architecture-zoom-level]');
   const clusterReadout = document.querySelector('[data-architecture-zoom-cluster-level]');
   assert.ok(tierReadout instanceof HTMLElement);
-  assert.ok(clusterReadout instanceof HTMLElement, 'the zoom cluster states the same scale');
+  assert.ok(clusterReadout instanceof HTMLElement);
   assert.equal(tierReadout.textContent, clusterReadout.textContent, 'tier and cluster print the same number');
-  assert.equal(tierReadout.textContent, `${Math.round(focusedScale * 100)}%`);
-  assert.equal(
-    screen.getByRole('button', { name: 'Focus' }).getAttribute('aria-pressed'),
-    'true',
-    'the focus mode is the pressed toggle by default',
-  );
+  assert.equal(tierReadout.textContent, `${Math.round(semanticScale * 100)}%`);
 
-  // 全貌: the EXPLICIT whole-graph fit. It IS the whole graph, so it needs no
-  // explanatory sentence: the review merged the old "zoom into <package>" hint
-  // into the Focus-tier line.
-  const readableGroup = screen.getByRole('group', { name: 'Readable zoom mode' });
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
-  assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview');
-  const overviewScale = Number(root.getAttribute('data-architecture-zoom-scale'));
-  assert.ok(overviewScale < focusedScale, 'the whole-graph fit is smaller than the readable focus');
-  assert.equal(
-    document.querySelector('[data-architecture-readable-focus-summary]'),
-    null,
-    'Overview shows no explanatory sentence',
-  );
-  assert.equal(
-    screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed'),
-    'true',
-    'the overview mode is the pressed toggle after choosing it',
-  );
-  const tierReadout2 = document.querySelector('[data-architecture-zoom-level]');
-  const clusterReadout2 = document.querySelector('[data-architecture-zoom-cluster-level]');
-  assert.equal(tierReadout2?.textContent, clusterReadout2?.textContent);
+  // The drawing the engine produced fits the canvas the test pinned.
+  assert.ok(Number(svg.getAttribute('width')) <= host.clientWidth + 1.5);
+  assert.ok(Number(svg.getAttribute('height')) <= host.clientHeight + 1.5);
+
+  // No Focus control or banner moved into the tier row or onto the canvas.
+  assert.equal(document.querySelector('[data-architecture-readable-toggle]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-focus-mode]'), null);
+  assert.equal(document.querySelector('[data-architecture-canvas-readable-toggle]'), null);
   assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null);
-
-  // 聚焦 returns to the readable floor; the one merged sentence is back. This
-  // drawing has ONE seeded package, so it must not claim "(0 other
-  // package(s))" — a count that reads like a function which returned nothing.
-  // The focus-only wording (the existing key) is what it states instead.
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Focus' }));
-  assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus');
-  assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), focusedScale);
-  assert.equal(root.getAttribute('data-architecture-readable-package'), 'src/modules/alpha');
-  const summary = document.querySelector('[data-architecture-readable-focus-summary]');
-  assert.ok(summary instanceof HTMLElement, 'the Focus tier states the focus reading');
-  assert.match(summary.textContent ?? '', /choose Overview to see the whole graph/i);
-  assert.doesNotMatch(summary.textContent ?? '', /0 other package/, 'no vacuous "(0 other package(s))"');
-  assert.doesNotMatch(summary.textContent ?? '', /focused on/, 'and no package claim when there is nothing to switch to');
-  assert.equal(summary.getAttribute('title'), 'src/modules/alpha', 'the full package id stays available as the title');
-  // The sentence is an overlay that wraps; truncating it would cut exactly the
-  // "choose Overview" escape the sentence exists to give.
-  assert.doesNotMatch(summary.className, /truncate/, 'the sentence must not truncate');
 });
 
-test('a phone opens a 120-file drawing readable, with the Overview switch unpressed', async () => {
+test('a phone opens the class drawing fitted, at the floor font, with no Focus switch', async () => {
   await withCoarsePointer(async () => {
-    apiMock.architectureGraph.mockResolvedValue(jsonResponse(LARGE_FILE_RESULT));
-    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-    const host = await screen.findByTestId('plantuml-host');
-    await waitFor(() => assert.ok(host.querySelector('svg')), { timeout: 20_000 });
+    rememberDefaultWithMentionedFunctions();
+    apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+    const host = await waitForDiagram();
     sizeHost(host, 390, 780);
     triggerResize();
 
     const root = graphRoot();
-    // The whole-graph fit of a 120-file drawing on a 390 px canvas is far below
-    // the readable floor; the phone must open focused instead.
-    await waitFor(
-      () => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'),
-      { timeout: 20_000 },
-    );
+    await waitFor(() => {
+      const svg = host.querySelector('svg');
+      assert.ok(svg?.getAttribute('data-architecture-semantic') !== null, 'the dense class drawing is semantic');
+    }, { timeout: 20_000 });
+    assert.equal(root.getAttribute('data-architecture-fit'), 'auto');
 
-    const overview = document.querySelector('[data-architecture-readable-overview-mode]');
-    assert.ok(overview instanceof HTMLElement, 'the standing Focus/Overview switch is on the canvas');
-    assert.equal(overview.getAttribute('aria-pressed'), 'false', 'the unreadable whole graph is not the active mode');
-    assert.equal(
-      document.querySelector('[data-architecture-sheet]'),
-      null,
-      'the switch is reachable without opening the Adjust sheet',
-    );
-    assert.ok(overview.closest('[data-architecture-canvas]') !== null, 'the switch lives on the drawing');
-
-    // The rendered titles really are readable: SVG font × applied scale.
-    const scale = Number(root.getAttribute('data-architecture-zoom-scale'));
-    assert.ok(scale >= READABLE_ZOOM_SCALE - 1e-9, `the opened scale is the readable floor; got ${scale}`);
+    // The whole drawing fits the phone canvas, and there is no Focus switch to
+    // reach for: the engine's floor font is the readability guarantee.
+    await waitFor(() => {
+      const svg = host.querySelector('svg') as Element;
+      assert.ok(
+        Number(svg.getAttribute('width')) <= host.clientWidth + 1.5,
+        `the whole drawing fits the phone width; width=${svg.getAttribute('width')} host=${host.clientWidth}`,
+      );
+    }, { timeout: 3000 });
+    assert.equal(document.querySelector('[data-architecture-readable-overview-mode]'), null);
+    assert.equal(document.querySelector('[data-architecture-canvas-readable-toggle]'), null);
     assert.ok(
-      renderedLabelPx(host, scale) >= MIN_READABLE_FONT_PX - 1e-9,
-      `node titles must render at >= ${MIN_READABLE_FONT_PX}px; got ${renderedLabelPx(host, scale)}`,
+      renderedLabelPx(host, 1) >= SEMANTIC_MIN_FONT_MOBILE_PX - 1e-9,
+      `node titles must render at >= ${SEMANTIC_MIN_FONT_MOBILE_PX}px; got ${renderedLabelPx(host, 1)}`,
     );
   });
 }, 30_000);
 
-test('the canvas switch returns a phone drawing to Overview and remembers the choice', async () => {
-  await withCoarsePointer(async () => {
-    apiMock.architectureGraph.mockResolvedValue(jsonResponse(LARGE_FILE_RESULT));
-    const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-    const host = await screen.findByTestId('plantuml-host');
-    await waitFor(() => assert.ok(host.querySelector('svg')), { timeout: 20_000 });
-    sizeHost(host, 390, 780);
-    triggerResize();
+test('auto re-solves after a host size change, manual keeps the scale, and Fit returns to auto', async () => {
+  rememberDefaultWithMentionedFunctions();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  sizeHost(host, 520, 360);
+  triggerResize();
 
-    const root = graphRoot();
-    await waitFor(
-      () => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'),
-      { timeout: 20_000 },
-    );
-    const overview = document.querySelector('[data-architecture-readable-overview-mode]');
-    assert.ok(overview instanceof HTMLElement, 'the canvas carries the Focus/Overview switch');
-    fireEvent.click(overview);
+  const root = graphRoot();
+  const semanticScale = (): number => Number(
+    host.querySelector('svg')?.getAttribute('data-architecture-semantic-scale'),
+  );
+  await waitFor(() => assert.ok(semanticScale() > 0));
+  assert.equal(root.getAttribute('data-architecture-fit'), 'auto');
+  const small = semanticScale();
 
-    assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview', 'one tap shows the whole graph');
-    assert.equal(overview.getAttribute('aria-pressed'), 'true', 'the switch states the mode now in force');
-    assert.equal(
-      window.localStorage.getItem('architecture.readableMode.v1:project-1'),
-      'overview',
-      'the explicit choice is persisted for this project',
-    );
-    first.unmount();
+  // A larger canvas: the pending 150 ms refit must re-solve, not keep the old
+  // scale (which is what the retired focus default did).
+  sizeHost(host, 900, 620);
+  triggerResize();
+  await waitFor(() => {
+    assert.ok(semanticScale() > small, `auto must re-solve larger on a larger canvas; ${small} → ${semanticScale()}`);
+    const svg = host.querySelector('svg') as Element;
+    assert.ok(Number(svg.getAttribute('width')) <= host.clientWidth + 1.5, 'the re-solved drawing fits the new canvas');
+    assert.equal(Number(svg.getAttribute('width')), svgViewBoxSize(svg).width, 'still 1:1 — no CSS factor');
+  }, { timeout: 3000 });
 
-    // A refresh (a fresh mount) reads the choice back.
-    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-    const reopenedHost = await screen.findByTestId('plantuml-host');
-    await waitFor(() => assert.ok(reopenedHost.querySelector('svg')), { timeout: 20_000 });
-    sizeHost(reopenedHost, 390, 780);
-    triggerResize();
-    await waitFor(
-      () => assert.equal(graphRoot().getAttribute('data-architecture-readable-mode'), 'overview'),
-      { timeout: 20_000 },
-    );
-    const reopened = document.querySelector('[data-architecture-readable-overview-mode]');
-    assert.ok(reopened instanceof HTMLElement);
-    assert.equal(reopened.getAttribute('aria-pressed'), 'true', 'the remembered choice survives the remount');
-  });
-}, 30_000);
+  // An explicit zoom switches to `manual`; a later size change must NOT move it.
+  fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+  assert.equal(root.getAttribute('data-architecture-fit'), 'manual');
+  const manual = semanticScale();
+  assert.ok(manual > 0);
+  sizeHost(host, 1100, 700);
+  triggerResize();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(semanticScale(), manual, 'manual keeps the reader scale across a resize');
+  assert.equal(root.getAttribute('data-architecture-fit'), 'manual');
+
+  // Fit returns to `auto` and re-solves against the current canvas.
+  fireEvent.click(root.querySelector('[data-architecture-zoom-fit]') as Element);
+  await waitFor(() => {
+    assert.equal(root.getAttribute('data-architecture-fit'), 'auto');
+    assert.notEqual(semanticScale(), manual, 'Fit re-solves instead of keeping the manual scale');
+    const svg = host.querySelector('svg') as Element;
+    assert.ok(Number(svg.getAttribute('width')) <= host.clientWidth + 1.5);
+  }, { timeout: 3000 });
+});
 
 test('a band-shaped explosion drawing collapses to the overview with a notice', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
@@ -2823,14 +2692,10 @@ test('the class view opens on the entities themselves: no directory boxes, reada
     'the rendered entity boxes are exactly the laid-out entities',
   );
 
-  // The readable-zoom policy owns the default: the whole drawing at its
-  // geometric fit. With no container measurement that fit is natural size
-  // (100%), and the explicit Focus arm stays one toolbar choice away.
-  assert.equal(
-    graphRoot().getAttribute('data-architecture-readable-mode'),
-    'overview',
-    'an unmeasured container opens at the whole drawing, never a crop',
-  );
+  // The sticky fit policy owns the default: the whole drawing, re-solved
+  // against the canvas. With no container measurement there is no fit to solve,
+  // so the engine shows the drawing at its natural scale.
+  assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'auto', 'the default is the sticky fit state');
   assert.equal(
     Number(graphRoot().getAttribute('data-architecture-zoom-scale')),
     1,
@@ -3745,7 +3610,7 @@ test('the fetch effect tears down cleanly when the panel unmounts mid-request', 
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 1));
 });
 
-test('the fit control is named after what it does, and the Focus tier carries the one summary', async () => {
+test('the fit control states the sticky fit state, and the canvas carries no Focus chrome', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
@@ -3753,53 +3618,33 @@ test('the fit control is named after what it does, and the Focus tier carries th
   triggerResize();
 
   const root = graphRoot();
-  // This host's fit is unreadable, so the drawing opens focused — and that
-  // focused view IS the fit the control applies.
-  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
-  const readableGroup = screen.getByRole('group', { name: 'Readable zoom mode' });
-
-  // The tier no longer prints a label-style tier text: the segmented control's
-  // pressed state is the one place the tier is stated.
-  const tier = document.querySelector('[data-architecture-zoom-tier]');
-  assert.ok(tier instanceof HTMLElement, 'the zoom tier lives on the canvas');
-  assert.equal(tier.querySelector('[data-architecture-zoom-tier-label]'), null, 'no label-style tier text');
+  await waitForFit(host);
   const fit = root.querySelector('[data-architecture-zoom-fit]');
   assert.ok(fit instanceof HTMLElement);
-  assert.equal(fit.getAttribute('data-architecture-zoom-fit-mode'), 'focus', 'the fit lands on a focus view');
-  assert.equal(fit.textContent, 'Fit to view', 'the control is named after what it applies');
-  assert.equal(fit.getAttribute('aria-pressed'), 'true', 'the zoom on screen is the readable fit');
-  // `data-architecture-zoom-mode` keeps its existing fit/custom vocabulary.
+  assert.equal(fit.textContent, 'Fit to view', 'one name for one action');
+  assert.equal(fit.getAttribute('aria-pressed'), 'true', 'the canvas is in the sticky fit state');
+  assert.equal(root.getAttribute('data-architecture-fit'), 'auto');
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
 
-  // One merged sentence in the Focus tier: it states the focus AND the escape
-  // to the whole graph. The old separate "fit notice" is gone.
-  const summary = document.querySelector('[data-architecture-readable-focus-summary]');
-  assert.ok(summary instanceof HTMLElement, 'the Focus tier states what the reader is looking at');
-  assert.match(summary.textContent ?? '', /Overview/, 'the sentence names the control that shows everything');
-  assert.match(summary.textContent ?? '', /whole graph/i);
-  assert.equal(document.querySelector('[data-architecture-readable-fit-notice]'), null);
+  // An explicit zoom releases the sticky state; Fit takes it back.
+  fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+  assert.equal(root.getAttribute('data-architecture-fit'), 'manual');
+  assert.equal(fit.getAttribute('aria-pressed'), 'false');
+  fireEvent.click(fit);
+  await waitFor(() => assert.equal(fit.getAttribute('aria-pressed'), 'true'));
+  assert.equal(root.getAttribute('data-architecture-fit'), 'auto');
 
-  // Choosing Overview really fits the whole drawing — but at 5 % its labels are
-  // a third of a pixel tall, so the Fit control must NOT claim that unreadable
-  // view as its own. The Fit press belongs to the readable focus.
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
-  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview'));
-  const wholeFit = root.querySelector('[data-architecture-zoom-fit]');
-  assert.ok(wholeFit instanceof HTMLElement);
-  assert.equal(wholeFit.getAttribute('data-architecture-zoom-fit-mode'), 'overview');
-  assert.equal(wholeFit.textContent, 'Fit to view');
-  assert.equal(
-    wholeFit.getAttribute('aria-pressed'),
-    'false',
-    'the unreadable whole-graph view must not show the readable fit as pressed',
-  );
+  // The tier row carries no Focus | Overview switch, and the retired banners
+  // (focus summary, fit notice, too-small hint) are not drawn anywhere.
+  const tier = document.querySelector('[data-architecture-zoom-tier]');
+  assert.ok(tier instanceof HTMLElement, 'the zoom tier lives on the canvas');
+  assert.equal(tier.querySelector('[data-architecture-readable-focus-mode]'), null);
+  assert.equal(tier.querySelector('[data-architecture-readable-overview-mode]'), null);
+  assert.equal(tier.querySelector('[data-architecture-readable-toggle]'), null);
+  assert.equal(tier.querySelector('[data-architecture-zoom-tier-label]'), null, 'no label-style tier text');
   assert.equal(document.querySelector('[data-architecture-readable-focus-summary]'), null);
-  assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null);
-
-  // Returning to Focus restores the pressed, readable fit.
-  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Focus' }));
-  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
-  assert.equal(root.querySelector('[data-architecture-zoom-fit]')?.getAttribute('aria-pressed'), 'true');
+  assert.equal(document.querySelector('[data-architecture-readable-fit-notice]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-notice]'), null);
 });
 
 /**
@@ -5231,7 +5076,7 @@ test('the file view has no element section (a file has no kind); the class view 
   await waitFor(() => assert.ok(document.querySelector('[data-architecture-filter-elements]')));
 });
 
-test('every reviewed locale carries both fit labels and the focused-fit escape', () => {
+test('every reviewed locale names Fit and carries none of the retired Focus strings', () => {
   const bundles: Record<string, unknown> = {
     en: enCommon,
     de: deCommon,
@@ -5247,20 +5092,35 @@ test('every reviewed locale carries both fit labels and the focused-fit escape',
     'zh-TW': zhTWCommon,
   };
   const plantumlOf = (bundle: unknown) => (bundle as {
-    architecture: {
-      plantuml: { zoomFit?: string; zoomFocus?: string; readable?: { focusedFitHint?: string } };
-    };
+    architecture: { plantuml: Record<string, unknown> & { readable?: Record<string, unknown> } };
   }).architecture.plantuml;
+  /** The keys that existed only to explain or switch the Focus mode. */
+  const RETIRED_READABLE_KEYS = [
+    'focus',
+    'overview',
+    'focusHint',
+    'focusSummary',
+    'focusOnly',
+    'overviewTooSmall',
+    'overviewHint',
+    'focusedFitHint',
+    'group',
+  ];
 
   assert.equal(Object.keys(bundles).length, 12, 'the reviewed locale set');
   for (const [locale, bundle] of Object.entries(bundles)) {
     const plantuml = plantumlOf(bundle);
-    assert.ok((plantuml.zoomFit ?? '').length > 0, `${locale} must name the whole-graph fit`);
-    assert.ok((plantuml.zoomFocus ?? '').length > 0, `${locale} must name the readable focus`);
-    assert.ok(
-      (plantuml.readable?.focusedFitHint ?? '').length > 0,
-      `${locale} must explain a focused fit and name the overview escape`,
-    );
+    assert.ok((plantuml.zoomFit as string | undefined)?.length, `${locale} must name Fit`);
+    assert.equal(plantuml.zoomFocus, undefined, `${locale} must not carry the retired focused-fit label`);
+    const readable = plantuml.readable;
+    assert.ok(readable !== undefined, `${locale} keeps its folder-overview notice and folded hint`);
+    for (const key of RETIRED_READABLE_KEYS) {
+      assert.equal(readable[key], undefined, `${locale} must not ship architecture.plantuml.readable.${key}`);
+    }
+    // The keys that remain are the ones the canvas still draws.
+    assert.ok((readable.folded as string | undefined)?.length, `${locale} keeps the folded-tier sentence`);
+    assert.ok((readable.collapsed as string | undefined)?.length, `${locale} keeps the band-collapse notice`);
+    assert.ok((readable.backToWhole as string | undefined)?.length, `${locale} keeps the way back`);
   }
 });
 
@@ -5830,41 +5690,29 @@ test('the neighbourhood view keeps edge labels hidden, like every other view', a
   assert.deepEqual(visibleEdgeLabels(host), [], 'no label is visible until the reader hovers an edge endpoint');
 });
 
-test('a whole graph below the useful scale offers a hint; tapping a package zooms in and back', async () => {
-  // The hint is an OVERVIEW affordance: the reader has asked for the whole
-  // graph at a scale too small to read. State that explicit choice, so the case
-  // stays about the hint (the unreadable default would open focused).
-  window.localStorage.setItem('architecture.readableMode.v1:project-1', 'overview');
+test('tapping a package zooms in through the same solve and keeps a way back', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
   const host = await waitForDiagram();
   const svg = host.querySelector('svg');
   assert.ok(svg !== null);
-  const natural = svgViewBoxSize(svg);
-  // A phone-shaped canvas that is deliberately narrower than the drawing: the
-  // whole-graph fit lands under the 12% useful-scale floor, which is exactly
-  // the state the task says must not leave the reader with a grey smear.
-  sizeHost(host, Math.max(8, Math.round(natural.width * 0.05)), 505);
+  // A small canvas, then an explicit zoom-out to the package level: frames are
+  // the only thing drawn, the state the "tap a package" gesture is for. The
+  // too-small HINT is retired with Focus, so no pill is drawn yet.
+  sizeHost(host, 300, 240);
   triggerResize();
   await waitFor(() => {
-    const scale = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-    assert.ok(scale > 0 && scale < 0.12, `the fit must land below the hint threshold; got ${scale}`);
+    assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'auto');
+    const svgNow = host.querySelector('svg') as Element;
+    assert.ok(Number(svgNow.getAttribute('width')) <= host.clientWidth + 1.5, 'the auto fit has re-solved');
   });
-
-  const hint = await waitFor(() => {
-    const node = document.querySelector('[data-architecture-readable-hint]');
-    assert.ok(node instanceof HTMLElement, 'a too-small whole graph states so');
-    return node;
-  });
-  assert.equal(hint.getAttribute('role'), 'status', 'the hint is announced without stealing focus');
-  assert.match(hint.textContent ?? '', /tap a package to zoom in/i);
-  assert.equal(
-    document.querySelector('[data-architecture-readable-back]'),
-    null,
-    'there is nothing to go back to before a package is chosen',
-  );
-
-  // The far zoom settles at the package level, where the frames are visible.
+  const autoScale = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  for (let step = 0; step < 10; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+  }
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
+  assert.equal(document.querySelector('[data-architecture-readable-hint]'), null, 'no Focus-era too-small hint');
+  assert.equal(document.querySelector('[data-architecture-readable-back]'), null);
+
   const frame = host.querySelector('.uml-package[data-package-id]');
   assert.ok(frame instanceof Element, 'the package level must draw package frames');
   const before = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
@@ -5872,17 +5720,15 @@ test('a whole graph below the useful scale offers a hint; tapping a package zoom
   await waitFor(() => {
     const scale = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
     assert.ok(scale > before, `tapping a package must zoom in; ${before} -> ${scale}`);
-    assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
+    assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'manual');
   });
   const back = document.querySelector('[data-architecture-readable-back]');
   assert.ok(back instanceof HTMLElement, 'the hint row now offers the way back');
-  assert.match(hint.textContent ?? '', /Focused on/i);
+  assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
 
-  // The zoom is CENTRED on that package: the scroll offsets are the frame's
-  // centre at the applied scale, brought to the middle of the content box.
-  const applied = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-  // The semantic rewrite replaces the frame's SVG element, so re-read it from
-  // the drawing that is now on screen (same package id, new geometry).
+  // The zoom is CENTRED on that package: the frame's attributes are already the
+  // mapped screen units (the SVG is 1:1), so the expected scroll is its centre
+  // brought to the middle of the content box.
   const frameNow = host.querySelector(`.uml-package[data-package-id="${frame.getAttribute('data-package-id')}"]`);
   assert.ok(frameNow instanceof Element, 'the tapped package is still drawn after the rewrite');
   const frameRect = [...frameNow.children].find((child) => child.tagName.toLowerCase() === 'rect');
@@ -5892,16 +5738,8 @@ test('a whole graph below the useful scale offers a hint; tapping a package zoom
   const originParts = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
   const originX = Number.isFinite(originParts[0]) ? originParts[0] : 0;
   const originY = Number.isFinite(originParts[1]) ? originParts[1] : 0;
-  // In semantic mode the frame's attributes are ALREADY screen units (the map
-  // is baked into the geometry and the SVG is shown 1:1), so the expected
-  // scroll is the frame centre without applying the zoom factor again.
-  const semantic = svg.getAttribute('data-architecture-semantic') !== null;
-  const expectedLeft = semantic
-    ? Math.max(0, fx - originX + fw / 2 - host.clientWidth / 2)
-    : Math.max(0, (fx - originX) * applied + (fw * applied) / 2 - host.clientWidth / 2);
-  const expectedTop = semantic
-    ? Math.max(0, fy - originY + fh / 2 - host.clientHeight / 2)
-    : Math.max(0, (fy - originY) * applied + (fh * applied) / 2 - host.clientHeight / 2);
+  const expectedLeft = Math.max(0, fx - originX + fw / 2 - host.clientWidth / 2);
+  const expectedTop = Math.max(0, fy - originY + fh / 2 - host.clientHeight / 2);
   assert.ok(
     Math.abs(host.scrollLeft - expectedLeft) < 0.5,
     `the package must be centred horizontally; got ${host.scrollLeft}, expected ${expectedLeft}`,
@@ -5911,11 +5749,12 @@ test('a whole graph below the useful scale offers a hint; tapping a package zoom
     `the package must be centred vertically; got ${host.scrollTop}, expected ${expectedTop}`,
   );
 
-  // "Back to whole graph" restores the whole-graph fit.
+  // "Back to whole graph" returns to the sticky auto fit.
   fireEvent.click(back);
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'fit'));
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'auto'));
   const restored = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-  assert.ok(restored < before * 1.001, `the whole-graph fit must be restored; got ${restored} vs ${before}`);
+  assert.equal(restored, autoScale, 'the auto fit is restored exactly');
+  assert.ok(restored > before, 'and it is the whole-graph fit, not the package-level zoom');
   assert.equal(document.querySelector('[data-architecture-readable-back]'), null, 'the back action is gone');
 });
 
@@ -6248,10 +6087,8 @@ test('Show all widens the element axis only, and Reset filters restores the ship
 });
 
 test('a drawing expected to be slow announces its layout, and one the package tier cannot fit collapses', async () => {
-  // The folded tier is an OVERVIEW reading of a canvas the drawing cannot fit;
-  // state that explicit whole-graph choice so the case stays about the fold
-  // (the unreadable default would open focused and neither fold nor hint).
-  window.localStorage.setItem('architecture.readableMode.v1:project-1', 'overview');
+  // Fit is the sticky default, so this case is about what the SOLVE does when
+  // even the floor scale cannot fit: it falls back to the folded tier.
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(DEEP_ENTITY_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
 
@@ -6337,7 +6174,7 @@ test('a drawing expected to be slow announces its layout, and one the package ti
     `the fold really removed the deeper levels (${drawnPackages.length} of ${allPackages.length} frames stay)`,
   );
 
-  // ── the reading is the REAL adaptation, and Fit leaves it fitting ────────────
+  // ── the reading is 1:1, and Fit is idempotent on the folded map ─────────────
   const svgOf = (): SVGSVGElement => {
     const element = host.querySelector('svg');
     assert.ok(element instanceof SVGSVGElement);
@@ -6345,27 +6182,29 @@ test('a drawing expected to be slow announces its layout, and one the package ti
   };
   const viewBoxWidth = (svg: SVGSVGElement): number =>
     Number((svg.getAttribute('viewBox') ?? '').split(/[\s,]+/)[2]);
-  assert.ok(
-    Number(svgOf().getAttribute('width')) <= host.clientWidth + 0.5,
-    `the folded drawing is ${svgOf().getAttribute('width')} px wide in a ${host.clientWidth} px canvas`,
-  );
+  // A pack whose tab is wider than the canvas is kept scrollable (the contract's
+  // "仍放不下则夹在下限并保持可滚动"); the point of this reading is that there is
+  // NO CSS factor hiding that truth — the element is exactly its viewBox.
+  assert.equal(Number(svgOf().getAttribute('width')), viewBoxWidth(svgOf()));
   fireEvent.click(document.querySelector('[data-architecture-zoom-fit]') as Element);
-  await waitFor(() => {
-    assert.ok(
-      Number(svgOf().getAttribute('width')) <= host.clientWidth + 0.5,
-      'Fit must leave the whole folded graph inside the canvas',
-    );
-  });
-  // The stated percentage is the drawing's own adaptation to the canvas over the
-  // drawing's own width — never the 5 % floor the ORIGINAL bounds would produce.
+  await waitFor(() => assert.equal(
+    Number(svgOf().getAttribute('width')),
+    viewBoxWidth(svgOf()),
+    'Fit must leave the folded map at 1:1, never a CSS factor',
+  ));
+  // The stated percentage is the SOLVED semantic scale — the floor, because the
+  // fold is the fallback once even that scale cannot fit — and it is exactly the
+  // SVG's own semantic reading. It is NOT a CSS factor: the packed drawing is
+  // shown 1:1, so the element's width equals its viewBox.
   const stated = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-  assert.ok(stated > 0 && stated <= 1);
-  assert.ok(
-    Math.abs(Number(svgOf().getAttribute('width')) - viewBoxWidth(svgOf()) * stated) < 1.5,
-    'the percentage the reader sees is the size actually drawn over the drawing\'s own size',
+  assert.equal(stated, MIN_ZOOM_SCALE, 'the fold is reached at the floor scale');
+  assert.equal(stated, Number(svgOf().getAttribute('data-architecture-semantic-scale')));
+  assert.equal(
+    Number(svgOf().getAttribute('width')),
+    viewBoxWidth(svgOf()),
+    'the folded drawing is 1:1 with its packed viewBox (k = 1)',
   );
-  assert.ok(stated > 0.05, `a folded drawing is not shown at the 5 % floor; got ${stated}`);
-});
+}, 30_000);
 
 /* ── panel visibility and readout fixes (2026-10-23) ──────────────────────────────────────── */
 
@@ -6597,6 +6436,7 @@ test('drilling into a neighbourhood names it and keeps the zoom', async () => {
   );
   const scaleBefore = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
   assert.ok(scaleBefore > 0, `the drawing is at a real scale before the drill; got ${scaleBefore}`);
+  assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'auto');
 
   drillNode(host, 'src/modules/alpha/A.ts.Alpha');
   // The view attribute flips with the state; the drawing follows one async
@@ -6611,21 +6451,19 @@ test('drilling into a neighbourhood names it and keeps the zoom', async () => {
   const status = document.querySelector('[data-architecture-neighbourhood-status]');
   assert.ok(status instanceof HTMLElement, 'the toolbar states what the reader is looking at');
   assert.match(status.textContent ?? '', /Neighbourhood of Alpha/, `got "${status.textContent}"`);
-  assert.equal(
-    graphRoot().getAttribute('data-architecture-zoom-scale'),
-    String(scaleBefore),
-    'entering the neighbourhood must not move the zoom',
-  );
-  assert.equal(
-    graphRoot().getAttribute('data-architecture-zoom-mode'),
-    'custom',
-    'the tier stops claiming the new drawing is fitted',
-  );
+  // Under `auto`, a new drawing is re-fitted to the canvas: that is the sticky
+  // fit contract, not the old "carry the scale across a drill".
+  assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'auto');
+  const svg = host.querySelector('svg') as Element;
+  assert.ok(Number(svg.getAttribute('width')) <= host.clientWidth + 1.5, 'the new drawing fits the canvas');
   const explosion = document.querySelector('[data-architecture-explosion]');
   assert.ok(explosion instanceof HTMLElement, 'the explosion control is offered from the neighbourhood');
   assert.ok((explosion.getAttribute('title') ?? '').length > 0, 'the control explains what the view is');
 
-  // …and stepping back out keeps the same scale.
+  // A MANUAL scale is the reader's, so stepping back out keeps it.
+  fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+  assert.equal(graphRoot().getAttribute('data-architecture-fit'), 'manual');
+  const manual = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
   fireEvent.click(document.querySelector('[data-architecture-back]') as Element);
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
   await waitFor(() =>
@@ -6634,9 +6472,9 @@ test('drilling into a neighbourhood names it and keeps the zoom', async () => {
       'the class drawing must be back on screen before its zoom is read',
     ));
   assert.equal(
-    graphRoot().getAttribute('data-architecture-zoom-scale'),
-    String(scaleBefore),
-    'leaving the neighbourhood must not move the zoom either',
+    Number(graphRoot().getAttribute('data-architecture-zoom-scale')),
+    manual,
+    'a manual scale survives leaving the neighbourhood',
   );
 });
 
@@ -6645,29 +6483,21 @@ test('drilling into a neighbourhood names it and keeps the zoom', async () => {
 // paper, the project search rows, and the longer-lived Undo
 // ---------------------------------------------------------------------------
 
-test('the Focus / Overview toggle paints the mode in force, and the semantic canvas paints no paper of its own', async () => {
+test('the semantic canvas paints no paper of its own and carries no Focus chrome', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await waitForDiagram();
 
-  const focus = document.querySelector('[data-architecture-readable-focus-mode]');
-  const overview = document.querySelector('[data-architecture-readable-overview-mode]');
-  assert.ok(focus instanceof HTMLElement, 'the Focus toggle is drawn');
-  assert.ok(overview instanceof HTMLElement, 'the Overview toggle is drawn');
-
-  // The pressed mode is distinguished VISIBLY — weight and fill, not the
-  // aria attribute alone (which the shipped defect had and nobody could see).
-  const pressed = [focus, overview].find((button) => button.getAttribute('aria-pressed') === 'true');
-  const unpressed = [focus, overview].find((button) => button.getAttribute('aria-pressed') !== 'true');
-  assert.ok(pressed !== undefined && unpressed !== undefined, 'exactly one mode is pressed');
-  assert.match(pressed.className, /font-semibold/, `the pressed mode must read heavier: ${pressed.className}`);
-  assert.doesNotMatch(unpressed.className, /font-semibold/);
-  assert.notEqual(pressed.className, unpressed.className, 'pressed and unpressed must not paint identically');
-
-  // Pressing the other one moves the visual state with the reading.
-  fireEvent.click(unpressed);
-  assert.equal(unpressed.getAttribute('aria-pressed'), 'true');
-  assert.match(unpressed.className, /font-semibold/);
-  assert.doesNotMatch(pressed.className, /font-semibold/);
+  // The Focus | Overview switch and every banner it drove are retired. The one
+  // scale statement lives in the tier readout and the zoom cluster, and the Fit
+  // control states whether the sticky fit state is in force.
+  assert.equal(document.querySelector('[data-architecture-readable-focus-mode]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-overview-mode]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-toggle]'), null);
+  assert.equal(document.querySelector('[data-architecture-canvas-readable-toggle]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-focus-summary]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-notice]'), null);
+  assert.ok(document.querySelector('[data-architecture-zoom-fit]') instanceof HTMLElement);
+  assert.ok(['auto', 'manual'].includes(graphRoot().getAttribute('data-architecture-fit') ?? ''));
 
   // The renderer's own `.uml-canvas` paper rectangle is transparent: its fill
   // used to be a paper colour sized to the mapped CONTENT, which left a white

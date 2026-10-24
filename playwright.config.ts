@@ -490,6 +490,17 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // ~7.7x and leaves a load-slowed fan-in run the same headroom as the sibling
   // architecture entries.
   'architecture-standalone.spec.ts': 240_000,
+  // The single-scale / fit contract drives FOUR fixtures (2, 26, 55 and 19
+  // entities) on FOUR viewports, reading the canvas after load, Fit, a window
+  // resize, fullscreen and the Inspector on each — sixteen page/state matrices
+  // in one case, plus three control arms that inject a defect and re-read.
+  // MEASURED on this worktree 2026-10-24: the whole invocation read
+  // `5 passed (2.8m)` — config evaluation, both webServers' boot, browser
+  // launch, the four fixtures and every reading included; the per-viewport
+  // cases closed at 41.9s / 74.6s / 115.1s / 152.3s and the control arms at
+  // 167.6s. 600_000 keeps ~3.6x over that reading, the same load-slowed
+  // fan-in headroom the sibling architecture criteria declare.
+  'architecture-fit-contract.spec.ts': 600_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2766,6 +2777,10 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // Architecture tab). It writes its own three-entity tree and drives TWO pages
   // in one context plus the BroadcastChannel between them.
   'architecture-standalone.spec.ts',
+  // The single-scale / fit contract: the same fixture home is what gives it a
+  // session whose transcript seeds the hub of each fixture and a project that
+  // offers the Architecture tab. It writes four `.archguard` trees under it.
+  'architecture-fit-contract.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second

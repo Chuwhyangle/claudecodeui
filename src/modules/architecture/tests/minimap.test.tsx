@@ -55,6 +55,31 @@ const READING: MinimapViewportReading = {
   scroll: { left: 0, top: 0 },
 };
 
+test('a semantic rewrite moves the range frame with the mapped content, at 1:1', () => {
+  // The semantic canvas passes `scale: 1` (the map is baked into the geometry),
+  // so a solved scale shows up as a SMALLER OR LARGER `natural`, never as a
+  // second scale here. The frame must follow that new proportion.
+  const base = {
+    scale: 1,
+    viewport: { width: 200, height: 100 },
+    scroll: { left: 0, top: 0 },
+  };
+  const largeMap = { ...base, natural: { width: 1000, height: 500 } };
+  const smallMap = { ...base, natural: { width: 500, height: 250 } };
+
+  // At 1:1 the visible drawing rect is exactly the viewport on both maps.
+  assert.equal(visibleDrawingRect(largeMap).width, 200);
+  assert.equal(visibleDrawingRect(smallMap).width, 200);
+
+  // A smaller mapped drawing is seen through the same window → a LARGER share
+  // of it, and the range frame drawn on the minimap is correspondingly larger.
+  assert.ok(visiblePercent(smallMap) > visiblePercent(largeMap));
+  const smallFrame = visibleRangeRect(smallMap);
+  const largeFrame = visibleRangeRect(largeMap);
+  assert.ok(smallFrame !== null && largeFrame !== null, 'both maps letterbox');
+  assert.ok(smallFrame.width > largeFrame.width);
+});
+
 test('the letterbox preserves the aspect ratio and centres the drawing', () => {
   const layout = minimapLayout({ width: 4000, height: 1000 });
   assert.ok(layout !== null);

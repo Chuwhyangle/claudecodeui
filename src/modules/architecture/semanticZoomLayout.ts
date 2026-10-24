@@ -19,6 +19,7 @@
  */
 
 import { tierWithinDeadzone } from '@/modules/architecture/explosionLod';
+import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
 export type {
   SemanticDrawingGeometry,
   SemanticEdgeGeometry,
@@ -106,6 +107,25 @@ export const SEMANTIC_FOLD_TRIGGER_RATIO = 2;
  * the packer below is asked for the canvas' own width).
  */
 export const SEMANTIC_FOLD_FIT_LIMIT = 1.2;
+
+/**
+ * The largest scale a Fit solve may choose. A drawing already smaller than its
+ * canvas is enlarged up to this bound: the semantic engine's floor text (10 px
+ * desktop / 11 px phone) is planned in SCREEN pixels, so at 150 % a 10 px label
+ * is 15 px and still crisp — the map is drawn 1:1, never resampled by CSS.
+ */
+export const MAX_FIT_SCALE = 1.5;
+
+/**
+ * How many evaluations one Fit solve may spend. The mapped content size is
+ * monotone non-decreasing in the scale, so bisecting the interval
+ * [MIN_ZOOM_SCALE, MAX_FIT_SCALE] reaches a pixel-accurate answer in far fewer
+ * than 14 steps; the cap is a contract (and a cost bound), not the resolution.
+ */
+export const FIT_SOLVE_MAX_ITERATIONS = 14;
+
+/** The two fixed evaluations every Fit solve makes before bisecting. */
+const FIT_SOLVE_FIXED_EVALUATIONS = 2;
 
 /** The gap between two packed package boxes in the folded tier. */
 export const SEMANTIC_FOLD_GAP_PX = 8;
@@ -261,6 +281,45 @@ export type SemanticZoomOptions = {
   /** A forced tier (control arms / tests). */
   readonly forceTier?: SemanticTier | null;
   readonly deadzone?: number;
+  /**
+   * Force the folded tier (`D`). The Fit solver uses this once even the floor
+   * scale cannot fit the canvas: the packed map is the only drawing that can
+   * leave the original extent behind, and it is chosen by its own fit rule.
+   */
+  readonly forceFold?: boolean;
+  /**
+   * Whether the sparse tier may fold itself on overflow (the shipped default).
+   * The Fit solver turns this off while bisecting: a folded drawing's content
+   * is packed at 1:1 and does not change with `s`, so folding mid-search would
+   * make the monotone bracket meaningless. The solver reaches `D` explicitly
+   * once the floor fails.
+   */
+  readonly autoFold?: boolean;
+};
+
+/** What one Fit solve returns. */
+export type SemanticFitSolution = {
+  /** The scale the drawing is drawn at: the solved `s`, or the floor when clamped. */
+  readonly scale: number;
+  /** The layout at `scale` (the folded drawing when `foldDepth` is set). */
+  readonly layout: SemanticZoomLayout;
+  /** Whether the mapped content really fits the canvas. */
+  readonly fits: boolean;
+  /** How many solver evaluations this answer cost (never above the cap). */
+  readonly iterations: number;
+  /** The folded level count when the answer is the `D` fallback, else `null`. */
+  readonly foldDepth: number | null;
+};
+
+/** The inputs a Fit solve reads. */
+export type SemanticFitOptions = {
+  readonly viewport: { readonly width: number; readonly height: number } | null;
+  readonly minFontPx?: number;
+  readonly deadzone?: number;
+  /** The lower bound; defaults to the manual minimum zoom. */
+  readonly lowerScale?: number;
+  /** The upper bound; defaults to {@link MAX_FIT_SCALE}. */
+  readonly upperScale?: number;
 };
 
 /** The fraction of the compaction the current scale earns (0 at ≥ 90 %, 1 at ≤ 50 %). */
@@ -1070,7 +1129,15 @@ export function solveSemanticZoom(
   // twice the canvas the reader would be scrolling through several screens with
   // "whole graph" on the canvas. `D` re-packs the kept packages instead, which
   // is the only way to leave the original extent behind.
-  const folded = forced ? null : foldForSparseTier(geometry, tree, chosen, fontPx, options.viewport);
+  const folded = forced
+    ? null
+    : options.forceFold === true
+      ? (options.viewport === null || options.viewport === undefined
+          ? null
+          : chooseFoldedPlan(geometry, tree, fontPx, options.viewport))
+      : options.autoFold === false
+        ? null
+        : foldForSparseTier(geometry, tree, chosen, fontPx, options.viewport);
 
   const layoutsById = folded === null ? chosen.layoutsById : new Map<string, SemanticNodeLayout>();
   const drawnEdges = folded !== null || chosen.tier === 'C'
@@ -1163,6 +1230,115 @@ export function solveSemanticZoom(
     visibleEdges: edges.length,
     stickies,
   };
+}
+
+/**
+ * Whether a solved layout's mapped content — its boundary, margin included —
+ * fits a canvas. The half-pixel slack absorbs the layout's own float noise, the
+ * same tolerance the readers use when comparing drawn extents.
+ */
+function layoutFits(layout: SemanticZoomLayout, viewport: { readonly width: number; readonly height: number }): boolean {
+  return layout.content.width <= viewport.width + 0.5
+    && layout.content.height <= viewport.height + 0.5;
+}
+
+/**
+ * Solve the scale at which the semantic drawing fits its canvas.
+ *
+ * This is the ONLY fit the semantic canvas applies: the returned `scale` is fed
+ * back into the engine, so the drawing is rewritten at that scale and shown 1:1
+ * — there is no CSS factor on top of it (that double scale was the defect this
+ * solve removes).
+ *
+ * The mapped content size is monotone non-decreasing in the scale (each axis's
+ * map is scale × span plus constraint stretches, and a richer tier only adds
+ * minimums), so a bisection over [floor, {@link MAX_FIT_SCALE}] finds the
+ * largest fitting scale. The two fixed evaluations (ceiling, floor) count
+ * against {@link FIT_SOLVE_MAX_ITERATIONS}; when even the floor does not fit,
+ * the folded tier answers, and when THAT is still wider than the canvas the
+ * floor scale is returned with `fits: false` so the caller keeps the drawing
+ * scrollable instead of inventing a smaller CSS factor.
+ *
+ * Deterministic: the same geometry, canvas and font size produce the same
+ * scale and the same layout.
+ */
+export function solveFitScale(
+  geometry: SemanticDrawingGeometry,
+  options: SemanticFitOptions,
+): SemanticFitSolution {
+  const viewport = options.viewport;
+  const lower = options.lowerScale ?? MIN_ZOOM_SCALE;
+  const upper = options.upperScale ?? MAX_FIT_SCALE;
+  const solveAt = (scale: number, forceFold = false): SemanticZoomLayout => solveSemanticZoom(geometry, {
+    scale,
+    viewport,
+    minFontPx: options.minFontPx,
+    // The Fit solve must be a pure function of (geometry, canvas): a tier kept
+    // from a previous interaction would make the binary search's monotonicity
+    // (and therefore its answer) depend on history.
+    previousTier: null,
+    deadzone: options.deadzone,
+    forceFold,
+    // The bisection measures the mapped (non-folded) drawing; see the option.
+    autoFold: false,
+  });
+
+  // An unmeasurable canvas has no fit to solve: show the drawing at its own
+  // natural scale and let the caller lay it out.
+  if (viewport === null || !(viewport.width > 0) || !(viewport.height > 0)) {
+    const layout = solveAt(1);
+    return { scale: layout.scale, layout, fits: false, iterations: 0, foldDepth: layout.foldDepth };
+  }
+
+  let iterations = 0;
+  const evaluate = (scale: number, forceFold = false): SemanticZoomLayout => {
+    iterations += 1;
+    return solveAt(scale, forceFold);
+  };
+
+  // The ceiling first: a drawing that already fits there is shown enlarged.
+  const ceiling = evaluate(upper);
+  if (layoutFits(ceiling, viewport)) {
+    return { scale: upper, layout: ceiling, fits: true, iterations, foldDepth: ceiling.foldDepth };
+  }
+
+  const floor = evaluate(lower);
+  if (!layoutFits(floor, viewport)) {
+    // Even the floor's package-only map is bigger than the canvas. The folded
+    // tier re-packs the kept packages instead of mapping the original extent;
+    // it is the fallback whether or not even the packed map fits — a pack that
+    // is still slightly larger is shown clamped at the floor and scrolls.
+    if (iterations < FIT_SOLVE_MAX_ITERATIONS) {
+      const folded = evaluate(lower, true);
+      if (folded.foldDepth !== null) {
+        return {
+          scale: lower,
+          layout: folded,
+          fits: layoutFits(folded, viewport),
+          iterations,
+          foldDepth: folded.foldDepth,
+        };
+      }
+    }
+    return { scale: lower, layout: floor, fits: false, iterations, foldDepth: floor.foldDepth };
+  }
+
+  // Bisect the bracket: `low` is known to fit, `high` is known not to.
+  let low = lower;
+  let high = upper;
+  let best = floor;
+  const bisectionBudget = FIT_SOLVE_MAX_ITERATIONS - FIT_SOLVE_FIXED_EVALUATIONS;
+  for (let step = 0; step < bisectionBudget; step += 1) {
+    const mid = (low + high) / 2;
+    const layout = evaluate(mid);
+    if (layoutFits(layout, viewport)) {
+      low = mid;
+      best = layout;
+    } else {
+      high = mid;
+    }
+  }
+  return { scale: best.scale, layout: best, fits: true, iterations, foldDepth: best.foldDepth };
 }
 
 /** The compartments (and their rule offsets) a drawn frame carries. */

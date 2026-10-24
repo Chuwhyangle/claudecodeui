@@ -136,6 +136,26 @@ test('the fit floor is derived from the smallest readable label, not the 5% manu
   assert.ok(MIN_READABLE_ZOOM_SCALE > MIN_ZOOM_SCALE && MIN_READABLE_ZOOM_SCALE < MAX_ZOOM_SCALE);
 });
 
+test('semantic mode records the scale and never rewrites the SVG size (k = 1)', () => {
+  // The semantic engine owns the ONLY proportion: it rewrites the geometry and
+  // sizes the element 1:1. The controller must therefore record the scale and
+  // leave width/height ALONE — a second CSS factor on top of the map is the
+  // double-scale defect the fit solve removes.
+  const svg = makeSvg('0 0 1000 500');
+  const container = makeContainer(800, 600, svg);
+  const controller = createSvgViewport(container);
+  controller.setSemanticMode({ width: 1000, height: 500 });
+  assert.equal(controller.attach(svg), 1);
+  const widthBefore = svg.getAttribute('width');
+  const heightBefore = svg.getAttribute('height');
+
+  assert.equal(controller.zoomTo(0.37), 0.37);
+  assert.equal(controller.zoomBy(1.5), 0.37 * 1.5);
+  assert.equal(svg.getAttribute('width'), widthBefore, 'the semantic drawing stays 1:1');
+  assert.equal(svg.getAttribute('height'), heightBefore);
+  assert.deepEqual(controller.semanticBaseSize(), { width: 1000, height: 500 });
+});
+
 test('zoom rewrites width/height from the viewBox and leaves the drawing untouched', () => {
   const svg = makeSvg('0 0 1000 500');
 

@@ -1,41 +1,25 @@
-import { DEFAULT_NODE_ID_SHAPE, directoryPathOf } from '@/modules/architecture/adaptiveGrouping';
-import {
-  buildHierarchyIndex,
-  ROOT_PACKAGE_ID,
-  type ArchitectureHierarchyIndex,
-} from '@/modules/architecture/hierarchyIndex';
-import type { ArchitectureNodeIdShape, ArchitectureRendererGraph } from '@/modules/architecture/rendererContract';
 import type { SvgViewportSize } from '@/modules/architecture/svgViewport';
 
 /**
- * The readable-zoom policy for the architecture diagram's default view.
+ * What remains of the readable-zoom policy after the single-scale contract.
  *
- * Fitting a whole graph into a panel is not the same as making it legible: a
- * 32880×9860 drawing fitted into 1151px needs ~3.5%, at which the renderer's
- * 13px labels draw under half a pixel tall. The policy therefore offers two
- * readings of the same drawing:
+ * The canvas no longer chooses between a "focus" crop and a whole-graph
+ * overview: the semantic layout engine owns the ONLY scale (`s`, applied to the
+ * geometry) and Fit solves that scale against the canvas. Two readings are
+ * still needed from this module:
  *
- *  · overview — the whole graph at the true geometric fit. It is the default
- *    whenever that fit already draws readable labels. The context that the
- *    drawing is too small to read is offered as a "zoom into …" hint, and the
- *    package-level titles are counter-scaled by the LOD layer so they stay
- *    legible (see `explosionLod.ts`);
- *  · focus — the default when the geometric fit would draw labels below the
- *    readable floor (`fitScale < READABLE_ZOOM_SCALE`): showing a 25 % whole
- *    graph whose text is 3 px tall is not "seeing the diagram", so the drawing
- *    opens at the scale where a label is at least readable, centred on the
- *    package carrying the densest share of the transcript's seeds. The reader
- *    can always choose overview, and that explicit choice is remembered per
- *    project and never overwritten by the automatic default.
+ *  · the readable floor constants, from which the viewport's minimum fit scale
+ *    is derived (a CSS-scaled drawing still must not smear its labels);
+ *  · the band test that collapses a drawing many times wider than its
+ *    container to the coarser directory overview instead of drawing a
+ *    one-pixel-tall strip.
  *
- * It also flags a drawing whose natural width/height is far wider than the
- * container: such a canvas becomes a thin band, so the caller collapses it to
- * the directory-grouped overview instead.
+ * The focus decision, its persisted per-project choice and the session-seed
+ * hierarchy that ranked a focus package are gone: none of them has a consumer
+ * now that Fit is a solve and the drawing opens at the whole graph.
  *
- * Everything here is pure arithmetic over the graph payload and the two sizes,
- * so the policy can be pinned without a laid-out browser. Consumers:
- * `PlantUmlGraph.tsx` (the default scale, the focus target, and the remembered
- * mode) and `tests/readableZoom.test.tsx`.
+ * Consumers: `svgViewport.ts` (the fit floor) and `PlantUmlGraph.tsx` (the
+ * band-collapse test).
  */
 
 /** The renderer's node-label font size, in SVG user units at 100% zoom. */
@@ -46,8 +30,8 @@ export const MIN_READABLE_FONT_PX = 9;
 
 /**
  * The scale at which a rendered 13px label occupies 9 CSS pixels. Below this a
- * fitted diagram is technically complete but practically unreadable, which is
- * exactly the state this policy replaces with a focus view.
+ * CSS-fitted drawing is technically complete but practically unreadable, which
+ * is why the viewport's fit floor is this value rather than the manual 5%.
  */
 export const READABLE_ZOOM_SCALE = MIN_READABLE_FONT_PX / RENDERED_LABEL_FONT_PX;
 
@@ -60,222 +44,19 @@ export const READABLE_ZOOM_SCALE = MIN_READABLE_FONT_PX / RENDERED_LABEL_FONT_PX
  */
 export const WIDE_CANVAS_ASPECT_RATIO = 6;
 
-/** The two readings the toolbar offers. */
+/**
+ * The vocabulary the drawn readout still names. `graphDom.ts` models the zoom
+ * hint with these two types; the contract retired their producers, so nothing
+ * in this module constructs a decision any more.
+ */
 export type ReadableZoomMode = 'focus' | 'overview';
 
-/** A package ranked by how much of its subtree the transcript seeded. */
-export type SeedPackageCandidate = {
-  /** The path-form package id (`modules/chat/hooks`). */
-  readonly packageId: string;
-  /** The last path segment, for a compact readout. */
-  readonly name: string;
-  /** Seeds in the package's whole subtree. */
-  readonly seedCount: number;
-  /** Entities in the package's whole subtree. */
-  readonly entityCount: number;
-  /** `seedCount / entityCount`; the primary ranking key. */
-  readonly density: number;
-};
-
-/** The values the overview hint needs; the component supplies the wording. */
+/** The values the (now retired) overview hint carried; kept as a public shape. */
 export type ReadableZoomHint = {
-  /** The package the reader should zoom into first. */
   readonly packageId: string;
-  /** How many OTHER seeded packages share the drawing. */
   readonly packageCount: number;
-  /** The scale actually applied, as a whole percentage. */
   readonly zoomPercent: number;
 };
-
-/** What the default view should do with one drawing. */
-export type ReadableZoomDecision = {
-  /** The mode to apply: the user's explicit choice, else the drawing's own default. */
-  readonly mode: ReadableZoomMode;
-  /**
-   * The mode this drawing chooses on its own: focus when its geometric fit is
-   * below the readable floor, overview when the whole graph already reads.
-   */
-  readonly defaultMode: ReadableZoomMode;
-  /** The uniform scale for `mode`: readable in focus, geometric in overview. */
-  readonly scale: number;
-  /** The package focus mode centres; `null` when the graph has no package. */
-  readonly focusPackageId: string | null;
-  /** True when the drawing is a band in this container and should collapse. */
-  readonly collapsedForAspect: boolean;
-  /** The overview-mode hint, `null` while focused (or with no seed packages). */
-  readonly overviewHint: ReadableZoomHint | null;
-};
-
-/** Everything one decision reads. */
-export type ReadableZoomInput = {
-  /**
-   * The geometric fit scale (the drawing's natural size fitted into the
-   * viewport, clamped by the viewport's own floor). Pass the fit-ALL value, not
-   * one already lifted to the readable floor, or the explicit focus scale can
-   * never be distinguished from the whole-graph fit.
-   */
-  readonly fitScale: number;
-  /** The drawing's natural size, for the aspect-band test. */
-  readonly natural: SvgViewportSize;
-  /** The measured content box, or `null` before layout. */
-  readonly viewport: SvgViewportSize | null;
-  /** The drawing's package tree; `null` when no hierarchy was built. */
-  readonly hierarchy: ArchitectureHierarchyIndex | null;
-  /** Selected/centre entity ids, preferred over the density winner. */
-  readonly selectedEntityIds?: readonly (string | null | undefined)[];
-  /** The user's explicit toolbar choice; omitted means "use the whole-graph default". */
-  readonly mode?: ReadableZoomMode;
-};
-
-/**
- * The `localStorage` key prefix; the full key adds `:<projectId>`.
- *
- * The remembered value is the reader's EXPLICIT toolbar choice, not the mode a
- * previous drawing happened to open in. A project with no stored value opens at
- * the whole-graph default, so a new project can never inherit another one's
- * focus — which is why the project id is part of the key rather than a global
- * switch. Mirrors the curation store's key shape.
- */
-export const READABLE_MODE_STORAGE_PREFIX = 'architecture.readableMode.v1';
-
-/** The narrow storage seam (real `localStorage`, or a test double). */
-export type ReadableModeStorageLike = {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem?(key: string): void;
-};
-
-/** The storage key for one project, or `null` when the project is unknown. */
-export function readableModeStorageKey(projectId: string | null): string | null {
-  if (projectId === null || projectId.trim().length === 0) return null;
-  return `${READABLE_MODE_STORAGE_PREFIX}:${projectId}`;
-}
-
-/**
- * The mode the reader explicitly chose for `projectId`, or `null` when they
- * have not chosen (or storage is unreachable, or the stored value is stale).
- */
-export function readStoredReadableMode(
-  storage: ReadableModeStorageLike | null | undefined,
-  projectId: string | null,
-): ReadableZoomMode | null {
-  const key = readableModeStorageKey(projectId);
-  if (key === null || storage === null || storage === undefined) return null;
-  try {
-    const stored = storage.getItem(key);
-    return stored === 'focus' || stored === 'overview' ? stored : null;
-  } catch {
-    // Private mode / embedded webview: the visit still works, it is just not
-    // remembered.
-    return null;
-  }
-}
-
-/** Remember (or clear, with `null`) one project's explicit readable mode. */
-export function writeStoredReadableMode(
-  storage: ReadableModeStorageLike | null | undefined,
-  projectId: string | null,
-  mode: ReadableZoomMode | null,
-): void {
-  const key = readableModeStorageKey(projectId);
-  if (key === null || storage === null || storage === undefined) return;
-  try {
-    if (mode === null) storage.removeItem?.(key);
-    else storage.setItem(key, mode);
-  } catch {
-    // Same as the read: an unavailable store is not an error the reader sees.
-  }
-}
-
-/**
- * Build the package hierarchy straight from the neighbourhood JSON, marking
- * every distance-0 node as a seed. This is the payload's own tree, so a
- * decision made BEFORE the SVG is measured and one made from the drawn SVG
- * agree; no geometry is consulted. `idShape` must match the one the drawing
- * used, or the packages here would not name the packages in the SVG.
- * Consumers: `PlantUmlGraph.tsx` and the readable-zoom tests.
- */
-export function buildSeedHierarchy(
-  graph: ArchitectureRendererGraph,
-  idShape: ArchitectureNodeIdShape = DEFAULT_NODE_ID_SHAPE,
-): ArchitectureHierarchyIndex {
-  return buildHierarchyIndex(
-    graph.nodes.map((node) => ({
-      id: node.id,
-      packageId: directoryPathOf(node.id, idShape),
-      seed: node.distance === 0,
-    })),
-  );
-}
-
-/**
- * How many non-root packages hold at least one seed DIRECTLY. Ancestor-only
- * packages are not counted twice: the hint says how many distinct packages the
- * reader would have to visit, not how many levels of the tree contain a seed.
- */
-export function seedPackageCount(hierarchy: ArchitectureHierarchyIndex): number {
-  let count = 0;
-  for (const packageNode of hierarchy.packages.values()) {
-    if (packageNode.id !== ROOT_PACKAGE_ID && packageNode.directSeedCount > 0) count += 1;
-  }
-  return count;
-}
-
-/**
- * Whether `candidate` should outrank `best`: higher seed density first, then
- * more seeds, then the deeper (more specific) package, then id order so the
- * choice is deterministic across map iteration.
- */
-function outranks(candidate: SeedPackageCandidate, candidateDepth: number, best: SeedPackageCandidate, bestDepth: number): boolean {
-  if (candidate.density !== best.density) return candidate.density > best.density;
-  if (candidate.seedCount !== best.seedCount) return candidate.seedCount > best.seedCount;
-  if (candidateDepth !== bestDepth) return candidateDepth > bestDepth;
-  return candidate.packageId < best.packageId;
-}
-
-/**
- * The package with the densest concentration of seeds (seeds ÷ subtree
- * entities), ignoring the root (it has no frame to centre). `null` when the
- * graph carries no seeded package.
- */
-export function densestSeedPackage(hierarchy: ArchitectureHierarchyIndex): SeedPackageCandidate | null {
-  let best: SeedPackageCandidate | null = null;
-  let bestDepth = 0;
-  for (const packageNode of hierarchy.packages.values()) {
-    if (packageNode.id === ROOT_PACKAGE_ID) continue;
-    if (packageNode.descendantSeedCount === 0 || packageNode.descendantEntityCount === 0) continue;
-    const candidate: SeedPackageCandidate = {
-      packageId: packageNode.id,
-      name: packageNode.name,
-      seedCount: packageNode.descendantSeedCount,
-      entityCount: packageNode.descendantEntityCount,
-      density: packageNode.descendantSeedCount / packageNode.descendantEntityCount,
-    };
-    const depth = packageNode.ancestors.length + 1;
-    if (best === null || outranks(candidate, depth, best, bestDepth)) {
-      best = candidate;
-      bestDepth = depth;
-    }
-  }
-  return best;
-}
-
-/**
- * The package focus mode should centre: the first selected/centre entity's own
- * package, else the densest seeded package. Mirrors the explosion LOD's
- * selection-first rule so the two never disagree about the focus.
- */
-export function readableFocusPackage(
-  hierarchy: ArchitectureHierarchyIndex,
-  selectedEntityIds: readonly (string | null | undefined)[],
-): string | null {
-  for (const id of selectedEntityIds) {
-    if (id === null || id === undefined) continue;
-    const packageId = hierarchy.entityPackage.get(id);
-    if (packageId !== undefined && packageId !== ROOT_PACKAGE_ID) return packageId;
-  }
-  return densestSeedPackage(hierarchy)?.packageId ?? null;
-}
 
 /**
  * Whether a drawing is a band in this container: its natural aspect ratio is
@@ -292,148 +73,4 @@ export function canvasIsTooWide(
   const naturalAspect = natural.width / natural.height;
   const containerAspect = viewport.width / viewport.height;
   return naturalAspect / containerAspect > threshold;
-}
-
-/**
- * The fit scale a decision actually reads: a usable positive number, never
- * above 1 (a fit never enlarges the drawing beyond its natural size).
- */
-function measuredFitScale(fitScale: number): number {
-  return Number.isFinite(fitScale) && fitScale > 0 ? Math.min(fitScale, 1) : 1;
-}
-
-/**
- * The mode a drawing opens in when the reader has made no explicit choice:
- * focus when the geometric fit would draw the renderer's 13 px labels below the
- * readable floor (`MIN_READABLE_FONT_PX`), overview when the whole graph
- * already reads. This is geometry, not device: a desktop canvas opening the
- * same unreadable 25 % drawing gets the same focus view.
- */
-export function defaultReadableMode(fitScale: number): ReadableZoomMode {
-  return measuredFitScale(fitScale) < READABLE_ZOOM_SCALE ? 'focus' : 'overview';
-}
-
-/**
- * The mode to apply: the reader's explicit (persisted) choice when there is
- * one, else the drawing's own default. A stored choice is never overwritten by
- * the automatic default — only the reader's own toolbar press updates it.
- */
-export function resolveReadableMode(
-  fitScale: number,
-  chosen: ReadableZoomMode | null | undefined,
-): ReadableZoomMode {
-  return chosen ?? defaultReadableMode(fitScale);
-}
-
-/**
- * Decide the default view for one drawing.
- *
- * The default follows what the reader can actually READ: a geometric fit at or
- * above the readable floor keeps the whole graph in view (overview); a fit
- * below it opens focused at the readable floor instead of cropping nothing and
- * drawing 3 px labels. Focus is entered automatically only in that unreadable
- * case — an explicit `mode` (the toolbar's remembered choice) always wins, and
- * the scale each mode maps to is unchanged: focus renders at or above the
- * readable floor, overview always shows the whole drawing.
- */
-export function decideReadableZoom(input: ReadableZoomInput): ReadableZoomDecision {
-  const { fitScale, natural, viewport, hierarchy } = input;
-  const measuredFit = measuredFitScale(fitScale);
-  const defaultMode = defaultReadableMode(measuredFit);
-  const mode = resolveReadableMode(measuredFit, input.mode);
-  const scale = mode === 'focus' ? Math.max(measuredFit, READABLE_ZOOM_SCALE) : measuredFit;
-
-  const focusPackageId = hierarchy === null
-    ? null
-    : readableFocusPackage(hierarchy, input.selectedEntityIds ?? []);
-  const collapsedForAspect = viewport !== null && canvasIsTooWide(natural, viewport);
-
-  const densest = hierarchy === null ? null : densestSeedPackage(hierarchy);
-  const seededPackages = hierarchy === null ? 0 : seedPackageCount(hierarchy);
-  const overviewHint = mode === 'overview' && densest !== null && seededPackages > 0
-    ? {
-        packageId: densest.packageId,
-        packageCount: Math.max(0, seededPackages - 1),
-        zoomPercent: Math.round(scale * 100),
-      }
-    : null;
-
-  return {
-    mode,
-    defaultMode,
-    scale,
-    focusPackageId,
-    collapsedForAspect,
-    overviewHint,
-  };
-}
-
-/**
- * The compact reading of a package id used by the zoom strip: the last
- * `segments` path segments (`data/home/yale/work/archguard/src/cli/mcp` →
- * `cli/mcp`). The full id stays available to the caller for the `title`, so the
- * strip never hides which package it means. Consumers: `PlantUmlGraph.tsx` and
- * the readable-zoom tests.
- */
-export function shortPackageName(packageId: string, segments = 2): string {
-  const parts = packageId.split('/').filter((part) => part.length > 0);
-  if (parts.length === 0) return '';
-  return parts.slice(-Math.max(1, segments)).join('/');
-}
-
-/** The locale key of the fit control while it really contains the whole drawing. */
-export const FIT_CONTROL_WHOLE_KEY = 'architecture.plantuml.zoomFit';
-
-/** The locale key of the fit control while the readable floor replaced the fit. */
-export const FIT_CONTROL_FOCUS_KEY = 'architecture.plantuml.zoomFocus';
-
-/** How the toolbar's fit control must read for the view on screen. */
-export type FitControlReading = {
-  /** The view the fit control applies: `focus` when the readable floor raised it. */
-  readonly mode: ReadableZoomMode;
-  /** The locale key the control's visible label comes from. */
-  readonly labelKey: typeof FIT_CONTROL_WHOLE_KEY | typeof FIT_CONTROL_FOCUS_KEY;
-  /** The English fallback paired with `labelKey`, for bundles that lack the key. */
-  readonly labelFallback: string;
-  /** Whether the control is pressed: the zoom on screen is a fit, not a user scale. */
-  readonly pressed: boolean;
-  /** True while a readable focus — not the whole graph — is what the fit produced. */
-  readonly focusNotice: boolean;
-};
-
-/** The only thing the fit control needs from a decision or an applied readout. */
-export type FitControlSource = {
-  readonly mode: ReadableZoomMode;
-};
-
-/**
- * Read the fit control off a decision. The object used to say "fit" whenever the
- * zoom mode was a fit, even when the readable floor had raised the scale past
- * the drawing's own extent — the 882px drawing on a 390px phone was labelled
- * "Fit to view" while only its left 44% was on screen. Naming a control after
- * what pressing it actually does is the fix: focus when the fit stops at the
- * readable floor, "fit" only when it truly contains the drawing. An unmeasured
- * drawing has no decision yet, so it keeps the plain whole-graph label.
- */
-export function fitControlReading(
-  decision: FitControlSource | null,
-  zoomMode: 'fit' | 'custom',
-): FitControlReading {
-  if (decision === null) {
-    return {
-      mode: 'overview',
-      labelKey: FIT_CONTROL_WHOLE_KEY,
-      labelFallback: 'Fit to view',
-      pressed: zoomMode === 'fit',
-      focusNotice: false,
-    };
-  }
-  const focused = decision.mode === 'focus';
-  return {
-    mode: decision.mode,
-    labelKey: focused ? FIT_CONTROL_FOCUS_KEY : FIT_CONTROL_WHOLE_KEY,
-    labelFallback: focused ? 'Focus' : 'Fit to view',
-    pressed: zoomMode === 'fit',
-    focusNotice: focused && zoomMode === 'fit',
-  };
 }

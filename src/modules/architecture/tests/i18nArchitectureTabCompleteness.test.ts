@@ -148,6 +148,33 @@ describe('every locale carries the architecture tab label and panel text', () =>
     expect(offenders).toEqual([]);
   });
 
+  it('carries none of the retired Focus-mode strings in any locale', () => {
+    // The single-scale contract removed the Focus | Overview switch, its
+    // persisted choice and every banner they drew. A stale translation is not
+    // harmless: it ships a string no code path can render, which makes the
+    // retired feature look alive to the next reader (and to the next reviewer).
+    const RETIRED_KEYS = [
+      'architecture.plantuml.zoomFocus',
+      'architecture.plantuml.readable.group',
+      'architecture.plantuml.readable.focus',
+      'architecture.plantuml.readable.overview',
+      'architecture.plantuml.readable.focusHint',
+      'architecture.plantuml.readable.overviewHint',
+      'architecture.plantuml.readable.focusSummary',
+      'architecture.plantuml.readable.focusOnly',
+      'architecture.plantuml.readable.overviewTooSmall',
+      'architecture.plantuml.readable.focusedFitHint',
+    ];
+    const offenders: string[] = [];
+    for (const file of bundleFiles) {
+      const bundle = JSON.parse(readFileSync(join(LOCALES_DIR, file), 'utf8')) as CommonBundle;
+      for (const key of RETIRED_KEYS) {
+        if (valueAt(bundle, key) !== undefined) offenders.push(`${file}: ${key} is still shipped`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   // Positive controls: the same checkers must reject the three ways a bundle can fail — a
   // missing key, a blank / key-copied value, and a translation that dropped its placeholder.
   // If they could not, the case above would be a green that cannot go red.

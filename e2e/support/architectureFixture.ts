@@ -1079,3 +1079,134 @@ export function writeArchitectureFixture(
       : {}),
   };
 }
+
+/* ── the fit-contract matrix: S / M / L / Quay-shaped drawings ─────────────────────────────── */
+
+/** The four fixture workspaces the fit-contract criterion drives. */
+export const FIT_CONTRACT_WORKSPACES = {
+  s: 'architecture-fit-contract-workspace-s',
+  m: 'architecture-fit-contract-workspace-m',
+  l: 'architecture-fit-contract-workspace-l',
+  quay: 'architecture-fit-contract-workspace-quay',
+} as const;
+
+/** Which size/shape one fit-contract fixture is. */
+export type FitContractFixtureOptions = {
+  readonly entityCount: number;
+  readonly entityKind: 'class' | 'interface';
+  readonly packageCount: number;
+  /** The visible name stem (`FitM`, `Quay`), so ids and labels are readable. */
+  readonly labelStem: string;
+};
+
+/** What the criterion reads back about one fit-contract fixture. */
+export type FitContractFixtureReading = {
+  readonly workspaceDir: string;
+  readonly entityTotal: number;
+  readonly entityIds: readonly string[];
+  /** The identifiers the session text must name (one hub + package leaders). */
+  readonly seedIdentifiers: readonly string[];
+  readonly packageIds: readonly string[];
+};
+
+/**
+ * Write one fit-contract fixture: a HUB-AND-SPOKE drawing of `entityCount`
+ * entities spread over `packageCount` packages.
+ *
+ * The hub is what makes the size measurable: it depends on every spoke, so the
+ * server's bounded hop expansion from the named hub reaches the whole drawing,
+ * and the drawing really has `entityCount` boxes for the criterion to measure.
+ * The seed list stays far below the server's 40-identifier cap.
+ */
+export function writeFitContractFixture(
+  workspaceDir: string,
+  options: FitContractFixtureOptions,
+): FitContractFixtureReading {
+  const generatedAt = new Date().toISOString();
+  const packages = Array.from(
+    { length: Math.max(1, options.packageCount) },
+    (_, index) => `src/fit/p${index}`,
+  );
+  const entities: { id: string; name: string; file: string; parents: string[] }[] = [];
+  for (let index = 0; index < options.entityCount; index += 1) {
+    const packageId = packages[index % packages.length];
+    const name = `${options.labelStem}${index}`;
+    entities.push({
+      id: `${packageId}/${name}.ts.${name}`,
+      name,
+      file: `${packageId}/${name}.ts`,
+      parents: index === 0 ? [] : [entities[0].id],
+    });
+  }
+  const hub = entities[0];
+  const leaders = packages
+    .map((packageId) => entities.find((entity) => entity.file.startsWith(`${packageId}/`)))
+    .filter((entity): entity is typeof entities[number] => entity !== undefined);
+  const seedIdentifiers = [hub.name, ...leaders.map((entity) => entity.name).filter((name) => name !== hub.name)];
+
+  const fileToIds: Record<string, string[]> = {};
+  const nameToIds: Record<string, string[]> = {};
+  const idToFile: Record<string, string> = {};
+  const idToName: Record<string, string> = {};
+  const dependencies: Record<string, string[]> = {};
+  const dependents: Record<string, string[]> = {};
+  for (const entity of entities) {
+    (fileToIds[entity.file] ??= []).push(entity.id);
+    (nameToIds[entity.name] ??= []).push(entity.id);
+    idToFile[entity.id] = entity.file;
+    idToName[entity.id] = entity.name;
+    dependencies[entity.id] ??= [];
+    dependents[entity.id] ??= [];
+  }
+  for (const entity of entities) {
+    for (const parent of entity.parents) {
+      dependencies[parent].push(entity.id);
+      dependents[entity.id].push(parent);
+    }
+  }
+
+  const srcDir = path.join(workspaceDir, 'src');
+  fs.mkdirSync(srcDir, { recursive: true });
+  writeJson(path.join(workspaceDir, '.archguard', 'query', 'manifest.json'), {
+    version: '1.0',
+    generatedAt,
+    globalScopeKey: SCOPE_KEY,
+    scopes: [{ key: SCOPE_KEY, label: 'src (typescript)', language: 'typescript', sources: [srcDir] }],
+  });
+  writeJson(path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch-index.json'), {
+    version: '1.0',
+    language: 'typescript',
+    archJsonHash: ARCH_JSON_HASH,
+    generatedAt,
+    fileToIds,
+    nameToIds,
+    idToFile,
+    idToName,
+    dependencies,
+    dependents,
+  });
+  writeJson(path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch.json'), {
+    version: '1.0',
+    language: 'typescript',
+    entities: entities.map((entity) => ({
+      id: entity.id,
+      name: entity.name,
+      type: options.entityKind,
+      isAbstract: false,
+      members: options.entityKind === 'interface'
+        ? [{ name: 'id', type: 'property', visibility: 'public', fieldType: 'string' }]
+        : [
+            { name: 'constructor', type: 'constructor', visibility: 'public', parameters: [] },
+            { name: 'run', type: 'method', visibility: 'public', parameters: [], returnType: 'void' },
+          ],
+    })),
+  });
+
+  return {
+    workspaceDir,
+    entityTotal: entities.length,
+    entityIds: entities.map((entity) => entity.id),
+    seedIdentifiers,
+    packageIds: packages,
+  };
+}
