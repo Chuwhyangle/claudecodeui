@@ -27,7 +27,7 @@ extra: {}
 
 ## DoD
 
-- 贴出对当前安装 fleet 的通过结果，以及控制臂变红的输出。
+- 贴出对当前安装 fleet 的通过结果（`initiative show/list` 的 JSON 形状读数），以及控制臂（无项目段 URI、未知 decision kind）变红的输出。
 
 ## Touches
 
