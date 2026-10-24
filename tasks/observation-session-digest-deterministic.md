@@ -1,7 +1,7 @@
 ---
 id: observation-session-digest-deterministic
 title: 观察墙 T2：会话磁贴生产者——每轮结束确定性摘要（结论摘录/改动/命令/测试/是否在问你/差量）
-status: ready
+status: done
 labels:
   - cockpit
   - observation
@@ -55,13 +55,3 @@ depends_on:
 - Merge repair (this round) — the exited-not-landed conflict in `server/shared/tests/quay-test-script.test.ts` is resolved as the per-hunk union of both criterion additions: observation's `session-digest.test.ts` + develop's liaison `liaison-deliver.test.ts` ⇒ 418 collected server test files, so AC2's pin is `known=3 unknown=415` and AC3's is `known=1 unknown=417`. That file now passes 14/14 on its own.
 - Baseline red carried — develop's `scripts/contraction-candidates/scan.mjs` + `scan.test.mjs` red `npm run typecheck` (implicit any), which the suite's typecheck stage runs; this branch carries the same byte-identical file-local `@ts-nocheck` landing-gap guard as `cockpit-initiative-view-and-decision-queue`, so whichever lands first the other merges cleanly. The owning follow-up types those files and removes the guard.
 - DoD manual pass — five real transcripts under `~/.claude/projects/-data-home-yale-work-claudecodeui/` read directly through `buildSessionDigest` (file-level, so no instance was started and the resident-restore constraint never came into play). 「问你」: 5/5 correct — all five end on a statement, and one that carries a question mid-paragraph is correctly not counted under the spec's "末段以问句结尾" rule. Test counts: 2/5 evaluated and both match the transcript (`vitest 191/0`; `node-test 10/0`); 3/5 unevaluated — two correct (no test run in the last turn) and one false-positive command match on a heredoc whose prose mentions `node … --test`, which still reads unevaluated rather than a number. Misjudged pass/fail counts: 0. This pass found the `tsx --test` recognition gap the earlier criteria missed; the command gate now recognises that shape and the criterion pins it end to end.
-
-## Blocker
-
-**2026-10-24T09:58:06.069Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/quay-test-script.test.ts
-CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
-Automatic merge failed; fix conflicts and then commit the result.
-- run_id：wk-prod-anchor
-- session_id：e4de0865-ff9f-4d53-84d9-6c855c9ed713

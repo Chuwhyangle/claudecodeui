@@ -44,6 +44,7 @@ extra: {}
 - src/modules/chat/composer/ReplyReferencePreview.tsx (new)
 - src/modules/chat/composer/ChatComposer.tsx
 - src/modules/chat/transcript/Markdown.tsx
+- src/modules/chat/transcript/StreamingMarkdown.tsx
 - src/modules/chat/transcript/MessageComponent.tsx
 - src/modules/chat/transcript/ChatMessagesPane.tsx
 - src/modules/chat/ChatInterface.tsx
