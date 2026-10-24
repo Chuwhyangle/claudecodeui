@@ -1,7 +1,7 @@
 ---
 id: contraction-candidates-signal-inventory-and-design
 title: 收缩候选（观察墙之后）：盘点「从不发声的仪器」等退役信号 + 只读扫描原型 + 进入观察墙与裁定落地的设计
-status: needs-human
+status: ready
 labels:
   - cockpit
   - observation
