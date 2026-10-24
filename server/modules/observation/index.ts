@@ -75,7 +75,6 @@ export type {
 } from './project-truth.producer.js';
 export {
   buildProjectTruth,
-  PROJECT_TRUTH_LAYER_LABELS,
   PROJECT_TRUTH_NOT_APPLICABLE_REASON,
 } from './project-truth.js';
 export type {
@@ -90,7 +89,6 @@ export type {
   ProjectTruthDigest,
   ProjectTruthGoalGateRow,
   ProjectTruthInFlightTask,
-  ProjectTruthLayerState,
   ProjectTruthLayers,
   ProjectTruthProjectRef,
   ProjectTruthReading,

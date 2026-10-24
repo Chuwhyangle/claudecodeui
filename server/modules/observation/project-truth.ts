@@ -120,9 +120,6 @@ export type ProjectTruthDeployReading =
   | { kind: 'unknown'; reason: string; checkedAt: number | null }
   | { kind: 'not-applicable'; reason: string };
 
-/** The five states a layer may carry. `not-applicable` is deploy-only. */
-export type ProjectTruthLayerState = 'ok' | 'attention' | 'red' | 'unevaluated' | 'not-applicable';
-
 /** 在飞 — what the worker is executing right now. */
 export type ProjectInflightLayer = {
   state: 'ok' | 'unevaluated';
@@ -215,7 +212,7 @@ export type ProjectTruthReading = {
 };
 
 /** The product's own name for each layer, used in status reasons and delta items. */
-export const PROJECT_TRUTH_LAYER_LABELS = {
+const PROJECT_TRUTH_LAYER_LABELS = {
   inflight: '在飞',
   landed: '落地',
   deploy: '部署',

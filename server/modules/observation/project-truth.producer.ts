@@ -35,6 +35,7 @@ import { formatProjectUri } from './observation-uri.js';
 import type { ObservedObject, ObservationStore } from './observation-store.js';
 import {
   buildProjectTruth,
+  PROJECT_TRUTH_NOT_APPLICABLE_REASON,
   type ProjectTruthBoardReading,
   type ProjectTruthDeployReading,
   type ProjectTruthDeployTarget,
@@ -88,7 +89,7 @@ export function createCheckDeployFreshnessReader(options: {
   return async (project) => {
     const target = project.deploy;
     if (target === null) {
-      return { kind: 'not-applicable', reason: '该项目没有部署概念（目前只有 CloudCLI 自身有部署）' };
+      return { kind: 'not-applicable', reason: PROJECT_TRUTH_NOT_APPLICABLE_REASON };
     }
 
     const scriptPath = path.join(project.projectPath, 'scripts', 'check-deploy-freshness.mjs');
@@ -264,7 +265,7 @@ export function createProjectTruthProducer(deps: ProjectTruthProducerDeps): Proj
       project.deploy === null
         ? Promise.resolve<ProjectTruthDeployReading>({
             kind: 'not-applicable',
-            reason: '该项目没有部署概念（目前只有 CloudCLI 自身有部署）',
+            reason: PROJECT_TRUTH_NOT_APPLICABLE_REASON,
           })
         : readDeploy(project).catch(
             (error: unknown): ProjectTruthDeployReading => ({
