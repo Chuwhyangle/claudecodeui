@@ -22,7 +22,7 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { findSessionHostState, findSessionOccupancy, useSessionHosts } from '@/shared/hooks/useSessionHosts';
 import { loadProjectIdentifiers } from '@/shared/projectIdentifiers';
 import { isVoiceDebugEnabled } from '@/shared/voiceDebug';
-import type { ChatMessage, QueuedDraft, ScheduledMessage, SlashCommand,SessionActivity,PendingPermissionRequest,PermissionMode,ProviderModelOption,VoiceFailureReport } from '@/shared/types';
+import type { ChatMessage, ComposerChipStrip, QueuedDraft, ScheduledMessage, SlashCommand,SessionActivity,PendingPermissionRequest,PermissionMode,ProviderModelOption,VoiceFailureReport } from '@/shared/types';
 import {
   PromptInput,
   PromptInputHeader,
@@ -51,7 +51,6 @@ import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMe
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
 import ReplyReferencePreview from '@/modules/chat/composer/ReplyReferencePreview';
 import { suggestionOptionId, truncateSuggestionLabel } from '@/modules/chat/utils/inputSuggestions';
-import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
 import type { ReplyItem, ReplyReference } from '@/modules/chat/utils/transcript/replyItems';
 
 /** How long the occupied notice's copy control says "copied" before returning to its label. */
@@ -252,49 +251,12 @@ type ChatComposerProps = {
   isTextareaExpanded: boolean;
   sendByCtrlEnter?: boolean;
   /**
-   * Ranked empty-box suggestion labels from `useInputSuggestions`. Optional so
-   * the standalone renders in tests keep working; absent means "no chips".
+   * The whole chip strip: visibility, keyboard selection, listbox id, the merged
+   * chips, the one accept callback, and the Suggest control plus expansion row.
+   * Produced once by `useSuggestionChips`; absent means "no chips" and keeps
+   * standalone renders working.
    */
-  inputSuggestionCandidates?: string[];
-  /**
-   * True only while every display condition holds (empty box, idle assistant, no
-   * menu, no queued draft or attachment, not occupied, not hidden this round).
-   * The candidates may be non-empty while this is false — the box just has text.
-   */
-  inputSuggestionsVisible?: boolean;
-  /** The chip the keyboard is on, or null. Mirrored into aria-activedescendant. */
-  selectedInputSuggestionIndex?: number | null;
-  /** Listbox id from the state hook; also prefixes each option id. */
-  inputSuggestionListId?: string;
-  /** Fills the draft with the chip's text; accepts a habit chip by index. */
-  onAcceptInputSuggestion?: (index: number) => void;
-  /**
-   * The merged strip (quoted > model > habit) when the LLM tier is wired. Absent means the
-   * standalone habit-only shape the existing renders use.
-   */
-  suggestionChips?: SuggestionChip[];
-  /** Accepts a model chip: fills the draft and sends it. */
-  onAcceptModelSuggestion?: (index: number) => void;
-  /** Accepts the quoted chip: fills `> text` and focuses, without sending. */
-  onAcceptQuotedSuggestion?: (text: string) => void;
-  /** Whether the reply-suggestions feature is on; false hides the Suggest button entirely. */
-  replySuggestionsEnabled?: boolean;
-  /** A draw is in flight: the Suggest button is disabled and shows its progress label. */
-  replySuggestionsLoading?: boolean;
-  /**
-   * Asks for a whole new batch of model chips. A promise that resolves false (or
-   * rejects) is a failed draw: the control shows a short failure state instead of
-   * appearing to have done nothing.
-   */
-  onRequestReplySuggestions?: () => void | Promise<boolean>;
-  /**
-   * The expansion experiment's variant/response chips for the draft in the box.
-   * Drawn as their own row under the textarea (the empty-box strip cannot carry
-   * them: they appear AFTER a chip has filled the body).
-   */
-  replyExpansionChips?: string[];
-  /** Accepts one variant/response chip: replaces the body, keeping a `> quote` prefix. */
-  onAcceptReplyExpansionChip?: (index: number) => void;
+  chipStrip?: ComposerChipStrip;
   /**
    * What the draft currently points at in the latest assistant reply, if
    * anything. Drawn as one line above the input box; `none` draws nothing.
@@ -386,19 +348,7 @@ export default function ChatComposer({
   placeholder,
   isTextareaExpanded,
   sendByCtrlEnter,
-  inputSuggestionCandidates = [],
-  inputSuggestionsVisible = false,
-  selectedInputSuggestionIndex = null,
-  inputSuggestionListId = '',
-  onAcceptInputSuggestion,
-  suggestionChips,
-  onAcceptModelSuggestion,
-  onAcceptQuotedSuggestion,
-  replySuggestionsEnabled = false,
-  replySuggestionsLoading = false,
-  onRequestReplySuggestions,
-  replyExpansionChips = [],
-  onAcceptReplyExpansionChip,
+  chipStrip,
   replyReference = null,
   replyItems = [],
 }: ChatComposerProps) {
@@ -590,8 +540,19 @@ export default function ChatComposer({
       replySuggestFailureTimer.current = null;
     }
   }, []);
+  // The one chip prop, unpacked once: the strip draws only while it is visible
+  // and carries at least one chip, and the Suggest control reads the same object.
+  const showSuggestionChips = chipStrip?.visible === true && chipStrip.chips.length > 0;
+  const chipStripSelectedIndex = chipStrip?.selectedIndex ?? null;
+  const chipStripListId = chipStrip?.listId ?? '';
+  const suggestionChipsEnabled = chipStrip?.suggestionsEnabled === true;
+  const suggestionChipsLoading = chipStrip?.suggestionsLoading === true;
+  const requestSuggestionBatch = chipStrip?.onRequestSuggestions;
+  const expansionChips = chipStrip?.expansionChips ?? [];
+  const acceptExpansionChip = chipStrip?.onAcceptExpansionChip;
+
   const requestReplySuggestions = useCallback(async () => {
-    if (!onRequestReplySuggestions) {
+    if (!requestSuggestionBatch) {
       return;
     }
     if (replySuggestFailureTimer.current !== null) {
@@ -601,7 +562,7 @@ export default function ChatComposer({
     setReplySuggestFailed(false);
     let succeeded = true;
     try {
-      succeeded = (await onRequestReplySuggestions()) !== false;
+      succeeded = (await requestSuggestionBatch()) !== false;
     } catch {
       // A thrown request is a failed draw, not an error the composer should carry.
       succeeded = false;
@@ -614,7 +575,7 @@ export default function ChatComposer({
       replySuggestFailureTimer.current = null;
       setReplySuggestFailed(false);
     }, REPLY_SUGGEST_FAILURE_DISPLAY_MS);
-  }, [onRequestReplySuggestions]);
+  }, [requestSuggestionBatch]);
   const dismissVoiceFailure = useCallback(() => setVoiceFailure(null), []);
   const noopTranscript = useCallback(() => {}, []);
   // The names the transcript is repaired against. Fetched once per project (the module
@@ -717,12 +678,8 @@ export default function ChatComposer({
   const hasQueuedDraft = Boolean(queuedDraft);
   // The chips occupy the textarea's one empty line. While they are on screen the
   // placeholder is blank so the two are not drawn over each other; the chips
-  // themselves are absolutely positioned and add no row.
-  // The merged strip when the caller wires it, otherwise the original habit-only list. The
-  // difference is what lets the composer render quoted and model chips without a second
-  // component: one listbox, three sources.
-  const resolvedSuggestionCount = suggestionChips?.length ?? inputSuggestionCandidates.length;
-  const showSuggestionChips = inputSuggestionsVisible && resolvedSuggestionCount > 0;
+  // themselves are absolutely positioned and add no row. One listbox carries all
+  // three sources, so the strip reads a single prop.
   // The strip overlays the box. It only needs clearance while the box holds text:
   // the quoted chip is the one chip allowed then, and without room made for the
   // row it covers the first line of the quote. The empty-box layout is unchanged.
@@ -1107,8 +1064,8 @@ export default function ChatComposer({
               onInput={onTextareaInput}
               placeholder={showSuggestionChips ? '' : placeholder}
               aria-activedescendant={
-                showSuggestionChips && selectedInputSuggestionIndex !== null
-                  ? suggestionOptionId(inputSuggestionListId, selectedInputSuggestionIndex)
+                showSuggestionChips && chipStripSelectedIndex !== null
+                  ? suggestionOptionId(chipStripListId, chipStripSelectedIndex)
                   : undefined
               }
               // Tighter than the class cap while the controls share this row: the row's height is
@@ -1125,15 +1082,12 @@ export default function ChatComposer({
               // can be sent until the job is stopped.
               disabled={isOccupied}
             />
-            {showSuggestionChips && (
+            {showSuggestionChips && chipStrip && (
               <InputSuggestionChips
-                listId={inputSuggestionListId}
-                suggestions={inputSuggestionCandidates}
-                chips={suggestionChips}
-                selectedIndex={selectedInputSuggestionIndex}
-                onAccept={onAcceptInputSuggestion ?? (() => undefined)}
-                onAcceptModel={onAcceptModelSuggestion}
-                onAcceptQuoted={onAcceptQuotedSuggestion}
+                listId={chipStripListId}
+                chips={chipStrip.chips}
+                selectedIndex={chipStripSelectedIndex}
+                onAccept={chipStrip.onAccept}
                 // The strip's background sits over the textarea; a press there
                 // must focus the input instead of being eaten by the listbox.
                 onBackgroundPress={() => textareaRef.current?.focus()}
@@ -1146,12 +1100,12 @@ export default function ChatComposer({
               one line at narrow widths, exactly like the other chips. A press
               neither moves the caret nor steals focus from the textarea.
             */}
-            {replyExpansionChips.length > 0 && (
+            {expansionChips.length > 0 && (
               <div
                 data-slot="reply-expansion-chips"
                 className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap px-4 pb-2 [scrollbar-width:none]"
               >
-                {replyExpansionChips.map((text, index) => (
+                {expansionChips.map((text, index) => (
                   <button
                     key={`${index}:${text}`}
                     type="button"
@@ -1159,7 +1113,7 @@ export default function ChatComposer({
                     title={text}
                     tabIndex={-1}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onAcceptReplyExpansionChip?.(index)}
+                    onClick={() => acceptExpansionChip?.(index)}
                     className="h-6 shrink-0 rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
                   >
                     {truncateSuggestionLabel(text)}
@@ -1247,7 +1201,7 @@ export default function ChatComposer({
               The Suggest button lives in the footer on purpose: it is the one control that
               regenerates the chips above the input, and it must stay reachable while the
               textarea is covered by them. It is drawn only when the feature is on AND there
-              is an assistant message to draw from (`replySuggestionsEnabled` folds both in;
+              is an assistant message to draw from (`suggestionsEnabled` folds both in;
               a new conversation has nothing to suggest from), and is disabled for the whole
               draw, so a second click cannot become a second request.
 
@@ -1263,21 +1217,21 @@ export default function ChatComposer({
               text loses no state. The wide tier keeps the labelled button unchanged: it has
               the width to spend.
             */}
-            {replySuggestionsEnabled && (isCompactTier ? (
+            {suggestionChipsEnabled && (isCompactTier ? (
               <PromptInputButton
                 data-slot="reply-suggest-button"
-                data-reply-suggest-state={replySuggestFailed ? 'failed' : replySuggestionsLoading ? 'loading' : 'idle'}
+                data-reply-suggest-state={replySuggestFailed ? 'failed' : suggestionChipsLoading ? 'loading' : 'idle'}
                 tooltip={{
                   content: replySuggestFailed
                     ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })
                     : t('input.suggestions.suggest', { defaultValue: 'Suggest' }),
                 }}
                 onClick={requestReplySuggestions}
-                disabled={replySuggestionsLoading}
+                disabled={suggestionChipsLoading}
                 aria-label={replySuggestFailed
                   ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })
                   : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
-                aria-busy={replySuggestionsLoading || undefined}
+                aria-busy={suggestionChipsLoading || undefined}
                 // The <360px band shrinks every PromptInputButton to 28px to fit the long model
                 // name; the icon control keeps its 32px hit target there and the right cluster
                 // gives up 2px per gap instead (below), so the row still does not overflow.
@@ -1286,7 +1240,7 @@ export default function ChatComposer({
                   replySuggestFailed && 'border-destructive/60 text-destructive',
                 )}
               >
-                {replySuggestionsLoading
+                {suggestionChipsLoading
                   ? <Loader2 className="animate-spin" />
                   : replySuggestFailed ? <CircleAlert /> : <Sparkles />}
               </PromptInputButton>
@@ -1294,19 +1248,19 @@ export default function ChatComposer({
               <button
                 type="button"
                 data-slot="reply-suggest-button"
-                data-reply-suggest-state={replySuggestFailed ? 'failed' : replySuggestionsLoading ? 'loading' : 'idle'}
+                data-reply-suggest-state={replySuggestFailed ? 'failed' : suggestionChipsLoading ? 'loading' : 'idle'}
                 onClick={requestReplySuggestions}
-                disabled={replySuggestionsLoading}
+                disabled={suggestionChipsLoading}
                 aria-label={replySuggestFailed
                   ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })
                   : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
-                aria-busy={replySuggestionsLoading || undefined}
+                aria-busy={suggestionChipsLoading || undefined}
                 className={cn(
                   'h-8 shrink-0 whitespace-nowrap rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
                   replySuggestFailed && 'border-destructive/60 text-destructive',
                 )}
               >
-                {replySuggestionsLoading
+                {suggestionChipsLoading
                   ? t('input.suggestions.suggesting', { defaultValue: 'Suggesting…' })
                   : replySuggestFailed
                     ? t('input.suggestions.suggestFailed', { defaultValue: 'Suggest failed' })

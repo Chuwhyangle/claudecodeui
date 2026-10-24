@@ -2,7 +2,7 @@
 id: gap-composer-chip-single-accept-path
 title: 输入框 chip 统一封装：一个接受入口、一个回调、来源差异只靠数据、跨来源契约测试；去掉旧的字符串表示并收拢 ChatComposer 的
   chip prop
-status: ready
+status: done
 labels:
   - gap
 parent: null

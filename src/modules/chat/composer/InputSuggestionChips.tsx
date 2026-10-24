@@ -6,25 +6,16 @@ import {
   suggestionOptionId,
   truncateSuggestionLabel,
 } from '@/modules/chat/utils/inputSuggestions';
-import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
+import type { SuggestionChip } from '@/shared/types';
 
 type InputSuggestionChipsProps = {
   /** The listbox id, from `useInputSuggestions`; also prefixes each option's id. */
   listId: string;
-  /**
-   * Plain habit labels, the pre-LLM shape. Ignored when `chips` is supplied; kept so
-   * standalone renders and older tests keep working.
-   */
-  suggestions?: string[];
   /** The merged strip (quoted > model > habit) from `useInputSuggestions`. */
-  chips?: SuggestionChip[];
+  chips: readonly SuggestionChip[];
   selectedIndex: number | null;
-  /** Accepts a habit chip by its index in the strip. Also the fallback for absent source callbacks. */
-  onAccept?: (index: number) => void;
-  /** Accepts a model chip: fills the draft and sends it. */
-  onAcceptModel?: (index: number) => void;
-  /** Accepts the quoted chip: fills `> text` and focuses, without sending. */
-  onAcceptQuoted?: (text: string) => void;
+  /** The one acceptance entry. What the chip does is its source's data, not this component's. */
+  onAccept: (chip: SuggestionChip) => void;
   /**
    * Called when the strip's own background — the gaps between chips or the
    * space past the last one — is pressed. The composer focuses its textarea
@@ -81,22 +72,20 @@ function isCoarsePointer(): boolean {
  * keydown and mirrored through `aria-activedescendant`.
  *
  * Three sources share the strip in a fixed order — quoted selection, model
- * replies, then habits. Their click semantics differ (a model reply is sent, a
- * quotation is only pasted and focused), so each source gets its own callback.
- * The label is shortened to one line; the complete text lives in `title` and in
- * the second-line preview the keyboard selection and the mouse hover reveal.
+ * replies, then habits. Clicking any of them calls the same `onAccept(chip)`:
+ * what differs per source is described by its accept descriptor, not here, so a
+ * new source needs no new prop. The label is shortened to one line; the complete
+ * text lives in `title` and in the second-line preview the keyboard selection and
+ * the mouse hover reveal.
  *
  * Below 480px the chips stay one line and scroll horizontally, and the key
  * hint is not shown (there is no keyboard to name keys for).
  */
 export function InputSuggestionChips({
   listId,
-  suggestions = [],
   chips,
   selectedIndex,
   onAccept,
-  onAcceptModel,
-  onAcceptQuoted,
   onBackgroundPress,
   showPreview,
 }: InputSuggestionChipsProps) {
@@ -105,14 +94,7 @@ export function InputSuggestionChips({
   // back to the keyboard selection, then to the first model chip.
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const resolved: SuggestionChip[] = chips ?? suggestions.map((text, index) => ({
-    id: `habit-${index}`,
-    text,
-    source: 'habit' as const,
-    index,
-  }));
-
-  if (resolved.length === 0) {
+  if (chips.length === 0) {
     return null;
   }
 
@@ -123,21 +105,9 @@ export function InputSuggestionChips({
   const activeIndex = hoveredIndex ?? selectedIndex;
   const previewChip = previewEnabled
     ? (activeIndex === null
-      ? resolved.find((chip) => chip.source === 'model') ?? null
-      : resolved[activeIndex] ?? null)
+      ? chips.find((chip) => chip.source === 'model') ?? null
+      : chips[activeIndex] ?? null)
     : null;
-
-  const accept = (chip: SuggestionChip, index: number) => {
-    if (chip.source === 'quoted' && onAcceptQuoted) {
-      onAcceptQuoted(chip.text);
-      return;
-    }
-    if (chip.source === 'model' && onAcceptModel) {
-      onAcceptModel(chip.index);
-      return;
-    }
-    onAccept?.(index);
-  };
 
   return (
     <div
@@ -164,7 +134,7 @@ export function InputSuggestionChips({
           onBackgroundPress?.();
         }}
       >
-        {resolved.map((chip, index) => (
+        {chips.map((chip, index) => (
           <button
             key={chip.id}
             id={suggestionOptionId(listId, index)}
@@ -179,7 +149,7 @@ export function InputSuggestionChips({
             onMouseDown={(event) => event.preventDefault()}
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
-            onClick={() => accept(chip, index)}
+            onClick={() => onAccept(chip)}
             className={cn(
               'h-6 shrink-0 rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors',
               'hover:border-primary/60 hover:text-foreground',

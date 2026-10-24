@@ -21,10 +21,7 @@ import { useCommandMenuState } from '@/modules/chat/hooks/useCommandMenuState';
 import { useDraftState } from '@/modules/chat/hooks/useDraftState';
 import { useFileMentions } from '@/modules/chat/hooks/useFileMentions';
 import { useInputHistory } from '@/modules/chat/hooks/useInputHistory';
-import { useInputSuggestions } from '@/modules/chat/hooks/useInputSuggestions';
-import { useReplySuggestions } from '@/modules/chat/hooks/useReplySuggestions';
-import { suggestionConditionsHold } from '@/modules/chat/utils/inputSuggestions';
-import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
+import { useSuggestionChips } from '@/modules/chat/hooks/useSuggestionChips';
 import { useSendDeliveryState } from '@/modules/chat/hooks/useSendDeliveryState';
 import { useSendOnEnter } from '@/modules/chat/hooks/useSendOnEnter';
 import { useTextareaInteractionState } from '@/modules/chat/hooks/useTextareaInteractionState';
@@ -173,32 +170,6 @@ type MentionableFile = {
 const createFakeSubmitEvent = () => {
   return { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>;
 };
-
-/**
- * Split a quoted draft into the part a response must keep and the part it
- * replaces.
- *
- * A quotation is pasted as one or more `> …` lines. An expansion chip for that
- * quotation replaces what the person wrote AFTER it, never the quotation itself,
- * so the prefix runs through the last `> ` line (and its newline). A draft with
- * no quotation has an empty prefix and the chip replaces all of it.
- */
-function splitQuotedPrefix(text: string): { prefix: string; rest: string } {
-  const lines = text.split('\n');
-  let lastQuotedLine = -1;
-  for (let index = 0; index < lines.length; index += 1) {
-    if (lines[index].trimStart().startsWith('>')) {
-      lastQuotedLine = index;
-    }
-  }
-  if (lastQuotedLine < 0) {
-    return { prefix: '', rest: text };
-  }
-  return {
-    prefix: `${lines.slice(0, lastQuotedLine + 1).join('\n')}\n`,
-    rest: lines.slice(lastQuotedLine + 1).join('\n'),
-  };
-}
 
 const getNotificationSessionSummary = (
   selectedSession: ProjectSession | null,
@@ -370,21 +341,6 @@ export function useChatComposerState({
     textareaRef,
     scope: draftScope,
   });
-  // An accepted chip is filled into the draft, not sent: the same pair of stores
-  // a send reads is written so the very next Enter submits the new text rather
-  // than a stale value. The caret goes to the end so the user can extend it.
-  const acceptSuggestion = useCallback((text: string) => {
-    setInputFromHistory(text);
-    requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
-      if (!textarea) {
-        return;
-      }
-      textarea.focus();
-      textarea.setSelectionRange(text.length, text.length);
-    });
-  }, [setInputFromHistory, textareaRef]);
-
   const {
     showFileDropdown,
     filteredFiles,
@@ -413,226 +369,30 @@ export function useChatComposerState({
     hasQueuedDraft: queuedDraft !== null,
     hasAttachments: attachedFiles.length > 0,
   };
-  const trimmedQuotedSelection = quotedSelection?.trim() ? quotedSelection.trim() : null;
-
-  /**
-   * The passage a quoted chip pasted, held after the browser selection itself is gone.
-   *
-   * Clicking the chip focuses the textarea, and focusing it collapses the document
-   * selection — which the selection hook correctly reports as "no selection". The
-   * proposal still promises the chip stays while the box holds the quote (that is how
-   * several passages are appended), so the accepted text is pinned here until the box
-   * is emptied or a NEW transcript selection arrives. It is never a stale source: it is
-   * set only from the chip that was just accepted.
-   */
-  const [pinnedQuote, setPinnedQuote] = useState<string | null>(null);
-  // A fresh selection supersedes the pinned one. Clearing (null) deliberately does not:
-  // that is the focus collapse the pin exists to survive.
-  useEffect(() => {
-    if (trimmedQuotedSelection) {
-      setPinnedQuote(null);
-    }
-  }, [trimmedQuotedSelection]);
-  // The composition's last chip fill, for the one undo this surface owns: a fill is a
-  // programmatic value, so the browser has no native undo entry for it.
-  const lastChipFillRef = useRef<{ before: string; after: string } | null>(null);
-
-  const effectiveQuotedSelection = trimmedQuotedSelection
-    ?? (input !== '' ? pinnedQuote : null);
-
-  // Model chips: one draw per assistant message, only while the empty box would
-  // show them, silent when the feature is off. The hook is called before the strip
-  // because its chips are the strip's second source.
+  // Every chip concern — the merged strip, the model and expansion draws, the
+  // single acceptance entry, and the pin/undo/sent state — lives in one hook.
+  // The idle conditions and the draft writer are all it needs from here.
   const {
-    enabled: replySuggestionsEnabled,
-    chips: replySuggestionChips,
-    loading: replySuggestionsLoading,
-    redraw: redrawReplySuggestions,
-    reportEvent: reportReplySuggestionEvent,
-    expansionEnabled: replyExpansionEnabled,
-    expansionChips: replyExpansionChips,
-    expansionSource: replyExpansionSource,
-    expansionLoading: replyExpansionLoading,
-    canExpand: replyExpansionCanExpand,
-    requestExpansion: requestReplyExpansion,
-    clearExpansion: clearReplyExpansion,
-  } = useReplySuggestions({
+    chipStrip,
+    handleChipUndoKey,
+    noteDraftEdit,
+    reportChipSent,
+    forgetChipState,
+    clearExpansion,
+    reportCleared,
+    handleSuggestionKeyDown,
+  } = useSuggestionChips({
+    input,
+    inputValueRef,
+    textareaRef,
+    setInputFromHistory,
+    submit: submitComposer,
+    conditions: suggestionConditions,
+    draftScope,
     sessionId: currentSessionId,
     lastAssistantMessageId,
-    active: suggestionConditionsHold(suggestionConditions) && input === '',
-    focus: effectiveQuotedSelection,
+    quotedSelection,
   });
-
-  // The text a model chip wrote into the draft, held until the send path confirms
-  // it went out. That is what makes `sent` a report about a delivered chip rather
-  // than about a click.
-  const modelChipFillRef = useRef<string | null>(null);
-
-  // Accepts one merged chip. Every source fills only — clicking a chip is a draft,
-  // not a send; the person confirms by pressing send themselves. A quotation is
-  // pasted and focused so the person can answer it, and a habit or model reply is
-  // written to both stores with the caret at the end so the next Enter sends it.
-  const acceptSuggestionChip = useCallback((chip: SuggestionChip) => {
-    if (chip.source === 'model') {
-      reportReplySuggestionEvent('picked', chip.index);
-      if (replyExpansionEnabled) {
-        // The experiment keeps the picked reply in the box so it can be expanded:
-        // filling and sending would leave nothing for the variants to replace.
-        modelChipFillRef.current = null;
-        setInputFromHistory(chip.text);
-        requestReplyExpansion({ seed: chip.text });
-        return;
-      }
-      modelChipFillRef.current = chip.text;
-      // Same fill path as a habit chip: both stores written, focused, caret at the
-      // end — and deliberately no `submitComposer()`, so the text waits in the box.
-      acceptSuggestion(chip.text);
-      return;
-    }
-    if (chip.source === 'quoted') {
-      const quoted = `> ${chip.text.replace(/\r?\n/gu, '\n> ')}\n`;
-      const current = inputValueRef.current;
-      const next = current.trim() ? `${current.replace(/\s+$/u, '')}\n\n${quoted}` : quoted;
-      modelChipFillRef.current = null;
-      // Keep the chip after the focus collapse the fill itself causes.
-      setPinnedQuote(chip.text);
-      lastChipFillRef.current = { before: current, after: next };
-      setInputFromHistory(next);
-      // With expansion on, the quotation is the anchor: the first chips are
-      // responses to it, and there is no seed because nothing follows it yet.
-      if (replyExpansionEnabled) {
-        requestReplyExpansion({ focus: chip.text, seed: '' });
-      }
-      requestAnimationFrame(() => {
-        const textarea = textareaRef.current;
-        if (!textarea) {
-          return;
-        }
-        textarea.focus();
-        textarea.setSelectionRange(next.length, next.length);
-      });
-      return;
-    }
-    acceptSuggestion(chip.text);
-  }, [
-    acceptSuggestion,
-    inputValueRef,
-    replyExpansionEnabled,
-    requestReplyExpansion,
-    reportReplySuggestionEvent,
-    setInputFromHistory,
-    textareaRef,
-  ]);
-
-  // Empty-box suggestion chips. Every display condition the proposal names is
-  // read here — the same values the composer itself paints from — and the hook
-  // owns selection, the Esc round, the adoption counters and the Tab/Enter/Esc
-  // semantics. It is called after the menu hooks because those decide two of the
-  // conditions.
-  const {
-    candidates: inputSuggestionCandidates,
-    chips: suggestionChips,
-    selectedIndex: selectedInputSuggestionIndex,
-    listId: inputSuggestionListId,
-    visible: inputSuggestionsVisible,
-    accept: acceptInputSuggestion,
-    handleKeyDown: handleInputSuggestionsKeyDown,
-  } = useInputSuggestions({
-    input,
-    ...suggestionConditions,
-    draftScope,
-    modelChips: replySuggestionChips,
-    quotedText: effectiveQuotedSelection,
-    onAccept: acceptSuggestionChip,
-  });
-
-  /** Accepts one model chip by its index in the current batch (the Suggest-button surface). */
-  const acceptModelSuggestion = useCallback((index: number) => {
-    const text = replySuggestionChips[index];
-    if (text === undefined) {
-      return;
-    }
-    reportReplySuggestionEvent('picked', index);
-    if (replyExpansionEnabled) {
-      modelChipFillRef.current = null;
-      lastChipFillRef.current = { before: inputValueRef.current, after: text };
-      setInputFromHistory(text);
-      requestReplyExpansion({ seed: text });
-      return;
-    }
-    modelChipFillRef.current = text;
-    lastChipFillRef.current = { before: inputValueRef.current, after: text };
-    // Fill only: the next Enter (or the send button) is the person's confirmation.
-    acceptSuggestion(text);
-  }, [
-    acceptSuggestion,
-    inputValueRef,
-    replyExpansionEnabled,
-    replySuggestionChips,
-    reportReplySuggestionEvent,
-    requestReplyExpansion,
-    setInputFromHistory,
-  ]);
-
-  /**
-   * Accepts one variant/response chip from the expansion experiment.
-   *
-   * The chip REPLACES the body — `> 原文` lines are the only part that survives a
-   * quoted draft — and, while the chain has depth left, becomes the seed of the
-   * next expansion so the person can keep refining. At the cap the chip is simply
-   * accepted and the strip goes away.
-   */
-  const acceptReplyExpansionChip = useCallback((index: number) => {
-    const text = replyExpansionChips[index];
-    if (text === undefined) {
-      return;
-    }
-    reportReplySuggestionEvent('picked', index, replyExpansionSource ?? undefined);
-    const current = inputValueRef.current;
-    const { prefix } = splitQuotedPrefix(current);
-    const next = prefix === '' ? text : `${prefix}${text}`;
-    modelChipFillRef.current = null;
-    lastChipFillRef.current = { before: current, after: next };
-    setInputFromHistory(next);
-    requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
-      if (!textarea) {
-        return;
-      }
-      textarea.focus();
-      textarea.setSelectionRange(next.length, next.length);
-    });
-    if (replyExpansionCanExpand) {
-      requestReplyExpansion({ seed: text });
-    } else {
-      clearReplyExpansion();
-    }
-  }, [
-    clearReplyExpansion,
-    inputValueRef,
-    replyExpansionCanExpand,
-    replyExpansionChips,
-    replyExpansionSource,
-    reportReplySuggestionEvent,
-    requestReplyExpansion,
-    setInputFromHistory,
-    textareaRef,
-  ]);
-
-  /**
-   * Pastes a quotation as `> text` on its own line(s) and focuses. Never sends.
-   *
-   * The text is passed in by the strip rather than re-read from the selection: by the
-   * time the click lands the selection may already be collapsing, and the chip's own
-   * recorded text is the stable source (the same reason its label/title carry it).
-   */
-  const acceptQuotedSuggestion = useCallback((text?: string) => {
-    const quote = (text ?? effectiveQuotedSelection)?.trim();
-    if (!quote) {
-      return;
-    }
-    acceptSuggestionChip({ id: 'quoted-0', text: quote, source: 'quoted', index: 0 });
-  }, [acceptSuggestionChip, effectiveQuotedSelection]);
 
   // Snapshot of everything `chat.send` needs beyond the text itself. Built at
   // send time for immediate sends and at queue time for queued ones, so a
@@ -787,7 +547,7 @@ export function useChatComposerState({
 
         queuedDraftSessionRef.current = queuedSessionKey;
         setQueuedDraft(durableDraft);
-        clearReplyExpansion();
+        clearExpansion();
         setInput('');
         inputValueRef.current = '';
         setAttachedFiles([]);
@@ -1017,14 +777,11 @@ export function useChatComposerState({
       const commitSentComposerState = () => {
         // `sent` is reported only when the text that went out is the one a model
         // chip wrote — a typed message is not this ledger's business.
-        if (modelChipFillRef.current !== null && currentInput === modelChipFillRef.current) {
-          reportReplySuggestionEvent('sent');
-        }
-        modelChipFillRef.current = null;
+        reportChipSent(currentInput);
         recordSentMessage(currentInput, targetSessionId);
         // The message left the box; the variants that answered it are no longer
         // about anything on screen.
-        clearReplyExpansion();
+        clearExpansion();
         // The box itself is cleared only while it still shows the scope the
         // message came from; a scope that has moved on (a new chat) already
         // shows its own, empty draft.
@@ -1102,7 +859,7 @@ export function useChatComposerState({
       selectedSession,
       attachedFiles,
       buildSendOptions,
-      clearReplyExpansion,
+      clearExpansion,
       currentSessionId,
       editingAnchorId,
       executeCommand,
@@ -1114,7 +871,7 @@ export function useChatComposerState({
       onSessionEstablished,
       provider,
       recordSentMessage,
-      reportReplySuggestionEvent,
+      reportChipSent,
       resetCommandMenuState,
       scrollToBottom,
       selectedProject,
@@ -1148,14 +905,12 @@ export function useChatComposerState({
 
       // A manual edit is not the draft an expansion chip was drawn for: the
       // variants would replace text the person just changed by hand.
-      clearReplyExpansion();
+      clearExpansion();
 
       // An edit also forfeits the `sent` attribution. Only an unedited model-chip
       // fill is that chip's text going out; once the person changes it, whatever
       // they send is their own message, even if they later type the fill back.
-      if (modelChipFillRef.current !== null && newValue !== modelChipFillRef.current) {
-        modelChipFillRef.current = null;
-      }
+      noteDraftEdit(newValue);
 
       // Carry the voice insertion range through the edit before it lands in state.
       remapVoiceRangeOnEdit(inputValueRef.current, newValue);
@@ -1178,9 +933,10 @@ export function useChatComposerState({
       handleCommandInputChange(newValue, cursorPos);
     },
     [
-      clearReplyExpansion,
+      clearExpansion,
       handleCommandInputChange,
       inputValueRef,
+      noteDraftEdit,
       remapVoiceRangeOnEdit,
       resetCommandMenuState,
       setCursorPosition,
@@ -1204,13 +960,12 @@ export function useChatComposerState({
    */
   const handleClearInput = useCallback(() => {
     if (inputValueRef.current !== '') {
-      reportReplySuggestionEvent('cleared');
+      reportCleared();
     }
     setInput('');
     inputValueRef.current = '';
-    setPinnedQuote(null);
-    lastChipFillRef.current = null;
-    clearReplyExpansion();
+    forgetChipState();
+    clearExpansion();
     resetCommandMenuState();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -1218,9 +973,10 @@ export function useChatComposerState({
     }
     setIsTextareaExpanded(false);
   }, [
-    clearReplyExpansion,
+    clearExpansion,
+    forgetChipState,
     inputValueRef,
-    reportReplySuggestionEvent,
+    reportCleared,
     resetCommandMenuState,
     setInput,
     setIsTextareaExpanded,
@@ -1231,19 +987,9 @@ export function useChatComposerState({
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       // A chip fill writes the draft programmatically, so the browser has no native
       // undo entry for it: Ctrl+Z would otherwise do nothing on the text the user just
-      // got from a chip. Intercept exactly while the box still holds that fill, and
-      // only then — every other edit keeps the browser's own undo.
-      if (
-        event.key.toLowerCase() === 'z'
-        && (event.ctrlKey || event.metaKey)
-        && !event.shiftKey
-        && lastChipFillRef.current !== null
-        && inputValueRef.current === lastChipFillRef.current.after
-      ) {
-        event.preventDefault();
-        const restore = lastChipFillRef.current.before;
-        lastChipFillRef.current = null;
-        setInputFromHistory(restore);
+      // got from a chip. The chip hook intercepts exactly while the box still holds
+      // that fill; every other edit keeps the browser's own undo.
+      if (handleChipUndoKey(event)) {
         return;
       }
 
@@ -1263,7 +1009,7 @@ export function useChatComposerState({
       // branches: they own Tab only while visible (falling through, un-consumed,
       // once the selection walks past an end) and Enter only while a chip is
       // selected. A composition's Enter is never an acceptance.
-      if (handleInputSuggestionsKeyDown(event, event.nativeEvent.isComposing || isImeComposing())) {
+      if (handleSuggestionKeyDown(event, event.nativeEvent.isComposing || isImeComposing())) {
         return;
       }
 
@@ -1314,17 +1060,17 @@ export function useChatComposerState({
     },
     [
       cyclePermissionMode,
+      handleChipUndoKey,
       handleCommandMenuKeyDown,
       handleFileMentionsKeyDown,
       handleClearInput,
       handleHistoryKeyDown,
-      handleInputSuggestionsKeyDown,
+      handleSuggestionKeyDown,
       inputValueRef,
       isDockTurnShown,
       isImeComposing,
       isLoading,
       sendOnEnter,
-      setInputFromHistory,
       showCommandMenu,
       showFileDropdown,
     ],
@@ -1409,18 +1155,18 @@ export function useChatComposerState({
   const beginEditMessage = useCallback((message: ChatMessage) => {
     if (!message.transcriptAnchorId) return;
     setEditingAnchorId(message.transcriptAnchorId);
-    clearReplyExpansion();
+    clearExpansion();
     setInput(message.content || '');
     inputValueRef.current = message.content || '';
     textareaRef.current?.focus();
-  }, [clearReplyExpansion, inputValueRef, setInput, textareaRef]);
+  }, [clearExpansion, inputValueRef, setInput, textareaRef]);
 
   const cancelEditMessage = useCallback(() => {
     setEditingAnchorId(null);
-    clearReplyExpansion();
+    clearExpansion();
     setInput('');
     inputValueRef.current = '';
-  }, [clearReplyExpansion, inputValueRef, setInput]);
+  }, [clearExpansion, inputValueRef, setInput]);
 
   return {
     input,
@@ -1454,20 +1200,11 @@ export function useChatComposerState({
     attachedFiles,
     setAttachedFiles,
     fileErrors,
-    inputSuggestionCandidates,
-    inputSuggestionsVisible,
-    selectedInputSuggestionIndex,
-    inputSuggestionListId,
-    acceptInputSuggestion,
-    suggestionChips,
-    acceptModelSuggestion,
-    acceptQuotedSuggestion,
-    replySuggestionsEnabled,
-    replySuggestionsLoading,
-    redrawReplySuggestions,
-    replyExpansionChips,
-    replyExpansionLoading,
-    acceptReplyExpansionChip,
+    /**
+     * Everything the composer's chip strip draws and calls, produced once by
+     * `useSuggestionChips` and forwarded unchanged.
+     */
+    chipStrip,
     getRootProps,
     getInputProps,
     isDragActive,
