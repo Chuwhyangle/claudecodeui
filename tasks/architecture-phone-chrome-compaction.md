@@ -105,3 +105,11 @@ depends_on:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/architecture-phone-chrome-compaction.md
+
+## Blocker
+
+**2026-10-24T05:16:32.190Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/mobileCompactToolbar.test.tsx: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+- run_id：wk-prod-anchor
+- session_id：c4a95949-d892-49a6-a8fe-6a464ab7093d
