@@ -2,7 +2,7 @@
 id: cockpit-board-and-fleet-readability-polish
 title: 驾驶舱 board / fleet 可读性打磨：回声横幅不挤舞台、Focus 页脚反映圈选磁贴、在途 chip 统一、目标列表默认非
   achieved 优先、id 尾部截断、空态给原因、cached 显示年龄
-status: ready
+status: done
 labels:
   - cockpit
   - ui
@@ -28,12 +28,12 @@ extra:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——回声出现时，横幅容器带「预留空间 / 绝对定位覆盖」的标记类（断言类名与舞台容器 padding / 定位属性，不量像素）；fleet 视图焦点在某磁贴时页脚文本含该磁贴标签而非「none」。
-- [ ] AC2: 同一测试文件——4 个在途任务夹具（短 / 长标题）渲染的 chip 使用同一组布局类（`getAllByTestId` 的 className 集合只有一种），长标题带换行类而非 `whitespace-nowrap` 溢出。
-- [ ] AC3: 同一测试文件——Stage goals 夹具含 5 个 achieved + 2 个 draft：draft 排在 achieved 之前，achieved 不渲染满格进度条节点（或默认折叠并显示计数）；Recent tasks 的长 id 带 title 属性且使用尾部截断类（不含中间省略逻辑）。
-- [ ] AC4: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——空墙文案含原因与下一步；有运行中会话时文案提及如何钉选；既有用例不弱化。
-- [ ] AC5: `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0——数据来自缓存时「cached」旁显示年龄文本，超过阈值带 stale 标记；非缓存不显示。
-- [ ] AC6: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` 与 `npm run typecheck` 均 exit 0——新文案键 12 个 locale 齐全。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——回声出现时，横幅容器带「预留空间 / 绝对定位覆盖」的标记类（断言类名与舞台容器 padding / 定位属性，不量像素）；fleet 视图焦点在某磁贴时页脚文本含该磁贴标签而非「none」。
+- [x] AC2: 同一测试文件——4 个在途任务夹具（短 / 长标题）渲染的 chip 使用同一组布局类（`getAllByTestId` 的 className 集合只有一种），长标题带换行类而非 `whitespace-nowrap` 溢出。
+- [x] AC3: 同一测试文件——Stage goals 夹具含 5 个 achieved + 2 个 draft：draft 排在 achieved 之前，achieved 不渲染满格进度条节点（或默认折叠并显示计数）；Recent tasks 的长 id 带 title 属性且使用尾部截断类（不含中间省略逻辑）。
+- [x] AC4: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——空墙文案含原因与下一步；有运行中会话时文案提及如何钉选；既有用例不弱化。
+- [x] AC5: `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0——数据来自缓存时「cached」旁显示年龄文本，超过阈值带 stale 标记；非缓存不显示。
+- [x] AC6: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` 与 `npm run typecheck` 均 exit 0——新文案键 12 个 locale 齐全。
 
 ## DoD
 

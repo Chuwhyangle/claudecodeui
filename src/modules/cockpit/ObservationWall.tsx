@@ -68,9 +68,27 @@ export default function ObservationWall({
         )}
 
         {drawnEntries.length === 0 ? (
-          <p className="p-3 text-xs text-muted-foreground" data-testid="observation-wall-empty">
-            {t('cockpit.observationEmpty')}
-          </p>
+          /*
+            AN EMPTY WALL MUST SAY WHY IT IS EMPTY. 「Nothing to observe right now.」 beside a
+            running session reads like a broken wall; the reason sentence says what the wall
+            admits, and the next sentence says how to put something on it (pin a session or a
+            project) or what will fill it on its own.
+          */
+          <div className="p-3" data-testid="observation-wall-empty">
+            <p className="text-xs font-medium text-foreground">{t('cockpit.observationEmpty')}</p>
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="observation-wall-empty-reason"
+            >
+              {t('cockpit.observationEmptyReason')}
+            </p>
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid="observation-wall-empty-next"
+            >
+              {t('cockpit.observationEmptyNext')}
+            </p>
+          </div>
         ) : (
           <ul
             className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3"

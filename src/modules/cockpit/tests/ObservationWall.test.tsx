@@ -911,3 +911,30 @@ describe('every input gets an echo', () => {
     });
   });
 });
+
+/**
+ * AC4 — an empty wall must not read like a broken wall.
+ *
+ * 「Nothing to observe right now.」 beside a running session says nothing about why the wall is
+ * empty or what would put something on it. The empty block now carries the wall's admission rule
+ * (a running session that needs nothing stays off it) and a next step (pin a session or project,
+ * or wait for something that needs you).
+ */
+describe('AC4: the empty wall explains itself', () => {
+  it('states why it is empty and what will fill it, including how to pin', async () => {
+    wallState = { entries: [], collapsedCount: 0, producers: [], self: null };
+    renderCockpit();
+
+    const empty = await screen.findByTestId('observation-wall-empty');
+    expect(empty.textContent).toContain('Nothing to observe right now.');
+
+    const reason = within(empty).getByTestId('observation-wall-empty-reason').textContent ?? '';
+    // The reason names the running-session case the person is looking at.
+    expect(reason).toMatch(/running session/i);
+    expect(reason).toMatch(/needs you|need you/i);
+
+    const next = within(empty).getByTestId('observation-wall-empty-next').textContent ?? '';
+    expect(next).toMatch(/pin/i);
+    expect(next).toMatch(/wall/i);
+  });
+});

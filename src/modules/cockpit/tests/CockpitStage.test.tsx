@@ -1279,3 +1279,177 @@ describe('cockpit input', () => {
     expect(locationSearch()).toBe('?view=fleet');
   });
 });
+
+/**
+ * AC1 — the echo must not resize the stage, and the fleet footer must name the focused tile.
+ *
+ * The regression this pins: the echo banner used to be an in-flow row inside the footer, so every
+ * submit grew the footer by a banner's height and shrank the stage (clipping its last line). The
+ * assertion is deliberately class-based, not pixel-based: the banner carries the overlay marker
+ * plus `absolute`, the footer is its positioned ancestor, and the stage's own class string is
+ * identical before and after the echo appears.
+ */
+describe('AC1: echo overlay and the fleet focus footer', () => {
+  it('draws the echo as an anchored overlay so the stage keeps its own box, and names the focused tile', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
+
+    // The focused tile is readable in the footer: its ordinal AND its project, never 「none」.
+    const focusedTile = screen
+      .getAllByTestId('cockpit-fleet-tile')[0] as HTMLElement;
+    const tileLabel = within(focusedTile).getByTestId('cockpit-fleet-tile-label').textContent ?? '';
+    const tileName = within(focusedTile).getByTestId('cockpit-fleet-tile-name').textContent ?? '';
+    expect(tileLabel).not.toBe('');
+    expect(tileName).not.toBe('');
+    const focusLine = screen.getByTestId('cockpit-focus').textContent ?? '';
+    expect(focusLine).toContain(tileLabel);
+    expect(focusLine).toContain(tileName);
+    expect(focusLine).not.toContain('none');
+
+    const stageBefore = screen.getByTestId('cockpit-stage').className;
+
+    // Submit a phrase the hub cannot place: that is the shortest path to a refused echo.
+    const textarea = screen
+      .getByTestId('cockpit-input')
+      .querySelector('[data-slot="prompt-input-textarea"]') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '今天天气不错' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    const echo = await screen.findByTestId('cockpit-echo');
+    const echoClasses = echo.className.split(/\s+/);
+    expect(echoClasses).toContain('cockpit-echo-overlay');
+    expect(echoClasses).toContain('absolute');
+    // The footer is the overlay's positioned ancestor, and the stage's box is unchanged.
+    expect(screen.getByTestId('cockpit-status').className.split(/\s+/)).toContain('relative');
+    expect(screen.getByTestId('cockpit-stage').className).toBe(stageBefore);
+  });
+
+  it('names the ringed (needs-you) fleet tile when the hub has reported no focus', async () => {
+    renderCockpit();
+
+    const tiles = await screen.findAllByTestId('cockpit-fleet-tile');
+    expect(tiles[0]?.getAttribute('data-needs-human')).toBe('true');
+
+    // A display that has not (yet) reported a focusable set reads Focus: none. The footer must
+    // still reflect the tile a person sees ringed, instead of stopping at 「none」.
+    hubMock.pushState({ ...hubMock.getState(), focusUri: null });
+    const attention = await screen.findByTestId('cockpit-fleet-attention');
+    expect(attention.textContent).toContain('claudecodeui');
+  });
+});
+
+/**
+ * AC2 — every in-flight chip is the same layout.
+ *
+ * The regression: the chip's width followed its longest line, so tasks with a subtitle drew
+ * 600–900px bars and tasks without one stayed small pills. The test carries FOUR chips (two
+ * without a title reading, two with long titles) and compares the literal `className` sets: one
+ * shared layout. The focus ring is a data-attribute variant, so it cannot split the set.
+ */
+describe('AC2: unified in-flight chips', () => {
+  it('renders four in-flight chips with one class set, wrapping long ids instead of nowrapping them', async () => {
+    const longIds = [
+      'gap-reply-suggestions-model-chip-fill-in-the-blank',
+      'gap-reply-suggestions-compact-footer-is-too-narrow',
+    ];
+    const inFlightSnapshot: QuaySnapshot = {
+      ...SNAPSHOT,
+      tasks: {
+        ...SNAPSHOT.tasks!,
+        recent: [
+          { id: longIds[0]!, title: 'Model chip fill-in', status: 'ready', updatedAt: null },
+          { id: longIds[1]!, title: 'Compact footer is too narrow', status: 'ready', updatedAt: null },
+        ],
+      },
+      inFlight: [
+        { taskId: 'short-a', phase: 'implementing', startedAt: '2026-10-22T23:00:00.000Z', lastHeartbeat: '2026-10-22T23:59:00.000Z', workerPid: 1 },
+        { taskId: 'short-b', phase: 'implementing', startedAt: '2026-10-22T23:00:00.000Z', lastHeartbeat: '2026-10-22T23:59:00.000Z', workerPid: 2 },
+        { taskId: longIds[0]!, phase: 'fan-in', startedAt: '2026-10-22T23:00:00.000Z', lastHeartbeat: '2026-10-22T23:59:00.000Z', workerPid: 3 },
+        { taskId: longIds[1]!, phase: 'awaiting-land', startedAt: '2026-10-22T23:00:00.000Z', lastHeartbeat: '2026-10-22T23:59:00.000Z', workerPid: 4 },
+      ],
+    };
+    apiMock.quaySnapshot.mockResolvedValue(okResponse(inFlightSnapshot));
+
+    renderCockpit('/cockpit?view=board&project=p1');
+
+    const chips = await screen.findAllByTestId('cockpit-board-object');
+    expect(chips).toHaveLength(4);
+    expect(new Set(chips.map((chip) => chip.className)).size).toBe(1);
+
+    const titleSpans = screen.getAllByTestId('cockpit-board-object-title');
+    expect(titleSpans).toHaveLength(4);
+    for (const span of titleSpans) {
+      const tokens = (span.className ?? '').split(/\s+/);
+      expect(tokens).toContain('break-words');
+      expect(tokens).not.toContain('truncate');
+      expect(tokens).not.toContain('whitespace-nowrap');
+      // The full id stays in the DOM and in the tooltip: wrapping is visual, never a rewrite.
+      expect(span.textContent).toBe(span.getAttribute('title'));
+    }
+    expect(titleSpans.map((span) => span.textContent)).toEqual(
+      expect.arrayContaining(['short-a', 'short-b', longIds[0], longIds[1]]),
+    );
+    // No middle-ellipsis logic: the long id is carried in full by the node.
+    expect(titleSpans.map((span) => span.textContent)).toContain(longIds[0]);
+  });
+});
+
+/**
+ * AC3 — the board's two long lists stay read on first look.
+ *
+ * Goals: drafts draw before achieved, and an achieved goal draws no full-width progress bar
+ * (it has nothing left to complete). Recent tasks: a long id keeps the full value in `title`
+ * and truncates at the TAIL (CSS `truncate`), never by rewriting the string around an ellipsis.
+ */
+describe('AC3: stage-goals ordering and tail-truncated task ids', () => {
+  it('puts drafts before achieved, drops achieved bars, and keeps long recent-task ids in full', async () => {
+    const longId = 'gap-warmclientstartup-returns-on-one-dep-200-not-optimizer-quiescence';
+    const achieved = Array.from({ length: 5 }, (_, index) => ({
+      id: `GOAL-${100 + index}`,
+      title: `Achieved goal ${index}`,
+      status: 'achieved',
+      updatedAt: '2026-10-22T00:00:00.000Z',
+    }));
+    const drafts = [
+      { id: 'GOAL-201', title: 'Draft goal one', status: 'draft', updatedAt: '2026-10-21T00:00:00.000Z' },
+      { id: 'GOAL-202', title: 'Draft goal two', status: 'draft', updatedAt: '2026-10-20T00:00:00.000Z' },
+    ];
+    const goalsSnapshot: QuaySnapshot = {
+      ...SNAPSHOT,
+      tasks: {
+        ...SNAPSHOT.tasks!,
+        recent: [{ id: longId, title: 'A task with a long id', status: 'ready', updatedAt: null }],
+      },
+      goals: {
+        total: 7,
+        achieved: 5,
+        // Deliberately ranked achieved-first, the way an updatedAt sort returns them.
+        breakdown: { byStatus: { achieved: 5, draft: 2 }, recent: [...achieved, ...drafts] },
+      },
+    };
+    apiMock.quaySnapshot.mockResolvedValue(okResponse(goalsSnapshot));
+
+    renderCockpit('/cockpit?view=board&project=p1');
+
+    const rows = await screen.findAllByTestId('quay-panel-stage-goals-row');
+    expect(rows).toHaveLength(7);
+    const statuses = rows.map((row) => (row.textContent ?? '').toLowerCase());
+    expect(statuses.slice(0, 2).every((text) => text.includes('draft'))).toBe(true);
+    expect(statuses.slice(2).every((text) => text.includes('achieved'))).toBe(true);
+
+    // Achieved rows carry no full-width bar node; drafts still do.
+    for (const row of rows) {
+      const isAchieved = (row.textContent ?? '').toLowerCase().includes('achieved');
+      expect(row.querySelector('[data-testid="quay-panel-stage-goals-bar"]') === null).toBe(isAchieved);
+    }
+
+    // Recent tasks: the long id truncates at the tail and stays reachable in full.
+    const taskRow = screen.getByTestId('quay-panel-recent-tasks-row');
+    const idSpan = taskRow.querySelector('span') as HTMLElement;
+    expect(idSpan.getAttribute('title')).toBe(longId);
+    expect((idSpan.className ?? '').split(/\s+/)).toContain('truncate');
+    expect(idSpan.textContent).toBe(longId);
+    expect(idSpan.textContent).not.toContain('…');
+  });
+});
