@@ -153,6 +153,13 @@ export type LiaisonInboxEntry = {
   cause: LiaisonInboxCause;
   sessionId: string | null;
   detail: string | null;
+  /**
+   * The authenticated caller the ORIGINAL delivery was made for, carried so a recovery
+   * redelivery is made as the same identity. The control service refuses a send with no
+   * user (`FORBIDDEN`), so an inbox that dropped this would queue messages it could never
+   * drain — which is exactly the failure this field exists to prevent.
+   */
+  userId: string | number | null;
 };
 
 /** The mark a delivered message carries, so a second pass can never resend it. */
@@ -446,6 +453,7 @@ export function createLiaisonDeliveryService(deps: LiaisonDeliverDeps): LiaisonD
       cause,
       sessionId,
       detail,
+      userId: input.userId ?? null,
     });
   }
 
@@ -596,7 +604,10 @@ export function createLiaisonDeliveryService(deps: LiaisonDeliverDeps): LiaisonD
           project: entry.project,
           from: entry.from,
           deliveryId: entry.deliveryId,
-          userId: null,
+          // The original delivery's caller. A recovery is not a new actor: it finishes the
+          // delivery the same person asked for, and the control service's access entry is
+          // the one check that says so.
+          userId: entry.userId ?? null,
         });
       } catch (error) {
         sent = { ok: false, code: 'send-failed', message: error instanceof Error ? error.message : String(error) };
@@ -604,6 +615,10 @@ export function createLiaisonDeliveryService(deps: LiaisonDeliverDeps): LiaisonD
 
       if (!sent.ok) {
         outcome.failed.push({ deliveryId: entry.deliveryId, reason: `${sent.code}: ${sent.message}` });
+        log(
+          `[liaison] inbox redelivery failed for ${entry.deliveryId} (${entry.initiative}/${entry.project}): ` +
+            `${sent.code}: ${sent.message}`,
+        );
         continue;
       }
       store.markDelivered(entry.deliveryId, { at: at(), sessionId, via: 'recovery' });

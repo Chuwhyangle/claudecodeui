@@ -239,10 +239,16 @@ test('AC1 recovery: the inbox is drained when the session becomes live, and a se
     project: TARGET,
     from: FROM,
     message: MESSAGE,
+    userId: 7,
   });
   assert.equal(queued.ok && queued.outcome, 'inbox');
   assert.equal(before.send.calls.length, 0);
   const queuedId = queued.deliveryId;
+  assert.equal(
+    store.pendingInbox()[0]?.userId,
+    7,
+    'the queued entry must carry the caller the delivery was made for — a recovery has no caller of its own',
+  );
 
   // Phase 2: the session is live now; the recovery event drains the entry exactly once.
   const after = serviceOver({
@@ -253,6 +259,7 @@ test('AC1 recovery: the inbox is drained when the session becomes live, and a se
   const recovery = await after.service.handleSessionRecovered('session-b');
   assert.deepEqual(recovery.delivered, [queuedId]);
   assert.equal(after.send.calls.length, 1, 'the queued message must be sent once on recovery');
+  assert.equal(after.send.calls[0]?.userId, 7, 'the recovery must be made as the caller the delivery was queued for');
   assert.ok(after.send.calls[0]?.content.startsWith(`${liaisonPrefix(INITIATIVE, FROM)} `));
   assert.equal(store.pendingInbox().length, 0, 'a redelivered message must leave the inbox');
 
@@ -431,6 +438,7 @@ test('the disk inbox survives a new store instance and keeps queued/delivered ap
       cause: 'liaison-dead',
       sessionId: 'session-b',
       detail: null,
+      userId: 7,
     });
     first.recordDelivery({
       deliveryId: 'queued-1',
