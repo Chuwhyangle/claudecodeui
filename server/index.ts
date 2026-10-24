@@ -235,11 +235,11 @@ const app = express();
 const server = http.createServer(app);
 
 // The generic SERVER-level settings file, read ONCE per process. It is loaded here rather than
-// inside `startServer` because two composition decisions need it before the routes are mounted
-// (the observation wall's block cap) and before a listener exists (the resident-restore pass);
-// both read the SAME reading, so an edit cannot reach one and not the other. Every knob is
-// optional; a malformed one falls back to its shipped default and reports the reason, which is
-// logged here.
+// inside `startServer` because the observation wall's block cap is a ROUTE-CONSTRUCTION input
+// (the mount below happens at module scope), and because the resident-restore pass must reuse
+// the SAME reading rather than open the file a second time — an edit reaching one and not the
+// other is exactly the split this single reading prevents. Every knob is optional; a malformed
+// one falls back to its shipped default and reports the reason, which is logged here.
 const serverSettings = loadServerSettings();
 for (const problem of serverSettings.problems) {
     console.warn(`${terminalTextStyles.info('[INFO]')} Server settings: ${problem}`);
@@ -2415,11 +2415,10 @@ async function startServer() {
         }
 
         // The generic SERVER-level settings file was read ONCE at module load (see the
-        // composition root above), after the orphan sweep of the process start and before any
-        // listener existed, so the restore pass this file may enable launches its processes
-        // after the sweep rather than before it. On unless the file says
-        // `residentRestore.enabled: false`, and scheduled rather than awaited so a slow
-        // provider cannot hold up `listen`.
+        // composition root above); only the restore pass is placed here. It runs after the
+        // orphan sweep above, so the processes this file may enable launch after the sweep
+        // rather than before it. On unless the file says `residentRestore.enabled: false`,
+        // and scheduled rather than awaited so a slow provider cannot hold up `listen`.
         if (serverSettings.residentRestore.enabled) {
             restoreResidentSessionsAfterRestart(serverSettings.residentRestore);
         }
