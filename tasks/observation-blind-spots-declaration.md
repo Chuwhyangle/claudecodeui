@@ -36,6 +36,16 @@ depends_on:
 - **浏览器实际操作 + 截图（PC 与移动）**：三类磁贴各打开一次预览，截图盲区段落与入口（存 `tmp/`）。
 - 隔离实例验证必须关闭常驻会话恢复。
 
+## Evidence
+
+- 真实浏览器（Playwright chromium，无 MCP 浏览器时的既有替代路径）驱动隔离实例：`SERVER_PORT=3142`、独立 `DATABASE_PATH`/`HOME`、`SERVER_SETTINGS_PATH` 关闭 `residentRestore`（日志无 `resident-restore` 启动行）；PC 1280×900 与移动 390×844 各跑一遍，三类磁贴各打开一次预览并截图存 `tmp/`：
+  - `tmp/dod-blind-spots-pc-session.png`、`tmp/dod-blind-spots-pc-project.png`、`tmp/dod-blind-spots-pc-architecture.png`
+  - `tmp/dod-blind-spots-mobile-session.png`、`tmp/dod-blind-spots-mobile-project.png`、`tmp/dod-blind-spots-mobile-architecture.png`
+  - 另有整墙截图 `tmp/dod-blind-spots-{pc,mobile}-wall.png`。
+- 浏览器读数：session 4 条、project 3 条、architecture 3 条盲区；「打开原始材料」入口文案分别为 `Open in the conversation` / `Open the Quay panel` / `Open in the architecture tab (highlight differences)`；磁贴文本不含盲区。
+- `GET /api/observation/wall` 实测：三个对象都带非空 `blindSpots`（数据库行未写 `__blindSpots`，读数由服务端按 kind 补默认），且该保留键不出现在返回的 `digest` 中。
+- 隔离实例与 Vite 已按监听端口精确 PID 停止，无本实例 `claudecodeui-session-*` scope。
+
 ## Touches
 
 - server/modules/observation/blind-spots.ts
