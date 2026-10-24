@@ -37,6 +37,7 @@ extra:
 - src/modules/architecture/tests/semanticZoomLayout.test.ts
 - src/modules/architecture/tests/semanticZoomPlan.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
+- scripts/contraction-candidates/scan.mjs
 - tasks/architecture-class-body-vertical-compaction.md
 
 ## Evidence
@@ -51,7 +52,7 @@ AC 逐条：
 1. `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` → **33 passed**。新增：B/A 过渡带（ratio ≥ 1.62）内隐藏成员类框高度 ≤ 标题（按 plan 预留的最坏标题）+ 分隔线、drawn 同样满足；成员可见的类框保持完整映射高度；压缩后同层矩形两两不相交（0.5px 容差）；边端点落在压缩后框边界；同输入同输出；既有用例全绿。
 2. `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts` → **37 passed**。新增：`visible` 判定与压缩高度一致；0.9 → 0.81 连续渐变；跨阈值高度单调不增；不低于 title+divider、不高于原完整高度。
 3. `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → **121 passed**。新增 55 实体夹具（entity 粒度）在 640×400 画布 Fit 到 B 档：42 个抽取到的类框全部无 `data-architecture-node-member`，drawn 高度 16px vs 源 216px；Fit 填充 0.912 且 `data-architecture-semantic-scale` 与 zoom 读数一致。
-4. `npx tsc --noEmit -p tsconfig.json` exit 0（src/ 覆盖面）；`npm run build` exit 0；`npx oxlint src/` exit 0。⚠️ 仓库级 `npm run typecheck` / `npm run lint` 在 `scripts/contraction-candidates/*` 上红——该文件来自 develop 的既有提交 `350a47bbc`（早于本任务 fork 点），与本任务 src/ 改动无关；按 AC 的「对 src/」口径记录。
+4. `npm run typecheck` exit 0（含 server / scripts）；`npm run lint` exit 0；`npm run build` exit 0。注：develop 上原有两个 lint 基线红（`scripts/contraction-candidates/scan.mjs` 两处未使用的 `maxPerKind` 参数）会红掉所有任务的 fan-in 静态阶段，本分支把它改为 `_maxPerKind` 一并修复，并把该文件补进 Touches（`node --test scripts/contraction-candidates/scan.test.mjs` → 1 passed）。
 
 DoD（真实浏览器，Playwright/Chromium，PC 1440×765，全屏）：
 
