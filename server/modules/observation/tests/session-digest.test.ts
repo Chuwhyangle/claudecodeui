@@ -169,6 +169,55 @@ test('AC1: vitest, node --test and playwright summaries each yield their own cou
   });
 });
 
+test('AC1: the repo\'s own tsx --test invocation is read as a node --test run', () => {
+  // Every server criterion in this repo runs node's test runner through the TS loader. The
+  // command gate must recognise that shape, not only a literal `node --test`.
+  const rows = [
+    { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'run the criterion' }] } },
+    {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 't-tsx',
+            name: 'Bash',
+            input: {
+              command:
+                'npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts',
+              description: 'Run the digest criterion',
+            },
+          },
+        ],
+      },
+    },
+    {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 't-tsx',
+            content: [{ type: 'text', text: 'ℹ tests 9\nℹ pass 9\nℹ fail 0\n' }],
+          },
+        ],
+      },
+    },
+    {
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'The criterion passes.' }] },
+    },
+  ];
+
+  const result = buildSessionDigest(rows.map((row) => JSON.stringify(row)).join('\n'));
+
+  assert.equal(result.state, 'evaluated');
+  if (result.state !== 'evaluated') return;
+  assert.deepEqual(result.digest.tests, { state: 'evaluated', runner: 'node-test', passed: 9, failed: 0 });
+});
+
 test('AC1: output no runner recognizes reads unevaluated with a reason', () => {
   const reading = parseTestOutput('all good, nothing to report\n');
 

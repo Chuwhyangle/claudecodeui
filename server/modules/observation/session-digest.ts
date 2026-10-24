@@ -71,7 +71,10 @@ export const SESSION_DIGEST_CONCLUSION_CHARS = 280;
 const FILE_TOOL_NAMES = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
 
 /** Commands that are a test run, by the words the runner itself prints. */
-const TEST_COMMAND = /\b(?:vitest|playwright)\b|\bnode\b[^\n]*\s--test\b|\bnpm\s+(?:run\s+)?test\b|\bjest\b/;
+// `tsx` is in the same arm as `node` because every server criterion in this repo runs node's
+// own test runner through the TS loader (`npx tsx --tsconfig server/tsconfig.json --test …`);
+// leaving it out read those turns as "no test command" even though node printed the summary.
+const TEST_COMMAND = /\b(?:vitest|playwright)\b|\b(?:node|tsx)\b[^\n]*\s--test\b|\bnpm\s+(?:run\s+)?test\b|\bjest\b/;
 
 /** The vitest summary line: `Tests  2 failed | 8 passed (10)`, or a passed-only line. */
 const VITEST_SUMMARY = /^\s*Tests\s+(.+)$/m;
