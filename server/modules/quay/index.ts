@@ -9,7 +9,19 @@
 // hub's target resolver (injected at the composition root, so the cockpit module itself stays
 // a leaf). It maps a CloudCLI project id to the fleet registry id and answers failures as
 // values rather than throwing.
-export { quayFleetRegistry, quayInitiatives, quayRoutes, quayService } from './quay.module.js';
+// quayCapabilities / quayDispatchCarrier / quayTaskEvents: the event-driven refresh's three
+// composed pieces. `quayCapabilities` answers whether a project's pinned quay has `task log`;
+// `quayDispatchCarrier` is the read-only `.quay/worker-dispatch.json` reader; `quayTaskEvents`
+// is the `fs.watch`-triggered incremental refresh (the TTL full read is unchanged).
+export {
+  quayCapabilities,
+  quayDispatchCarrier,
+  quayFleetRegistry,
+  quayInitiatives,
+  quayRoutes,
+  quayService,
+  quayTaskEvents,
+} from './quay.module.js';
 // createQuayInitiatives: the composition seam the initiative/decision-queue criterion drives
 // with an injected exec, and the factory a test uses to read a temp fleet home without a CLI.
 export {

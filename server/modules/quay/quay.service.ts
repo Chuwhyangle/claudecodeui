@@ -531,6 +531,9 @@ const QUAY_LANES_PREFIX = ['lanes', '--json'] as const;
  * all rather than merely uncalled.
  */
 export const QUAY_READ_ONLY_COMMANDS: readonly (readonly string[])[] = [
+  // The capability probe's one read: `--help` lists the verbs a project's pinned CLI has.
+  // It is only ever used to answer "does `task log` / `lanes` exist", never to read state.
+  ['--help'],
   ['config', 'validate', '--json'],
   ['task', 'list', '--json'],
   // The compact status index behind `changes` (AC-348): the same read with the
@@ -549,8 +552,74 @@ export const QUAY_READ_ONLY_COMMANDS: readonly (readonly string[])[] = [
   ...QUAY_GANTT_WINDOW_HOURS.map((hours) => [...QUAY_LANES_PREFIX, '--window-hours', String(hours)]),
 ];
 
-/** True when `args` is exactly one of the whitelisted read-only commands. */
+/**
+ * The largest `--limit` the transition read accepts (quay's own cap). A value above it would
+ * be refused by the CLI itself, so the whitelist refuses it before any child is spawned.
+ */
+const QUAY_TASK_LOG_MAX_LIMIT = 500;
+
+/** A strict-enough ISO-8601 instant: the date/time shape `task log --since` documents. */
+function isIso8601Instant(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    && !Number.isNaN(Date.parse(value));
+}
+
+/**
+ * The cursor shape `task log --since` accepts: exactly `{v, carrierEpoch, seq}` with the
+ * documented types. Extra keys are refused on purpose — the CLI itself tolerates them, but a
+ * caller that widened the cursor could smuggle a fourth field through a read-only boundary.
+ */
+function isTaskLogCursorArg(value: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch {
+    return false;
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return false;
+  }
+  const record = parsed as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.length !== 3 || !keys.includes('v') || !keys.includes('carrierEpoch') || !keys.includes('seq')) {
+    return false;
+  }
+  return record.v === 1
+    && typeof record.carrierEpoch === 'string'
+    && record.carrierEpoch.length > 0
+    && typeof record.seq === 'number'
+    && Number.isInteger(record.seq)
+    && record.seq >= 0;
+}
+
+/**
+ * Structural validation of the transition read:
+ * `task log --json --since <ISO8601|cursor> --limit <1..500>`.
+ *
+ * This is deliberately NOT a prefix rule. A prefix match on `task` would accept
+ * `task create` / `task edit` / `task check`; every token here is pinned by position, every
+ * value is validated, and one extra token refuses the whole argv.
+ */
+function isTaskLogReadCommand(args: readonly string[]): boolean {
+  if (args.length !== 7) {
+    return false;
+  }
+  return args[0] === 'task'
+    && args[1] === 'log'
+    && args[2] === '--json'
+    && args[3] === '--since'
+    && (isIso8601Instant(args[4]) || isTaskLogCursorArg(args[4]))
+    && args[5] === '--limit'
+    && /^\d+$/.test(args[6])
+    && Number(args[6]) >= 1
+    && Number(args[6]) <= QUAY_TASK_LOG_MAX_LIMIT;
+}
+
+/** True when `args` is exactly one whitelisted read-only command (or the validated task-log read). */
 export function isReadOnlyQuayCommand(args: readonly string[]): boolean {
+  if (isTaskLogReadCommand(args)) {
+    return true;
+  }
   return QUAY_READ_ONLY_COMMANDS.some(
     (allowed) =>
       allowed.length === args.length
@@ -973,6 +1042,13 @@ type QuayServiceDependencies = {
    * untouched; absent means the response says `contextEvents: null`.
    */
   readContextEventsStatus?: () => QuayContextEventsStatus;
+  /**
+   * Called on every `readTaskIndex` — the read path the MCP `changes` tool and the session
+   * mention join use. The event-driven refresh (`quay-task-events.service.ts`) uses it to
+   * notice that a project is being read, which is one of the three conditions for watching it.
+   * OPTIONAL so every existing composition stays untouched.
+   */
+  onTaskIndexRead?: (projectId: string) => void;
 };
 
 type QuaySnapshotOptions = {
@@ -1722,6 +1798,11 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
   >();
   const taskIndexLoading = new Set<string>();
   const taskIndexLastStartedAt = new Map<string, number>();
+  // The START instant of the load that produced the CURRENT reading. Distinct from
+  // `taskIndexLastStartedAt` (which also moves for a load that later fails): the event path's
+  // ISO seed and its "an event older than the baseline must not roll back a manual edit" rule
+  // both need the instant of the load whose rows are being read.
+  const taskIndexBaselineStartedAt = new Map<string, number>();
   let taskIndexInFlight = 0;
 
   /** The one argv the index is read with; it is on {@link QUAY_READ_ONLY_COMMANDS}. */
@@ -1741,6 +1822,10 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     const tasks = entry?.tasks ?? EMPTY_TASK_INDEX;
     const observedAtMs = entry?.observedAtMs ?? null;
     const base = { coverage: 'full' as const, taskCount: tasks.size, observedAtMs, tasks };
+    // The read hook fires on every read, including the event service's own poll-time read.
+    // Consumers use it as an ACTIVITY signal (has this project been read in the last 10 min?),
+    // never as a load trigger, so a fire-and-forget callback is the right shape here.
+    dependencies.onTaskIndexRead?.(projectId);
     if (entry?.error !== undefined) {
       return { ...base, state: 'error', reason: entry.error };
     }
@@ -1798,13 +1883,22 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
    * {@link QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS} projects are already loading — so
    * twenty readers, or one reader polling twenty times a minute, still cost one
    * `quay` child per project per interval and never a whole snapshot.
+   *
+   * `options.minIntervalMs` lets the EVENT path ask for a shorter floor (5 s) than the TTL
+   * path's {@link QUAY_TASK_INDEX_MIN_INTERVAL_MS}: a burst of creation events must not stall
+   * for a minute, but it still must not turn into one `task list` per event. The exported TTL
+   * constants themselves do not change.
    */
-  const requestTaskIndexLoad = (projectId: string): void => {
+  const requestTaskIndexLoad = (
+    projectId: string,
+    options?: { minIntervalMs?: number },
+  ): void => {
+    const minIntervalMs = options?.minIntervalMs ?? QUAY_TASK_INDEX_MIN_INTERVAL_MS;
     if (taskIndexLoading.has(projectId) || taskIndexInFlight >= QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS) {
       return;
     }
     const lastStartedAt = taskIndexLastStartedAt.get(projectId);
-    if (lastStartedAt !== undefined && dependencies.now() - lastStartedAt < QUAY_TASK_INDEX_MIN_INTERVAL_MS) {
+    if (lastStartedAt !== undefined && dependencies.now() - lastStartedAt < minIntervalMs) {
       return;
     }
     const projectPath = dependencies.resolveProjectPathById(projectId);
@@ -1812,8 +1906,9 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       return;
     }
 
+    const startedAtMs = dependencies.now();
     taskIndexLoading.add(projectId);
-    taskIndexLastStartedAt.set(projectId, dependencies.now());
+    taskIndexLastStartedAt.set(projectId, startedAtMs);
     taskIndexInFlight += 1;
     // Fire-and-forget, with every failure path swallowed into the index's own
     // `error` state: a detached rejection here would be an unhandled one, and the
@@ -1836,6 +1931,9 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
           return;
         }
         applyTaskIndexStdout(projectId, result.stdout);
+        // Only a SUCCESSFUL load moves the baseline: a failed refresh leaves the previous
+        // rows (and their baseline) in place, which is what the event path must keep using.
+        taskIndexBaselineStartedAt.set(projectId, startedAtMs);
       } catch (error) {
         recordTaskIndexFailure(projectId, error instanceof Error ? error.message : String(error));
       } finally {
@@ -1843,6 +1941,40 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
         taskIndexInFlight -= 1;
       }
     })();
+  };
+
+  /**
+   * The START instant of the full load that produced the current index rows, or `null` when no
+   * successful load has landed. The event service derives its ISO seed from this (`start - 2 s`)
+   * and compares each transition's `at` against it, so a manual edit the full read already saw
+   * cannot be rolled back by an older event.
+   */
+  const getTaskIndexLoadStartedAtMs = (projectId: string): number | null =>
+    taskIndexBaselineStartedAt.get(projectId) ?? null;
+
+  /**
+   * Applies one event-vetted status to one EXISTING row. Returns `false` when the project has
+   * no index or the task is not in it (the caller then requests a full load rather than
+   * inventing a row from an event, which carries no title and no goal_ac).
+   *
+   * The index's `observedAtMs`/baseline are deliberately untouched: the row changed from an
+   * event, not from a full read, so the reading must keep ageing towards its TTL refresh.
+   */
+  const updateTaskIndexRow = (
+    projectId: string,
+    taskId: string,
+    row: Pick<QuayTaskStatusRow, 'status' | 'updatedAt'>,
+  ): boolean => {
+    const entry = taskIndex.get(projectId);
+    if (entry === undefined) {
+      return false;
+    }
+    const existing = entry.tasks.get(taskId);
+    if (existing === undefined) {
+      return false;
+    }
+    entry.tasks.set(taskId, { ...existing, status: row.status, updatedAt: row.updatedAt });
+    return true;
   };
 
   const getQuayStatus = (projectId: string): QuayProjectStatus | null => {
@@ -2209,6 +2341,21 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     inFlightGantt.set(key, promise);
     const read = await promise;
     return { gantt: read.gantt, unavailable: read.unavailable, cached: false };
+  };
+
+  /**
+   * Drops every cached lanes reading for one project (all windows). The event service calls
+   * this when `<projectRoot>/.quay/worker-dispatch.json` changes, which is the signal that a
+   * worker just started or finished — the next lanes read must spawn `lanes` again instead of
+   * serving up to 30 s of stale in-flight data. Other projects' caches are untouched.
+   */
+  const invalidateLanesForProject = (projectId: string): void => {
+    const prefix = `${projectId}::`;
+    for (const key of [...ganttCache.keys()]) {
+      if (key.startsWith(prefix)) {
+        ganttCache.delete(key);
+      }
+    }
   };
 
   /**
@@ -2619,6 +2766,12 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     // full coverage without ever waiting on — or spawning — a snapshot.
     readTaskIndex,
     requestTaskIndexLoad,
+    // The event-driven refresh's three primitives (quay-task-events.service.ts):
+    // the baseline instant its ISO seed and rollback guard need, the row update an applied
+    // transition writes, and the lanes invalidation a `worker-dispatch.json` change triggers.
+    getTaskIndexLoadStartedAtMs,
+    updateTaskIndexRow,
+    invalidateLanesForProject,
     // The eager cross-project reading (fleet-overview P2): driver state + task counts
     // for every quay project, per-project TTL, bounded fan-out. The sidebar consumes it
     // for the project-row task badges; the lazy Tier-2 snapshot stays the expanded view.

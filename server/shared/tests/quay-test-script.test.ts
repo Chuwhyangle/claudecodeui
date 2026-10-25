@@ -333,8 +333,11 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // Then gap-quay-session-mentions-and-lanes-only-readings added its criterion
     // server/modules/quay/tests/session-mentions.test.ts (439 + 1 = 440 collected
     // server test files).
-    // This fixture names 3 known files, so 440 - 3 = 437.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=437$/);
+    // Then gap-quay-event-driven-refresh-capability-probe-and-dispatch-reading added its
+    // criterion server/modules/quay/tests/quay-live-refresh.test.ts (440 + 1 = 441
+    // collected server test files).
+    // This fixture names 3 known files, so 441 - 3 = 438.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=438$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -383,9 +386,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // Same collection as AC2 — 440 files on this tree — but this fixture names ONE known
-    // file, so 440 - 1 = 439 (AC2 reads 437 because its fixture names 3).
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=439$/);
+    // Same collection as AC2 — 441 files on this tree — but this fixture names ONE known
+    // file, so 441 - 1 = 440 (AC2 reads 438 because its fixture names 3).
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=440$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

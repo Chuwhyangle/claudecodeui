@@ -387,6 +387,7 @@
 2235	server/modules/providers/tests/claude-activity-schedules.test.ts
 2233	server/modules/providers/tests/claude-activity-task-reducer.test.ts
 2169	server/modules/providers/tests/claude-resident-idle.test.ts
+2162	server/modules/quay/tests/quay-live-refresh.test.ts
 2127	server/modules/providers/tests/claude-activity-lease-parity.test.ts
 2122	server/modules/providers/tests/claude-stream-block-key.test.ts
 2112	server/modules/providers/tests/claude-runtime-frame-forwarding.test.ts

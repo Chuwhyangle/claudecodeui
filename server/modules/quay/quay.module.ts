@@ -11,7 +11,10 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 import { createQuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
 import { createQuayFleetRegistry } from './quay-fleet-registry.js';
 import { DEFAULT_INITIATIVE_AUDIT_RATIO, createQuayInitiatives } from './quay-initiatives.js';
+import { createQuayCapabilities, type QuayEntrypointIdentity } from './quay-capabilities.js';
+import { createQuayDispatchCarrier } from './quay-dispatch-carrier.js';
 import { QUAY_COMMAND_TIMEOUT_MS, createQuayProcessRunner } from './quay-process.js';
+import { createQuayTaskEvents } from './quay-task-events.service.js';
 import { createQuayRouter } from './quay.routes.js';
 import { createQuayService, type QuayFileReader } from './quay.service.js';
 import {
@@ -105,6 +108,16 @@ export const quayFleetProjectIds = createQuayFleetProjectIdResolver({
 });
 
 /** The single quay display service instance; also used by the projects module for Tier-1 detection. */
+
+/**
+ * The event-driven refresh's read hook, installed on the service just below. The service is
+ * created first (it owns the task index), and the events service is created after it (it
+ * consumes the index primitives); this holder lets the service's read path reach the events
+ * service without a circular construction. Until it is installed the hook is a no-op, and it
+ * only ever fires on a real read, never at module-evaluation time.
+ */
+const taskIndexReadListener: { current: (projectId: string) => void } = { current: () => undefined };
+
 export const quayService = createQuayService({
   fileExists: (filePath) => fs.existsSync(filePath),
   resolveProjectPathById: (projectId) => projectsDb.getProjectPathById(projectId),
@@ -133,7 +146,132 @@ export const quayService = createQuayService({
   // "is this host recording anything?", and a reader should not have to call two
   // endpoints to find out.
   readContextEventsStatus: () => readContextEventStatus(),
+  // Every task-index read is an activity signal for the event-driven refresh.
+  onTaskIndexRead: (projectId) => taskIndexReadListener.current(projectId),
 });
+
+/**
+ * The path the project-scoped adapter will spawn: `<projectRoot>/.quay/plugin/bin/quay` when
+ * present, else the first `quay` on this process's PATH (the adapter's own migration-period
+ * fallback). Resolving it here — rather than duplicating the spawn logic — is what lets the
+ * capability cache key on the binary that will actually run.
+ */
+function resolveQuayEntrypointPath(projectPath: string): string | null {
+  const scoped = path.join(projectPath, '.quay', 'plugin', 'bin', 'quay');
+  if (fs.existsSync(scoped)) {
+    return scoped;
+  }
+  const pathValue = process.env.PATH ?? '';
+  for (const dir of pathValue.split(path.delimiter)) {
+    if (dir === '') {
+      continue;
+    }
+    const candidate = path.join(dir, 'quay');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/** The realpath+mtime+size identity the capability cache re-probes on, or `null`. */
+function readQuayEntrypointIdentity(projectPath: string): QuayEntrypointIdentity | null {
+  const entrypoint = resolveQuayEntrypointPath(projectPath);
+  if (entrypoint === null) {
+    return null;
+  }
+  try {
+    const realpath = fs.realpathSync(entrypoint);
+    const stats = fs.statSync(realpath);
+    return stats.isFile()
+      ? { realpath, mtimeMs: stats.mtimeMs, size: stats.size }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The production directory watcher behind the event-driven refresh. It watches the `.quay`
+ * DIRECTORY (not the two files): the driver replaces both carriers by atomic rename, which
+ * would leave a file-level watcher pinned to the old inode. `persistent: false` means the
+ * watcher never keeps the server process alive; a missing/unwatchable directory answers
+ * `null` (project off) rather than throwing.
+ */
+function watchQuayDirectory(
+  dirPath: string,
+  onChange: (eventType: string, filename: string | null) => void,
+): { close(): void; onError(handler: (error: Error) => void): void } | null {
+  try {
+    const watcher = fs.watch(dirPath, { persistent: false }, (eventType, filename) => {
+      onChange(eventType, filename === null ? null : String(filename));
+    });
+    return {
+      close: () => watcher.close(),
+      onError: (handler) => {
+        watcher.on('error', handler);
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** `kill(pid, 0)` liveness; `EPERM` means the process exists but may not be signalled. */
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/**
+ * The per-project verb capability probe (`--help` → `task log` / `lanes`). Consumers:
+ * `quayTaskEvents` (it may only watch/call `task log` when the verb is available).
+ */
+export const quayCapabilities = createQuayCapabilities({
+  // The same whitelisted boundary every other read goes through; `--help` is on the whitelist.
+  runCommand: (cwd, args) => quayService.runQuayCommand(cwd, args),
+  readEntrypoint: readQuayEntrypointIdentity,
+  now: () => Date.now(),
+  log: (message) => console.log(message),
+  commandTimeoutMs: QUAY_COMMAND_TIMEOUT_MS,
+});
+
+/**
+ * The read-only `worker-dispatch.json` reader. Consumers: the panel-facing quay API and the
+ * event service's lanes invalidation (the latter only observes the file's change, not its
+ * contents). `phase` is deliberately absent — it stays a lanes-only reading.
+ */
+export const quayDispatchCarrier = createQuayDispatchCarrier({
+  resolveProjectPathById: (projectId) => projectsDb.getProjectPathById(projectId),
+  readFile: quayFileReader,
+  isProcessAlive: processIsAlive,
+});
+
+/**
+ * The event-driven task-index refresh. Consumers: `quayService.readTaskIndex` reports every
+ * read through `noteProjectRead` (installed just below), and the `.quay/worker-dispatch.json`
+ * change invalidates that project's lanes cache. The TTL full read is left exactly as it was.
+ */
+export const quayTaskEvents = createQuayTaskEvents({
+  now: () => Date.now(),
+  resolveProjectPathById: (projectId) => projectsDb.getProjectPathById(projectId),
+  readTaskIndex: (projectId) => quayService.readTaskIndex(projectId),
+  taskIndexLoadStartedAtMs: (projectId) => quayService.getTaskIndexLoadStartedAtMs(projectId),
+  requestTaskIndexLoad: (projectId, options) => quayService.requestTaskIndexLoad(projectId, options),
+  updateTaskIndexRow: (projectId, taskId, row) => quayService.updateTaskIndexRow(projectId, taskId, row),
+  capabilities: quayCapabilities,
+  runCommand: (cwd, args) => quayService.runQuayCommand(cwd, args),
+  watchPath: watchQuayDirectory,
+  onDispatchFileChanged: (projectId) => quayService.invalidateLanesForProject(projectId),
+  log: (message) => console.log(message),
+});
+
+// The service was created before the events service existed; install the read hook now.
+taskIndexReadListener.current = quayTaskEvents.noteProjectRead;
 
 /**
  * The fleet registry seam the cockpit's pinned-target read/write goes through. It maps a
