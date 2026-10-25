@@ -341,21 +341,77 @@ async function waitForPublishedView(page) {
 }
 
 /**
- * The first exact-text match Playwright judges visible, in DOM order.
+ * The element a click on `text` should land on, or `null` while no such element exists.
  *
- * WHY VISIBILITY IS PART OF THE SELECTOR: the sidebar renders a project's display name and its
- * path suffix side by side in one flex row. When the row's action group and badges squeeze the
- * name, the `truncate` span carrying it measures zero width, and Playwright calls a zero-width
+ * WHY THE TEXT ELEMENT IS NOT THE CLICK TARGET: the sidebar renders a project's display name and
+ * its path suffix side by side in one flex row. When the row's action group and badges squeeze the
+ * name, the `truncate` span carrying it measures ZERO width, and Playwright calls a zero-width
  * element invisible even though the row it belongs to is plainly on screen. An unfiltered
- * `.first()` can resolve to exactly that span, so `waitFor({ state: 'visible' })` times out and
- * the run reports "the project never appeared" — a lie about the sidebar. Filtering on visibility
- * keeps the DOM-order preference and skips anything that cannot be clicked.
+ * `.first()` resolves to exactly that span, so `waitFor({ state: 'visible' })` times out and the
+ * run reports "the project never appeared" — a lie about the sidebar. Worse, the squeezed span is
+ * briefly width>0 while the row's badges load, so a "first visible match" sampled once can be a
+ * target that stops being visible a frame later. The ROW the text sits in does not have that race.
+ *
+ * The preference order is:
+ *   1. the nearest visible button/anchor/[role=button] row of each match, in DOM order — the row
+ *      that owns the text, whether or not the text span itself is clickable;
+ *   2. the first exact match Playwright judges visible (a row div with its own click handler and
+ *      no role — the session rows' shape);
+ *   3. the nearest visible ancestor of the first match (a row that is neither).
  *
  * @param {import('playwright').Page} page
  * @param {string} text
+ * @returns {Promise<import('playwright').Locator | null>}
  */
-function firstVisibleExactText(page, text) {
-  return page.getByText(text, { exact: true }).filter({ visible: true }).first();
+async function clickTargetForText(page, text) {
+  const matches = page.getByText(text, { exact: true });
+  const matchCount = await matches.count();
+  if (matchCount === 0) return null;
+
+  // `ancestor-or-self` is in reverse document order, so `[1]` is the NEAREST row — not the whole
+  // sidebar. `filter({ visible: true })` on it makes a collapsed/hidden row ineligible.
+  for (let index = 0; index < matchCount; index += 1) {
+    const row = matches
+      .nth(index)
+      .locator('xpath=ancestor-or-self::*[self::button or self::a or @role="button"][1]')
+      .filter({ visible: true })
+      .first();
+    if (await row.count() > 0) return row;
+  }
+
+  const visibleMatch = matches.filter({ visible: true }).first();
+  if (await visibleMatch.count() > 0) return visibleMatch;
+
+  const visibleAncestor = matches.first().locator('xpath=ancestor::*').filter({ visible: true }).first();
+  if (await visibleAncestor.count() > 0) return visibleAncestor;
+  return null;
+}
+
+/**
+ * Waits until `text` has a click target, polling for it rather than waiting on one locator's
+ * visibility: which element is clickable depends on the row's layout, and it can change while the
+ * document boots.
+ *
+ * @param {import('playwright').Page} page
+ * @param {string} text
+ * @param {number} timeout
+ * @returns {Promise<import('playwright').Locator | null>}
+ */
+async function waitForClickTarget(page, text, timeout) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    let target = null;
+    try {
+      target = await clickTargetForText(page, text);
+    } catch {
+      // A document that was replaced mid-navigation has no DOM to query yet; that is "not yet",
+      // not a failure — the same reload window the bounded retries below were written for.
+      target = null;
+    }
+    if (target !== null) return target;
+    if (Date.now() >= deadline) return null;
+    await page.waitForTimeout(250);
+  }
 }
 
 /**
@@ -371,23 +427,21 @@ function firstVisibleExactText(page, text) {
  * @param {{ project: string, session: string }} target
  */
 async function selectProjectSession(page, target) {
-  const projectRow = firstVisibleExactText(page, target.project);
-  const sessionRow = firstVisibleExactText(page, target.session);
-
   await page.goto('/');
-  /** @param {number} timeout */
-  const appears = (timeout) => projectRow.waitFor({ state: 'visible', timeout }).then(() => true, () => false);
-  let up = await appears(10_000);
-  for (let attempt = 0; !up && attempt < 2; attempt += 1) {
+  let projectRow = await waitForClickTarget(page, target.project, 10_000);
+  for (let attempt = 0; projectRow === null && attempt < 2; attempt += 1) {
     await page.reload().catch(() => undefined);
-    up = await appears(6_000);
+    projectRow = await waitForClickTarget(page, target.project, 6_000);
   }
-  if (!up) {
+  if (projectRow === null) {
     throw new Error(`the fixture project "${target.project}" never appeared in the sidebar`);
   }
 
   await projectRow.click();
-  await sessionRow.waitFor({ state: 'visible', timeout: 10_000 });
+  const sessionRow = await waitForClickTarget(page, target.session, 10_000);
+  if (sessionRow === null) {
+    throw new Error(`the session "${target.session}" never appeared under the project "${target.project}"`);
+  }
   await sessionRow.click();
 }
 
