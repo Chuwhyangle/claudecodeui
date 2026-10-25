@@ -29,9 +29,9 @@ extra:
 - [x] 同一文件含一例：宽屏（≥481px、细指针）列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto`，chip 含 `line-clamp-2`（PC 行为不变）；exit 0。
 - [x] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx` exit 0。
 - [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
-- [ ] 外框统一为虚线：`npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：同时渲染 `model`、`habit`、`quoted` 三种来源的 chip，每个 chip 的 class 都含 `border-dashed` 且都不含 `border-solid`；`quoted` chip 另含 `border-primary/50` 与 `bg-primary/5`，`model` / `habit` chip 不含 `border-primary/50`；exit 0。取假：给 `model` 加回 `border-solid`，该例必须红。
-- [ ] `InlineQuoteChip` 同步：`npx vitest run src/modules/chat/tests/inlineQuoteChip.test.tsx` 含一例：内嵌 quoted chip 的 class 含 `border-dashed`、不含 `border-solid`，并保留 `border-primary/50` 与 `bg-primary/5`；exit 0。
-- [ ] 源码里不再有 chip 的实线分支：`git grep -n "border-solid" -- src/modules/chat/composer/InputSuggestionChips.tsx src/modules/chat/composer/InlineQuoteChip.tsx || true` 无输出（代码与注释都不得再出现该字面量）。
+- [x] 外框统一为虚线：`npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：同时渲染 `model`、`habit`、`quoted` 三种来源的 chip，每个 chip 的 class 都含 `border-dashed` 且都不含 `border-solid`；`quoted` chip 另含 `border-primary/50` 与 `bg-primary/5`，`model` / `habit` chip 不含 `border-primary/50`；exit 0。取假：给 `model` 加回 `border-solid`，该例必须红。
+- [x] `InlineQuoteChip` 同步：`npx vitest run src/modules/chat/tests/inlineQuoteChip.test.tsx` 含一例：内嵌 quoted chip 的 class 含 `border-dashed`、不含 `border-solid`，并保留 `border-primary/50` 与 `bg-primary/5`；exit 0。
+- [x] 源码里不再有 chip 的实线分支：`git grep -n "border-solid" -- src/modules/chat/composer/InputSuggestionChips.tsx src/modules/chat/composer/InlineQuoteChip.tsx || true` 无输出（代码与注释都不得再出现该字面量）。
 
 ## DoD
 
@@ -43,6 +43,13 @@ extra:
 - pageerror 0、console error 0（三条腿）。报告 `tmp/chip-dod/report.json`。
 
 **重派追加的 DoD（外框统一，上面的读数不覆盖这一项）：** 在同一隔离实例再截 PC 与手机各一张，会话需同时出现 model chip 与 habit chip（空输入）；另在输入框里选中 transcript 文字生成一个 quoted chip，分别截「空框 quoted chip」与「内嵌在正文里的 quoted chip」两种形态。用 `browser_evaluate` 贴出每个 chip 的 `getComputedStyle(chip).borderTopStyle`（须全为 `dashed`，改前 model 为 `solid`），以及 quoted chip 的 `borderTopColor` 带主题色、`backgroundColor` 非透明。贴改前后并排截图，肉眼确认三类 chip 外框同为虚线、quoted 仍有主题色边与淡底。
+
+验证读数（外框统一，2026-10-25，隔离实例 `:3123`，本 worktree 构建；会话 `9bd933fb…`，空输入，3 个 model chip + 2 个 habit chip）：
+- **手机 390×844**：六个来源（quoted/model/habit）chip 的 `getComputedStyle(chip).borderTopStyle` 全为 `dashed`；model/habit 的 `borderTopColor` 为 `rgba(226,224,217,0.7)`、`backgroundColor` 透明；quoted 为 `rgba(37,99,235,0.5)`（主题色）与 `rgba(37,99,235,0.05)`（淡底）。同一次会话里 chip 行仍是单行（所有 chip top=744）、`scrollWidth 733 > clientWidth 372`、真实触摸拖动 `scrollLeft 0 → 361`，`.chat-composer-shell` 149px。截图 `tmp/chip-dod/phone-390x844-empty-after.png`、`phone-390x844-quoted-row-after.png`、`phone-390x844-after-swipe-after.png`。
+- **PC 1440×900**：五/六个 chip 全部 `dashed`、quoted 同色值；listbox 为 `flex-wrap`、`scrollWidth == clientWidth == 866`、chip 折成两行（top 734 / 764）且全部完整可见。截图 `tmp/chip-dod/desktop-1440x900-empty-after.png`、`desktop-1440x900-quoted-row-after.png`。
+- **内嵌 quoted chip**（输入框已有文字 + 实时选中 transcript 文字）：`[data-slot="inline-quote-chip"]` 的 `borderTopStyle` = `dashed`，`borderTopColor` = `rgba(37,99,235,0.5)`，`backgroundColor` = `rgba(37,99,235,0.05)`。截图 `tmp/chip-dod/desktop-1440x900-quoted-inline-after.png`、`phone-390x844-quoted-inline-after.png`。
+- **改前对照**（同一实例、同一会话，把两个组件退回 develop 版本重建客户端）：model 与 quoted chip（行内与内嵌）`borderTopStyle` 均为 `solid`，habit 为 `dashed`。改前后并排裁剪图 `tmp/chip-dod/crop-desktop-before.png` ↔ `crop-desktop-after.png`、`crop-desktop-quoted-before.png` ↔ `crop-desktop-quoted-after.png`、`crop-desktop-inline-before.png` ↔ `crop-desktop-inline-after.png`。
+- 三条腿 `pageerror` 0；仅有的控制台错误是应用自身的 GitHub 版本检查（`api.github.com` 403，外部限流），与本改动无关。读数报告 `tmp/chip-dod/report-after.json` / `report-before.json`。
 
 ## Touches
 
