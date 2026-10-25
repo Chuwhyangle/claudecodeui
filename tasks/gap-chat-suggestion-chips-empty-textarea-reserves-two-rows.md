@@ -1,7 +1,7 @@
 ---
 id: gap-chat-suggestion-chips-empty-textarea-reserves-two-rows
 title: Chat 建议 chip：空输入框预留的两行空白要收掉，chip 紧贴输入框顶部
-status: todo
+status: ready
 labels:
   - gap
   - defect
