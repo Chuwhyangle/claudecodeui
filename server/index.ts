@@ -76,7 +76,8 @@ import {
     mountOAuthServer,
     readMcpAllowedRedirectHosts,
 } from './modules/oauth/index.js';
-import { createSystemModule, readBuildInfo } from './modules/system/index.js';
+import { createSystemModule, createDeployNoticeProvider, readBuildInfo } from './modules/system/index.js';
+import { createNoticesRouter, createNoticeRegistry } from './modules/notices/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { userRoutes } from './modules/user/index.js';
@@ -160,7 +161,7 @@ import {
 import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, readVoiceRealtimeRuntimeConfig, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, SpeakerTrackerRegistry, createSpeakerTrackerSeam, resolveSpeakerTrackingSettings, type SpeakerTrackingSettingsBlock, type VoiceSpeakerTrackerSeam, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams, createVoiceSpeakerModelService } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
-import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
+import { initializeDatabase, noticeDismissalsDb, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
 
 // --------------------------- composition-root port wiring ---------------------------
@@ -251,6 +252,19 @@ const systemModule = createSystemModule({
     // The fleet handshake travels through this closure so `modules/system` keeps no edge into
     // `modules/quay`: the composition root is where the two meet.
     readFleetState: async () => (await quayService.getFleetSummary()).fleet.state,
+});
+
+// The ONE notice registry behind `GET /api/notices`. The provider list is assembled HERE, the
+// one place that may see both modules: `modules/notices` must not import `modules/system` (N8),
+// so the deploy provider is built from the system module's reading and handed in. The dismissal
+// table comes from `modules/database`'s barrel — the registry itself never touches SQL.
+const noticeRegistry = createNoticeRegistry({
+    providers: [
+        createDeployNoticeProvider({
+            readReadiness: () => systemModule.readDeployReadiness(),
+        }),
+    ],
+    dismissals: noticeDismissalsDb,
 });
 console.log('SERVER_PORT from env:', process.env.SERVER_PORT);
 
@@ -1769,6 +1783,11 @@ app.use(
 );
 
 app.use('/api/system', authenticateToken, systemModule.router);
+
+// Notices API Routes (protected): the user's active/dismissed 「need to know」 entries and the
+// revision-bound dismissal. `authenticateToken` supplies `req.user`, which is the only source of
+// the dismissal's user id.
+app.use('/api/notices', authenticateToken, createNoticesRouter(noticeRegistry));
 
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 
