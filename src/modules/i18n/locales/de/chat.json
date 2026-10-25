@@ -143,8 +143,7 @@
       "suggest": "Vorschlagen",
       "suggesting": "Wird vorgeschlagen…",
       "suggestHint": "Antworten aus dem bisherigen Gespräch vorschlagen",
-      "quoteChip": "Zitat: {{text}}",
-      "previewHint": "Vollständiger Vorschlag"
+      "quoteChip": "Zitat: {{text}}"
     },
     "placeholder": "/ für Befehle, @ für Dateien eingeben oder {{provider}} etwas fragen...",
     "placeholderDefault": "Nachricht eingeben...",

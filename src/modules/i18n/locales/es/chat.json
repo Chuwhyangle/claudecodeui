@@ -154,8 +154,7 @@
       "suggest": "Sugerir",
       "suggesting": "Sugiriendo…",
       "suggestHint": "Sugerir respuestas según la conversación",
-      "quoteChip": "Cita: {{text}}",
-      "previewHint": "Sugerencia completa"
+      "quoteChip": "Cita: {{text}}"
     },
     "placeholder": "Escribe / para comandos, @ para archivos, o pregúntale lo que quieras a {{provider}}...",
     "placeholderDefault": "Escribe tu mensaje...",

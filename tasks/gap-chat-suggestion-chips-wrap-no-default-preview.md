@@ -1,7 +1,7 @@
 ---
 id: gap-chat-suggestion-chips-wrap-no-default-preview
 title: Chat 建议 chip：多行换行显示，去掉默认预览行与键盘提示
-status: ready
+status: done
 labels:
   - gap
   - defect

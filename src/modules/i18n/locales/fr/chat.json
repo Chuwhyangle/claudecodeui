@@ -144,8 +144,7 @@
       "suggest": "Suggérer",
       "suggesting": "Suggestion…",
       "suggestHint": "Suggérer des réponses d'après la conversation",
-      "quoteChip": "Citation : {{text}}",
-      "previewHint": "Suggestion complète"
+      "quoteChip": "Citation : {{text}}"
     },
     "placeholder": "Tapez / pour les commandes, @ pour les fichiers, ou posez une question à {{provider}}...",
     "placeholderDefault": "Tapez votre message...",

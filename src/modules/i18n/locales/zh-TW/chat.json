@@ -143,8 +143,7 @@
       "suggest": "建議",
       "suggesting": "產生中…",
       "suggestHint": "根據上下文建議回覆",
-      "quoteChip": "引用：{{text}}",
-      "previewHint": "完整建議"
+      "quoteChip": "引用：{{text}}"
     },
     "placeholder": "輸入 / 叫用指令，@ 選取檔案，或向 {{provider}} 提問...",
     "placeholderDefault": "輸入您的訊息...",

@@ -12,11 +12,7 @@ import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChi
 import { useChatComposerState } from '@/modules/chat/hooks/useChatComposerState';
 import { useInputHistory } from '@/modules/chat/hooks/useInputHistory';
 import { useInputSuggestions } from '@/modules/chat/hooks/useInputSuggestions';
-import {
-  SUGGESTION_LABEL_MAX_CHARS,
-  buildSuggestionChips,
-  truncateSuggestionLabel,
-} from '@/modules/chat/utils/inputSuggestions';
+import { buildSuggestionChips } from '@/modules/chat/utils/inputSuggestions';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import { resetChatDrafts, writeDraftText } from '@/shared/chatDrafts';
 import type { ComposerChipStrip, PermissionMode, Project, ProjectSession } from '@/shared/types';
@@ -815,24 +811,19 @@ describe('merged strip at the component surface', () => {
     assert.equal(options[2].textContent, '习惯一');
   });
 
-  it('shortens a long label and puts the complete text in the preview and title', () => {
+  it('keeps a long label whole, lets it take two lines, and keeps the complete text in title', () => {
     const longReply = '这是一条很长的模型回复文本，必须被截断显示但完整保留在第二行预览里';
     const view = renderMergedChips({ chips: buildSuggestionChips({ modelChips: [longReply] }) });
 
     const option = view.getByRole('option');
-    assert.equal(option.textContent, truncateSuggestionLabel(longReply));
-    assert.ok((option.textContent?.length ?? 0) <= SUGGESTION_LABEL_MAX_CHARS + 1);
-    assert.ok(option.textContent?.endsWith('…'));
+    // No JS ellipsis any more: the chip carries the text and CSS clamps it to
+    // two lines, so a long reply is readable instead of cut at ~18 characters.
+    assert.equal(option.textContent, longReply);
+    assert.ok(
+      option.className.split(/\s+/).includes('line-clamp-2'),
+      'a chip may occupy at most two lines',
+    );
     assert.equal(option.getAttribute('title'), longReply);
-
-    const preview = view.container.querySelector('[data-suggestion-preview]');
-    assert.ok(preview, 'the first model chip is the default preview');
-    assert.equal(preview.textContent, longReply);
-  });
-
-  it('shows no preview on a coarse pointer', () => {
-    const view = renderMergedChips({ showPreview: false });
-    assert.equal(view.container.querySelector('[data-suggestion-preview]'), null);
   });
 
   it('routes every source to the one accept callback, each with its own chip', () => {
@@ -860,67 +851,37 @@ describe('merged strip at the component surface', () => {
   });
 });
 
-describe('the second-line preview follows the hovered or selected chip', () => {
+describe('the strip wraps and draws no second-line preview', () => {
   const previewOf = (view: ReturnType<typeof render>) => view.container.querySelector('[data-suggestion-preview]');
-  const element = (props: Partial<React.ComponentProps<typeof InputSuggestionChips>> = {}) => React.createElement(
-    InputSuggestionChips,
-    {
-      listId: 'chip-list',
-      chips: mergedChips(),
-      selectedIndex: null,
-      onAccept: () => undefined,
-      ...props,
-    },
-  );
 
-  it('(a) a hovered quoted chip previews the first line it will fill', () => {
+  it('AC1: with no hover and no selection a model chip produces no [data-suggestion-preview]', () => {
     const view = renderMergedChips();
-    const quoted = view.getAllByRole('option')[0];
+    assert.ok(view.container.querySelector('[data-chip-source="model"]'), 'a model chip must be on screen');
 
-    fireEvent.mouseEnter(quoted);
+    assert.equal(previewOf(view), null, 'an unselected strip must not print a chip\'s full text below it');
 
-    const preview = previewOf(view);
-    assert.ok(preview, 'hovering a chip must produce the second-line preview');
-    assert.equal(preview.textContent, '选中的原文', 'the preview is the passage as it will be inserted');
-    assert.equal(preview.getAttribute('data-suggestion-preview'), 'quoted');
+    // Hovering is the pointer's highlight, not a second line either.
+    fireEvent.mouseEnter(view.container.querySelector('[data-chip-source="model"]') as HTMLElement);
+    assert.equal(previewOf(view), null, 'hover highlights the chip instead of previewing it');
   });
 
-  it('(a2) a multi-line passage previews only its first line', () => {
-    const view = renderMergedChips({
-      chips: buildSuggestionChips({ quotedText: '第一行\n第二行' }),
-    });
+  it('AC2: six long chips all stay in the DOM inside a flex-wrap listbox with no horizontal scroll', () => {
+    const longReplies = Array.from(
+      { length: 6 },
+      (_, index) => `第${index + 1}条很长的模型回复文本，用来验证自动换行布局不会把后面的 chip 横向裁掉`,
+    );
+    const view = renderMergedChips({ chips: buildSuggestionChips({ modelChips: longReplies }) });
 
-    fireEvent.mouseEnter(view.getAllByRole('option')[0]);
-
-    assert.equal(previewOf(view)?.textContent, '第一行');
-  });
-
-  it('(b) a keyboard-selected model chip previews its own complete text', () => {
-    const view = renderMergedChips({ selectedIndex: 1 });
-
-    const preview = previewOf(view);
-    assert.ok(preview);
-    assert.equal(preview.textContent, '模型答复一');
-    assert.equal(preview.getAttribute('data-suggestion-preview'), 'model');
-  });
-
-  it('(c) with no hover and no selection the first model chip is the preview, and none without a model chip', () => {
-    const withModel = renderMergedChips();
-    assert.equal(previewOf(withModel)?.textContent, '模型答复一');
-
-    const habitsOnly = renderMergedChips({ chips: buildSuggestionChips({ habitChips: ['习惯一'] }) });
-    assert.equal(previewOf(habitsOnly) === null, true, 'a habit chip is never the fallback preview');
-  });
-
-  it('(d) moving the selection from the quoted chip to a model chip and back moves the preview', () => {
-    const view = render(element({ selectedIndex: 0 }));
-    assert.equal(previewOf(view)?.textContent, '选中的原文');
-
-    view.rerender(element({ selectedIndex: 1 }));
-    assert.equal(previewOf(view)?.textContent, '模型答复一');
-
-    view.rerender(element({ selectedIndex: 0 }));
-    assert.equal(previewOf(view)?.textContent, '选中的原文');
+    const listbox = view.getByRole('listbox');
+    const tokens = listbox.className.split(/\s+/).filter(Boolean);
+    assert.ok(tokens.includes('flex-wrap'), `the listbox must wrap; class read ${listbox.className}`);
+    assert.equal(tokens.includes('overflow-x-auto'), false, 'no horizontal scroll track');
+    assert.equal(tokens.includes('whitespace-nowrap'), false, 'chips may wrap their own text');
+    assert.equal(
+      view.getAllByRole('option').length,
+      longReplies.length,
+      'every chip is in the DOM, none parked off-screen behind a scroll',
+    );
   });
 });
 
