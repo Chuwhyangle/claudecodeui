@@ -1,7 +1,7 @@
 ---
 id: gap-composer-quote-insert-breaks-only-for-multiline
 title: 引用插入：末尾空行加 2 个回车的规则收缩为仅当插入文本含换行符时才触发
-status: todo
+status: ready
 labels:
   - gap
 parent: null
