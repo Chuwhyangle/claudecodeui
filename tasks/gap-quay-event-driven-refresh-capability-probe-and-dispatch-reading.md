@@ -24,7 +24,7 @@ extra:
 要做的四块：
 
 一、能力探测与降级（新增 `quay-capabilities.ts`）
-- 用现有进程适配器对项目解析出的 quay 入口跑一次 `--help`，解析出 `task log` 与 `lanes` 动词是否存在，以及帮助文本里是否提到 `tailCursor` 或 `--since tail`。每项能力三态：`available`、`absent`、`unknown`。探测失败（spawn 错误、超时、非零退出且无输出）只能是 `unknown`，不得读成 `absent`。
+- 用现有进程适配器对项目解析出的 quay 入口跑一次 `--help`，解析出 `task log` 与 `lanes` 动词是否存在；`--help` 只用来探测动词，不用它判断响应字段：`tailCursor` 这类字段只出现在 JSON 响应里，是否写进帮助取决于实现者，字段一律看响应里有没有这个键（见下面的播种一条）。每项能力三态：`available`、`absent`、`unknown`。探测失败（spawn 错误、超时、非零退出且无输出）只能是 `unknown`，不得读成 `absent`。
 - 探测结果按入口的 realpath 加 mtime 加 size 缓存（符号链接换了指向、二进制被更新都会重探）；`unknown` 不长期缓存，按 60 秒退避重试。能力状态变化时记一行日志（每个项目每次变化一行）。
 - 只读白名单（`isReadOnlyQuayCommand`，现为整条参数精确匹配）要接纳两种新读法而不放过写动词：`['--help']`；以及 `task log --json --since <S> --limit <N>`，其中 S 必须是合法的 ISO8601 时刻或只含 `v`、`carrierEpoch`、`seq` 三个键且类型正确的 cursor JSON，N 是 1 到 500 的整数，多一个 token 都拒绝。固定条目保持精确匹配，任务日志这一条用结构化校验，不得退化成前缀匹配。
 
@@ -49,7 +49,7 @@ extra:
 - [ ] 白名单：同一测试文件含用例：`['--help']`、`task log --json --since <合法 ISO> --limit 500`、`task log --json --since <合法 cursor JSON> --limit 1` 被接纳；`--limit 0`、`--limit 501`、`--limit abc`、缺 `--since`、`--since` 为乱码、cursor JSON 含多余键或类型错误、尾部多一个 token、缺 `--json`，以及 `task create`、`task edit`、`goal write`、`goal batch`、`goal gate`、`promote`、`retreat`、`driver start` 一律被拒。取假：把 task log 条目改成 `task` 前缀匹配，拒绝写动词的那几例必须红。`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/quay/tests/quay.service.test.ts` exit 0 且 `git diff --stat -- server/modules/quay/tests/quay.service.test.ts` 无输出。
 - [ ] 事件应用：同一测试文件含用例（注入脚本化的命令桩与假时钟）：已知任务的状态转移更新索引行且不触发 `task list`；同一 `eventId` 重复投递幂等；乱序到达的 transitions 按 seq 应用；事件 `at` 早于该行基线加载时刻时不回退手改得到的状态；响应里 `complete: false` 不产生任何副作用。
 - [ ] 全量刷新触发：同一测试文件含用例：创建事件或不在索引里的任务在一个事件周期内触发恰好一次 `task list --json --no-body`（不等 60 秒），一阵创建事件下 5 秒内至多一次；`rebase: true`、`carrierEpoch` 变化、非法 JSON、缺字段各自触发全量加载并把 cursor 复位为未播种；`task log` 失败进入 `degraded` 且记录原因，按 5 秒起翻倍封顶 60 秒的退避重试，期间 TTL 路径不受影响。
-- [ ] cursor 处理：同一测试文件含用例：无 `tailCursor` 时第一次调用用「加载开始时刻减 2 秒」的 ISO；响应 `nextCursor` 为 null 时下一次仍用同一个 ISO；非 null 后每次调用回传的 cursor 与上次返回值深度相等且键序不变；响应带 `tailCursor` 时首次就以它播种、不用 ISO；一页满 500 条立刻续取、最多连续 5 页。
+- [ ] cursor 处理：同一测试文件含用例：无 `tailCursor` 时第一次调用用「加载开始时刻减 2 秒」的 ISO；响应 `nextCursor` 为 null 时下一次仍用同一个 ISO；非 null 后每次调用回传的 cursor 与上次返回值深度相等且键序不变；响应带 `tailCursor` 时首次就以它播种、不用 ISO（无论夹具里的 `--help` 文本有没有 `tailCursor` 字样，判据只看响应里有没有这个键）；一页满 500 条立刻续取、最多连续 5 页。
 - [ ] 监视器：同一测试文件含用例（注入 `watchPath` 与假定时器）：250ms 内连续 10 次变化通知恰好 1 次 `task log`；执行中又来变化，结束后恰好补 1 次；`.quay` 里其它文件名（`gate-events.jsonl` 的 change 与 rename）不触发任何 spawn；`worker-dispatch.json` 与事件文件的原子替换（rename 通知）被正确处理；监视器 error 进入 `degraded` 而不是静默；`.quay` 目录不存在时为 off 且不抛错；第 17 个活跃项目淘汰最近最少使用者；闲置 10 分钟自动停止；进程退出钩子关闭全部监视器。
 - [ ] 降级与兜底：同一测试文件含用例：`task log` 能力为 `absent` 或 `unknown` 时零监视器、零次 `task log` spawn，任务索引的加载行为与今天一致；能力为 `available` 且事件持续到达时，TTL 到点仍会再做一次全量 `task list`（假时钟推进过 120 秒）；`QUAY_TASK_INDEX_TTL_MS`、`QUAY_TASK_INDEX_MIN_INTERVAL_MS`、`QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS` 三个常量的取值不变；`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/quay/tests/quay-fleet-summary.test.ts` exit 0 且 `git diff --stat -- server/modules/quay/tests/quay-fleet-summary.test.ts` 无输出。
 - [ ] dispatch 读取：同一测试文件含用例：文件不存在为 `absent`，`{}` 为 `empty`，条目 workerPid 存活为 `live`、不存在为 `residue`，JSON 非法、非对象、超过 1MB 为 `not-evaluated`；取假：把非法 JSON 读成 `empty`，对应用例必须红；读取路径只能落在 `<projectRoot>/.quay/worker-dispatch.json`。
