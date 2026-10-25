@@ -51,3 +51,11 @@ extra:
 - server/modules/quay/tests/fixtures/driver-status-worker-0.22.0.json (new)
 - server/modules/quay/tests/fixtures/driver-status-worker-0.19.0.json (new)
 - tasks/gap-quay-snapshot-loop-status-version-drain-orphan.md
+
+## Blocker
+
+**2026-10-25T14:30:46.669Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-resident-busy-input.test.ts:   AssertionError [ERR_ASSERTION]: the leg-2 frame must be readable with its own uuid
+- run_id：wk-prod-anchor
+- session_id：2bfce5d5-3e5c-4c71-bfe8-87cf1255d5b2
