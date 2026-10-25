@@ -27,16 +27,30 @@ extra:
 
 ## AC
 
-- [ ] `InputSuggestionChips.tsx` 不再渲染预览行：`npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例「无悬停、无选中、有 model chip 时，DOM 中没有 `[data-suggestion-preview]`」，exit 0。
-- [ ] 同一测试文件含一例：渲染 6 个长文本 chip 时，列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto` 与 `whitespace-nowrap`，且每个 chip 都在 DOM 中；exit 0。
-- [ ] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx` exit 0，且该文件不再断言 `previewHint` / `Tab to select` 文案。
-- [ ] 12 个 `src/modules/i18n/locales/*/chat.json` 均不含 `hintSelect`、`hintAccept`、`hintHide`、`previewHint` 键：`node -e` 逐文件解析 `input.suggestions` 并断言四键不存在，exit 0；locale 键集合一致性检查（仓库既有 i18n parity 测试）exit 0。
-- [ ] 键盘行为不变：`npx vitest run src/modules/chat/tests/suggestionChipAcceptContract.test.tsx src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 中 Tab 选中、Enter 接受、Esc 隐藏的既有用例全部通过。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0（删除 prop 后无悬空引用）。
+- [x] `InputSuggestionChips.tsx` 不再渲染预览行：`npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例「无悬停、无选中、有 model chip 时，DOM 中没有 `[data-suggestion-preview]`」，exit 0。
+- [x] 同一测试文件含一例：渲染 6 个长文本 chip 时，列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto` 与 `whitespace-nowrap`，且每个 chip 都在 DOM 中；exit 0。
+- [x] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx` exit 0，且该文件不再断言 `previewHint` / `Tab to select` 文案。
+- [x] 12 个 `src/modules/i18n/locales/*/chat.json` 均不含 `hintSelect`、`hintAccept`、`hintHide`、`previewHint` 键：`node -e` 逐文件解析 `input.suggestions` 并断言四键不存在，exit 0；locale 键集合一致性检查（仓库既有 i18n parity 测试）exit 0。
+- [x] 键盘行为不变：`npx vitest run src/modules/chat/tests/suggestionChipAcceptContract.test.tsx src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 中 Tab 选中、Enter 接受、Esc 隐藏的既有用例全部通过。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0（删除 prop 后无悬空引用）。
 
 ## DoD
 
 真实页面验证（AGENTS.md「UI 验证」）：MCP 浏览器在 PC 1440×900、1000×800 与手机 390×844 三个视口打开一个会话末尾带 model 回复 chip 的真实会话（隔离实例：`scripts/isolated-instance.sh`，挑小 transcript、清 `session_drafts`），截图存 `tmp/` 并贴出，须看到：(a) 所有 chip 同时可见、过长文本折成两行而不是被裁掉；(b) 没有 chip 下方的灰色全文行；(c) 没有 `Tab to select` 提示；(d) 点击任一 chip 仍把文本填入输入框且不发送。再跑 `node scripts/ui-scenario.mjs` 中涉及输入建议的场景（若存在）并贴出 JSON 报告。fixture 单测只是必要条件，不算落地。
+
+## Evidence
+
+- 单测（worktree `task/gap-chat-suggestion-chips-wrap-no-default-preview`）：
+  - `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` → 36 passed（含 AC1「无悬停/无选中 ⇒ 无 `[data-suggestion-preview]`」与 AC2 六长 chip `flex-wrap` 用例）。
+  - `npx vitest run …chatComposerReplyChips.test.tsx …inputSuggestionChipsBackground.test.tsx …suggestionChipAcceptContract.test.tsx …inlineQuoteChip.test.tsx` → 67 passed。
+  - `npx vitest run src/modules/i18n/tests/localeDuplicateKeys.test.ts src/modules/chat/tests/uiNavigate.test.tsx` → 27 passed。
+  - `npx tsc --noEmit -p tsconfig.json` → exit 0。
+- locale 键检查：`node -e` 逐文件解析，`{"checked":12,"problems":[]}`，exit 0。
+- 真实页面（隔离实例 `:3197` + 本机 OpenAI 协议 stub 网关，会话 `b787f50e-76f7-48c6-b9ac-e43ee4a59895`，已清 `session_drafts`）：
+  - 截图：`tmp/dod-shots/pc-1440x900.png`、`tmp/dod-shots/pc-1000x800.png`、`tmp/dod-shots/mobile-390x844.png`；读数：`tmp/dod-shots/report.json`。
+  - 三视口读数：`flexWrap: "wrap"`、`overflowX: "visible"`、`scrollWidth === clientWidth`（866/866、677/677、372/372）、3 个 chip 全部 `inViewportX: true`、`[data-suggestion-preview]` 0 个、`Tab to select` 不存在；1000px 与 390px 下长 chip 高 46px（两行、line-clamp 收尾）。
+  - 点击第一个 chip：输入框由空变为该 chip 全文，仍在同一会话（未发送）。
+  - `ui-scenario`：`e2e/scenarios/` 仅 cockpit / quay-wall 场景，无输入建议场景，故无 JSON 报告可跑。
 
 ## Touches
 
@@ -46,6 +60,17 @@ extra:
 - src/modules/chat/tests/chatComposerReplyChips.test.tsx
 - src/modules/chat/tests/inputSuggestionChipsBackground.test.tsx
 - src/modules/chat/tests/suggestionChipAcceptContract.test.tsx
+- src/modules/chat/tests/inlineQuoteChip.test.tsx
 - src/modules/i18n/locales/en/chat.json
 - src/modules/i18n/locales/zh-CN/chat.json
+- src/modules/i18n/locales/de/chat.json
+- src/modules/i18n/locales/es/chat.json
+- src/modules/i18n/locales/fr/chat.json
+- src/modules/i18n/locales/id/chat.json
+- src/modules/i18n/locales/it/chat.json
+- src/modules/i18n/locales/ja/chat.json
+- src/modules/i18n/locales/ko/chat.json
+- src/modules/i18n/locales/ru/chat.json
+- src/modules/i18n/locales/tr/chat.json
+- src/modules/i18n/locales/zh-TW/chat.json
 - tasks/gap-chat-suggestion-chips-wrap-no-default-preview.md
