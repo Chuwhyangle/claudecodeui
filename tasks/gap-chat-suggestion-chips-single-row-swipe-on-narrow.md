@@ -24,14 +24,19 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：窄屏（`matchMedia` 桩为 ≤480px）渲染 6 个长文本 chip 时，列表容器 class 含 `flex-nowrap` 与 `overflow-x-auto`、不含 `flex-wrap`，每个 chip 含 `whitespace-nowrap`；exit 0。
-- [ ] 同一文件含一例：宽屏（≥481px、细指针）列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto`，chip 含 `line-clamp-2`（PC 行为不变）；exit 0。
-- [ ] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx` exit 0。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [x] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：窄屏（`matchMedia` 桩为 ≤480px）渲染 6 个长文本 chip 时，列表容器 class 含 `flex-nowrap` 与 `overflow-x-auto`、不含 `flex-wrap`，每个 chip 含 `whitespace-nowrap`；exit 0。
+- [x] 同一文件含一例：宽屏（≥481px、细指针）列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto`，chip 含 `line-clamp-2`（PC 行为不变）；exit 0。
+- [x] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx` exit 0。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
 
 ## DoD
 
 真实页面验证（AGENTS.md「UI 验证」）：隔离实例（`scripts/isolated-instance.sh`）里 MCP 浏览器打开末尾带 model 回复 chip 的真实会话，手机 390×844 与 PC 1440×900 各截图存 `tmp/` 并贴出，并用 `browser_evaluate` 贴出读数：手机、空输入、有 chip 时 `.chat-composer-shell` 高度（修复前 203px，目标 ≤ 150px）、chip 行是否单行（所有 chip 的 `getBoundingClientRect().top` 相同）、`listbox.scrollWidth > clientWidth` 时确实可横向滑动（`scrollLeft` 可改变，并用一次真实的触摸/拖动手势验证）；PC 读数确认 chip 仍换行、全部可见。fixture 单测只是必要条件，不算落地。
+
+验证读数（2026-10-25，隔离实例 :3112，worktree 构建）：
+- 手机 390×844、空输入、3 个 model chip：`.chat-composer-shell` **149px**（目标 ≤150；修复前 203），textarea rows=1 / 40px，chip 行 42px，单行（3 个 chip 的 top 均为 744）。`matchMedia('(max-width: 480px)')` 与 `(pointer: coarse)` 均 true，listbox class 含 `flex-nowrap overflow-x-auto`、不含 `flex-wrap`，`scrollWidth 557 > clientWidth 372`；真实 CDP 触摸拖动后 `scrollLeft 0 → 185`，三 chip 全部露出且仍在同一行。截图 `tmp/chip-dod/phone-390x844-before-swipe.png`、`tmp/chip-dod/phone-390x844-after-swipe.png`。
+- PC 1440×900、细指针：listbox class 含 `flex-wrap`、无 `overflow-x-auto`，`scrollWidth == clientWidth == 866`，3 个 chip 全部完整可见（`line-clamp-2`），截图 `tmp/chip-dod/desktop-1440x900.png`。
+- pageerror 0、console error 0（三条腿）。报告 `tmp/chip-dod/report.json`。
 
 ## Touches
 
