@@ -1,7 +1,7 @@
 ---
 id: gap-cockpit-pulse-strip-composes-existing-charts-aligned
 title: Cockpit 脉搏条实验：内部改用 Loop pulse / Tests / Fan-in 三张图的现有画法，叠成一列、时间轴对齐
-status: ready
+status: done
 labels:
   - gap
 parent: null
