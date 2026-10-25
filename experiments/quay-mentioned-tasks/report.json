@@ -1,0 +1,453 @@
+{
+  "scanned": 250,
+  "sessionsWithMentions": 242,
+  "sessionsWithMentionsPct": 96.8,
+  "totalMentions": 1812,
+  "totalToolBlockMentions": 18795,
+  "bodyChars": 2469101,
+  "toolChars": 16107773,
+  "sessionsByDistinctCount": {
+    "min": 1,
+    "max": 89,
+    "median": 1.0
+  },
+  "mentionDepth": {
+    "sessions": [
+      {
+        "session": "21ec253f-8507-44d6-988f-1bf0dd38544a",
+        "units": 154,
+        "distinct": 1,
+        "mentions": 12,
+        "lastUnit": 1
+      },
+      {
+        "session": "5bdf0f5e-0466-49cb-b00b-1ef2b3240b0a",
+        "units": 15,
+        "distinct": 4,
+        "mentions": 5,
+        "lastUnit": 15
+      },
+      {
+        "session": "95c681af-1ce2-4e1a-9eea-d272c410a4b1",
+        "units": 1545,
+        "distinct": 14,
+        "mentions": 28,
+        "lastUnit": 1386
+      },
+      {
+        "session": "75464416-957d-48a0-a5d3-c1cd9781d44b",
+        "units": 135,
+        "distinct": 1,
+        "mentions": 4,
+        "lastUnit": 135
+      },
+      {
+        "session": "f3822078-3a84-4016-9b96-21d79e88bb7e",
+        "units": 827,
+        "distinct": 2,
+        "mentions": 4,
+        "lastUnit": 827
+      },
+      {
+        "session": "22b8a331-c1e6-430d-b0c1-cd0c6f90724c",
+        "units": 7,
+        "distinct": 1,
+        "mentions": 2,
+        "lastUnit": 7
+      },
+      {
+        "session": "61a15a86-feed-46aa-9804-f09bea555fac",
+        "units": 72,
+        "distinct": 2,
+        "mentions": 2,
+        "lastUnit": 72
+      },
+      {
+        "session": "f2ccd32d-2e78-469c-867e-a53b44de0a6b",
+        "units": 16,
+        "distinct": 4,
+        "mentions": 5,
+        "lastUnit": 16
+      },
+      {
+        "session": "048cfb69-8793-41b2-8a2b-692b8f2b9dd7",
+        "units": 109,
+        "distinct": 1,
+        "mentions": 12,
+        "lastUnit": 1
+      },
+      {
+        "session": "0abc3120-6e5e-4eeb-99ac-e72784c2bfa3",
+        "units": 18,
+        "distinct": 4,
+        "mentions": 5,
+        "lastUnit": 18
+      },
+      {
+        "session": "bd5887cd-08c0-4c84-9fed-ff55125e685d",
+        "units": 501,
+        "distinct": 1,
+        "mentions": 6,
+        "lastUnit": 501
+      },
+      {
+        "session": "3a73c678-00b2-4226-b8ad-d729c9e9296e",
+        "units": 233,
+        "distinct": 1,
+        "mentions": 14,
+        "lastUnit": 1
+      },
+      {
+        "session": "195cccfb-417e-4f92-b1fc-d263ea64d408",
+        "units": 21,
+        "distinct": 5,
+        "mentions": 6,
+        "lastUnit": 21
+      },
+      {
+        "session": "ae590479-fdb9-44e7-b16f-9846223485df",
+        "units": 6,
+        "distinct": 1,
+        "mentions": 2,
+        "lastUnit": 6
+      },
+      {
+        "session": "d6a5e1f1-0158-4e7c-b9ed-fb2958719987",
+        "units": 505,
+        "distinct": 1,
+        "mentions": 4,
+        "lastUnit": 505
+      },
+      {
+        "session": "bb48063e-af25-4181-9306-8d59fc69238d",
+        "units": 695,
+        "distinct": 1,
+        "mentions": 4,
+        "lastUnit": 695
+      },
+      {
+        "session": "db6f7025-bbc7-4b92-895d-c939f6b65109",
+        "units": 3793,
+        "distinct": 89,
+        "mentions": 370,
+        "lastUnit": 3793
+      },
+      {
+        "session": "9a3b0ed0-1ae1-4dd2-8df1-b4766703c3a3",
+        "units": 668,
+        "distinct": 1,
+        "mentions": 5,
+        "lastUnit": 668
+      },
+      {
+        "session": "012b6079-cfa1-48ff-8d4a-d00b6460709c",
+        "units": 140,
+        "distinct": 1,
+        "mentions": 13,
+        "lastUnit": 140
+      },
+      {
+        "session": "d26310a2-5333-427b-807c-706232c033bb",
+        "units": 16,
+        "distinct": 2,
+        "mentions": 3,
+        "lastUnit": 16
+      },
+      {
+        "session": "a2aa04c7-cad0-489a-ad12-957fab815537",
+        "units": 12,
+        "distinct": 4,
+        "mentions": 7,
+        "lastUnit": 12
+      },
+      {
+        "session": "6980a9fd-0e42-497a-9fad-e83ee8d573bf",
+        "units": 533,
+        "distinct": 1,
+        "mentions": 5,
+        "lastUnit": 533
+      },
+      {
+        "session": "ede4338c-afd6-41a0-beae-b92429ef9dbc",
+        "units": 999,
+        "distinct": 1,
+        "mentions": 5,
+        "lastUnit": 999
+      },
+      {
+        "session": "c1c39ea1-2e07-4828-a77a-a61749aa57aa",
+        "units": 6,
+        "distinct": 1,
+        "mentions": 2,
+        "lastUnit": 6
+      },
+      {
+        "session": "9f315c79-54a8-4d3e-b2fc-65e96b3d6b82",
+        "units": 18,
+        "distinct": 2,
+        "mentions": 3,
+        "lastUnit": 18
+      },
+      {
+        "session": "143962a4-6b9a-427c-b4f2-7c07ae47a6cb",
+        "units": 15,
+        "distinct": 4,
+        "mentions": 5,
+        "lastUnit": 15
+      },
+      {
+        "session": "37641ba2-81f6-4593-a9fa-d3f814329ea8",
+        "units": 610,
+        "distinct": 1,
+        "mentions": 4,
+        "lastUnit": 610
+      },
+      {
+        "session": "7ea6b344-b2ba-4ff6-b0cd-7cfe094b18b4",
+        "units": 321,
+        "distinct": 1,
+        "mentions": 12,
+        "lastUnit": 1
+      },
+      {
+        "session": "1f2e5ed1-d0c0-4948-a8b0-0818c31b915d",
+        "units": 57,
+        "distinct": 5,
+        "mentions": 6,
+        "lastUnit": 57
+      },
+      {
+        "session": "d4dd2498-bec2-492b-b76c-7d3ade9444f9",
+        "units": 885,
+        "distinct": 1,
+        "mentions": 4,
+        "lastUnit": 885
+      },
+      {
+        "session": "4b1ed5c3-c5d2-4e1f-9549-4f022419be7a",
+        "units": 18,
+        "distinct": 2,
+        "mentions": 4,
+        "lastUnit": 18
+      },
+      {
+        "session": "7b82ef6d-52b4-41e4-9937-c13359b7ec42",
+        "units": 7,
+        "distinct": 1,
+        "mentions": 3,
+        "lastUnit": 7
+      },
+      {
+        "session": "bec2f728-3ceb-4401-8ba6-71b2fae6e8cd",
+        "units": 393,
+        "distinct": 1,
+        "mentions": 5,
+        "lastUnit": 393
+      },
+      {
+        "session": "7b43933a-783c-40c1-a412-f99994464e46",
+        "units": 655,
+        "distinct": 1,
+        "mentions": 6,
+        "lastUnit": 655
+      },
+      {
+        "session": "8392b58f-a594-4d23-8526-668dc9da495c",
+        "units": 543,
+        "distinct": 1,
+        "mentions": 5,
+        "lastUnit": 543
+      },
+      {
+        "session": "acc220a2-bc4f-41ac-a99b-bb6f60b78d66",
+        "units": 9,
+        "distinct": 3,
+        "mentions": 4,
+        "lastUnit": 9
+      },
+      {
+        "session": "781f7579-500e-4acc-af60-b49a1606eaa9",
+        "units": 698,
+        "distinct": 19,
+        "mentions": 53,
+        "lastUnit": 698
+      },
+      {
+        "session": "1e26774c-efbc-453e-89dc-d9fb6984d480",
+        "units": 470,
+        "distinct": 1,
+        "mentions": 5,
+        "lastUnit": 470
+      },
+      {
+        "session": "b163bec1-2b9c-4bae-9ee5-19e52843eed4",
+        "units": 398,
+        "distinct": 1,
+        "mentions": 5,
+        "lastUnit": 398
+      },
+      {
+        "session": "3e2e4562-d9bc-4f92-9d46-f0525d98dbed",
+        "units": 6,
+        "distinct": 1,
+        "mentions": 2,
+        "lastUnit": 6
+      }
+    ],
+    "windowFullCapture": {
+      "20": {
+        "capturesAll": 94,
+        "missesAny": 148
+      },
+      "50": {
+        "capturesAll": 111,
+        "missesAny": 131
+      },
+      "100": {
+        "capturesAll": 126,
+        "missesAny": 116
+      },
+      "200": {
+        "capturesAll": 147,
+        "missesAny": 95
+      },
+      "500": {
+        "capturesAll": 192,
+        "missesAny": 50
+      }
+    },
+    "mentionTailCapturePct": {
+      "20": 38.4,
+      "50": 45.3,
+      "100": 49.5,
+      "200": 56.3,
+      "500": 69.9
+    }
+  },
+  "topMentions": [
+    {
+      "id": "architecture-node-size-from-drawn-content",
+      "count": 33
+    },
+    {
+      "id": "cockpit-push-to-talk-and-focus-routing",
+      "count": 27
+    },
+    {
+      "id": "architecture-chrome-and-mobile-drawer-polish",
+      "count": 22
+    },
+    {
+      "id": "architecture-landscape-phone-layout",
+      "count": 21
+    },
+    {
+      "id": "cockpit-read-only-stage",
+      "count": 20
+    },
+    {
+      "id": "architecture-fullscreen-fit-margin",
+      "count": 19
+    },
+    {
+      "id": "quay-wall-uri-dereference-with-snapshot-fallback",
+      "count": 19
+    },
+    {
+      "id": "architecture-standalone-page",
+      "count": 18
+    },
+    {
+      "id": "quay-wall-addressable-view-and-input-package",
+      "count": 18
+    },
+    {
+      "id": "cockpit-initiative-view-and-decision-queue",
+      "count": 16
+    },
+    {
+      "id": "quay-uri-project-segment-is-fleet-registry-id",
+      "count": 16
+    },
+    {
+      "id": "gap-resident-restore-after-restart",
+      "count": 16
+    },
+    {
+      "id": "architecture-plantuml-rendering",
+      "count": 15
+    },
+    {
+      "id": "observation-p0-view-instrumentation-and-weekly-report",
+      "count": 15
+    },
+    {
+      "id": "observation-session-digest-deterministic",
+      "count": 15
+    },
+    {
+      "id": "deploy-readiness-build-and-safe-restart",
+      "count": 14
+    },
+    {
+      "id": "goal-049",
+      "count": 14
+    },
+    {
+      "id": "architecture-semantic-zoom-defects-polish",
+      "count": 14
+    },
+    {
+      "id": "cockpit-stage-visual-attention-fixes",
+      "count": 14
+    },
+    {
+      "id": "cockpit-board-and-fleet-readability-polish",
+      "count": 13
+    },
+    {
+      "id": "cockpit-phone-remote-input",
+      "count": 13
+    },
+    {
+      "id": "architecture-single-scale-fit-contract",
+      "count": 12
+    },
+    {
+      "id": "observation-wall-ui",
+      "count": 12
+    },
+    {
+      "id": "quay-fleet-cli-locator-and-handshake",
+      "count": 12
+    },
+    {
+      "id": "cockpit-walkthrough-interaction-defects",
+      "count": 12
+    },
+    {
+      "id": "gap-composer-empty-box-history-frequency-chips",
+      "count": 11
+    },
+    {
+      "id": "gap-reply-suggestions-backend-llm-service",
+      "count": 11
+    },
+    {
+      "id": "architecture-keyboard-nav-start-and-a11y",
+      "count": 11
+    },
+    {
+      "id": "architecture-panel-visibility-and-readout-fixes",
+      "count": 11
+    },
+    {
+      "id": "architecture-show-all-and-large-graph-fit",
+      "count": 11
+    }
+  ],
+  "mentionKindSplit": {
+    "task": 1190,
+    "goal": 32
+  }
+}
