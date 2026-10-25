@@ -979,6 +979,79 @@ describe('the strip wraps and draws no second-line preview', () => {
   });
 });
 
+/**
+ * The two arrangements of the strip's row, chosen from the viewport.
+ *
+ * The narrow one is the phone with its keyboard up: one line of chips scrolled
+ * sideways, so the composer's box stays one chip tall instead of spending a
+ * second chip line out of the ~400-450px of transcript a phone has left. The
+ * wide one is the wrapping two-line row the
+ * `gap-chat-suggestion-chips-wrap-no-default-preview` task pinned, unchanged.
+ */
+describe('the strip row follows the viewport', () => {
+  const SIX_LONG_CHIPS = Array.from(
+    { length: 6 },
+    (_, index) => `第${index + 1}条很长的模型回复文本，用来验证窄屏单行横滑布局里每个 chip 都可以滑动到`,
+  );
+
+  /**
+   * The device query the strip reads. The suite's jsdom default answers "no" to
+   * every query (the desktop arrangement); these cases answer the one the strip
+   * asks, in the direction the case is about.
+   */
+  const stubChipRowMatchMedia = (matches: boolean) => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia);
+  };
+
+  it('AC1: a narrow viewport makes one row that scrolls sideways', () => {
+    stubChipRowMatchMedia(true);
+    const view = renderMergedChips({ chips: buildSuggestionChips({ modelChips: SIX_LONG_CHIPS }) });
+
+    const listbox = view.getByRole('listbox');
+    const tokens = listbox.className.split(/\s+/).filter(Boolean);
+    assert.ok(tokens.includes('flex-nowrap'), `the narrow row must not wrap; class read ${listbox.className}`);
+    assert.ok(tokens.includes('overflow-x-auto'), `the narrow row must scroll sideways; class read ${listbox.className}`);
+    assert.equal(tokens.includes('flex-wrap'), false, 'a wrapping row would grow a second line');
+
+    const options = view.getAllByRole('option');
+    assert.equal(options.length, SIX_LONG_CHIPS.length);
+    for (const option of options) {
+      const chipTokens = option.className.split(/\s+/).filter(Boolean);
+      assert.ok(
+        chipTokens.includes('whitespace-nowrap'),
+        `every narrow chip stays on one line; class read ${option.className}`,
+      );
+      assert.equal(option.getAttribute('title'), option.textContent, 'the complete text stays in title');
+    }
+  });
+
+  it('AC2: a wide, fine-pointer viewport keeps the wrapping two-line row', () => {
+    stubChipRowMatchMedia(false);
+    const view = renderMergedChips({ chips: buildSuggestionChips({ modelChips: SIX_LONG_CHIPS }) });
+
+    const listbox = view.getByRole('listbox');
+    const tokens = listbox.className.split(/\s+/).filter(Boolean);
+    assert.ok(tokens.includes('flex-wrap'), `the desktop row must wrap; class read ${listbox.className}`);
+    assert.equal(tokens.includes('overflow-x-auto'), false, 'no horizontal scroll track on the desktop row');
+
+    for (const option of view.getAllByRole('option')) {
+      assert.ok(
+        option.className.split(/\s+/).includes('line-clamp-2'),
+        `a desktop chip may occupy two lines; class read ${option.className}`,
+      );
+    }
+  });
+});
+
 type MergedArgs = ReturnType<typeof baseSuggestionArgs> & {
   modelChips?: string[];
   quotedText?: string | null;
