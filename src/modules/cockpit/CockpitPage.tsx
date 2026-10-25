@@ -1458,16 +1458,12 @@ export default function CockpitPage() {
       </header>
 
       {/* The deployment reading is chrome, not a view: it stays put across the wall, the fleet,
-          the initiatives and every project stage, the same way the header does. On a phone it
-          takes the compact form: a strip that exists only when there is news (a fresh deployment
-          has nothing to say), so a phone does not spend a row of the stage on 已是最新. */}
-      {viewportWidth < 768 ? (
-        <DeployReadiness compact />
-      ) : (
-        <div className="border-b border-border/40 px-4 py-2">
-          <DeployReadiness />
-        </div>
-      )}
+          the initiatives and every project stage, the same way the header does. The compact form
+          was retired with the chat page's strip — the notices module's slot owns the interrupts,
+          and this status panel stays permanent and unaffected by dismissals. */}
+      <div className="border-b border-border/40 px-4 py-2">
+        <DeployReadiness />
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/*

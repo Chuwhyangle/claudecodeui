@@ -1098,6 +1098,14 @@ export const api = {
     /** The one confirmed action: build, then restart only if the build succeeded. */
     deploy: () => post('/api/system/deploy'),
   },
+
+  notices: {
+    /** This user's active notices and the ones already dismissed at their current revision. */
+    list: () => get('/api/notices'),
+    /** Records that the user has seen `revision` of `id`; 409 means the notice moved on. */
+    dismiss: (id: string, revision: string) =>
+      post(`/api/notices/${encodeURIComponent(id)}/dismiss`, { revision }),
+  },
 };
 
 // ---------------------------

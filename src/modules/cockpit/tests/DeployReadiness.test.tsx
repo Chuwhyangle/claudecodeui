@@ -45,12 +45,10 @@ function reading(overrides: Partial<DeployReadinessReading> = {}): DeployReadine
 
 function renderStrip({
   value = reading(),
-  compact = false,
   deploy = vi.fn<DeployExecutePort>(async () => ({ ok: true })),
   read = vi.fn<DeployReadinessPort>(async () => value),
 }: {
   value?: DeployReadinessReading;
-  compact?: boolean;
   deploy?: DeployExecutePort;
   read?: DeployReadinessPort;
 } = {}) {
@@ -58,7 +56,7 @@ function renderStrip({
     deploy,
     ...render(
       <I18nextProvider i18n={i18n}>
-        <DeployReadiness compact={compact} deploy={deploy} read={read} now={() => NOW} />
+        <DeployReadiness deploy={deploy} read={read} now={() => NOW} />
       </I18nextProvider>,
     ),
   };
@@ -174,31 +172,5 @@ describe('the confirmed deploy action', () => {
 
     expect(screen.queryByTestId('deploy-confirm-panel')).toBeNull();
     expect(deploy).not.toHaveBeenCalled();
-  });
-});
-
-describe('the session page compact form', () => {
-  it('renders nothing while the deployment is fresh', async () => {
-    const read = vi.fn<DeployReadinessPort>(async () => reading({ status: 'fresh' }));
-    const { container } = renderStrip({ compact: true, read });
-
-    await waitFor(() => expect(read).toHaveBeenCalled());
-    expect(container.querySelector('[data-testid="deploy-readiness"]')).toBeNull();
-  });
-
-  it('renders the same sentence when the deployment is not fresh', async () => {
-    renderStrip({
-      compact: true,
-      read: vi.fn<DeployReadinessPort>(async () =>
-        reading({
-          status: 'pending-build',
-          pendingCommits: [{ sha: 'b'.repeat(40), subject: 'src: x', taskId: null }],
-        }),
-      ),
-    });
-
-    expect((await screen.findByTestId('deploy-status')).textContent).toBe(
-      '1 change not yet built',
-    );
   });
 });

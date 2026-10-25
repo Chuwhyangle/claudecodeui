@@ -932,5 +932,20 @@
     "blockedReason": "Grund für die Nichtlandung: {{reason}}",
     "liveNotice": "{{taskId}} ist jetzt live",
     "unavailable": "Die Aufgabenkette ist nicht verfügbar: {{reason}}"
+  },
+  "notices": {
+    "dismiss": "Verwerfen",
+    "more": "{{n}} weitere",
+    "inboxTitle": "Benachrichtigungen",
+    "dismissedGroup": "Verworfen",
+    "deploy": {
+      "pendingBuild": {
+        "title": "Bereitgestellte Änderungen sind gebaut, laufen aber nicht",
+        "action": "Bauen und neu starten"
+      },
+      "failed": {
+        "title": "Der letzte Build oder Neustart ist fehlgeschlagen"
+      }
+    }
   }
 }

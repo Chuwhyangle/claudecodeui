@@ -962,5 +962,20 @@
     "blockedReason": "Raison de non-atteinte : {{reason}}",
     "liveNotice": "{{taskId}} est maintenant en production",
     "unavailable": "La chaîne des tâches est indisponible : {{reason}}"
+  },
+  "notices": {
+    "dismiss": "Ignorer",
+    "more": "{{n}} de plus",
+    "inboxTitle": "Notifications",
+    "dismissedGroup": "Ignorées",
+    "deploy": {
+      "pendingBuild": {
+        "title": "Les modifications déployées sont compilées mais pas en cours d’exécution",
+        "action": "Compiler et redémarrer"
+      },
+      "failed": {
+        "title": "La dernière compilation ou redémarrage a échoué"
+      }
+    }
   }
 }

@@ -41,14 +41,18 @@ export type {
 // render them without the whole page.
 export { default as InitiativeView } from '@/modules/cockpit/InitiativeView';
 export { default as DecisionQueue, sampleAuditDecisions } from '@/modules/cockpit/DecisionQueue';
-// The deployment strip: `CockpitPage` mounts it persistently, and `ChatInterface` mounts the
-// compact variant when the running build is not current. Exported here so the chat module
-// reaches it through this barrel rather than deep-importing the cockpit's files.
-export { default as DeployReadiness } from '@/modules/cockpit/DeployReadiness';
+// The deployment strip: `CockpitPage` mounts it persistently. `DeployConfirmDialog` is the one
+// confirmation panel and confirmed write, reused by the notices module's slot so a deploy started
+// from the chat page passes through the same human confirmation. Exported here so the notices
+// module reaches it through this barrel rather than deep-importing the cockpit's files.
+export { default as DeployReadiness, DeployConfirmDialog } from '@/modules/cockpit/DeployReadiness';
 export type {
   DeployCommitReading,
+  DeployConfirmDialogProps,
+  DeployExecutePort,
   DeployFailureReading,
   DeployLastDeployReading,
+  DeployReadinessPort,
   DeployReadinessReading,
   DeployStatus,
 } from '@/modules/cockpit/DeployReadiness';

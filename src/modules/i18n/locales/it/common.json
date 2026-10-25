@@ -962,5 +962,20 @@
     "blockedReason": "Motivo del mancato atterraggio: {{reason}}",
     "liveNotice": "{{taskId}} è ora in produzione",
     "unavailable": "La catena delle attività non è disponibile: {{reason}}"
+  },
+  "notices": {
+    "dismiss": "Ignora",
+    "more": "{{n}} altre",
+    "inboxTitle": "Notifiche",
+    "dismissedGroup": "Ignorate",
+    "deploy": {
+      "pendingBuild": {
+        "title": "Le modifiche di distribuzione sono compilate ma non in esecuzione",
+        "action": "Compila e riavvia"
+      },
+      "failed": {
+        "title": "L'ultima compilazione o riavvio non è riuscito"
+      }
+    }
   }
 }

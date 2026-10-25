@@ -962,5 +962,20 @@
     "blockedReason": "İnmemesinin nedeni: {{reason}}",
     "liveNotice": "{{taskId}} artık canlı",
     "unavailable": "Görev zinciri kullanılamıyor: {{reason}}"
+  },
+  "notices": {
+    "dismiss": "Yoksay",
+    "more": "{{n}} tane daha",
+    "inboxTitle": "Bildirimler",
+    "dismissedGroup": "Yoksayılanlar",
+    "deploy": {
+      "pendingBuild": {
+        "title": "Dağıtım değişiklikleri derlendi ancak çalışmıyor",
+        "action": "Derle ve yeniden başlat"
+      },
+      "failed": {
+        "title": "Son derleme veya yeniden başlatma başarısız oldu"
+      }
+    }
   }
 }

@@ -962,5 +962,20 @@
     "blockedReason": "未落地原因：{{reason}}",
     "liveNotice": "{{taskId}} 已上线",
     "unavailable": "任务流转链暂不可用：{{reason}}"
+  },
+  "notices": {
+    "dismiss": "忽略",
+    "more": "另有 {{n}} 条",
+    "inboxTitle": "收件箱",
+    "dismissedGroup": "已忽略",
+    "deploy": {
+      "pendingBuild": {
+        "title": "部署变更已构建但尚未运行",
+        "action": "构建并重启"
+      },
+      "failed": {
+        "title": "上一次构建或重启失败"
+      }
+    }
   }
 }

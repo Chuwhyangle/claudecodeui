@@ -962,5 +962,20 @@
     "blockedReason": "Motivo de no aterrizaje: {{reason}}",
     "liveNotice": "{{taskId}} ya está en vivo",
     "unavailable": "La cadena de tareas no está disponible: {{reason}}"
+  },
+  "notices": {
+    "dismiss": "Descartar",
+    "more": "{{n}} más",
+    "inboxTitle": "Notificaciones",
+    "dismissedGroup": "Descartadas",
+    "deploy": {
+      "pendingBuild": {
+        "title": "Los cambios de despliegue están compilados pero no en ejecución",
+        "action": "Compilar y reiniciar"
+      },
+      "failed": {
+        "title": "La última compilación o reinicio falló"
+      }
+    }
   }
 }

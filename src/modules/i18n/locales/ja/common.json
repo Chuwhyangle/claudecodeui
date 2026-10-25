@@ -962,5 +962,20 @@
     "blockedReason": "未着地の理由：{{reason}}",
     "liveNotice": "{{taskId}} が稼働中になりました",
     "unavailable": "タスクの流れを取得できません：{{reason}}"
+  },
+  "notices": {
+    "dismiss": "無視",
+    "more": "他に {{n}} 件",
+    "inboxTitle": "通知一覧",
+    "dismissedGroup": "無視済み",
+    "deploy": {
+      "pendingBuild": {
+        "title": "デプロイの変更はビルド済みですが未実行です",
+        "action": "ビルドして再起動"
+      },
+      "failed": {
+        "title": "前回のビルドまたは再起動に失敗しました"
+      }
+    }
   }
 }

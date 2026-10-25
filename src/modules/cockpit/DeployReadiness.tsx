@@ -12,6 +12,10 @@ import { api } from '@/shared/api';
  * (`POST /api/system/deploy`). The confirmation panel is a discrete human action — the design
  * explicitly refuses a voice 「是」 for a restart — so clicking the action only opens the panel;
  * only its confirm button sends the request.
+ *
+ * The chat page no longer mounts this component's old `compact` form: the notices module's
+ * `NoticeSlot` replaces it and reuses `DeployConfirmDialog` below, so the confirm panel and the
+ * write it gates exist once. The cockpit page keeps the full strip permanently.
  */
 
 export type DeployCommitReading = {
@@ -67,12 +71,24 @@ export type DeployReadinessPort = () => Promise<DeployReadinessReading>;
 export type DeployExecutePort = () => Promise<{ ok: boolean }>;
 
 type DeployReadinessProps = {
-  /** The session page's compact form; it hides itself entirely while the deployment is fresh. */
-  compact?: boolean;
   read?: DeployReadinessPort;
   deploy?: DeployExecutePort;
   /** Injected in tests so the relative 「2 分钟前」 is deterministic. */
   now?: () => number;
+};
+
+/** What the shared confirmation panel draws: the commits that would take effect, and the one
+ * confirmed write. The panel itself never opens itself; the caller owns that state. */
+export type DeployConfirmDialogProps = {
+  pendingCommits: DeployCommitReading[];
+  /** The confirmed write; defaults to `POST /api/system/deploy`. Injected in tests. */
+  deploy?: DeployExecutePort;
+  /** Closes the panel without sending anything. */
+  onCancel: () => void;
+  /** Called after a confirmed write succeeds, with the server's answer. */
+  onDeployed?: (result: { ok: boolean }) => void;
+  /** Called when the write throws, with the error's message. */
+  onError?: (message: string) => void;
 };
 
 const POLL_INTERVAL_MS = 15_000;
@@ -93,11 +109,102 @@ function shortSha(sha: string | null): string {
 }
 
 /**
- * Used by `CockpitPage` (the persistent strip) and `ChatInterface` (the compact, non-fresh
- * only variant), so a person sees the same deployment sentence wherever they are.
+ * The confirmation panel shared by the cockpit strip and the notices slot. It is the only place
+ * a deploy request is sent from a notice: the notice's primary action merely opens it, and the
+ * confirm button is a discrete human action — the design deliberately refuses a voice 「是」 for a
+ * restart. Rendering it in both surfaces keeps that contract in one implementation.
+ *
+ * Consumers: `DeployReadiness` (the cockpit's persistent strip) and the notices module's
+ * `NoticeSlot` (through this module's barrel).
+ */
+export function DeployConfirmDialog({
+  pendingCommits,
+  deploy = defaultDeploy,
+  onCancel,
+  onDeployed,
+  onError,
+}: DeployConfirmDialogProps) {
+  const { t } = useTranslation();
+  // Whether the confirmed request is in flight. Essential: it turns the confirm button
+  // non-repeatable while the same deploy is already running.
+  const [submitting, setSubmitting] = useState(false);
+
+  const confirmAndDeploy = useCallback(async () => {
+    if (submitting) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await deploy();
+      onDeployed?.(result);
+    } catch (cause) {
+      onError?.(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [deploy, onDeployed, onError, submitting]);
+
+  return (
+    <div
+      data-testid="deploy-confirm-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('cockpit.deployConfirmTitle')}
+      className="absolute inset-x-0 top-full z-30 mt-2 rounded-lg border border-border bg-card p-3 shadow-lg"
+    >
+      <p className="text-sm font-medium">{t('cockpit.deployConfirmTitle')}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{t('cockpit.deployConfirmBody')}</p>
+      {pendingCommits.length === 0 ? (
+        <p className="mt-1 text-xs text-muted-foreground" data-testid="deploy-no-commits">
+          {t('cockpit.deployNoCommits')}
+        </p>
+      ) : (
+        <ul className="mt-1 max-h-40 space-y-1 overflow-auto" data-testid="deploy-commits">
+          {pendingCommits.map((commit) => (
+            <li key={commit.sha} data-testid="deploy-commit" className="text-xs">
+              <code className="rounded bg-muted px-1">{shortSha(commit.sha)}</code>{' '}
+              {commit.subject}
+              {commit.taskId !== null && (
+                <span className="ml-1 text-muted-foreground">
+                  {t('cockpit.deployCommitTask', { task: commit.taskId })}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-muted-foreground">{t('cockpit.deployConfirmRestartHint')}</p>
+      <div className="mt-2 flex justify-end gap-2">
+        <button
+          type="button"
+          data-testid="deploy-cancel"
+          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
+          onClick={onCancel}
+        >
+          {t('cockpit.deployCancel')}
+        </button>
+        <button
+          type="button"
+          data-testid="deploy-confirm"
+          disabled={submitting}
+          className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          onClick={() => void confirmAndDeploy()}
+        >
+          {t('cockpit.deployConfirm')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The cockpit's persistent deployment strip: the answer to 「当前运行的版本包括驾驶舱的变更吗」
+ * and 「重启成功了吗」, plus the one click that opens the confirmation panel. The chat page's
+ * interrupt slot lives in the notices module and reuses `DeployConfirmDialog` from here.
+ *
+ * Used by `CockpitPage`.
  */
 export default function DeployReadiness({
-  compact = false,
   read = defaultRead,
   deploy = defaultDeploy,
   now = () => Date.now(),
@@ -112,9 +219,6 @@ export default function DeployReadiness({
   // Whether the confirmation panel is open. Essential: it is the gate between one click and a
   // restart, and it must be explicit rather than inferred from a pending request.
   const [confirmOpen, setConfirmOpen] = useState(false);
-  // Whether the confirmed request is in flight. Essential: it turns the confirm button
-  // non-repeatable while the same deploy is already running.
-  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -134,24 +238,8 @@ export default function DeployReadiness({
     return () => window.clearInterval(timer);
   }, [load]);
 
-  const confirmAndDeploy = useCallback(async () => {
-    if (submitting) {
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await deploy();
-      setConfirmOpen(false);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [deploy, load, submitting]);
-
   if (error !== null) {
-    return compact ? null : (
+    return (
       <p role="status" data-testid="deploy-readiness" data-status="unavailable" className="text-xs text-muted-foreground">
         {t('cockpit.deployUnavailable', { reason: error })}
       </p>
@@ -159,11 +247,6 @@ export default function DeployReadiness({
   }
 
   if (reading === null) {
-    return null;
-  }
-
-  // The session page only carries deployment news when there is some.
-  if (compact && reading.status === 'fresh') {
     return null;
   }
 
@@ -205,11 +288,7 @@ export default function DeployReadiness({
     <section
       data-testid="deploy-readiness"
       data-status={reading.status}
-      className={
-        compact
-          ? 'relative shrink-0 border-b border-border/60 bg-muted/40 px-3 py-1.5 text-xs'
-          : 'relative flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs'
-      }
+      className="relative flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs"
       aria-label={t('cockpit.deployStatus')}
     >
       <span data-testid="deploy-status" className="text-foreground">
@@ -244,55 +323,16 @@ export default function DeployReadiness({
       )}
 
       {confirmOpen && (
-        <div
-          data-testid="deploy-confirm-panel"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('cockpit.deployConfirmTitle')}
-          className="absolute inset-x-0 top-full z-30 mt-2 rounded-lg border border-border bg-card p-3 shadow-lg"
-        >
-          <p className="text-sm font-medium">{t('cockpit.deployConfirmTitle')}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t('cockpit.deployConfirmBody')}</p>
-          {reading.pendingCommits.length === 0 ? (
-            <p className="mt-1 text-xs text-muted-foreground" data-testid="deploy-no-commits">
-              {t('cockpit.deployNoCommits')}
-            </p>
-          ) : (
-            <ul className="mt-1 max-h-40 space-y-1 overflow-auto" data-testid="deploy-commits">
-              {reading.pendingCommits.map((commit) => (
-                <li key={commit.sha} data-testid="deploy-commit" className="text-xs">
-                  <code className="rounded bg-muted px-1">{shortSha(commit.sha)}</code>{' '}
-                  {commit.subject}
-                  {commit.taskId !== null && (
-                    <span className="ml-1 text-muted-foreground">
-                      {t('cockpit.deployCommitTask', { task: commit.taskId })}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="mt-2 text-xs text-muted-foreground">{t('cockpit.deployConfirmRestartHint')}</p>
-          <div className="mt-2 flex justify-end gap-2">
-            <button
-              type="button"
-              data-testid="deploy-cancel"
-              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
-              onClick={() => setConfirmOpen(false)}
-            >
-              {t('cockpit.deployCancel')}
-            </button>
-            <button
-              type="button"
-              data-testid="deploy-confirm"
-              disabled={submitting}
-              className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-              onClick={() => void confirmAndDeploy()}
-            >
-              {t('cockpit.deployConfirm')}
-            </button>
-          </div>
-        </div>
+        <DeployConfirmDialog
+          pendingCommits={reading.pendingCommits}
+          deploy={deploy}
+          onCancel={() => setConfirmOpen(false)}
+          onDeployed={() => {
+            setConfirmOpen(false);
+            void load();
+          }}
+          onError={setError}
+        />
       )}
     </section>
   );

@@ -1053,5 +1053,20 @@
     "blockedReason": "Unlanded reason: {{reason}}",
     "liveNotice": "{{taskId}} is now live",
     "unavailable": "The task chain is unavailable: {{reason}}"
+  },
+  "notices": {
+    "dismiss": "Dismiss",
+    "more": "{{n}} more",
+    "inboxTitle": "Notices",
+    "dismissedGroup": "Dismissed",
+    "deploy": {
+      "pendingBuild": {
+        "title": "Deployment changes are built but not running",
+        "action": "Build and restart"
+      },
+      "failed": {
+        "title": "The last build or restart failed"
+      }
+    }
   }
 }

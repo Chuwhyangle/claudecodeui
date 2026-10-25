@@ -121,11 +121,9 @@ type ChatInterfaceProps = {
    */
   onRevealNavigate?: (reveal: UiNavigateReveal) => boolean;
   /**
-   * The line mounted above the transcript, supplied by the workspace. The deployment strip
-   * lives in the cockpit module, and chat must not import another feature module that
-   * exports this very component — that would close a chat ↔ cockpit module cycle and make
-   * the chat barrel resolve partially during tests. So the workspace, which already imports
-   * both modules' barrels, hands the node down.
+   * The notice slot mounted above the transcript, supplied by the workspace. The notices module
+   * owns it; chat must not import that feature module's slot itself (char supplied by the
+   * workspace, which already imports both barrels), so the workspace hands the node down.
    */
   noticeSlot?: React.ReactNode;
 };
@@ -1137,10 +1135,8 @@ function ChatInterface({
           <SessionTaskChain projectId={selectedProject.projectId} sessionId={chainSessionId} />
         )}
 
-        {/* Deployment news while it is news: the compact strip renders nothing when the running
-            build is current, so the transcript's first row is not spent on an all-green line.
-            A person who asked 「重启成功了吗」 sees the answer here without leaving the chat.
-            Supplied by the workspace rather than imported here — see `noticeSlot`. */}
+        {/* The interrupt slot: at most one notice, the rest folded behind a count. Supplied by
+            the workspace rather than imported here — see `noticeSlot`. */}
         {noticeSlot}
 
         <MarkdownWorkspaceContext.Provider value={markdownWorkspaceValue}>

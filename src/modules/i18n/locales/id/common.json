@@ -1045,5 +1045,20 @@
     "blockedReason": "Alasan belum mendarat: {{reason}}",
     "liveNotice": "{{taskId}} kini aktif",
     "unavailable": "Rantai tugas tidak tersedia: {{reason}}"
+  },
+  "notices": {
+    "dismiss": "Abaikan",
+    "more": "{{n}} lagi",
+    "inboxTitle": "Notifikasi",
+    "dismissedGroup": "Diabaikan",
+    "deploy": {
+      "pendingBuild": {
+        "title": "Perubahan penerapan sudah dibangun tetapi belum berjalan",
+        "action": "Bangun dan mulai ulang"
+      },
+      "failed": {
+        "title": "Build atau restart terakhir gagal"
+      }
+    }
   }
 }
