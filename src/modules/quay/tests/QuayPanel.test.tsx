@@ -1203,53 +1203,45 @@ test('AC5: a cached snapshot shows its age, marks an over-threshold reading stal
 });
 
 /**
- * The pulse strip is the panel's always-visible reading; the full Loop pulse card below stays
- * the expanded view. This case pins the two facts the cockpit depends on: the strip is actually
- * mounted at the top of the loaded panel, and activating a mark emits the TASK address (the
- * fleet registry id segment, never the CloudCLI project id).
+ * The Quay tab draws its time readings in exactly three charts — Loop pulse, Tests, Fan-in.
+ * A fourth time base (the pulse strip) used to sit above them; the user removed it from this
+ * tab (the cockpit keeps its own copy). This case pins both halves: no strip is mounted, and
+ * the three charts the tab is supposed to show are all still there. Re-adding the strip block
+ * above the grid turns the first assertion red.
  */
-test('the loaded panel opens with the pulse strip, and a task mark focuses its quay address', () => {
-  const focused: string[] = [];
-  const snapshot: QuaySnapshot = {
+test('the loaded panel draws its three charts with no pulse strip above them', () => {
+  // Anchored where SNAPSHOT's own rounds are: the shared window is taken from the lane
+  // reading, so a `now` elsewhere would push the Tests and Fan-in rounds out of it and those
+  // cards would draw their empty states instead of their timelines.
+  const nowMs = Date.UTC(2026, 9, 1, 23, 59, 0);
+  const withGantt: QuaySnapshot = {
     ...SNAPSHOT,
-    inFlight: [
-      {
-        taskId: 'task-live',
-        phase: 'implementing',
-        startedAt: '2026-10-01T23:40:00.000Z',
-        lastHeartbeat: '2026-10-01T23:59:00.000Z',
-        workerPid: 41,
-      },
-    ],
-    blockers: [
-      {
-        taskId: 'task-blocked',
-        since: '2026-10-01T20:00:00.000Z',
-        signature: 'AC 未全勾 :: checked #/#',
-        occurrences: 2,
-        dependents: ['task-e', 'task-f'],
-      },
-    ],
+    gantt: {
+      windowHours: 3,
+      nowMs,
+      overflow: 0,
+      lanes: [[
+        {
+          taskId: 'gap-gantt-task',
+          runId: 'worker-gap-gantt-task',
+          startMs: nowMs - 1800_000,
+          endMs: nowMs,
+          phase: 'implementing',
+          finalState: null,
+          fanInOutcome: null,
+        },
+      ]],
+    },
   };
 
-  const { getByTestId, getAllByTestId } = render(
-    <QuayPanel
-      projectId={CLOUD_PROJECT_ID}
-      view={{ status: 'loaded', snapshot }}
-      onRefresh={() => {}}
-      onFocusTask={(uri) => focused.push(uri)}
-    />,
-  );
+  const { getByTestId, queryByTestId } = renderView({ status: 'loaded', snapshot: withGantt }, null);
 
-  getByTestId('quay-panel-pulse-strip');
-  assert.match(getByTestId('quay-panel-pulse-strip-blocker-impact').textContent ?? '', /⛔ 2/);
+  // `assert.ok(x === null, msg)` rather than `assert.equal(x, null)`: when this fails the
+  // actual value is a DOM element, and assert.equal would try to serialise the whole subtree
+  // into its failure message (OOM) instead of printing the message below.
+  assert.ok(queryByTestId('quay-panel-pulse') === null, 'the Quay tab must not mount the pulse strip');
 
-  const line = getAllByTestId('quay-panel-pulse-strip-inflight-line')[0];
-  assert.ok(line, 'the in-flight reading must draw a line');
-  line.click();
-  assert.deepEqual(focused, ['quay://claudecodeui/task/task-live']);
-
-  focused.length = 0;
-  getAllByTestId('quay-panel-pulse-strip-blocker-segment')[0].click();
-  assert.deepEqual(focused, ['quay://claudecodeui/task/task-blocked']);
+  getByTestId('quay-gantt');
+  getByTestId('quay-panel-tests-timeline');
+  getByTestId('quay-panel-fanin-timeline');
 });

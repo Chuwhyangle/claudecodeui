@@ -14,7 +14,6 @@ import type {
 import { cn } from '@/shared/utils';
 import type { QuayPanelView } from '@/modules/quay/hooks/useQuayStatus';
 import LoopPulseGantt from '@/modules/quay/LoopPulseGantt';
-import PulseStrip from '@/modules/quay/PulseStrip';
 import { formatQuayUri } from '@/modules/quay/quayUri';
 import TimelineBar from '@/modules/quay/TimelineBar';
 
@@ -45,10 +44,10 @@ type QuayPanelProps = {
    */
   ganttRefreshing?: boolean;
   /**
-   * Focuses the task behind a pulse-strip mark, addressed as `quay://<fleetProjectId>/task/<id>`.
-   * Omitted on a surface with no focus model (the session page's Quay tab), where the strip is
-   * then display-only. The address is minted from the snapshot's fleet registry id, never from
-   * the CloudCLI project id (the fleet could not dereference that).
+   * Accepted but no longer consumed by this panel. The cockpit's board surface still mounts
+   * `QuayPanel` with a focus handler, so the prop stays on the type; the panel has no
+   * focusable mark of its own since its strip was removed (the cockpit fleet tiles keep
+   * their own copy and their own handler).
    */
   onFocusTask?: (uri: string) => void;
 };
@@ -833,7 +832,6 @@ export default function QuayPanel({
   windowHours,
   onWindowChange,
   ganttRefreshing = false,
-  onFocusTask,
 }: QuayPanelProps) {
   if (view.status === 'not-configured') {
     return (
@@ -884,7 +882,6 @@ export default function QuayPanel({
       windowHours={windowHours}
       onWindowChange={onWindowChange}
       ganttRefreshing={ganttRefreshing}
-      onFocusTask={onFocusTask}
     />
   );
 }
@@ -898,7 +895,6 @@ function LoadedQuayPanel({
   windowHours,
   onWindowChange,
   ganttRefreshing,
-  onFocusTask,
 }: {
   projectId: string;
   snapshot: QuaySnapshot;
@@ -907,7 +903,6 @@ function LoadedQuayPanel({
   windowHours?: number;
   onWindowChange?: (hours: number) => void;
   ganttRefreshing: boolean;
-  onFocusTask?: (uri: string) => void;
 }) {
   // This panel only renders for a project that has a `.quay/config.yml`, so a null
   // driver means `driver status --json` did not answer — never "not configured",
@@ -929,16 +924,6 @@ function LoadedQuayPanel({
   const generatedMs = toEpochMs(snapshot.generatedAt);
   const cachedAgeMs = snapshot.cached && generatedMs !== null ? Math.max(0, Date.now() - generatedMs) : null;
   const cachedStale = cachedAgeMs !== null && cachedAgeMs > CACHED_STALE_AFTER_MS;
-
-  // The strip's focus action addresses the TASK, and the only project segment a `quay://`
-  // reference may carry is the fleet registry id. An unregistered project has no address to
-  // mint, so the strip stays display-only there rather than emitting an undereferenceable URI.
-  const fleetProjectId = snapshot.fleetProjectId ?? null;
-  const focusPulseTask =
-    onFocusTask === undefined || fleetProjectId === null
-      ? undefined
-      : (taskId: string) =>
-          onFocusTask(formatQuayUri({ type: 'task', project: fleetProjectId, id: taskId, ac: null }));
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4" data-testid="quay-panel-loaded">
@@ -992,25 +977,6 @@ function LoadedQuayPanel({
             </a>
           )}
         </div>
-      </div>
-
-      {/*
-        THE PULSE STRIP SITS AT THE TOP OF THE PANEL. The four dense rows are the always-visible
-        reading (the panel's equivalent of the cockpit tile's strip); the full Loop pulse card
-        below stays the expanded view. One window switch lives on the strip (6/24/72 h) and is
-        independent of the gantt card's own data window.
-      */}
-      <div className="mb-3" data-testid="quay-panel-pulse">
-        <PulseStrip
-          inFlight={snapshot.inFlight}
-          gantt={snapshot.gantt ?? null}
-          tests={snapshot.tests}
-          fanIn={snapshot.fanIn}
-          blockers={snapshot.blockers ?? null}
-          generatedAt={snapshot.generatedAt}
-          onFocusTask={focusPulseTask}
-          testId="quay-panel-pulse-strip"
-        />
       </div>
 
       {/*

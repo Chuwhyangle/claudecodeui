@@ -1572,34 +1572,7 @@ describe('pulse strip', () => {
     expect(focuses.map((event) => event.uri)).toEqual(['quay://claudecodeui/task/task-live']);
   });
 
-  it('clicking a mark on the board’s strip focuses that task (its declared address)', async () => {
-    // Two in-flight tasks: the rail focuses the first on load, so clicking the second's pulse
-    // line is observable as a focus CHANGE rather than a no-op that already held.
-    const twoTasks: QuaySnapshot = {
-      ...SNAPSHOT,
-      inFlight: [
-        ...(SNAPSHOT.inFlight ?? []),
-        {
-          taskId: 'task-b',
-          phase: 'fan-in',
-          startedAt: '2026-10-22T22:00:00.000Z',
-          lastHeartbeat: '2026-10-22T23:58:00.000Z',
-          workerPid: 4321,
-        },
-      ],
-    };
-    apiMock.quaySnapshot.mockResolvedValue(okResponse(twoTasks));
-
-    renderCockpit('/cockpit?view=board&project=p1');
-
-    await screen.findByTestId('cockpit-board-rail');
-    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/task/task-a'));
-
-    const lines = await screen.findAllByTestId('quay-panel-pulse-strip-inflight-line');
-    const second = lines.find((line) => line.getAttribute('data-phase') === 'fan-in');
-    expect(second).toBeTruthy();
-    fireEvent.click(second!);
-
-    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/task/task-b'));
-  });
+  // The board surface used to carry its own strip, and this suite drove its marks to prove the
+  // focus was a CHANGE. That strip is gone from the Quay panel (the fleet tiles keep theirs,
+  // covered above), so there is no board mark left to click.
 });
