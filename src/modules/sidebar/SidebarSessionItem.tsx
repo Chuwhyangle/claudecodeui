@@ -400,7 +400,7 @@ function SidebarSessionItem({
           href={`/session/${session.id}`}
           className={cn(
             buttonVariants({ variant: 'ghost' }),
-            'h-auto w-full justify-start rounded-md border bg-card p-2 pr-11 text-left font-normal transition-all duration-150',
+            'h-auto w-full justify-start rounded-md border bg-card p-2 pr-[4.25rem] text-left font-normal transition-all duration-150',
             isSelected ? 'border-primary/20 bg-primary/5' : 'border-border/30',
             !isSelected && isProcessing
               ? 'border-border/60 bg-muted/20 hover:bg-muted/25'
@@ -480,7 +480,8 @@ function SidebarSessionItem({
         </a>
 
         {/* 「钉到观察墙 / 取消」 sits beside the options trigger, always visible: pinning a
-            session is a one-click action, not a menu item. */}
+            session is a one-click action, not a menu item. The row's pr-[4.25rem] reserves
+            its slot (right-9 + 24px + gap), so the star never overlaps the age. */}
         <WatchPinToggle
           uri={formatSessionUri(session.id)}
           testId="cockpit-session-watch-toggle"
