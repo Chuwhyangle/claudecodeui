@@ -126,6 +126,14 @@ export type QuayTaskEventsDependencies = {
     dirPath: string,
     onChange: (eventType: string, filename: string | null) => void,
   ): QuayDirWatcher | null;
+  /**
+   * Whether the watched directory is still at its path. Injected (default: assume present) so
+   * the service stays filesystem-free; production binds `fs.existsSync`. It answers the one
+   * event `fs.watch` cannot express: the watched directory ITSELF was renamed away, which
+   * arrives as a `rename` of the directory's own basename while the watcher keeps following
+   * the moved inode.
+   */
+  directoryExists?(dirPath: string): boolean;
   /** The lanes-cache invalidation seam, called when `worker-dispatch.json` changes. */
   onDispatchFileChanged(projectId: string): void;
   log?(message: string): void;
@@ -338,6 +346,7 @@ export function createQuayTaskEvents(
   const retryCapMs = dependencies.retryCapMs ?? DEFAULT_RETRY_CAP_MS;
   const commandTimeoutMs = dependencies.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
   const seedLookbackMs = dependencies.seedLookbackMs ?? DEFAULT_SEED_LOOKBACK_MS;
+  const directoryExists = dependencies.directoryExists ?? (() => true);
 
   const monitors = new Map<string, Monitor>();
   /** Projects whose WATCHER failed: they fall back to the TTL path permanently for the process. */
@@ -420,9 +429,32 @@ export function createQuayTaskEvents(
     _eventType: string,
     filename: string | null,
   ): void => {
-    if (filename === null) {
-      // The platform omitted the name: it cannot be filtered, so treat it as a status change.
-      scheduleDebouncedPoll(monitor);
+    const dirName = path.basename(monitor.quayDir);
+    if (filename === null || filename === dirName) {
+      // `fs.watch` reports the removal/rename of the WATCHED DIRECTORY itself as a `rename`
+      // of its own basename (measured: `EVENT rename "<dir basename>"`), and keeps following
+      // the moved inode. That is not a status event: re-check the path and either re-watch it
+      // (it still exists) or go off (this project falls back to the TTL path and the next read
+      // re-activates it).
+      if (!directoryExists(monitor.quayDir)) {
+        log(
+          `quay task events: ${monitor.quayDir} no longer exists; `
+          + 'the monitor is off and this project falls back to the TTL path',
+        );
+        disposeMonitor(monitor);
+        return;
+      }
+      if (filename === null) {
+        // The platform omitted the name and the directory is still there: treat it as a
+        // status change, because it cannot be filtered.
+        scheduleDebouncedPoll(monitor);
+        return;
+      }
+      // Renamed and re-created at the same path: the old watcher follows the OLD inode, so
+      // replace it. `ensureMonitored` opens a fresh watcher on the current directory.
+      log(`quay task events: ${monitor.quayDir} was replaced; re-watching it`);
+      disposeMonitor(monitor);
+      void ensureMonitored(monitor.projectId).catch(() => undefined);
       return;
     }
     if (filename === TASK_STATUS_EVENTS_FILE) {

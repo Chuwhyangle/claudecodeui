@@ -413,6 +413,7 @@ function eventsHarness(options: {
   watchPathFactory?: WatchHarness['watchPath'];
   maxActiveMonitors?: number;
   onDispatchFileChanged?: (projectId: string) => void;
+  directoryExists?: (dirPath: string) => boolean;
 }): EventsHarness {
   const clock = options.clock ?? createFakeClock(0);
   const watch = options.watch ?? createWatchHarness();
@@ -465,6 +466,7 @@ function eventsHarness(options: {
       return options.respond([...args], calls.length - 1);
     },
     watchPath: options.watchPathFactory ?? watch.watchPath,
+    directoryExists: options.directoryExists,
     onDispatchFileChanged: (projectId) => {
       dispatchChanges.push(projectId);
       options.onDispatchFileChanged?.(projectId);
@@ -1020,6 +1022,25 @@ test('watcher: a project without a .quay directory is off and does not throw', a
   await harness.service.ensureMonitored('project-1');
   assert.equal(harness.service.readMonitorState('project-1').state, 'off');
   assert.equal(harness.calls.length, 0);
+});
+
+test('watcher: renaming the watched .quay directory turns the monitor off instead of following the moved inode', async () => {
+  // Measured fs.watch behaviour: renaming the watched directory emits `rename` with the
+  // directory's own basename, and the watcher keeps following the moved inode. Reporting
+  // `off` (rather than staying silently `active` on a directory that no longer exists) is
+  // what keeps the TTL path honest; a later read re-activates a fresh watcher.
+  const harness = eventsHarness({
+    projects: singleProject(),
+    respond: () => ({ ok: true, code: 0, stdout: page([]), stderr: '' }),
+    directoryExists: () => false,
+  });
+  await harness.service.ensureMonitored('project-1');
+  const watcher = harness.watch.closable[0];
+  harness.watch.emit(QUAY_DIR, 'rename', '.quay');
+
+  assert.equal(harness.service.readMonitorState('project-1').state, 'off');
+  assert.equal(watcher.closed, true);
+  assert.match(harness.logs.join('\n'), /no longer exists/);
 });
 
 test('watcher: the 17th active project evicts the least-recently-used monitor', async () => {

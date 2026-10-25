@@ -266,6 +266,9 @@ export const quayTaskEvents = createQuayTaskEvents({
   capabilities: quayCapabilities,
   runCommand: (cwd, args) => quayService.runQuayCommand(cwd, args),
   watchPath: watchQuayDirectory,
+  // `fs.watch` keeps following a directory that was renamed away; this is how the service
+  // tells "the .quay directory itself moved" from "a carrier inside it changed".
+  directoryExists: (dirPath) => fs.existsSync(dirPath),
   onDispatchFileChanged: (projectId) => quayService.invalidateLanesForProject(projectId),
   log: (message) => console.log(message),
 });
