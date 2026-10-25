@@ -82,7 +82,10 @@ function SchedulePicker({ onCommit }: { onCommit: (scheduledFor: Date) => void }
           type="datetime-local"
           value={customValue}
           onChange={(event) => setCustomValue(event.target.value)}
-          className="mt-1 w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground"
+          // `min-w-0` for the same reason as the surface: a native date/time input
+          // has an intrinsic minimum width of its own, and without this it widens
+          // the menu past the anchor's `maxWidth` on a phone.
+          className="mt-1 w-full min-w-0 max-w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground"
         />
         <button
           type="button"
