@@ -770,6 +770,100 @@ describe('accessibility and adoption readout', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The empty box's height while the strip is on screen
+// ---------------------------------------------------------------------------
+
+/**
+ * The strip is a flow row below the textarea, so an empty box that keeps the textarea's
+ * two-row default puts two blank lines between the box top and the chips (the placeholder
+ * is blank in this mode). The box therefore drops to one row exactly while the strip is
+ * its content; text and the no-chip empty state keep the default and the auto-height path.
+ */
+describe('the strip owns the empty box\'s single line', () => {
+  const textareaOf = (view: ReturnType<typeof render>) => {
+    const textarea = view.container.querySelector('textarea');
+    assert.ok(textarea, 'the composer must render a textarea');
+    return textarea;
+  };
+
+  /**
+   * The real composer state under the real composer, so the textarea is wired to the
+   * auto-height path (`resizeTextarea`) the interface uses rather than to a stub.
+   */
+  const Harness = () => {
+    const state = useChatComposerState({
+      selectedProject: PROJECT,
+      selectedSession: SESSION,
+      currentSessionId: SESSION.id,
+      provider: 'claude',
+      permissionMode: 'default',
+      cyclePermissionMode: () => undefined,
+      resolvePermissionModeForProvider: () => 'default' as PermissionMode,
+      currentProviderModel: 'test-model',
+      currentProviderEffort: 'medium',
+      isLoading: false,
+      canAbortSession: false,
+      tokenBudget: null,
+      sendMessage: () => undefined,
+      scrollToBottom: () => undefined,
+      addMessage: () => undefined,
+      setIsUserScrolledUp: () => undefined,
+      setPendingPermissionRequests: () => undefined,
+    });
+
+    return React.createElement(ChatComposer, {
+      ...composerBaseProps(),
+      input: state.input,
+      hasInput: Boolean(state.input.trim()),
+      onInputChange: state.handleInputChange,
+      onTextareaKeyDown: state.handleKeyDown,
+      onTextareaClick: state.handleTextareaClick,
+      onTextareaInput: state.handleTextareaInput,
+      textareaRef: state.textareaRef,
+      inputHighlightRef: state.inputHighlightRef,
+      onClearInput: state.handleClearInput,
+      onSubmit: state.handleSubmit,
+      chipStrip: state.chipStrip,
+    } as unknown as React.ComponentProps<typeof ChatComposer>);
+  };
+
+  it('AC1: the empty textarea is one row with chips, and the default without them', () => {
+    const { view, rerender } = renderComposer();
+    assert.ok(view.getByRole('listbox'), 'the strip is on screen in this mode');
+    assert.equal(textareaOf(view).getAttribute('rows'), '1');
+
+    // No chips: the empty box keeps the browser default (two rows) and its placeholder.
+    rerender({ chipStrip: chipStripProps({ visible: false }) });
+    const withoutChips = textareaOf(view);
+    assert.equal(withoutChips.getAttribute('rows'), null, 'rows must not be forced without chips');
+    assert.equal(withoutChips.rows, 2, 'the textarea keeps the browser-default row count');
+    assert.equal(withoutChips.getAttribute('placeholder'), 'Ask anything');
+  });
+
+  it('AC2: typed text restores the default rows and auto-height; clearing returns to one row', () => {
+    seedHistory(SEED_HISTORY);
+    const view = render(React.createElement(Harness));
+    const textarea = textareaOf(view);
+    assert.ok(view.getByRole('listbox'), 'the seeded strip is on screen');
+    assert.equal(textarea.getAttribute('rows'), '1');
+
+    act(() => {
+      fireEvent.change(textarea, { target: { value: '第一行\n第二行' } });
+    });
+    assert.equal(textarea.getAttribute('rows'), null, 'a typed draft takes back the default rows');
+    // jsdom reports scrollHeight 0, so the untouched auto-height path writes its 22px floor.
+    assert.equal(textarea.style.height, '22px', 'the auto-height write still runs for a typed draft');
+
+    act(() => {
+      fireEvent.change(textarea, { target: { value: '' } });
+    });
+    assert.equal(textarea.getAttribute('rows'), '1', 'clearing returns to the single-line box');
+    assert.equal(textarea.style.height, 'auto', 'the empty box is handed back to the default height');
+    assert.ok(view.getByRole('listbox'), 'the strip is back with the empty box');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The merged strip: sources, labels, preview and visibility
 // ---------------------------------------------------------------------------
 

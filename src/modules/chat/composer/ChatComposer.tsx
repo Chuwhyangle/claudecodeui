@@ -642,6 +642,14 @@ export default function ChatComposer({
     bodyRef: composerBodyRef,
   });
   const inlineChipActive = inlineQuoteChip.active;
+  // The strip is the only content of an empty box, so the box itself drops to a single line and
+  // the strip's own flow row below it supplies the height. Without this the textarea keeps its
+  // two-row default (`rows=2`) above the strip, and since the placeholder is blank in that mode
+  // those two rows are pure blank space between the box top and the chips. Anything else — typed
+  // text, the inline quote-chip flow, or no chips at all — keeps the normal default and the
+  // auto-growth path in `useTextareaInteractionState`.
+  const suggestionChipsOwnEmptyLine =
+    showSuggestionChips && !inlineChipActive && input === '';
   // Starting the next recording is the user answering the last failure, so it dismisses the notice.
   // Wrapped here rather than inside the button because the failing attempt's message is the
   // composer's state: the button renders what it is handed and owns no memory of the last failure.
@@ -682,10 +690,10 @@ export default function ChatComposer({
     : t(composerDock.stopReasonKey, { defaultValue: 'Stop is unavailable while the server is unreachable' });
 
   const hasQueuedDraft = Boolean(queuedDraft);
-  // The chips occupy the textarea's one empty line. While they are on screen the
-  // placeholder is blank so the two are not drawn over each other; the chips
-  // themselves are absolutely positioned and add no row. One listbox carries all
-  // three sources, so the strip reads a single prop.
+  // The chips are the empty box's content. While they are on screen the placeholder is blank so
+  // the two are not drawn over each other, and the textarea drops to one line (see
+  // `suggestionChipsOwnEmptyLine`); the strip is a flow row beneath it, adding its own height.
+  // One listbox carries all three sources, so the strip reads a single prop.
   const canQueueDraft = isLoading && Boolean(input.trim() || attachedFiles.length > 0);
   // The same button press, two different outcomes. For a per-run session the text waits in this
   // client's queue until the turn ends, which is why the button becomes a queue arrow and the hint
@@ -1096,6 +1104,11 @@ export default function ChatComposer({
               // mirror layer carries it instead (see `useInlineQuoteChip`).
               data-inline-chip-mode={inlineChipActive ? 'true' : undefined}
               placeholder={showSuggestionChips ? '' : placeholder}
+              // One line while the strip below is the empty box's content: the two blank rows the
+              // `rows=2` default would reserve are what put a block of space above the chips. The
+              // map back to the default is `undefined` (not 2) so the browser default is never
+              // restated; the `height` written by `resizeTextarea` is left untouched.
+              rows={suggestionChipsOwnEmptyLine ? 1 : undefined}
               aria-activedescendant={
                 showSuggestionChips && !inlineChipActive && chipStripSelectedIndex !== null
                   ? suggestionOptionId(chipStripListId, chipStripSelectedIndex)
