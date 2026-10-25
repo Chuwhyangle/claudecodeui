@@ -2,7 +2,7 @@
 id: gap-chat-banners-paused-pending-signal-redesign
 title: 暂停 Chat 页常驻状态 banner：摘掉 NoticeSlot 与 SessionTaskChain 的挂载（驾驶舱部署条与服务端
   notices 保留）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
