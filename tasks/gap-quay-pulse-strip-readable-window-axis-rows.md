@@ -1,7 +1,7 @@
 ---
 id: gap-quay-pulse-strip-readable-window-axis-rows
 title: Quay 脉搏条：6h 可点、行有可见标签、时间轴与带时长的任务条
-status: todo
+status: ready
 labels:
   - gap
   - defect
