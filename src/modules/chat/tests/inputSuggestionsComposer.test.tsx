@@ -1303,6 +1303,72 @@ describe('the strip row follows the viewport', () => {
       );
     }
   });
+
+  // The narrow chip is one line of any length: it neither wraps nor truncates by CSS,
+  // so a swipe reads it to the last character. The only bound is a label cap (80 code
+  // points) that exists for text with no natural limit — a quoted passage — and that
+  // leaves the complete text in `title`.
+  const NARROW_LABEL_CAP = 80;
+  const LONG_TEXT = '长'.repeat(200);
+
+  it('AC3: a narrow chip is not width-capped or CSS-truncated, so a swipe reaches its end', () => {
+    stubChipRowMatchMedia(true);
+    const seventyChars = '字'.repeat(70);
+    const view = renderMergedChips({ chips: buildSuggestionChips({ modelChips: [seventyChars] }) });
+
+    const option = view.getByRole('option');
+    const tokens = option.className.split(/\s+/).filter(Boolean);
+    assert.ok(tokens.includes('shrink-0'), `the chip keeps its own width; class read ${option.className}`);
+    assert.ok(tokens.includes('whitespace-nowrap'), `the chip stays on one line; class read ${option.className}`);
+    assert.equal(tokens.includes('truncate'), false, 'no CSS ellipsis: the text has to be swipeable');
+    assert.equal(tokens.includes('max-w-[85%]'), false, 'no width cap: a long chip may be wider than the row');
+    assert.equal(option.textContent, seventyChars, 'every character of a 70-character chip is drawn');
+  });
+
+  it('AC4: a narrow label is capped at 80 code points with an ellipsis and the full text in title', () => {
+    stubChipRowMatchMedia(true);
+    const exactlyCap = '甲'.repeat(NARROW_LABEL_CAP);
+    const emojiRun = '😀'.repeat(NARROW_LABEL_CAP + 5);
+    const view = renderMergedChips({
+      chips: buildSuggestionChips({ modelChips: [LONG_TEXT, exactlyCap, emojiRun] }),
+    });
+
+    const [long, exact, emoji] = view.getAllByRole('option');
+    assert.equal(long.textContent, `${'长'.repeat(NARROW_LABEL_CAP)}…`, 'a 200-character label is cut at 80 plus an ellipsis');
+    assert.equal(long.getAttribute('title'), LONG_TEXT, 'the complete text stays in title');
+    assert.equal(exact.textContent, exactlyCap, 'a label of exactly 80 is left whole');
+    assert.equal(
+      Array.from(emoji.textContent ?? '').length,
+      NARROW_LABEL_CAP + 1,
+      'the cap counts code points, so a surrogate pair is never cut in half',
+    );
+  });
+
+  it('AC5: a quoted chip caps only the quoted text, not its prefix, and still inserts the whole passage', () => {
+    stubChipRowMatchMedia(true);
+    const onAccept = vi.fn();
+    const view = renderMergedChips({
+      chips: buildSuggestionChips({ quotedText: LONG_TEXT }),
+      onAccept,
+    });
+
+    const option = view.getByRole('option');
+    assert.equal(option.textContent, `Quote: ${'长'.repeat(NARROW_LABEL_CAP)}…`);
+    fireEvent.click(option);
+    assert.equal(onAccept.mock.calls.length, 1);
+    assert.equal(
+      (onAccept.mock.calls[0][0] as { text: string }).text,
+      LONG_TEXT,
+      'the chip handed to onAccept still carries the complete passage',
+    );
+  });
+
+  it('AC6: a wide row does not cap the label (its CSS two-line clamp is unchanged)', () => {
+    stubChipRowMatchMedia(false);
+    const view = renderMergedChips({ chips: buildSuggestionChips({ modelChips: [LONG_TEXT] }) });
+
+    assert.equal(view.getByRole('option').textContent, LONG_TEXT);
+  });
 });
 
 type MergedArgs = ReturnType<typeof baseSuggestionArgs> & {

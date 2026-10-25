@@ -48,6 +48,28 @@ const NARROW_CHIP_ROW_QUERY = '(max-width: 480px), (pointer: coarse)';
  */
 export const SUGGESTION_CHIP_PASS_THROUGH_PX = 44;
 
+/**
+ * The most code points a narrow chip's label draws before an ellipsis.
+ *
+ * The narrow row is one line that scrolls sideways and does not truncate by CSS: a
+ * chip is as wide as its text, and a swipe reads it to the last character. Most
+ * sources are short by construction (a habit chip is at most 60 characters, a model
+ * chip is clipped server-side to `maxChipChars`, 120 by default) but a quoted
+ * passage has no natural limit, and a thousand-character chip would be a thousand
+ * characters of swiping. This is the bound for that case; the complete text stays
+ * in `title` and, for a quoted chip, in what `onAccept` inserts. The wide row does
+ * not use it — its two-line CSS clamp is unchanged.
+ */
+const NARROW_LABEL_MAX_CODE_POINTS = 80;
+
+/** Code points, not UTF-16 units, so a surrogate pair is never cut in half. */
+function capNarrowLabel(text: string): string {
+  const codePoints = Array.from(text);
+  return codePoints.length > NARROW_LABEL_MAX_CODE_POINTS
+    ? `${codePoints.slice(0, NARROW_LABEL_MAX_CODE_POINTS).join('')}…`
+    : text;
+}
+
 const readNarrowChipRow = (): boolean => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false;
@@ -111,10 +133,12 @@ function useNarrowChipRow(): boolean {
  * - Narrow or touch-only is ONE line that scrolls sideways (`flex-nowrap
  *   overflow-x-auto`): a phone there has ~400-450px of visible height once its
  *   keyboard is up, so a second chip line costs more of the transcript than it is
- *   worth. Each chip is `shrink-0 whitespace-nowrap` and clamps to `max-w-[85%]`,
- *   which leaves the next chip peeking and so advertises the swipe; the strip's own
- *   scrollbar is hidden and the native touch pan does the moving. The complete text
- *   is still in `title`.
+ *   worth. Each chip is `shrink-0 whitespace-nowrap` and as wide as its text — no
+ *   width cap, no CSS ellipsis — so a swipe reads it to the end; whichever chip
+ *   straddles the right edge is cut off there, which is itself the cue that the row
+ *   scrolls. The strip's own scrollbar is hidden and the native touch pan does the
+ *   moving. Only the label cap (`NARROW_LABEL_MAX_CODE_POINTS`) bounds a chip, and
+ *   the complete text is still in `title`.
  *
  * There is deliberately no second-line preview: hovering or keyboard-selecting a
  * chip only highlights that chip, in either arrangement. A press on a chip
@@ -201,11 +225,11 @@ export function InputSuggestionChips({
               // the listbox wider than the composer. The cap is the row minus the
               // spacer (44px) and one gap (4px): a chip allowed the whole row would not
               // fit beside the spacer, wrap to line two, and leave line one empty.
-              // Narrow: one line per chip, truncated at 85% of the row so the next
-              // chip peeks and the horizontal swipe is discoverable; the chip never
-              // shrinks, so the track overflows and actually scrolls.
+              // Narrow: one line per chip at the width of its text. It never shrinks
+              // and has no cap, so the track overflows and actually scrolls, and a
+              // swipe reaches the last character.
               isNarrowRow
-                ? 'max-w-[85%] shrink-0 truncate whitespace-nowrap'
+                ? 'shrink-0 whitespace-nowrap'
                 : 'line-clamp-2 min-w-0 max-w-[calc(100%-48px)] break-words',
               'hover:border-primary/60 hover:text-foreground',
               // Every source draws the same dashed frame: the row has no legend,
@@ -217,12 +241,15 @@ export function InputSuggestionChips({
               selectedIndex === index && 'border-primary bg-primary/10 text-foreground',
             )}
           >
-            {chip.source === 'quoted'
-              ? t('input.suggestions.quoteChip', {
-                defaultValue: 'Quote: {{text}}',
-                text: chip.text,
-              })
-              : chip.text}
+            {(() => {
+              const label = isNarrowRow ? capNarrowLabel(chip.text) : chip.text;
+              return chip.source === 'quoted'
+                ? t('input.suggestions.quoteChip', {
+                  defaultValue: 'Quote: {{text}}',
+                  text: label,
+                })
+                : label;
+            })()}
           </button>
         ))}
       </div>
