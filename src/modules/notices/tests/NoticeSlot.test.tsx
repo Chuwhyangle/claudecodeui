@@ -240,16 +240,13 @@ describe('the inbox keeps folded and dismissed entries reachable (N6)', () => {
     expect(screen.getByTestId('notice-dismissed-entry')).toBeTruthy();
   });
 
-  it('keeps the inbox reachable when every notice is dismissed', async () => {
+  it('leaves the transcript alone once every notice is dismissed', async () => {
     const dismissed = notice({ id: 'notice:dismissed' });
 
     renderSlot({ active: [], dismissed: [dismissed] });
 
-    expect(await screen.findByTestId('notice-inbox-toggle')).toBeTruthy();
-    expect(screen.queryByTestId('notice-entry')).toBeNull();
-
-    fireEvent.click(screen.getByTestId('notice-inbox-toggle'));
-    const dismissedEntry = await screen.findByTestId('notice-dismissed-entry');
-    expect(dismissedEntry).toBeTruthy();
+    // The dismissed entry stays on the server (retrievable while the slot is up), but a slot
+    // with nothing to interrupt must not spend a row of the chat page on a launcher.
+    await waitFor(() => expect(screen.queryByTestId('notice-slot')).toBeNull());
   });
 });

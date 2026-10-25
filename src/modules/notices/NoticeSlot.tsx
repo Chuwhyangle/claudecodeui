@@ -122,7 +122,10 @@ export default function NoticeSlot({
   );
 
   const [head, ...others] = visible;
-  if (head === undefined && dismissed.length === 0) {
+  // No interruptible entry, no slot: dismissing the last notice must leave the transcript alone.
+  // The inbox stays reachable through the fold line whenever the slot is up (including its
+  // 「已忽略」 group when the remaining entries are all folded).
+  if (head === undefined) {
     return null;
   }
 
@@ -135,40 +138,38 @@ export default function NoticeSlot({
       className="relative shrink-0 border-b border-border/60 bg-muted/40 px-3 py-1.5 text-xs"
       aria-label={t('notices.inboxTitle')}
     >
-      {head !== undefined && (
-        <div
-          data-testid="notice-entry"
-          data-notice-id={head.id}
-          data-severity={head.severity}
-          className="flex flex-wrap items-center gap-2"
-        >
-          <span data-testid="notice-title" className="text-foreground">
-            {t(head.title, head.params)}
-          </span>
+      <div
+        data-testid="notice-entry"
+        data-notice-id={head.id}
+        data-severity={head.severity}
+        className="flex flex-wrap items-center gap-2"
+      >
+        <span data-testid="notice-title" className="text-foreground">
+          {t(head.title, head.params)}
+        </span>
 
-          {head.primaryAction !== undefined && (
-            <button
-              type="button"
-              data-testid="notice-primary-action"
-              className="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-accent"
-              onClick={() => void openConfirm()}
-            >
-              {t(head.primaryAction.labelKey)}
-            </button>
-          )}
+        {head.primaryAction !== undefined && (
+          <button
+            type="button"
+            data-testid="notice-primary-action"
+            className="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-accent"
+            onClick={() => void openConfirm()}
+          >
+            {t(head.primaryAction.labelKey)}
+          </button>
+        )}
 
-          {isDismissible(head) && (
-            <button
-              type="button"
-              data-testid="notice-dismiss"
-              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
-              onClick={() => handleDismiss(head)}
-            >
-              {t('notices.dismiss')}
-            </button>
-          )}
-        </div>
-      )}
+        {isDismissible(head) && (
+          <button
+            type="button"
+            data-testid="notice-dismiss"
+            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
+            onClick={() => handleDismiss(head)}
+          >
+            {t('notices.dismiss')}
+          </button>
+        )}
+      </div>
 
       {hasFoldLine && (
         <button
