@@ -18,6 +18,8 @@ import type { SidebarProjectItemProps } from '@/modules/sidebar/SidebarProjectIt
  */
 
 const apiMock = vi.hoisted(() => ({ quayFleetSummary: vi.fn() }));
+/** The server's boot-time cockpit switch; the off arm proves both row actions disappear. */
+const featuresMock = vi.hoisted(() => ({ cockpitEnabled: true }));
 const compactState = vi.hoisted(() => ({ compact: false }));
 
 vi.mock('@/shared/api', async (importOriginal) => {
@@ -27,6 +29,10 @@ vi.mock('@/shared/api', async (importOriginal) => {
     api: { ...(actual.api as Record<string, unknown>), quayFleetSummary: apiMock.quayFleetSummary },
   };
 });
+
+vi.mock('@/shared/hooks/useServerFeatures', () => ({
+  useServerFeatures: () => ({ status: 'loaded' as const, cockpitEnabled: featuresMock.cockpitEnabled }),
+}));
 
 vi.mock('@/modules/sidebar/hooks/useCompactSidebar', () => ({
   useCompactSidebar: () => compactState.compact,
@@ -112,6 +118,7 @@ const renderRow = async (project: Project) => {
 
 beforeEach(() => {
   compactState.compact = false;
+  featuresMock.cockpitEnabled = true;
   apiMock.quayFleetSummary.mockReset();
   apiMock.quayFleetSummary.mockImplementation(async () => ({
     ok: true,
@@ -156,4 +163,20 @@ test('the compact (mobile) card draws the same action', async () => {
   );
   const link = container.querySelector('[data-testid="cockpit-project-link"]') as HTMLAnchorElement;
   assert.equal(link.getAttribute('href'), '/cockpit?view=board&project=claudecodeui');
+});
+
+test('with the cockpit switched off the row draws neither the pin nor the board link', async () => {
+  featuresMock.cockpitEnabled = false;
+  const { container } = await renderRow(makeProject('registered'));
+
+  // The fleet read still runs (the task-count badge is not a cockpit surface); the two entry
+  // points into the cockpit are absent in both layouts.
+  await waitFor(() => assert.equal(apiMock.quayFleetSummary.mock.calls.length, 1));
+  assert.equal(container.querySelector('[data-testid="cockpit-project-link"]'), null);
+  assert.equal(container.querySelector('[data-testid="cockpit-project-watch-toggle"]'), null);
+
+  compactState.compact = true;
+  const compact = await renderRow(makeProject('registered'));
+  assert.equal(compact.container.querySelector('[data-testid="cockpit-project-link"]'), null);
+  assert.equal(compact.container.querySelector('[data-testid="cockpit-project-watch-toggle"]'), null);
 });

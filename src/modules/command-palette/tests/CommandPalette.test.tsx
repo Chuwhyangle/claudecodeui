@@ -33,6 +33,11 @@ vi.mock('@/modules/command-palette/hooks/useGitActions', () => ({
     checkout: vi.fn(),
   }),
 }));
+const featuresMock = vi.hoisted(() => ({ cockpitEnabled: true }));
+vi.mock('@/shared/hooks/useServerFeatures', () => ({
+  useServerFeatures: () => ({ status: 'loaded' as const, cockpitEnabled: featuresMock.cockpitEnabled }),
+}));
+
 vi.mock('@/shared/context/ThemeContext', () => ({
   useTheme: () => ({ toggleDarkMode: vi.fn() }),
 }));
@@ -79,6 +84,7 @@ async function openPalette() {
 }
 
 beforeEach(async () => {
+  featuresMock.cockpitEnabled = true;
   await i18n.changeLanguage('en');
 });
 
@@ -127,4 +133,16 @@ test('「在新窗口打开驾驶舱」 opens the basename-aware cockpit URL in 
   } finally {
     openSpy.mockRestore();
   }
+});
+
+test('with the cockpit switched off the palette lists no cockpit command', async () => {
+  featuresMock.cockpitEnabled = false;
+  renderPalette();
+  await openPalette();
+
+  expect(screen.queryByText(i18n.t('cockpit.openCockpit'))).toBeNull();
+  expect(screen.queryByText(i18n.t('cockpit.openCockpitNewWindow'))).toBeNull();
+  // The rest of the action list is untouched.
+  expect(screen.getByText(i18n.t('commandPalette.openSettings'))).not.toBeNull();
+  expect(screen.getByText(i18n.t('commandPalette.startNewChat'))).not.toBeNull();
 });

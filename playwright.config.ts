@@ -3017,6 +3017,31 @@ const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPE
  * the control arm; the reader re-reads on mtime, so no server restart is involved.
  */
 const architectureRefreshSelection = selectedSpecFiles().includes('architecture-refresh.spec.ts');
+
+/**
+ * The specs that exercise the cockpit, which now ships OFF.
+ *
+ * The server defaults `cockpit.enabled` to false, so every run that contains one of these
+ * files must opt in through the SAME `SERVER_SETTINGS_PATH` seam the architecture criterion
+ * uses. A full-tree run selects every file, so the default e2e matrix runs with the cockpit
+ * enabled; the disabled arm is asserted in-page by stubbing the features endpoint, and the
+ * shipped default itself is pinned by the server settings criterion.
+ */
+const COCKPIT_SPEC_FILES = [
+  'cockpit-observation-wall.spec.ts',
+  'cockpit-phone-narrow.spec.ts',
+  'cockpit-remote.spec.ts',
+  'cockpit-visual.spec.ts',
+  'ui-scenario-runner.spec.ts',
+];
+const cockpitSelection = selectedSpecFiles().some((file) => COCKPIT_SPEC_FILES.includes(file));
+/**
+ * Whether this run needs its own server settings file at all. ONE file carries both blocks:
+ * a full-tree run selects the architecture and cockpit specs together, and two separate
+ * `SERVER_SETTINGS_PATH` spreads would silently drop one of them.
+ */
+const runServerSettingsSelection = architectureRefreshSelection || cockpitSelection;
+
 const ARCHITECTURE_REFRESH_SETTINGS = path.join(dataDir, 'architecture-refresh-server.settings.json');
 const ARCHITECTURE_REFRESH_FAKE_CLI = path.join(dataDir, 'architecture-refresh-fake-cli.mjs');
 const ARCHITECTURE_REFRESH_COUNTER = path.join(dataDir, 'architecture-refresh-fake-counter.txt');
@@ -3131,25 +3156,32 @@ const ARCHITECTURE_REFRESH_FAKE_CLI_SOURCE = [
   '',
 ].join('\n');
 
-if (architectureRefreshSelection && isDataDirOwner) {
+if (runServerSettingsSelection && isDataDirOwner) {
   fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(ARCHITECTURE_REFRESH_FAKE_CLI, ARCHITECTURE_REFRESH_FAKE_CLI_SOURCE, 'utf8');
-  fs.writeFileSync(
-    ARCHITECTURE_REFRESH_CONTROL,
-    JSON.stringify({ mode: 'success', delayMs: 0 }),
-    'utf8',
-  );
+  if (architectureRefreshSelection) {
+    fs.writeFileSync(ARCHITECTURE_REFRESH_FAKE_CLI, ARCHITECTURE_REFRESH_FAKE_CLI_SOURCE, 'utf8');
+    fs.writeFileSync(
+      ARCHITECTURE_REFRESH_CONTROL,
+      JSON.stringify({ mode: 'success', delayMs: 0 }),
+      'utf8',
+    );
+  }
   fs.writeFileSync(
     ARCHITECTURE_REFRESH_SETTINGS,
     `${JSON.stringify({
-      architecture: {
-        refresh: {
-          cliPath: ARCHITECTURE_REFRESH_FAKE_CLI,
-          timeoutMs: 120_000,
-          memoryLimitMb: 0,
-          defect: '',
-        },
-      },
+      ...(cockpitSelection ? { cockpit: { enabled: true } } : {}),
+      ...(architectureRefreshSelection
+        ? {
+            architecture: {
+              refresh: {
+                cliPath: ARCHITECTURE_REFRESH_FAKE_CLI,
+                timeoutMs: 120_000,
+                memoryLimitMb: 0,
+                defect: '',
+              },
+            },
+          }
+        : {}),
     }, null, 2)}\n`,
     'utf8',
   );
@@ -3606,13 +3638,14 @@ export default defineConfig({
         ...(debugAgentFixtureHome
           ? { DEBUG_AGENT: '1', DEBUG_AGENT_HOME: debugAgentFixtureHome }
           : {}),
-        // The manual re-analysis criterion's deployment knobs. `SERVER_SETTINGS_PATH` is
-        // the shipped entry for the server settings file; the two fake-CLI paths travel as
-        // the child's own environment. All three are absent from every other selection, so
-        // no other spec sees a fake ArchGuard CLI or a redirected settings file.
+        // The run's server settings file: the cockpit's opt-in when a cockpit spec is in the
+        // selection, and/or the architecture criterion's deployment knobs. ONE file, because a
+        // full-tree run selects both and two `SERVER_SETTINGS_PATH` entries would collide. The
+        // two fake-CLI paths travel as the child's own environment and stay absent from every
+        // selection that does not name the architecture spec.
+        ...(runServerSettingsSelection ? { SERVER_SETTINGS_PATH: ARCHITECTURE_REFRESH_SETTINGS } : {}),
         ...(architectureRefreshSelection
           ? {
-              SERVER_SETTINGS_PATH: ARCHITECTURE_REFRESH_SETTINGS,
               ARCHGUARD_FAKE_COUNTER: ARCHITECTURE_REFRESH_COUNTER,
               ARCHGUARD_FAKE_CONTROL: ARCHITECTURE_REFRESH_CONTROL,
             }

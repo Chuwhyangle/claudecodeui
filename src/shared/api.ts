@@ -938,6 +938,9 @@ export const api = {
 
   // Server-side settings: personal access tokens, stored credentials, notifications, web push
   settings: {
+    // The server-level switches read from the boot-time settings file. The cockpit's entry
+    // points read this before rendering; a failed or absent answer is treated as "off".
+    serverFeatures: () => get('/api/settings/features'),
     accessTokens: () => get('/api/settings/access-tokens'),
     // The advanced, read-only OAuth-token list beside the PAT list. GET only: there
     // is no create/revoke here on purpose (OAuth tokens are revoked via grants).

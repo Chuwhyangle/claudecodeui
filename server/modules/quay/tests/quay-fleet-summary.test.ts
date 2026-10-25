@@ -240,3 +240,41 @@ test('AC3: six quay projects fan out with at most four concurrent task reads', a
   // The ceiling is only meaningful if reads really did overlap.
   assert.ok(peakTaskReads > 1, 'reads ran strictly one at a time; the ceiling was not exercised');
 });
+
+test('AC-cockpit: with the switch off the cockpit-only routes are 404, not the SPA fallback', async () => {
+  const service = createQuayService(createDependencies({
+    fileExists: quayConfigs('quay-a'),
+    listProjects: () => [{ projectId: 'quay-a', projectPath: projectPath('quay-a') }],
+    runCommand: createFleetRunner([]),
+  }));
+
+  const app = express();
+  app.use('/api/quay', createQuayRouter({ quayService: service, cockpitEnabled: () => false }));
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+
+  try {
+    const address = server.address() as AddressInfo;
+    const base = `http://127.0.0.1:${address.port}`;
+    const initiatives = await fetch(`${base}/api/quay/initiatives`);
+    assert.equal(initiatives.status, 404);
+
+    const decide = await fetch(`${base}/api/quay/initiatives/demo/decide`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ option: 'approve', by: 'person', kind: 'human' }),
+    });
+    assert.equal(decide.status, 404);
+
+    const pin = await fetch(`${base}/api/quay/quay-a/interface-session`, { method: 'PUT' });
+    assert.equal(pin.status, 404);
+
+    // The display reading the sidebar shares is NOT a cockpit surface and keeps answering.
+    const summary = await fetch(`${base}/api/quay/fleet-summary`);
+    assert.equal(summary.status, 200);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});

@@ -12,6 +12,7 @@ import { getQuayIndicatorStatus, getTaskIndicatorStatus } from '@/modules/sideba
 import TaskIndicator from '@/modules/sidebar/TaskIndicator';
 import QuayIndicator from '@/modules/sidebar/QuayIndicator';
 import SidebarProjectSessions from '@/modules/sidebar/SidebarProjectSessions';
+import { useServerFeatures } from '@/shared/hooks/useServerFeatures';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
 import { useFleetAttention } from '@/modules/sidebar/hooks/useFleetAttention';
 import { useFleetTaskCounts } from '@/modules/sidebar/hooks/useFleetTaskCounts';
@@ -227,6 +228,9 @@ function SidebarProjectItem({
   // The fleet registry id is the ONLY handle a cockpit board link can be built from; an
   // unregistered project has none, so the action is absent rather than pointing nowhere.
   const attention = useFleetAttention();
+  // The cockpit's own entry points (watch pin, board link) exist only when the server's
+  // boot-time switch is on; the task counts and Quay indicator above are not cockpit surfaces.
+  const { cockpitEnabled } = useServerFeatures();
   const fleetProjectId = attention.fleetProjectIdByProject.get(project.projectId) ?? null;
   const cockpitLinkLabel = t('common:cockpit.openProject', 'View in cockpit');
   const mobileRenameInputRef = useRef<HTMLInputElement>(null);
@@ -389,13 +393,13 @@ function SidebarProjectItem({
                   </>
                 ) : (
                   <>
-                    {fleetProjectId !== null && (
+                    {cockpitEnabled && fleetProjectId !== null && (
                       <WatchPinToggle
                         uri={formatProjectUri(fleetProjectId)}
                         testId="cockpit-project-watch-toggle"
                       />
                     )}
-                    {fleetProjectId !== null && (
+                    {cockpitEnabled && fleetProjectId !== null && (
                       <CockpitProjectLink
                         compact
                         fleetProjectId={fleetProjectId}
@@ -589,14 +593,14 @@ function SidebarProjectItem({
                 >
                   <Edit3 className="h-3 w-3" />
                 </div>
-                {fleetProjectId !== null && (
+                {cockpitEnabled && fleetProjectId !== null && (
                   <WatchPinToggle
                     uri={formatProjectUri(fleetProjectId)}
                     testId="cockpit-project-watch-toggle"
                     className="touch:opacity-100 opacity-0 transition-opacity group-hover:opacity-100"
                   />
                 )}
-                {fleetProjectId !== null && (
+                {cockpitEnabled && fleetProjectId !== null && (
                   <CockpitProjectLink
                     compact={false}
                     fleetProjectId={fleetProjectId}

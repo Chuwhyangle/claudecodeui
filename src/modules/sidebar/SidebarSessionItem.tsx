@@ -10,6 +10,7 @@ import { WatchPinToggle, formatSessionUri } from '@/modules/cockpit';
 import type { LLMProvider, Project, ProjectSession, SessionWithProvider } from '@/shared/types';
 import { PROVIDER_LABELS, createSessionViewModel, formatCompactAge } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import { presentSessionActivity } from '@/modules/sidebar/utils/sessionActivityPresentation';
+import { useServerFeatures } from '@/shared/hooks/useServerFeatures';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
 import { useProviderSessionIdCopy } from '@/modules/sidebar/hooks/useProviderSessionIdCopy';
 import { useTickingNow } from '@/modules/sidebar/hooks/useTickingNow';
@@ -63,6 +64,9 @@ function SidebarSessionItem({
   t,
 }: SidebarSessionItemProps) {
   const isCompact = useCompactSidebar();
+  // The observation-wall pin is the cockpit's action; with the switch off the row keeps its
+  // prior shape (see the padding below) and no longer offers an entry to a gated surface.
+  const { cockpitEnabled } = useServerFeatures();
   const sessionView = createSessionViewModel(session, currentTime, t);
   // A running row draws what the turn is doing from the session's own activity
   // entry — the same reading the Running view draws — so the two surfaces say
@@ -238,10 +242,12 @@ function SidebarSessionItem({
             </div>
 
             {/* 「钉到观察墙 / 取消」, the same action the wall tile carries. */}
-            <WatchPinToggle
-              uri={formatSessionUri(session.id)}
-              testId="cockpit-session-watch-toggle"
-            />
+            {cockpitEnabled && (
+              <WatchPinToggle
+                uri={formatSessionUri(session.id)}
+                testId="cockpit-session-watch-toggle"
+              />
+            )}
             <button
               type="button"
               aria-label={`Session options for ${sessionView.sessionName}`}
@@ -400,7 +406,10 @@ function SidebarSessionItem({
           href={`/session/${session.id}`}
           className={cn(
             buttonVariants({ variant: 'ghost' }),
-            'h-auto w-full justify-start rounded-md border bg-card p-2 pr-[4.25rem] text-left font-normal transition-all duration-150',
+            'h-auto w-full justify-start rounded-md border bg-card p-2 text-left font-normal transition-all duration-150',
+            // The cockpit's pin used to own the slot `pr-[4.25rem]` reserves; without it the
+            // options trigger alone needs `pr-10`, so a disabled deployment does not leave a hole.
+            cockpitEnabled ? 'pr-[4.25rem]' : 'pr-10',
             isSelected ? 'border-primary/20 bg-primary/5' : 'border-border/30',
             !isSelected && isProcessing
               ? 'border-border/60 bg-muted/20 hover:bg-muted/25'
@@ -482,11 +491,13 @@ function SidebarSessionItem({
         {/* 「钉到观察墙 / 取消」 sits beside the options trigger, always visible: pinning a
             session is a one-click action, not a menu item. The row's pr-[4.25rem] reserves
             its slot (right-9 + 24px + gap), so the star never overlaps the age. */}
-        <WatchPinToggle
-          uri={formatSessionUri(session.id)}
-          testId="cockpit-session-watch-toggle"
-          className="absolute right-9 top-1/2 -translate-y-1/2 transform"
-        />
+        {cockpitEnabled && (
+          <WatchPinToggle
+            uri={formatSessionUri(session.id)}
+            testId="cockpit-session-watch-toggle"
+            className="absolute right-9 top-1/2 -translate-y-1/2 transform"
+          />
+        )}
         <SessionOptions
           className="absolute right-2 top-1/2 -translate-y-1/2 transform transition-all duration-200"
           sessionId={session.id}

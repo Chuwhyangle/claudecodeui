@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { useHref, useInRouterContext, useLocation, useNavigate } from 'react-router-dom';
 
 import { cn } from '@/shared/utils';
+import { useServerFeatures } from '@/shared/hooks/useServerFeatures';
 import {
   cockpitViewPath,
   readCockpitReturnPath,
@@ -286,6 +287,11 @@ function PlainModeSwitch({
 /**
  * Used by the sidebar header, the collapsed rail, the mobile drawer and the cockpit header —
  * one control, so 「how do I get to the other mode」 has one answer wherever a person is.
+ *
+ * WITH THE COCKPIT SWITCHED OFF THE WHOLE CONTROL IS ABSENT. A one-segment toggle is not a
+ * toggle, and the sessions segment is a no-op on a sessions page; hiding the group is what
+ * 「切换空间不可见」 means. The server's answer is also what gates the route and the APIs, so a
+ * person who bookmarks `/cockpit` cannot reach it through a stale link.
  */
 export default function SidebarModeSwitch({
   mode,
@@ -297,6 +303,12 @@ export default function SidebarModeSwitch({
 }: SidebarModeSwitchProps) {
   const attention = useFleetAttention();
   const inRouter = useInRouterContext();
+  // Loading is treated as off: rendering and then removing the switch would flash exactly the
+  // control a disabled release promises not to show.
+  const { cockpitEnabled } = useServerFeatures();
+  if (!cockpitEnabled) {
+    return null;
+  }
   return inRouter ? (
     <RoutedModeSwitch
       mode={mode}

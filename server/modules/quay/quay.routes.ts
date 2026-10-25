@@ -23,6 +23,7 @@
 
 import express from 'express';
 
+import { readCockpitEnabled } from '@/shared/ports/cockpit-enabled.port.js';
 import { asyncHandler } from '@/shared/utils.js';
 
 import { createCounterVoice, type CounterVoiceService } from './counter-voice.js';
@@ -75,6 +76,15 @@ type QuayRouterDependencies = {
    * answers `session-mentions-unavailable`; production always binds it.
    */
   sessionMentions?: SessionMentionsService;
+  /**
+   * The cockpit switch behind the routes that exist only for the cockpit.
+   *
+   * OPTIONAL so a display-only harness keeps its shape; absent reads the process-wide port
+   * `server/index.ts` installs (fail-closed before installation). Production passes nothing
+   * and therefore reads the ONE boot-time value the WebSocket gate and the client's feature
+   * reading use.
+   */
+  cockpitEnabled?: () => boolean;
 };
 
 /** What the router answers when no fleet registry was composed in. */
@@ -175,6 +185,27 @@ function readUriQuery(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+/**
+ * The gate for the routes the cockpit alone uses (initiative view / ruling / counter-voice,
+ * and the pinned-target triple).
+ *
+ * A disabled feature answers 404, not 403: the routes are supposed to look absent. The gate
+ * is a real handler rather than an unmounted router because the SPA catch-all is mounted
+ * after every API route and would answer an unmounted extensionless path with `index.html`
+ * 200 — a "missing" API that looks like a success.
+ */
+function requireCockpit(
+  cockpitEnabled: () => boolean,
+): (req: express.Request, res: express.Response, next: express.NextFunction) => void {
+  return (_req, res, next) => {
+    if (cockpitEnabled()) {
+      next();
+      return;
+    }
+    res.status(404).json({ error: 'Not found' });
+  };
+}
+
 /** Creates the Quay routes; mounted by the server entrypoint behind auth. */
 export function createQuayRouter(dependencies: QuayRouterDependencies): express.Router {
   const { quayService } = dependencies;
@@ -182,6 +213,8 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
   const readLastOpenedSession = dependencies.readLastOpenedSession ?? (() => null);
   const initiatives = dependencies.initiatives ?? createQuayInitiatives();
   const counterVoice = dependencies.counterVoice ?? createCounterVoice();
+  const cockpitEnabled = dependencies.cockpitEnabled ?? readCockpitEnabled;
+  const cockpitOnly = requireCockpit(cockpitEnabled);
   const router = express.Router();
 
   // Declared before the `/:projectId/...` routes so the static segment is never mistaken
@@ -253,6 +286,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
    */
   router.get(
     '/initiatives',
+    cockpitOnly,
     asyncHandler(async (_req, res) => {
       const reading = await initiatives.read();
       return res.json(reading);
@@ -266,6 +300,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
    */
   router.post(
     '/initiatives/:slug/decide',
+    cockpitOnly,
     asyncHandler(async (req, res) => {
       const slug = typeof req.params.slug === 'string' ? req.params.slug : '';
       const parsed = parseInitiativeDecisionBody(req.body);
@@ -289,6 +324,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
    */
   router.get(
     '/initiatives/:attentionId/counter-voice',
+    cockpitOnly,
     asyncHandler(async (req, res) => {
       const attentionId = typeof req.params.attentionId === 'string' ? req.params.attentionId : '';
       if (attentionId === '') {
@@ -319,6 +355,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
    */
   router.get(
     '/:projectId/interface-session',
+    cockpitOnly,
     asyncHandler(async (req, res) => {
       const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
       const reading = await fleetRegistry.readInterfaceSession(projectId);
@@ -330,6 +367,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
   // own reason (`interface-session-is-dev-session`, `unknown-project`, …) so the UI can show it.
   router.put(
     '/:projectId/interface-session',
+    cockpitOnly,
     asyncHandler(async (req, res) => {
       const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
       const sessionId = parseInterfaceSessionId(req.body);
@@ -343,6 +381,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
 
   router.delete(
     '/:projectId/interface-session',
+    cockpitOnly,
     asyncHandler(async (req, res) => {
       const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
       const result = await fleetRegistry.writeInterfaceSession(projectId, null);

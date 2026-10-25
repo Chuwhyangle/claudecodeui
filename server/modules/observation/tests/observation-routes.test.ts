@@ -69,7 +69,7 @@ function errorHandler(error: unknown, _req: Request, res: Response, _next: NextF
 }
 
 /** One express app around the real router; `authenticated` decides whether `req.user` exists. */
-function createApp(authenticated: boolean): Express {
+function createApp(authenticated: boolean, cockpitEnabled = true): Express {
   const app = express();
   app.use(express.json());
   if (authenticated) {
@@ -78,7 +78,10 @@ function createApp(authenticated: boolean): Express {
       next();
     });
   }
-  app.use('/api/observation', createObservationRoutes(store));
+  app.use(
+    '/api/observation',
+    createObservationRoutes(store, () => cockpitEnabled),
+  );
   app.use(errorHandler);
   return app;
 }
@@ -235,6 +238,27 @@ test('AC3: a seen write that would move the cursor backwards is ignored', async 
     const body = (await backwards.json()) as { advanced: boolean; cursor: { revision: number } };
     assert.equal(body.advanced, false);
     assert.equal(body.cursor.revision, head.revision, 'the stored cursor stays at the higher revision');
+  } finally {
+    await stop();
+  }
+});
+
+test('AC-cockpit: with the switch off every wall endpoint is 404, including the pin writes', async () => {
+  writeOneRevision();
+  const { baseUrl, stop } = await listen(createApp(true, false));
+  try {
+    const wall = await fetch(`${baseUrl}/api/observation/wall`);
+    assert.equal(wall.status, 404);
+
+    const pin = await fetch(`${baseUrl}/api/observation/watch/${encodeURIComponent(SESSION_URI)}`, { method: 'PUT' });
+    assert.equal(pin.status, 404);
+
+    const seen = await fetch(`${baseUrl}/api/observation/seen`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ uri: SESSION_URI, revision: 1 }),
+    });
+    assert.equal(seen.status, 404);
   } finally {
     await stop();
   }

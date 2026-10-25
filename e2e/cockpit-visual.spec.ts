@@ -37,6 +37,8 @@ const PASSWORD = 'e2epassword';
 const SHOT_DIR = path.join(process.cwd(), 'tmp');
 const FLEET_SHOT = path.join(SHOT_DIR, 'cockpit-visual-fleet.png');
 const BOARD_SHOT = path.join(SHOT_DIR, 'cockpit-visual-board.png');
+const DISABLED_HOME_SHOT = path.join(SHOT_DIR, 'cockpit-disabled-home.png');
+const DISABLED_DEEPLINK_SHOT = path.join(SHOT_DIR, 'cockpit-disabled-deeplink.png');
 
 /** The WCAG AA floor for normal-size text. */
 const AA_CONTRAST = 4.5;
@@ -262,6 +264,40 @@ test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async ({ browser }) => {
   await bootstrapAuth(browser);
+});
+
+/**
+ * The released default, read on the real app: the server answered `enabled: true` (this run
+ * opts in so the other cases can render the stage), so this case overrides the ONE reading the
+ * client branches on. That makes the control arm the product's fail-closed answer to a server
+ * that says off, without booting a second server for one assertion.
+ */
+test('with the cockpit switched off the switch is absent and both deep links return to the workspace', async ({ page }) => {
+  await authenticate(page);
+  await page.route('**/api/settings/features', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ cockpit: { enabled: false } }),
+    }),
+  );
+  await stubQuay(page);
+
+  fs.mkdirSync(SHOT_DIR, { recursive: true });
+  await page.goto('/');
+  await expect(page.getByTestId('sidebar-mode-switch')).toHaveCount(0);
+  await expect(page.getByTestId('cockpit-attention-badge')).toHaveCount(0);
+  await page.screenshot({ path: DISABLED_HOME_SHOT, fullPage: true });
+
+  // A bookmarked or previously scanned address must not render a stage the server gated.
+  await page.goto('/cockpit');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId('cockpit-page')).toHaveCount(0);
+  await page.screenshot({ path: DISABLED_DEEPLINK_SHOT, fullPage: true });
+
+  await page.goto('/cockpit/remote');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId('cockpit-remote')).toHaveCount(0);
 });
 
 test('the ordinal label is at least body size and meets WCAG AA contrast', async ({ page }) => {

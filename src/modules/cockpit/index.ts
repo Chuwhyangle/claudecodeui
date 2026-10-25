@@ -3,6 +3,9 @@
 // deterministic intent parser, so it is exported here rather than deep-imported from its file.
 export { default as CockpitPage } from '@/modules/cockpit/CockpitPage';
 export { default as CockpitRemote } from '@/modules/cockpit/CockpitRemote';
+// The route gate `App` mounts for both cockpit addresses. It reads the server's boot-time
+// switch through the shared store and redirects to the workspace when the feature is off.
+export { default as CockpitRoute } from '@/modules/cockpit/CockpitRoute';
 export { parseCockpitIntent } from '@/modules/cockpit/cockpitIntent';
 export type { CockpitIntent, CockpitIntentContext } from '@/modules/cockpit/cockpitIntent';
 // The cockpit's address grammar, exported so the sidebar's mode switch and its project rows

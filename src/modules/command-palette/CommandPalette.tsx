@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from '@/shared/ui';
 import { useTheme } from '@/shared/context/ThemeContext';
+import { useServerFeatures } from '@/shared/hooks/useServerFeatures';
 import { usePaletteOps } from '@/modules/command-palette/context/PaletteOpsContext';
 import { SETTINGS_MAIN_TABS } from '@/shared/constants';
 import type { AppTab, Project } from '@/shared/types';
@@ -80,6 +81,10 @@ function CommandPalette({
   const [search, setSearch] = React.useState('');
   const [pages, setPages] = React.useState<Page[]>([]);
   const { toggleDarkMode } = useTheme();
+  // The cockpit's two commands are entry points to a feature the server may have switched
+  // off; with it off they are not listed at all (a command that navigates to a redirect is
+  // worse than an absent command).
+  const { cockpitEnabled } = useServerFeatures();
   const navigate = useNavigate();
   const ops = usePaletteOps();
   // The new-window command must carry the deployment basename: `window.open('/cockpit')`
@@ -228,26 +233,30 @@ function CommandPalette({
                   <SunMoon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="flex-1">{t('commandPalette.toggleTheme')}</span>
                 </CommandItem>
-                <CommandItem
-                  value={`${t('common:cockpit.openCockpit')} cockpit 驾驶舱 stage fleet`}
-                  onSelect={() => run(() => navigate(COCKPIT_COMMAND_PATH))}
-                >
-                  <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="flex-1">{t('common:cockpit.openCockpit')}</span>
-                </CommandItem>
-                <CommandItem
-                  value={`${t('common:cockpit.openCockpitNewWindow')} cockpit new window tab 驾驶舱 新窗口`}
-                  onSelect={() =>
-                    run(() => {
-                      // The cockpit is routinely parked on a second screen; opening it in its
-                      // own window must not navigate this one away from the session list.
-                      window.open(cockpitHref, '_blank', 'noopener,noreferrer');
-                    })
-                  }
-                >
-                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="flex-1">{t('common:cockpit.openCockpitNewWindow')}</span>
-                </CommandItem>
+                {cockpitEnabled && (
+                  <>
+                    <CommandItem
+                      value={`${t('common:cockpit.openCockpit')} cockpit 驾驶舱 stage fleet`}
+                      onSelect={() => run(() => navigate(COCKPIT_COMMAND_PATH))}
+                    >
+                      <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="flex-1">{t('common:cockpit.openCockpit')}</span>
+                    </CommandItem>
+                    <CommandItem
+                      value={`${t('common:cockpit.openCockpitNewWindow')} cockpit new window tab 驾驶舱 新窗口`}
+                      onSelect={() =>
+                        run(() => {
+                          // The cockpit is routinely parked on a second screen; opening it in its
+                          // own window must not navigate this one away from the session list.
+                          window.open(cockpitHref, '_blank', 'noopener,noreferrer');
+                        })
+                      }
+                    >
+                      <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="flex-1">{t('common:cockpit.openCockpitNewWindow')}</span>
+                    </CommandItem>
+                  </>
+                )}
               </CommandGroup>
             )}
 

@@ -12,13 +12,21 @@ export { createSettingsService } from './settings.service.js';
 // process rather than to a user. Per-user settings stay in the settings store
 // behind the routes above; this file is the one carrier for server-wide policy.
 export { loadServerSettings, SERVER_SETTINGS_ENV } from './server-settings.js';
-// ServerSettings / ResidentRestoreSettings / ObservationSettings: the reading `server/index.ts`
-// branches on (`residentRestore.enabled`, `max`, `maxAgeMs`, `observation.wallLimit`) and the
-// shape of those blocks. Exported for that composition root and for the resident-restore
-// criterion, which drives the loader over files it owns.
+// createServerFeaturesRouter: mounted by the server entrypoint at
+// `/api/settings/features` to publish the server-level switches a client must know before it
+// renders an entry point (today: the cockpit). Kept as a factory so a criterion can mount it
+// over a literal reading without composing the assembled settings module.
+export { createServerFeaturesRouter } from './server-features.routes.js';
+// ServerSettings / ResidentRestoreSettings / ObservationSettings / CockpitSettings: the
+// reading `server/index.ts` branches on (`residentRestore.enabled`, `max`, `maxAgeMs`,
+// `observation.wallLimit`, `cockpit.enabled`) and the shape of those blocks. Exported for that
+// composition root and for the resident-restore criterion, which drives the loader over files
+// it owns.
 export type {
+  CockpitSettings,
   InitiativeSettings,
   ObservationSettings,
   ResidentRestoreSettings,
+  ServerFeatures,
   ServerSettings,
 } from './server-settings.js';

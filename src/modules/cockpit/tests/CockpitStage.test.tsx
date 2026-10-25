@@ -1,11 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { QuayFleetSummary, QuaySnapshot } from '@/shared/types';
 import { i18n } from '@/modules/i18n';
 import CockpitPage, { COCKPIT_HEADER_CONTROL_SIZE_CLASS } from '@/modules/cockpit/CockpitPage';
+import CockpitRoute from '@/modules/cockpit/CockpitRoute';
 import { formatCockpitView, parseCockpitView } from '@/modules/cockpit/cockpitView';
 import type { CockpitView } from '@/modules/cockpit/cockpitView';
 
@@ -289,6 +290,13 @@ const hubMock = vi.hoisted(() => {
 vi.mock('@/shared/context/WebSocketContext', () => ({
   useWebSocketOptional: () => hubMock.socket,
   useWebSocket: () => hubMock.socket,
+}));
+
+// The cockpit page is only reachable behind the server's switch; the stage cases render it
+// directly, so they arm the reading as on (the off arm is `CockpitRoute`'s own criterion).
+const featuresMock = vi.hoisted(() => ({ cockpitEnabled: true }));
+vi.mock('@/shared/hooks/useServerFeatures', () => ({
+  useServerFeatures: () => ({ status: 'loaded' as const, cockpitEnabled: featuresMock.cockpitEnabled }),
 }));
 
 const apiMock = vi.hoisted(() => ({
@@ -612,6 +620,7 @@ function sentEvents(type?: string): Array<Record<string, unknown>> {
 }
 
 beforeEach(() => {
+  featuresMock.cockpitEnabled = true;
   hubMock.reset();
   apiMock.quayFleetSummary.mockReset();
   apiMock.quaySnapshot.mockReset();
@@ -1620,4 +1629,32 @@ describe('pulse strip', () => {
   // The board surface used to carry its own strip, and this suite drove its marks to prove the
   // focus was a CHANGE. That strip is gone from the Quay panel (the fleet tiles keep theirs,
   // covered above), so there is no board mark left to click.
+});
+
+describe('the cockpit route gate', () => {
+  it('redirects both cockpit addresses to the workspace when the server switch is off', () => {
+    featuresMock.cockpitEnabled = false;
+    render(
+      <MemoryRouter initialEntries={['/cockpit']}>
+        <Routes>
+          <Route path="/cockpit" element={<CockpitRoute surface="stage" />} />
+          <Route path="/" element={<div data-testid="workspace" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('cockpit-page')).toBeNull();
+    expect(screen.getByTestId('workspace')).not.toBeNull();
+
+    cleanup();
+    render(
+      <MemoryRouter initialEntries={['/cockpit/remote']}>
+        <Routes>
+          <Route path="/cockpit/remote" element={<CockpitRoute surface="remote" />} />
+          <Route path="/" element={<div data-testid="workspace" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('cockpit-remote')).toBeNull();
+    expect(screen.getByTestId('workspace')).not.toBeNull();
+  });
 });

@@ -3805,6 +3805,24 @@ export type ComposerChipStrip = {
 
 // ---------------------------
 
+//----------------- SERVER FEATURES ------------
+
+/**
+ * The server-level switches `GET /api/settings/features` publishes.
+ *
+ * The server reads its settings file once at boot; this is the reading that reaches the
+ * browser without a rebuild. `cockpit.enabled` ships false: a release hides the cockpit's
+ * page, its mode switch and its entry points unless an operator opts in. A client must treat
+ * anything other than a positive `true` as off, so an older server (404) or a malformed answer
+ * cannot expose the feature by accident.
+ */
+export type ServerFeatures = {
+  /** Whether the experimental cockpit (stage + phone remote) is enabled for this server run. */
+  cockpit: { enabled: boolean };
+};
+
+// ---------------------------
+
 //----------------- REPLY SUGGESTIONS ------------
 
 /**

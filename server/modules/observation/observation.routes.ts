@@ -12,6 +12,12 @@
  * routes answer 401 themselves when it is absent, which also makes the authentication path
  * testable without importing the auth module (the observation module stays a leaf).
  *
+ * THE COCKPIT GATE. The wall is the cockpit's reading surface; the sidebar's pin controls are
+ * the same feature. When the cockpit is switched off, every route here answers 404 and the
+ * producer-side `POST /view-events` (mounted beside this router) is untouched. The gate is an
+ * explicit 404 handler rather than an unmounted router because the SPA catch-all is mounted
+ * after every API route and would otherwise answer `/api/observation/wall` with HTML 200.
+ *
  * Consumers: `server/modules/observation/observation.module.ts` (composition) and
  * `server/modules/observation/tests/observation-routes.test.ts`.
  */
@@ -55,10 +61,27 @@ function requireBodyUri(body: unknown): string {
 /**
  * Builds the router over one store.
  *
+ * `cockpitEnabled` is REQUIRED: a caller must state the feature's state rather than inherit a
+ * default that could expose the wall by omission. `observation.module.ts` supplies the
+ * process-wide port; the route criterion supplies both arms explicitly.
+ *
  * Consumers: `server/modules/observation/observation.module.ts`.
  */
-export function createObservationRoutes(store: ObservationStore): Router {
+export function createObservationRoutes(
+  store: ObservationStore,
+  cockpitEnabled: () => boolean,
+): Router {
   const router = express.Router();
+
+  // One gate for all four routes: the wall, the seen cursor and the pin list are the cockpit's
+  // reading surface, not a general-purpose API.
+  router.use((_req, res, next) => {
+    if (cockpitEnabled()) {
+      next();
+      return;
+    }
+    res.status(404).json({ error: 'Not found' });
+  });
 
   router.get('/wall', (req, res) => {
     if (rejectAnonymous(req, res)) return;

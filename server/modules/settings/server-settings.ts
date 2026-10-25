@@ -113,6 +113,37 @@ export type InitiativeSettings = {
 };
 
 /**
+ * The cockpit feature switch, as read from the SERVER settings file's `cockpit` block.
+ *
+ * `enabled` SHIPS FALSE: the cockpit is still experimental and a release must not expose it
+ * unless an operator opts in. The same block also carries `cockpit.counterVoice`, which the
+ * counter-voice reader owns on its own; this loader reads `enabled` and ignores every other
+ * field, so the two readers can land independently.
+ *
+ * Consumed by `server/index.ts`: it gates the cockpit's WebSocket frames and its dedicated
+ * HTTP surfaces, and it is the value the client's `/api/settings/features` reading reports.
+ * Read once at boot, like every other knob in this file — an edit reaches the next start.
+ */
+export type CockpitSettings = {
+  enabled: boolean;
+};
+
+/** The shipped cockpit switch: off. Mirrored by `config/server.settings.example.json`. */
+export const DEFAULT_COCKPIT_ENABLED = false;
+
+/**
+ * The public server policy a client may read without an operator's own file.
+ *
+ * Today that is the cockpit switch alone. The shape is deliberately a named block rather than
+ * a bare boolean so a later server-level flag can join it without changing the response's
+ * top-level type. Consumed by `createServerFeaturesRouter` and, through it,
+ * `GET /api/settings/features`.
+ */
+export type ServerFeatures = {
+  cockpit: { enabled: boolean };
+};
+
+/**
  * One reading of the server settings file, good for the whole boot.
  *
  * `residentRestore` and `observation` are ALWAYS concrete and always default-filled: a file
@@ -127,6 +158,7 @@ export type ServerSettings = {
   residentRestore: ResidentRestoreSettings;
   observation: ObservationSettings;
   initiative: InitiativeSettings;
+  cockpit: CockpitSettings;
   source: ServerSettingsSource;
   path: string;
   problems: string[];
@@ -190,8 +222,17 @@ export function loadServerSettings(options: {
   const residentRestore = readResidentRestore(record.residentRestore, problems);
   const observation = readObservation(record.observation, problems);
   const initiative = readInitiative(record.initiative, problems);
+  const cockpit = readCockpit(record.cockpit, problems);
 
-  return { residentRestore, observation, initiative, source: 'file', path: filePath, problems };
+  return {
+    residentRestore,
+    observation,
+    initiative,
+    cockpit,
+    source: 'file',
+    path: filePath,
+    problems,
+  };
 }
 
 /**
@@ -210,6 +251,7 @@ function defaultServerSettings(filePath: string): ServerSettings {
       viewEvents: { enabled: DEFAULT_VIEW_EVENTS_ENABLED, path: defaultViewEventsPath() },
     },
     initiative: { auditRatio: DEFAULT_INITIATIVE_AUDIT_RATIO },
+    cockpit: { enabled: DEFAULT_COCKPIT_ENABLED },
     source: 'default',
     path: filePath,
     problems: [],
@@ -375,6 +417,37 @@ function readInitiative(raw: unknown, problems: string[]): InitiativeSettings {
       settings.auditRatio = record.auditRatio;
     } else {
       problems.push('`initiative.auditRatio` must be a number in (0, 1]');
+    }
+  }
+  return settings;
+}
+
+/**
+ * The `cockpit` block, read for its `enabled` switch only.
+ *
+ * EVERYTHING ELSE IN THE BLOCK IS IGNORED. `cockpit.counterVoice` belongs to
+ * `modules/quay/counter-voice-settings.ts`; ignoring it here is what keeps the two readers
+ * independent (and a `cockpit` object that carries only `counterVoice` valid). The switch
+ * must be a real boolean: a string `"true"` is a malformed value, and the shipped default
+ * (off) is the safe reading for a release that cannot decide.
+ */
+function readCockpit(raw: unknown, problems: string[]): CockpitSettings {
+  const settings: CockpitSettings = { enabled: DEFAULT_COCKPIT_ENABLED };
+
+  if (raw === undefined) {
+    return settings;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    problems.push('`cockpit` must be a JSON object');
+    return settings;
+  }
+
+  const record = raw as Record<string, unknown>;
+  if (record.enabled !== undefined) {
+    if (typeof record.enabled === 'boolean') {
+      settings.enabled = record.enabled;
+    } else {
+      problems.push('`cockpit.enabled` must be a boolean');
     }
   }
   return settings;

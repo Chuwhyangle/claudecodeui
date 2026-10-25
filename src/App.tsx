@@ -11,10 +11,11 @@ import { WebSocketProvider } from '@/shared/context/WebSocketContext';
 import { PluginsProvider } from '@/modules/plugins';
 import { ProjectWorkspaceRoute, useProjectsState } from '@/modules/project-workspace';
 import { OAuthConsentRoute } from '@/modules/oauth-consent';
-import { CockpitPage, CockpitRemote } from '@/modules/cockpit';
+import { CockpitRoute } from '@/modules/cockpit';
 import { ArchitecturePanel, requestArchitectureSessionFocus } from '@/modules/architecture';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
+import { useServerFeatures } from '@/shared/hooks/useServerFeatures';
 import { installViewEvents, reportView } from '@/shared/viewEvents';
 import { i18n } from '@/modules/i18n';
 
@@ -144,15 +145,21 @@ const NO_SESSION_IS_PROCESSING = (): boolean => false;
  * Mounted first among the router's children, so its install effect runs before the
  * workspace's first report. Uploads can be disabled in `server.settings.json`
  * (`observation.viewEvents.enabled`); the server then answers 204 without writing.
+ *
+ * THE COCKPIT REPORT IS GATED TOO. With the feature switched off, a `/cockpit` deep link is
+ * redirected by {@link CockpitRoute}; reporting the tab before that redirect would record a
+ * visit to a page this deployment does not have.
  */
 function ViewEventInstrumentation() {
   const location = useLocation();
+  const { cockpitEnabled } = useServerFeatures();
   useEffect(() => installViewEvents(), []);
   useEffect(() => {
+    if (!cockpitEnabled) return;
     if (location.pathname === '/cockpit' || location.pathname.startsWith('/cockpit/')) {
       reportView('tab', 'cockpit');
     }
-  }, [location.pathname]);
+  }, [location.pathname, cockpitEnabled]);
   return null;
 }
 
@@ -247,12 +254,15 @@ export default function App() {  const routerBasename = detectRouterBasename();
                       />
                       {/* The cockpit: a top-level read-only stage over the quay fleet, a sibling
                           of the project workspace rather than a tab inside one. It is behind the
-                          same ProtectedRoute, so it reads the fleet only for a signed-in user. */}
-                      <Route path="/cockpit" element={<CockpitPage />} />
+                          same ProtectedRoute, so it reads the fleet only for a signed-in user;
+                          `CockpitRoute` additionally checks the server's boot-time
+                          `cockpit.enabled` switch and redirects to the workspace when off. */}
+                      <Route path="/cockpit" element={<CockpitRoute surface="stage" />} />
                       {/* The phone remote: the input half of the same hub, opened by scanning
-                          the code the stage draws. Same ProtectedRoute, so it binds to the
-                          signed-in user's hub with no extra token or pairing step. */}
-                      <Route path="/cockpit/remote" element={<CockpitRemote />} />
+                          the code the stage draws. Same ProtectedRoute and the same switch, so a
+                          disabled deployment cannot be reached by scanning a previously drawn
+                          code either. */}
+                      <Route path="/cockpit/remote" element={<CockpitRoute surface="remote" />} />
                       {/* The OAuth consent screen: a full-page surface of its own, NOT
                           inside the project workspace shell, so an authorization request
                           never mounts the sidebar, tabs or chat pane behind it. It is

@@ -16,6 +16,8 @@ import { afterEach, beforeEach, describe, test, vi } from 'vitest';
  */
 
 const apiMock = vi.hoisted(() => ({ quayFleetSummary: vi.fn() }));
+/** The server's boot-time cockpit switch; tests arm it per case. */
+const featuresMock = vi.hoisted(() => ({ cockpitEnabled: true }));
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -24,6 +26,10 @@ vi.mock('@/shared/api', async (importOriginal) => {
     api: { ...(actual.api as Record<string, unknown>), quayFleetSummary: apiMock.quayFleetSummary },
   };
 });
+
+vi.mock('@/shared/hooks/useServerFeatures', () => ({
+  useServerFeatures: () => ({ status: 'loaded' as const, cockpitEnabled: featuresMock.cockpitEnabled }),
+}));
 
 // The star badge fetches GitHub on mount; the switch cases do not care about it.
 vi.mock('@/modules/sidebar/GitHubStarBadge', () => ({ default: () => null }));
@@ -110,6 +116,7 @@ async function loadModules() {
 }
 
 beforeEach(() => {
+  featuresMock.cockpitEnabled = true;
   apiMock.quayFleetSummary.mockReset();
   apiMock.quayFleetSummary.mockImplementation(async () => okResponse(fleetSummary(0, 1)));
   vi.resetModules();
@@ -375,5 +382,41 @@ describe('AC2: the needs-human attention badge', () => {
         Object.defineProperty(document, 'hidden', hiddenDescriptor);
       }
     }
+  });
+});
+
+describe('the cockpit switch off (a released default)', () => {
+  test('draws no mode switch and no attention badge in any layout', async () => {
+    featuresMock.cockpitEnabled = false;
+    const { i18n, t, SidebarHeader, SidebarCollapsed } = await loadModules();
+
+    const header = render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter basename="/ccui" initialEntries={['/ccui']}>
+          <SidebarHeader {...headerProps('p1', t)} />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    assert.equal(header.container.querySelectorAll('[data-testid="sidebar-mode-switch"]').length, 0);
+    assert.equal(header.container.querySelectorAll('[data-testid="cockpit-attention-badge"]').length, 0);
+    // The sessions list itself is unharmed: the settings control still renders in the cluster.
+    assert.ok(header.container.querySelector('button[aria-label="actions.settings"]'));
+    header.unmount();
+
+    const collapsed = render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter basename="/ccui" initialEntries={['/ccui']}>
+          <SidebarCollapsed
+            onExpand={() => {}}
+            onShowSettings={() => {}}
+            updateAvailable={false}
+            restartRequired={false}
+            onShowVersionModal={() => {}}
+            t={t}
+          />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    assert.equal(collapsed.container.querySelectorAll('[data-testid="sidebar-mode-switch"]').length, 0);
   });
 });

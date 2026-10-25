@@ -12,6 +12,8 @@
  */
 import express, { type Router } from 'express';
 
+import { readCockpitEnabled } from '@/shared/ports/cockpit-enabled.port.js';
+
 import { createObservationRoutes } from './observation.routes.js';
 import { createObservationStore, type ObservationStoreDeps } from './observation-store.js';
 import { createViewEventRoutes } from './view-events.routes.js';
@@ -24,20 +26,27 @@ import {
 /**
  * Everything the composition root can supply. `wallLimit` and `viewEvents` come from the server
  * settings file's `observation` block; `publish` is bound to the cockpit hub's per-user broadcast.
- * An omitted `viewEvents` keeps the shipped on-by-default local log.
+ * An omitted `viewEvents` keeps the shipped on-by-default local log. `cockpitEnabled` defaults to
+ * the process-wide cockpit port (`server/index.ts` installs it at boot); a criterion may pass its
+ * own reader instead.
  */
-export type ObservationModuleDeps = ObservationStoreDeps & { viewEvents?: Partial<ViewEventsSettings> };
+export type ObservationModuleDeps = ObservationStoreDeps & {
+  viewEvents?: Partial<ViewEventsSettings>;
+  cockpitEnabled?: () => boolean;
+};
 
 /**
  * Builds the module's router. Consumed by `server/index.ts`.
  *
  * Two sub-routers share the `/api/observation` mount: the wall's object/seen/watch endpoints and
  * the view-event log. Both stay inside this module's leaf boundary — neither reaches a sibling
- * feature module.
+ * feature module. Only the wall is behind the cockpit switch; the view-event log is the app-wide
+ * instrumentation and keeps writing for every connected page.
  */
 export function createObservationModule(deps: ObservationModuleDeps = {}): Router {
   const router = express.Router();
-  router.use(createObservationRoutes(createObservationStore(deps)));
+  const cockpitEnabled = deps.cockpitEnabled ?? readCockpitEnabled;
+  router.use(createObservationRoutes(createObservationStore(deps), cockpitEnabled));
   router.use(createViewEventRoutes(createViewEventService(resolveViewEventsSettings(deps.viewEvents))));
   return router;
 }

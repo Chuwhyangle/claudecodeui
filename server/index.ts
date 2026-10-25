@@ -14,6 +14,7 @@ import { WebSocket as WebSocketClient, type WebSocket } from 'ws';
 import { AppError, findApplicationRoot, getModuleDirectory, installVoiceRuntimeConfigReader, IS_PLATFORM, terminalTextStyles } from '@/shared/utils.js';
 import type { AuthenticatedWebSocketRequest, HostMode, LLMProvider, ProviderRuntimeWriter } from '@/shared/types.js';
 import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
+import { installCockpitEnabledPort } from '@/shared/ports/cockpit-enabled.port.js';
 import { installConnectedClientsPort } from '@/shared/ports/connected-clients.port.js';
 import { installInitiativeAuditRatioPort } from '@/shared/ports/initiative-audit-ratio.port.js';
 import { installProjectsSessionFetchPort } from '@/shared/ports/projects-session-fetch.port.js';
@@ -61,7 +62,7 @@ import { quayFleetRegistry, quayRoutes, quayService } from './modules/quay/index
 // no sibling module), which is why the two seams it needs are bound here.
 import { createCockpitModule } from './modules/cockpit/index.js';
 import { commandsRoutes } from './modules/commands/index.js';
-import { loadServerSettings, settingsRoutes, type ResidentRestoreSettings } from './modules/settings/index.js';
+import { loadServerSettings, createServerFeaturesRouter, settingsRoutes, type ResidentRestoreSettings } from './modules/settings/index.js';
 import {
     createAccessTokensService,
     createOAuthClientsRouter,
@@ -287,6 +288,12 @@ for (const problem of serverSettings.problems) {
 // boot-time reading above as the only reader of the settings module. Installed before the
 // routes are mounted, and read lazily on the first initiatives request.
 installInitiativeAuditRatioPort({ readAuditRatio: () => serverSettings.initiative.auditRatio });
+// The cockpit's feature switch. The cockpit's dedicated routes live in modules/quay and
+// modules/observation, both composed before this reading exists (quayRoutes at import time);
+// the port carries the ONE boot-time value to their request-time gates without a
+// `modules/quay -> modules/settings` import (AC-394's cycle budget). Fail-closed before this
+// line: a route can never expose the cockpit by omission.
+installCockpitEnabledPort({ readEnabled: () => serverSettings.cockpit.enabled });
 const queryClaude = providerRuntimeService.getRunner('claude');
 const queryCursor = providerRuntimeService.getRunner('cursor');
 const gitRoutes = createGitModule({
@@ -1576,8 +1583,12 @@ createWebSocketServer(server, {
         control: chatControl,
         uiNavigations,
         // The cockpit's shared state: `cockpit.hello` / `cockpit.event` frames are routed into
-        // it and every state change is broadcast back on the same sockets.
-        cockpitHub,
+        // it and every state change is broadcast back on the same sockets. With the feature
+        // switched off the hub is NOT handed to the gateway, so both frames are dropped and the
+        // cockpit's confirmed-send path is unreachable from a socket. The hub itself is still
+        // built: the observation layer's `publish` seam broadcasts through it, and with no
+        // cockpit participant that broadcast has no recipients.
+        ...(serverSettings.cockpit.enabled ? { cockpitHub } : {}),
     },
     shell: {
         resolveProviderSessionId: (sessionId, provider) => {
@@ -1738,6 +1749,16 @@ app.use('/api/quay', authenticateToken, quayRoutes);
 app.use('/api/commands', authenticateToken, commandsRoutes);
 
 // Settings API Routes (protected)
+//
+// `/features` is mounted FIRST and carries the server-level switches a client needs before it
+// renders an entry point (today: the cockpit). It is a separate router because its reading is
+// the composition root's boot-time value, not the per-user settings service; both live under
+// the same authenticated `/api/settings` prefix.
+app.use(
+    '/api/settings/features',
+    authenticateToken,
+    createServerFeaturesRouter({ cockpit: { enabled: serverSettings.cockpit.enabled } }),
+);
 app.use('/api/settings', authenticateToken, settingsRoutes);
 
 // Personal-access-token self-check. The token itself is the credential — a
