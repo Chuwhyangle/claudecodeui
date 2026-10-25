@@ -31,15 +31,37 @@ extra:
 
 ## AC
 
-- [ ] 新增 `src/modules/chat/tests/composerMenuAnchor.test.ts`（vitest）：对 `innerWidth` ∈ {320, 390, 768} × 触发器 `rect.right` ∈ {贴右缘, 视口中部, 偏左} 的组合，断言算出的菜单盒 `[left, right]` 完全落在 `[8, innerWidth-8]` 内；`npx vitest run src/modules/chat/tests/composerMenuAnchor.test.ts` 退出码 0。
-- [ ] 同文件含纵向用例：`rect.top` 很小（< 100）或 `visualViewport.height` 小于 `innerHeight` 时，菜单盒 `top >= 8`，且底边不低于 `visualViewport` 可视区；该用例在修复前（对 `git stash` 掉修复后的原实现）为红。
-- [ ] `grep -nE "max\(200|max\(160" src/modules/chat/hooks/useComposerMenuAnchor.ts` 无命中（夹紧下限已移除）。
-- [ ] `npx vitest run src/modules/chat/tests/chatComposerResponsive.test.tsx` 退出码 0（既有移动端更多菜单行为不回退）；`npx tsc --noEmit -p tsconfig.json` 无新增错误。
-- [ ] MCP 浏览器在 390×780 与 320×568 下点击「…」，菜单四边都在视口内；展开「定时发送」选择器后仍在视口内且无横向滚动；截图存 `tmp/` 并贴出（UI 任务 DoD 条款，见 AGENTS.md「UI 验证」）。
+- [x] 新增 `src/modules/chat/tests/composerMenuAnchor.test.ts`（vitest）：对 `innerWidth` ∈ {320, 390, 768} × 触发器 `rect.right` ∈ {贴右缘, 视口中部, 偏左} 的组合，断言算出的菜单盒 `[left, right]` 完全落在 `[8, innerWidth-8]` 内；`npx vitest run src/modules/chat/tests/composerMenuAnchor.test.ts` 退出码 0。
+- [x] 同文件含纵向用例：`rect.top` 很小（< 100）或 `visualViewport.height` 小于 `innerHeight` 时，菜单盒 `top >= 8`，且底边不低于 `visualViewport` 可视区；该用例在修复前（对 `git stash` 掉修复后的原实现）为红。
+- [x] `grep -nE "max\(200|max\(160" src/modules/chat/hooks/useComposerMenuAnchor.ts` 无命中（夹紧下限已移除）。
+- [x] `npx vitest run src/modules/chat/tests/chatComposerResponsive.test.tsx` 退出码 0（既有移动端更多菜单行为不回退）；`npx tsc --noEmit -p tsconfig.json` 无新增错误。
+- [x] MCP 浏览器在 390×780 与 320×568 下点击「…」，菜单四边都在视口内；展开「定时发送」选择器后仍在视口内且无横向滚动；截图存 `tmp/` 并贴出（UI 任务 DoD 条款，见 AGENTS.md「UI 验证」）。
 
 ## DoD
 
 在真实运行的页面上，用 MCP 浏览器移动尺寸（390×780、320×568）实际点开「…」菜单、展开日程选择器、再点开模型菜单与权限菜单各一次，四边均不越出视口，截图存 `tmp/` 并随任务贴出；如存在可用场景，另跑 `node scripts/ui-scenario.mjs <scenario.json>` 并贴出 JSON 报告。只有单测绿、没有实机截图，不算落地。MCP 浏览器若被占用，按共享车道教训用一次性 Playwright spec，且不得改动用户服务端偏好、不得在运行中的会话页按 Escape。
+
+## Evidence
+
+- 单测：`QUAY_VITEST_MAX_WORKERS=2 npx vitest run src/modules/chat/tests/composerMenuAnchor.test.ts` → 3 passed。反向验证：只 `git stash` 掉 `useComposerMenuAnchor.ts` 的修复（测试文件保留）→ 3 failed（横向夹紧、顶部 8px、visualViewport 底边三条均红）。
+- 回归：`npx vitest run src/modules/chat/tests/chatComposerResponsive.test.tsx` → 16 passed。
+- 类型：`npx tsc --noEmit -p tsconfig.json` → exit 0。
+- 下限移除：`grep -nE "max\(200|max\(160" src/modules/chat/hooks/useComposerMenuAnchor.ts` → 无命中（exit 1）。
+- 实机（本会话无浏览器 MCP，按 DoD 用一次性 Playwright；隔离实例 :3191 + 本 worktree 的 Vite :5199，隔离 HOME、`residentRestore.enabled=false`、未按 Escape、未改用户偏好）。读数（fixed 盒子的左/上/右/下，视口边距）：
+
+  | 视口 | 菜单 | box (l,t,r,b) | 边距 l/t/r/b | scrollWidth/clientWidth |
+  | --- | --- | --- | --- | --- |
+  | 390×780 | 「…」 | 125,587,328,719 | 125/587/62/61 | 201/201 |
+  | 390×780 | 定时发送（已展开） | 53,293,328,719 | 53/293/62/61 | 273/273 |
+  | 390×780 | 模型 | 180,418,328,719 | 180/418/62/61 | 146/146 |
+  | 390×780 | 权限 | 8,305,360,719 | 8/305/30/61 | 350/350 |
+  | 320×568 | 「…」 | 109,375,312,507 | 109/375/8/61 | 201/201 |
+  | 320×568 | 定时发送（已展开） | 38,81,312,507 | 38/81/8/61 | 272/272 |
+  | 320×568 | 模型 | 164,206,312,507 | 164/206/8/61 | 146/146 |
+  | 320×568 | 权限 | 8,29,312,507 | 8/29/8/61 | 302/302 |
+
+  全部 `inside=true`（四边均在视口内）；定时发送的 `datetime-local` 宽 245px（390）/244px（320），完全落在菜单内；`document` 横向溢出 0；关闭后残留 overlay 0；`pageerror` 0。截图与 `report.json`：`tmp/ui-menu-anchor/{390x780,320x568}-{more,schedule,model,permission}.png`。
+- ui-scenario：`e2e/scenarios/` 仅有 `cockpit-mode-switch.json` 与 `quay-wall-focus-pin-utter.json`，均不覆盖 composer 菜单，故无可用场景可跑。
 
 ## Touches
 
