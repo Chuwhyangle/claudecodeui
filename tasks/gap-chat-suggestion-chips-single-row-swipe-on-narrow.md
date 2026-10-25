@@ -1,7 +1,7 @@
 ---
 id: gap-chat-suggestion-chips-single-row-swipe-on-narrow
 title: Chat 建议 chip：窄屏单行滑动压低输入区高度；chip 外框统一为虚线（quoted 保留主题色虚线边+淡底）
-status: ready
+status: done
 labels:
   - gap
   - defect
