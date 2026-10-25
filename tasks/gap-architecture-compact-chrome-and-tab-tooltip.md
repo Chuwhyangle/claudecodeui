@@ -22,25 +22,43 @@ extra:
 
 ## AC
 
-- [ ] 新增 vitest 用例（名含 `desktop toolbar keeps Export and Legend in the overflow menu`）：桌面档渲染面板，断言工具栏上没有可见的 `Export ▾` 与 `Legend` 顶层按钮，存在带 `aria-label` 的 `⋯` 溢出触发器；点开后菜单内含全部 `data-architecture-export-item` 条目与 Legend 入口；`Open in new tab`、`Text`、`Fullscreen`（`data-architecture-fullscreen-toggle`）仍是顶层按钮且各有 `aria-label`。
-- [ ] 新增 e2e `e2e/architecture-compact-chrome.spec.ts`（沿用 `e2e/support/architectureFixture.ts`）：视口 1440×900、侧栏展开，断言 `[data-architecture-toolbar]` 只有一行（其高度 ≤ 52px，且所有顶层按钮的 `getBoundingClientRect().top` 相同），且 `[data-architecture-canvas-header]` 高度 ≤ 40px；`npx playwright test e2e/architecture-compact-chrome.spec.ts` 退出码 0。
-- [ ] 新增 vitest 用例（名含 `desktop readout defaults to one line`）：桌面档首次渲染时 `data-architecture-readout-toggle` 的 `aria-expanded` 为 `false`，`data-architecture-filter-hidden` 行、`data-architecture-filter-show-all`、`data-architecture-filter-reset` 不在 DOM；点击 toggle 后三者出现。
-- [ ] 新增 vitest 用例（名含 `collapsed readout keeps Show mentioned reachable`）：构造 `hiddenMentionedKinds` 非空的筛选读数，折叠态下仍存在 `data-architecture-filter-show-mentioned` 按钮，点击后会话提到的实体被显示（与现有 `showHiddenMentioned` 行为一致）；`hiddenMentionedKinds` 为空时该按钮不出现。
-- [ ] 新增 vitest 用例（新文件 `src/shared/ui/tests/Tooltip.test.tsx`，名含 `tooltip closes on press and stays closed until re-enter`）：hover 触发后显示；在触发元素内 pointerdown/click 后立即消失；不离开时不再弹出；mouseleave 再 mouseenter 后恢复；触屏长按路径仍可显示。
-- [ ] 在 `src/modules/project-workspace/tests/workspaceTabsResponsive.test.tsx` 新增用例（名含 `tab tooltip only when the label is hidden`）：标签文字可见的 tab 不渲染 tooltip，仅图标的 tab 渲染 tooltip，点击后 tooltip 关闭。
-- [ ] 既有用例随新结构更新后全部通过：`npx vitest run src/modules/architecture/tests/exportMenu.test.tsx src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/mobileCompactToolbar.test.tsx src/modules/architecture/tests/fullscreen.test.tsx` 退出码 0（分文件逐个跑，不做多文件 fan-out）。
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` 退出码 0（新增文案键 12 个 locale 齐全）。
-- [ ] `npx playwright test e2e/architecture-fullscreen.spec.ts e2e/architecture-overlay-layout.spec.ts` 退出码 0（既有全屏 e2e 随新工具栏更新后仍绿）。
-- [ ] `npx tsc --noEmit -p tsconfig.json` 退出码 0。
+- [x] 新增 vitest 用例（名含 `desktop toolbar keeps Export and Legend in the overflow menu`）：桌面档渲染面板，断言工具栏上没有可见的 `Export ▾` 与 `Legend` 顶层按钮，存在带 `aria-label` 的 `⋯` 溢出触发器；点开后菜单内含全部 `data-architecture-export-item` 条目与 Legend 入口；`Open in new tab`、`Text`、`Fullscreen`（`data-architecture-fullscreen-toggle`）仍是顶层按钮且各有 `aria-label`。
+- [x] 新增 e2e `e2e/architecture-compact-chrome.spec.ts`（沿用 `e2e/support/architectureFixture.ts`）：视口 1440×900、侧栏展开，断言 `[data-architecture-toolbar]` 只有一行（其高度 ≤ 52px，且所有顶层按钮的 `getBoundingClientRect().top` 相同），且 `[data-architecture-canvas-header]` 高度 ≤ 40px；`npx playwright test e2e/architecture-compact-chrome.spec.ts` 退出码 0。
+- [x] 新增 vitest 用例（名含 `desktop readout defaults to one line`）：桌面档首次渲染时 `data-architecture-readout-toggle` 的 `aria-expanded` 为 `false`，`data-architecture-filter-hidden` 行、`data-architecture-filter-show-all`、`data-architecture-filter-reset` 不在 DOM；点击 toggle 后三者出现。
+- [x] 新增 vitest 用例（名含 `collapsed readout keeps Show mentioned reachable`）：构造 `hiddenMentionedKinds` 非空的筛选读数，折叠态下仍存在 `data-architecture-filter-show-mentioned` 按钮，点击后会话提到的实体被显示（与现有 `showHiddenMentioned` 行为一致）；`hiddenMentionedKinds` 为空时该按钮不出现。
+- [x] 新增 vitest 用例（新文件 `src/shared/ui/tests/Tooltip.test.tsx`，名含 `tooltip closes on press and stays closed until re-enter`）：hover 触发后显示；在触发元素内 pointerdown/click 后立即消失；不离开时不再弹出；mouseleave 再 mouseenter 后恢复；触屏长按路径仍可显示。
+- [x] 在 `src/modules/project-workspace/tests/workspaceTabsResponsive.test.tsx` 新增用例（名含 `tab tooltip only when the label is hidden`）：标签文字可见的 tab 不渲染 tooltip，仅图标的 tab 渲染 tooltip，点击后 tooltip 关闭。
+- [x] 既有用例随新结构更新后全部通过：`npx vitest run src/modules/architecture/tests/exportMenu.test.tsx src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/mobileCompactToolbar.test.tsx src/modules/architecture/tests/fullscreen.test.tsx` 退出码 0（分文件逐个跑，不做多文件 fan-out）。
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` 退出码 0（新增文案键 12 个 locale 齐全）。
+- [x] `npx playwright test e2e/architecture-fullscreen.spec.ts e2e/architecture-overlay-layout.spec.ts` 退出码 0（既有全屏 e2e 随新工具栏更新后仍绿）。
+- [x] `npx tsc --noEmit -p tsconfig.json` 退出码 0。
 
 ## DoD
 
 在真实运行的页面上完成并留证（截图存 `tmp/`，在任务里贴出）：用 MCP 浏览器打开一个真实会话的 Architecture tab，（1）1440×900、侧栏展开，工具栏为一行、读数为一行，画布顶 y 与画布高度相对改动前（197 / 657）明确改善，贴前后截图和读数；（2）点开 `⋯` 溢出菜单，逐项走通 Export 条目与 Legend；（3）展开读数，点 `Show all` / `Reset filters`，并在存在被隐藏的会话相关实体时直接点折叠态的 `Show mentioned (N)`；（4）点击 workspace 的 Architecture tab 后 tooltip 立即消失且不遮挡 `Open in new tab`；（5）手机视口（390×844）确认 compact 档没有退化。同时存在可用场景时跑 `node scripts/ui-scenario.mjs <scenario.json>` 并贴 JSON 报告与检查点截图。仅有单测通过不算完成。
 
+## DoD evidence
+
+真实页面，1440×900、侧栏展开（面板宽 1151px = 1440 − 289px 侧栏），compact-chrome fixture 会话：
+
+- **工具栏一行**：高 41px，四个顶层动作 top 全为 66（`Open in new tab` / `Text` / `Fullscreen` / `⋯`），工具栏上无 `Export ▾`、无 `Legend`。
+- **读数一行**：`[data-architecture-canvas-header]` 高 35.5px，`aria-expanded=false`，`data-architecture-filter-hidden` / Show all / Reset 均不在 DOM。
+- **画布**：顶 y=133.5、高 731px；改动前的真实读数为 197 / 657（proposal 里的量测）——画布多出 63.5px 高度，画布高 657→731。
+- **溢出菜单逐项走通**：`puml`（`architecture-class-…-.puml`）、`copy`（剪贴板以 `@startuml` 开头）、`svg`、`png`、`mmd`（`architecture-entity.mmd`）各自下载成功；再从同一菜单点开 Legend 弹层。
+- **折叠态 Show mentioned**（functions-384 读数：默认 filter 隐藏 function，画面上是 12 个 class）：折叠行读作 `▸ Show mentioned (2)`；点击后 12→14 节点、按钮消失；展开读数显示 `Hidden 382 functions · ▸ Show all · ↺ Reset filters`；`Reset filters` 回到 12 节点，`Show all` 升到 396 节点、筛选行随之消失。
+- **tab tooltip**（900×800，图标化 tab）：hover 显示 `Architecture`（`[data-tooltip-bubble]`）；点击后 bubble 数为 0；`Open in new tab` 中心点命中测试返回按钮本身。
+- **手机 390×844**：工具栏一行 56px（四个按钮 top 均为 50.5），读数折叠，工具栏内无 Fullscreen，Fullscreen 与 Open in new tab 都在 Adjust sheet 里。
+- 整轮 `pageErrors` 为空。
+
+截图：`tmp/architecture-compact-chrome/dod-01-desktop-one-line.png` … `dod-13-phone-adjust-sheet.png`；结构化报告：`tmp/architecture-compact-chrome/dod-report.json`。仓库现成场景只有 `cockpit-mode-switch` 与 `quay-wall-focus-pin-utter`，没有 Architecture 场景可用，故上面的 Playwright 真实页面走查即作为场景报告。
+
+**已知残留**：当 filter 徽标进入两段式（`Hiding 4 · keeping 1`，即刚点过 Show mentioned 的状态）时，桌面工具栏会把 `⋯` 触发��挤到第二行；AC 量测的状态（徽标为 `Hiding 4`）是一行。未在本任务修：工具栏是刻意 wrap 而非滚动（滚动容器会裁掉搜索浮层），改成 nowrap 在 1024px 断点可能溢出控件。
+
 ## Touches
 
 - src/modules/architecture/ArchitecturePanel.tsx
 - src/modules/architecture/ArchitectureExportMenu.tsx
+- src/modules/architecture/ArchitectureSheet.tsx
 - src/shared/ui/Tooltip.tsx
 - src/modules/project-workspace/WorkspaceTabs.tsx
 - src/modules/i18n/locales/de/common.json
@@ -59,9 +77,12 @@ extra:
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/architecture/tests/fullscreen.test.tsx
+- src/modules/architecture/tests/architectureDiffHighlight.test.tsx
 - src/shared/ui/tests/Tooltip.test.tsx
 - src/modules/project-workspace/tests/workspaceTabsResponsive.test.tsx
+- playwright.config.ts
 - e2e/architecture-compact-chrome.spec.ts
+- e2e/architecture-canvas-layout.spec.ts
 - e2e/architecture-fullscreen.spec.ts
 - e2e/architecture-overlay-layout.spec.ts
 - tasks/gap-architecture-compact-chrome-and-tab-tooltip.md
