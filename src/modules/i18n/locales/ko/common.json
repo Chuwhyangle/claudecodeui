@@ -826,6 +826,8 @@
     "observationPinFailed": "고정을 변경할 수 없습니다.",
     "observationPinNext": "연결을 확인하고 다시 시도하세요.",
     "echoDone": "완료: {{text}}",
+    "echoNoEffect": "“{{text}}”로 열 항목이 없습니다.",
+    "echoNoEffectNext": "먼저 프로젝트 카드를 선택한 뒤 확대하세요.",
     "echoSent": "전송됨.",
     "echoCancelled": "취소됨.",
     "echoUnmatched": "「{{text}}」을(를) 실행할 수 없습니다.",

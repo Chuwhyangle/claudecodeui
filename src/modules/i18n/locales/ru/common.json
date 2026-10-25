@@ -796,6 +796,8 @@
     "observationPinFailed": "Не удалось изменить закрепление.",
     "observationPinNext": "Проверьте соединение и повторите.",
     "echoDone": "Готово: {{text}}",
+    "echoNoEffect": "Для «{{text}}» ничего не открылось.",
+    "echoNoEffectNext": "Сначала выберите карточку проекта, затем увеличьте.",
     "echoSent": "Отправлено.",
     "echoCancelled": "Отменено.",
     "echoUnmatched": "Не удалось выполнить «{{text}}».",

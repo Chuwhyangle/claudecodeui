@@ -796,6 +796,8 @@
     "observationPinFailed": "Anheftung konnte nicht geändert werden.",
     "observationPinNext": "Verbindung prüfen und erneut versuchen.",
     "echoDone": "Erledigt: {{text}}",
+    "echoNoEffect": "Für „{{text}}“ wurde nichts geöffnet.",
+    "echoNoEffectNext": "Zuerst eine Projektkarte fokussieren, dann hineinzoomen.",
     "echoSent": "Gesendet.",
     "echoCancelled": "Abgebrochen.",
     "echoUnmatched": "„{{text}}“ konnte nicht ausgeführt werden.",

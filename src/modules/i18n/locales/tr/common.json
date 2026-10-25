@@ -826,6 +826,8 @@
     "observationPinFailed": "Sabitleme değiştirilemedi.",
     "observationPinNext": "Bağlantıyı kontrol edip yeniden deneyin.",
     "echoDone": "Tamamlandı: {{text}}",
+    "echoNoEffect": "“{{text}}” için açılacak bir şey yok.",
+    "echoNoEffectNext": "Önce bir proje kartına odaklanın, sonra yakınlaştırın.",
     "echoSent": "Gönderildi.",
     "echoCancelled": "İptal edildi.",
     "echoUnmatched": "“{{text}}” yapılamadı.",

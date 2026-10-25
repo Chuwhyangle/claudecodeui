@@ -826,6 +826,8 @@
     "observationPinFailed": "无法更改钉选。",
     "observationPinNext": "检查连接后重试。",
     "echoDone": "已完成：{{text}}",
+    "echoNoEffect": "“{{text}}”没有可打开的内容。",
+    "echoNoEffectNext": "先聚焦一个项目卡片，再放大。",
     "echoSent": "已发送。",
     "echoCancelled": "已取消。",
     "echoUnmatched": "无法执行「{{text}}」。",

@@ -826,6 +826,8 @@
     "observationPinFailed": "Impossibile modificare il fissaggio.",
     "observationPinNext": "Controlla la connessione e riprova.",
     "echoDone": "Fatto: {{text}}",
+    "echoNoEffect": "Niente da aprire per «{{text}}».",
+    "echoNoEffectNext": "Seleziona prima una scheda progetto, poi ingrandisci.",
     "echoSent": "Inviato.",
     "echoCancelled": "Annullato.",
     "echoUnmatched": "Impossibile eseguire «{{text}}».",

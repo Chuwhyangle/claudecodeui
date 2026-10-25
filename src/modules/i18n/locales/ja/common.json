@@ -826,6 +826,8 @@
     "observationPinFailed": "固定を変更できませんでした。",
     "observationPinNext": "接続を確認して再試行してください。",
     "echoDone": "完了：{{text}}",
+    "echoNoEffect": "「{{text}}」で開けるものがありません。",
+    "echoNoEffectNext": "先にプロジェクトカードにフォーカスしてからズームしてください。",
     "echoSent": "送信しました。",
     "echoCancelled": "取り消しました。",
     "echoUnmatched": "「{{text}}」を実行できませんでした。",

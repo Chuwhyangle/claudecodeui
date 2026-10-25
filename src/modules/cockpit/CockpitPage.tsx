@@ -19,6 +19,7 @@ import { SidebarModeSwitch } from '@/modules/sidebar';
 import CockpitInput from '@/modules/cockpit/CockpitInput';
 import CockpitStage from '@/modules/cockpit/CockpitStage';
 import type { CockpitFleetStatus } from '@/modules/cockpit/CockpitStage';
+import { parseCockpitIntent } from '@/modules/cockpit/cockpitIntent';
 import { pinCockpitTargetSession } from '@/modules/cockpit/cockpitRouting';
 import type { CockpitFleetPort, CockpitFleetReading, CockpitFleetWriteResult } from '@/modules/cockpit/cockpitRouting';
 import {
@@ -65,7 +66,7 @@ const REMOTE_PATH = '/cockpit/remote';
  * from `md` up (the same size the sidebar's settings button uses). Exported so the cockpit test
  * can assert both controls carry this class rather than measuring jsdom boxes, which have no CSS.
  */
-export const COCKPIT_HEADER_CONTROL_SIZE_CLASS = 'min-h-11 min-w-11 md:min-h-7 md:min-w-7';
+export const COCKPIT_HEADER_CONTROL_SIZE_CLASS = 'min-h-11 min-w-11 md:min-h-6 md:min-w-6';
 
 /**
  * The address the stage's QR code encodes: this deployment's origin and basename plus
@@ -380,6 +381,9 @@ export default function CockpitPage() {
   const echoSubmitRevRef = useRef(0);
   // The phrase the armed echo is about, so the done sentence can quote it.
   const lastSubmittedTextRef = useRef('');
+  // The stage (view + focus) as it was when the phrase left, so an echo can tell a zoom that
+  // opened something from one the hub accepted but had nothing to open.
+  const echoSubmitStageRef = useRef('');
 
   const loadFleet = useCallback(async () => {
     setFleet({ status: 'loading' });
@@ -983,8 +987,23 @@ export default function CockpitPage() {
     if (!echoArmedRef.current) return;
     if (hubState.rev <= echoSubmitRevRef.current) return;
     echoArmedRef.current = false;
-    setEcho({ kind: 'done', text: t('cockpit.echoDone', { text: lastSubmittedTextRef.current }) });
-  }, [hubState.pendingSend, hubState.rev, t]);
+    const submitted = lastSubmittedTextRef.current;
+    // A zoom the hub accepted but that changed neither view nor focus opened nothing: say so
+    // instead of a green 「Done」 over an unchanged stage.
+    const stageNow = JSON.stringify([hubState.view, hubState.focusUri]);
+    const zoomWithoutEffect =
+      parseCockpitIntent(submitted, { visible: [], projects: [] }).kind === 'zoom-in' &&
+      stageNow === echoSubmitStageRef.current;
+    setEcho(
+      zoomWithoutEffect
+        ? {
+            kind: 'refused',
+            text: t('cockpit.echoNoEffect', { text: submitted }),
+            next: t('cockpit.echoNoEffectNext'),
+          }
+        : { kind: 'done', text: t('cockpit.echoDone', { text: submitted }) },
+    );
+  }, [hubState.pendingSend, hubState.rev, hubState.view, hubState.focusUri, t]);
 
   // The done/refused echo disappears after a few seconds; a confirmation lives exactly as long
   // as the card it belongs to.
@@ -1060,9 +1079,10 @@ export default function CockpitPage() {
       echoArmedRef.current = true;
       echoSubmitRevRef.current = hubState.rev;
       lastSubmittedTextRef.current = text;
+      echoSubmitStageRef.current = JSON.stringify([hubState.view, hubState.focusUri]);
       hub.dispatch({ type: 'utterance', text });
     },
-    [hub, hubState.rev],
+    [hub, hubState.rev, hubState.view, hubState.focusUri],
   );
 
   const confirmSend = useCallback(() => {
@@ -1350,7 +1370,7 @@ export default function CockpitPage() {
       data-cockpit-debug={debug ? 'true' : undefined}
     >
       <header
-        className="flex flex-nowrap items-center justify-between gap-2 border-b border-border/40 px-3 py-1.5 md:flex-wrap md:px-4 md:py-2"
+        className="relative flex flex-nowrap items-center justify-between gap-2 border-b border-border/40 px-3 py-1.5 md:flex-wrap md:px-4 md:py-2"
         data-testid="cockpit-header"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
@@ -1405,7 +1425,8 @@ export default function CockpitPage() {
           aria-expanded={remoteOpen}
           className={cn(
             COCKPIT_HEADER_CONTROL_SIZE_CLASS,
-            'hidden items-center justify-center rounded-md border border-border/60 px-2 text-xs text-foreground hover:bg-accent md:inline-flex',
+            // The switch's pill is 28px (24px segments + padding); the toggle matches the pill, not a segment.
+            'hidden items-center justify-center rounded-md border border-border/60 px-2 text-xs text-foreground hover:bg-accent md:inline-flex md:h-7',
           )}
           data-testid="cockpit-remote-toggle"
         >
@@ -1418,7 +1439,9 @@ export default function CockpitPage() {
         */}
         {remoteOpen && (
           <div
-            className="flex items-center gap-2"
+            // A popover under the header, not a header child: opening it must not grow the
+            // header and push the stage and the mode switch down.
+            className="absolute right-4 top-full z-30 mt-1 flex items-center gap-2 rounded-lg border border-border/60 bg-background p-3 shadow-lg"
             data-testid="cockpit-remote-panel"
             data-cockpit-remote-url={remoteUrl}
           >

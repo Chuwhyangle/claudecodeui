@@ -917,6 +917,8 @@
     "observationPinFailed": "Could not change the pin.",
     "observationPinNext": "Check the connection and try again.",
     "echoDone": "Done: {{text}}",
+    "echoNoEffect": "Nothing opened for “{{text}}”.",
+    "echoNoEffectNext": "Focus a project card first, then zoom in.",
     "echoSent": "Sent.",
     "echoCancelled": "Cancelled.",
     "echoUnmatched": "Could not do “{{text}}”.",

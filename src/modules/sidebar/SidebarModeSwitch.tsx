@@ -125,7 +125,7 @@ function ModeSwitchView({
       'relative flex items-center justify-center rounded-md text-muted-foreground transition-all',
       isColumn
         ? 'h-11 w-11'
-        : cn(controlSizeClass ?? 'min-h-11 min-w-11 md:min-h-8 md:min-w-8', 'md:px-1.5'),
+        : cn(controlSizeClass ?? 'min-h-11 min-w-11 md:min-h-6 md:min-w-6', 'md:px-1.5'),
       active
         ? 'bg-background text-foreground shadow-sm'
         : 'hover:text-foreground hover:bg-accent/60',

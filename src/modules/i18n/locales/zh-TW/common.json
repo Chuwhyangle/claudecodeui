@@ -826,6 +826,8 @@
     "observationPinFailed": "無法變更釘選。",
     "observationPinNext": "檢查連線後重試。",
     "echoDone": "已完成：{{text}}",
+    "echoNoEffect": "「{{text}}」沒有可開啟的內容。",
+    "echoNoEffectNext": "請先聚焦一個專案卡片，再放大。",
     "echoSent": "已傳送。",
     "echoCancelled": "已取消。",
     "echoUnmatched": "無法執行「{{text}}」。",

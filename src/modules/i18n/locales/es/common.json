@@ -826,6 +826,8 @@
     "observationPinFailed": "No se pudo cambiar la fijación.",
     "observationPinNext": "Comprueba la conexión e inténtalo de nuevo.",
     "echoDone": "Hecho: {{text}}",
+    "echoNoEffect": "No se abrió nada para «{{text}}».",
+    "echoNoEffectNext": "Enfoca primero una tarjeta de proyecto y luego amplía.",
     "echoSent": "Enviado.",
     "echoCancelled": "Cancelado.",
     "echoUnmatched": "No se pudo hacer «{{text}}».",

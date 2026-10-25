@@ -826,6 +826,8 @@
     "observationPinFailed": "Impossible de modifier l’épingle.",
     "observationPinNext": "Vérifiez la connexion et réessayez.",
     "echoDone": "Terminé : {{text}}",
+    "echoNoEffect": "Rien à ouvrir pour « {{text}} ».",
+    "echoNoEffectNext": "Sélectionnez d'abord une carte de projet, puis zoomez.",
     "echoSent": "Envoyé.",
     "echoCancelled": "Annulé.",
     "echoUnmatched": "Impossible d’exécuter « {{text}} ».",
