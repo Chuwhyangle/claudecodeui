@@ -55,6 +55,7 @@ UI 任务的真实落地标准（按仓库 UI 验证规则）：在隔离实例�
 - src/modules/project-workspace/WorkspaceMain.tsx
 - src/modules/chat/ChatInterface.tsx
 - src/modules/cockpit/DeployReadiness.tsx
+- src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/index.ts
 - src/modules/cockpit/tests/DeployReadiness.test.tsx
 - src/modules/i18n/locales/de/common.json
