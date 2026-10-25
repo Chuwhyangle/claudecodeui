@@ -23,14 +23,26 @@ extra:
 
 ## AC
 
-- [ ] `e2e/ui-scenario-runner.spec.ts` 新增用例（标题含 `zero-width`）：夹具里项目名 span 先于可见行出现且宽度为 0，运行器仍以 exit 0 跑完 `cockpit-mode-switch.json`；命令 `bash scripts/with-memory-cap.sh npx playwright test e2e/ui-scenario-runner.spec.ts -g "zero-width"` 退出码 0。
-- [ ] 同文件新增用例（标题含 `without the semantic surface`）：把运行器指向一个不挂语义面的静态页，断言 exit 2 且 stderr 含 `semantic surface`，并在 `BOOT_TIMEOUT_MS` 内返回；`... -g "without the semantic surface"` 退出码 0。
-- [ ] 既有两臂不退化：`bash scripts/with-memory-cap.sh npx playwright test e2e/ui-scenario-runner.spec.ts -g "the UI scenario runner on the Quay wall"` 退出码 0。
-- [ ] `node --check scripts/ui-scenario.mjs` 退出码 0。
+- [x] `e2e/ui-scenario-runner.spec.ts` 新增用例（标题含 `zero-width`）：夹具里项目名 span 先于可见行出现且宽度为 0，运行器仍以 exit 0 跑完 `cockpit-mode-switch.json`；命令 `bash scripts/with-memory-cap.sh npx playwright test e2e/ui-scenario-runner.spec.ts -g "zero-width"` 退出码 0。
+- [x] 同文件新增用例（标题含 `without the semantic surface`）：把运行器指向一个不挂语义面的静态页，断言 exit 2 且 stderr 含 `semantic surface`，并在 `BOOT_TIMEOUT_MS` 内返回；`... -g "without the semantic surface"` 退出码 0。
+- [x] 既有两臂不退化：`bash scripts/with-memory-cap.sh npx playwright test e2e/ui-scenario-runner.spec.ts -g "the UI scenario runner on the Quay wall"` 退出码 0。
+- [x] `node --check scripts/ui-scenario.mjs` 退出码 0。
 
 ## DoD
 
 在真实对象上各走一次并贴出输出：(a) 开发构建的真实侧栏（项目名 span 实测宽度为 0）上，`node scripts/ui-scenario.mjs e2e/scenarios/cockpit-mode-switch.json --project claudecodeui --session <真实会话名>` 现在 exit 0，JSON 报告与检查点截图存 `tmp/`；(b) 对 `scripts/isolated-instance.sh start` 起的生产构建实例跑同一命令，exit 2 且 stderr 明确说明「语义面未挂载、需要开发构建」，不再是泛化超时。夹具与单测只是必要条件，不算完成。
+
+## Evidence
+
+- AC1 `-g "zero-width"` → `1 passed (3.2s)`。夹具自检通过：decoy span `getBoundingClientRect().width === 0`、Playwright `toBeHidden()`、且在精确匹配里 DOM 先于可见行（`firstIsDecoy=true`）；运行器 `exit 0`、`stepCount=3`、3 张检查点截图非空。
+- AC2 `-g "without the semantic surface"` → `1 passed (32.2s)`；运行器 `exit 2`、`stdout` 无报告、stderr 含 `semantic surface`，30.5s 结束（受 `BOOT_TIMEOUT_MS` 约束，不是挂死）。
+- AC3 `-g "the UI scenario runner on the Quay wall"` → `1 passed, 1 skipped (12.7s)`，命令退出码 0。wall 臂的 skip 是该用例既有的 `test.skip`（本机 quay-fleet registry 未登记临时夹具项目），不是新增退化。
+- AC4 `node --check scripts/ui-scenario.mjs` → exit 0。
+- DoD(a) 开发构建：worktree 全量构建后，`SERVER_PORT=<隔离后端> vite` 的 dev 实例（`http://127.0.0.1:6191`，语义面已挂载）。侧栏实测：`span[title="claudecodeui"]` 宽 `0`；`getByText("claudecodeui",{exact:true}).first()` resolved=1 `visible=false`；`filter({visible:true})` count=`0`（即只按「第一个可见匹配」仍选不到，必须点它所属的行）。
+  `node scripts/ui-scenario.mjs e2e/scenarios/cockpit-mode-switch.json --base-url http://127.0.0.1:6191 --auth-token <token> --project claudecodeui --session "会话列表 Pin to wall 按钮位置重叠" --out tmp/dod/dev` → **exit 0**，stderr `ui-scenario: passed (3 steps, 4293ms, 3 checkpoint(s))`。报告 `tmp/dod/dev/report.json`；截图 `tmp/dod/dev/step-1-open-session.png` (228577 B)、`step-2-open-cockpit.png` (29700 B)、`step-3-open-session.png` (26016 B)；侧栏截图 `tmp/dod/dev-sidebar.png`。
+- DoD(b) 生产构建实例：`bash scripts/isolated-instance.sh start`（worktree 的 `dist/` + `dist-server/` 全量构建，:6091，residentRestore disabled）。同一命令 → **exit 2，33s**，stderr：
+  `ui-scenario: Error: the semantic surface (window.__cloudcliScenario) was not mounted within 30000ms. It is installed only by a development build: main.tsx gates it on import.meta.env.DEV plus localStorage['ui-scenario']='on'. A page served from a production dist/ build (for example an instance started by scripts/isolated-instance.sh) has no semantic surface to drive. Point --base-url at the Vite dev server instead (npm run client, or npm run dev).`
+  stdout 0 字节（不再是无信息量的泛化超时）。证据：`tmp/dod-production-stderr.txt`。
 
 ## Touches
 
