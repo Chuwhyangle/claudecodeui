@@ -1,5 +1,18 @@
 import type { QuayGanttInterval, QuayGanttLanes, QuayGanttUnavailableReason } from '@/shared/types';
 import { cn } from '@/shared/utils';
+import {
+  LOOP_PULSE_AXIS_Y,
+  LOOP_PULSE_BAR_HEIGHT,
+  LOOP_PULSE_LANE_HEIGHT,
+  LOOP_PULSE_LANES,
+  LOOP_PULSE_PLOT_HEIGHT,
+  LOOP_PULSE_TOP,
+  MIN_BAR_WIDTH,
+  PAD,
+  PLOT_LEFT,
+  PLOT_WIDTH,
+  PLOT_WIDTH_INNER,
+} from '@/modules/quay/chartGeometry';
 
 /**
  * How many lane guide lines to draw. Fixed at quay's own `FIXED_GANTT_LANES`, and
@@ -7,23 +20,12 @@ import { cn } from '@/shared/utils';
  * contract ("this board has five lanes"), so a quiet board must still show five empty
  * lanes rather than collapsing to however many happen to be occupied.
  */
-export const GANTT_LANES = 5;
+export const GANTT_LANES = LOOP_PULSE_LANES;
 
-// The bar is drawn in a fixed 600xH coordinate space and scaled uniformly by CSS
-// (`w-full h-auto`), matching quay's own renderer. Unlike `TimelineBar` the SVG is NOT
-// stretched with `preserveAspectRatio="none"`: this card carries axis labels and an
-// overflow badge as real text, and non-uniform scaling would distort them.
-const PLOT_WIDTH = 600;
-const PAD = 4;
-const PLOT_LEFT = PAD;
-const PLOT_WIDTH_INNER = PLOT_WIDTH - 2 * PAD;
-const LANE_HEIGHT = 16;
-const BAR_HEIGHT = 10;
-const TOP = 8;
-const AXIS_Y = TOP + GANTT_LANES * LANE_HEIGHT + 6;
-const PLOT_HEIGHT = AXIS_Y + 12;
-/** A zero-length interval would be invisible, so every bar keeps at least this width. */
-const MIN_BAR_WIDTH = 1.5;
+// The bar is drawn in the shared `PLOT_WIDTH`-wide coordinate space (`chartGeometry`) and
+// scaled uniformly by CSS (`w-full h-auto`), matching quay's own renderer. Unlike `TimelineBar`
+// the SVG is NOT stretched with `preserveAspectRatio="none"`: this card carries axis labels and
+// an overflow badge as real text, and non-uniform scaling would distort them.
 
 /**
  * The windows the dashboard offers, in hours. The default mirrors quay's own
@@ -225,14 +227,14 @@ function GanttPlot({ gantt }: { gantt: QuayGanttLanes }) {
       const left = toX(Math.max(interval.startMs, windowStartMs));
       const right = toX(Math.min(interval.endMs, nowMs));
       const state = intervalState(interval);
-      const top = TOP + laneIndex * LANE_HEIGHT;
+      const top = LOOP_PULSE_TOP + laneIndex * LOOP_PULSE_LANE_HEIGHT;
       return (
         <rect
           key={`${interval.taskId}-${interval.startMs}-${index}`}
           x={left}
           y={top}
           width={Math.max(MIN_BAR_WIDTH, right - left)}
-          height={BAR_HEIGHT}
+          height={LOOP_PULSE_BAR_HEIGHT}
           rx={2}
           fill="currentColor"
           className={stateClass(state)}
@@ -262,19 +264,24 @@ function GanttPlot({ gantt }: { gantt: QuayGanttLanes }) {
     </p>
   ) : (
     <svg
-      viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+      viewBox={`0 0 ${PLOT_WIDTH} ${LOOP_PULSE_PLOT_HEIGHT}`}
       role="img"
       aria-label={`Loop pulse gantt chart (${GANTT_LANES} fixed lanes)`}
       className="h-auto w-full"
       data-testid="quay-gantt-svg"
+      // The reading's window, exposed as machine-readable endpoints so the alignment criterion
+      // (and the cockpit) can compare the gantt with the two `TimelineBar`s without parsing
+      // clock text. `TimelineBar` publishes the same two attributes.
+      data-window-start={windowStartMs}
+      data-window-end={nowMs}
     >
       {Array.from({ length: GANTT_LANES }, (_unused, index) => (
         <line
           key={index}
           x1={PLOT_LEFT}
-          y1={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
+          y1={LOOP_PULSE_TOP + index * LOOP_PULSE_LANE_HEIGHT + LOOP_PULSE_LANE_HEIGHT - 4}
           x2={PLOT_WIDTH - PAD}
-          y2={TOP + index * LANE_HEIGHT + LANE_HEIGHT - 4}
+          y2={LOOP_PULSE_TOP + index * LOOP_PULSE_LANE_HEIGHT + LOOP_PULSE_LANE_HEIGHT - 4}
           stroke="currentColor"
           className="text-border"
           strokeDasharray="2 2"
@@ -287,7 +294,7 @@ function GanttPlot({ gantt }: { gantt: QuayGanttLanes }) {
       {overflow > 0 && (
         <text
           x={PLOT_WIDTH - PAD}
-          y={TOP}
+          y={LOOP_PULSE_TOP}
           fontSize={9}
           fontWeight={700}
           textAnchor="end"
@@ -299,13 +306,13 @@ function GanttPlot({ gantt }: { gantt: QuayGanttLanes }) {
         </text>
       )}
 
-      <line x1={PLOT_LEFT} y1={AXIS_Y} x2={PLOT_WIDTH - PAD} y2={AXIS_Y} stroke="currentColor" className="text-border" />
-      <text x={PLOT_LEFT} y={PLOT_HEIGHT - 1} fontSize={9} fill="currentColor" className="text-muted-foreground">
+      <line x1={PLOT_LEFT} y1={LOOP_PULSE_AXIS_Y} x2={PLOT_WIDTH - PAD} y2={LOOP_PULSE_AXIS_Y} stroke="currentColor" className="text-border" />
+      <text x={PLOT_LEFT} y={LOOP_PULSE_PLOT_HEIGHT - 1} fontSize={9} fill="currentColor" className="text-muted-foreground">
         {formatClock(windowStartMs)}
       </text>
       <text
         x={PLOT_WIDTH - PAD}
-        y={PLOT_HEIGHT - 1}
+        y={LOOP_PULSE_PLOT_HEIGHT - 1}
         fontSize={9}
         textAnchor="end"
         fill="currentColor"

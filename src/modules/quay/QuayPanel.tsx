@@ -16,6 +16,7 @@ import type { QuayPanelView } from '@/modules/quay/hooks/useQuayStatus';
 import LoopPulseGantt from '@/modules/quay/LoopPulseGantt';
 import { formatQuayUri } from '@/modules/quay/quayUri';
 import TimelineBar from '@/modules/quay/TimelineBar';
+import { fanInTimelineRanges, resolveTimelineWindow, testsTimelineRanges } from '@/modules/quay/timelineMapping';
 
 type QuayPanelProps = {
   projectId: string;
@@ -214,32 +215,6 @@ function toEpochMs(value: string | null): number | null {
 
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
-}
-
-const HOUR_MS = 3_600_000;
-
-/** Mirrors `LoopPulseGantt`'s default (`DEFAULT_GANTT_WINDOW_HOURS`): used only when the snapshot carries no lane reading *and* the host has not selected a window. */
-const DEFAULT_TIMELINE_WINDOW_HOURS = 3;
-
-/**
- * The one window the Quay tab's three charts share (see `QuayTimelineWindow`).
- *
- * It always comes from the Loop pulse reading — `snapshot.gantt.windowHours` + `nowMs` — so the
- * Tests and Fan-in bars are cut to exactly the gantt's slice instead of adapting a window to
- * whatever records they happen to hold. When there is no lane reading (an un-upgraded plugin, or
- * a failed read) the window falls back to the host's selected `windowHours` and the snapshot's own
- * `generatedAt` as `now`, so the two bars still render over a stated window rather than guessing one.
- */
-function resolveTimelineWindow(
-  gantt: QuaySnapshot['gantt'],
-  requestedWindowHours: number | undefined,
-  generatedAt: string,
-): QuayTimelineWindow {
-  // `generatedAt` is always present on a loaded snapshot; `Date.now()` is only a last resort so a
-  // bar is never handed a windowless boundary.
-  const nowMs = gantt?.nowMs ?? toEpochMs(generatedAt) ?? Date.now();
-  const windowHours = gantt?.windowHours ?? requestedWindowHours ?? DEFAULT_TIMELINE_WINDOW_HOURS;
-  return { startMs: nowMs - windowHours * HOUR_MS, endMs: nowMs };
 }
 
 /**
@@ -499,24 +474,9 @@ function StageGoals({ goals }: { goals: QuaySnapshot['goals'] }) {
 /** Tests card: the current suite reading plus a timeline of the recent history rounds over the panel's shared window. */
 function TestsCard({ tests, window }: { tests: QuaySnapshot['tests']; window: QuayTimelineWindow }) {
   const current = tests?.current ?? null;
-  const rounds = tests?.recentRounds ?? [];
-  // Chronological: the reader returns the most recent N in file order, so the
-  // timeline's x-axis runs oldest → newest left to right.
-  const ranges = rounds.flatMap((round) => {
-    const startMs = toEpochMs(round.startedAt);
-    if (startMs === null) {
-      return [];
-    }
-
-    return [
-      {
-        startMs,
-        endMs: startMs + (round.durationMs ?? 0),
-        state: round.state,
-        label: `Round ${round.round}: ${round.state} (${round.pass ?? '?'} pass / ${round.fail ?? '?'} fail)`,
-      },
-    ];
-  });
+  // The range mapping is shared with the cockpit's `PulseStrip` (`timelineMapping.ts`), so the
+  // tab and the cockpit cannot place a round differently.
+  const ranges = testsTimelineRanges(tests);
 
   return (
     <section data-testid="quay-panel-tests">
@@ -571,23 +531,9 @@ function TestsCard({ tests, window }: { tests: QuaySnapshot['tests']; window: Qu
 /** Fan-in card: a timeline of recent lock windows over the panel's shared window, plus the last five task/outcome rows. */
 function FanInCard({ fanIn, window }: { fanIn: QuaySnapshot['fanIn']; window: QuayTimelineWindow }) {
   const attempts = fanIn?.recent ?? [];
-  // The carrier stores the lock epochs in Unix seconds; the timeline works in ms.
-  const ranges = attempts.flatMap((attempt) => {
-    if (attempt.lockAcquireEpoch === null) {
-      return [];
-    }
-
-    const startMs = attempt.lockAcquireEpoch * 1000;
-    const endMs = attempt.lockReleaseEpoch === null ? startMs : attempt.lockReleaseEpoch * 1000;
-    return [
-      {
-        startMs,
-        endMs: Math.max(endMs, startMs),
-        state: attempt.outcome,
-        label: `${attempt.task}: ${attempt.outcome}`,
-      },
-    ];
-  });
+  // The range mapping is shared with the cockpit's `PulseStrip` (`timelineMapping.ts`); the
+  // carrier stores lock epochs in Unix seconds and that module converts them.
+  const ranges = fanInTimelineRanges(fanIn);
   // Newest first for the text list, even though the timeline reads left to right.
   const recentAttempts = attempts.slice(-5).reverse();
 
