@@ -2,7 +2,7 @@
 id: gap-quay-event-driven-refresh-capability-probe-and-dispatch-reading
 title: Quay 服务端消费端：能力探测与降级、fs.watch + task log 事件触发刷新、读 worker-dispatch.json（TTL
   全量兜底保留）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
