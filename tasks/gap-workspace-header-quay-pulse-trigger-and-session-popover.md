@@ -1,7 +1,7 @@
 ---
 id: gap-workspace-header-quay-pulse-trigger-and-session-popover
 title: 工作区标题栏：Quay 迷你甘特图/脉冲条触发器 + 会话 task/goal popover（移动端 tab 下拉去文本）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
