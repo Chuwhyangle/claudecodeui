@@ -943,16 +943,19 @@ describe('the strip shares the empty textarea\'s cell', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The strip's left pass-through gutter
+// The strip's leading pass-through spacer
 // ---------------------------------------------------------------------------
 
 /**
- * The strip lies over the box, so its leftmost strip must not swallow the press
- * that should focus the textarea (and raise the phone's keyboard). The gutter is
- * a placeholder OUTSIDE the scroll container, `pointer-events-none`, sized from
- * the one exported constant, in both arrangements.
+ * The strip lies over the box, so the space before its first chip must not swallow
+ * the press that should focus the textarea (and raise the phone's keyboard). That
+ * space is the strip's FIRST FLOW ITEM, sized from the one exported constant, in
+ * both arrangements: on the wide wrapping row only the first line is indented (the
+ * second starts flush left), and on the narrow row it is the head of the scroll
+ * content, so it slides away with the chips instead of leaving a blank strip.
+ * Nothing but a chip takes the pointer: the listbox is `pointer-events-none`.
  */
-describe('the strip\'s left pass-through gutter', () => {
+describe('the strip\'s leading pass-through spacer', () => {
   const stubChipRowMatchMedia = (matches: boolean) => {
     vi.spyOn(window, 'matchMedia').mockImplementation(((query: string) => ({
       matches,
@@ -966,12 +969,13 @@ describe('the strip\'s left pass-through gutter', () => {
     })) as unknown as typeof window.matchMedia);
   };
   const tokensOf = (element: Element) => element.className.split(/\s+/).filter(Boolean);
+  const SPACER = '[data-slot="input-suggestion-chips-pass-through"]';
 
-  it('AC2: the scroll area gives up the same 44px constant, outside its own scroll box', () => {
+  it('AC1: the spacer is the first item INSIDE the listbox and reads the one 44px constant', () => {
     assert.equal(
       SUGGESTION_CHIP_PASS_THROUGH_PX,
       44,
-      `the pass-through gutter is 44px; the exported constant reads ${SUGGESTION_CHIP_PASS_THROUGH_PX}`,
+      `the pass-through spacer is 44px; the exported constant reads ${SUGGESTION_CHIP_PASS_THROUGH_PX}`,
     );
 
     for (const narrow of [true, false]) {
@@ -979,37 +983,75 @@ describe('the strip\'s left pass-through gutter', () => {
       const { view } = renderComposer();
 
       const listbox = view.getByRole('listbox');
-      const gutter = view.container.querySelector<HTMLElement>(
-        '[data-slot="input-suggestion-chips-pass-through"]',
-      );
-      assert.ok(gutter, `a pass-through placeholder exists (narrow=${narrow})`);
+      const spacer = view.container.querySelector<HTMLElement>(SPACER);
+      assert.ok(spacer, `a pass-through spacer exists (narrow=${narrow})`);
       assert.equal(
-        gutter.style.width,
+        spacer.style.width,
         `${SUGGESTION_CHIP_PASS_THROUGH_PX}px`,
-        `the placeholder reads the one constant (narrow=${narrow})`,
+        `the spacer reads the one constant (narrow=${narrow})`,
+      );
+      assert.equal(
+        listbox.firstElementChild === spacer,
+        true,
+        `the spacer is the listbox's first flow item, so only the first line is indented (narrow=${narrow})`,
       );
       assert.equal(
         listbox.style.marginLeft,
-        `${SUGGESTION_CHIP_PASS_THROUGH_PX}px`,
-        `the scroll area gives up the same constant (narrow=${narrow})`,
-      );
-      assert.equal(
-        listbox.contains(gutter),
-        false,
-        `the placeholder is outside the scroll container (narrow=${narrow})`,
-      );
-      assert.ok(
-        tokensOf(gutter).includes('pointer-events-none'),
-        `the placeholder must not take the press; class read ${gutter.className}`,
-      );
-      assert.ok(
-        tokensOf(listbox).includes('pointer-events-auto'),
-        `the scroll area itself stays interactive; class read ${listbox.className}`,
+        '',
+        `no row-wide margin: that would indent every wrapped line (narrow=${narrow})`,
       );
 
       view.unmount();
       vi.restoreAllMocks();
     }
+  });
+
+  it('AC2: nothing but a chip takes the pointer, so the spacer and the gaps reach the textarea', () => {
+    for (const narrow of [true, false]) {
+      stubChipRowMatchMedia(narrow);
+      const { view } = renderComposer();
+
+      const listbox = view.getByRole('listbox');
+      const spacer = view.container.querySelector<HTMLElement>(SPACER);
+      assert.ok(spacer);
+      assert.ok(
+        tokensOf(listbox).includes('pointer-events-none'),
+        `the listbox must not take the press; class read ${listbox.className}`,
+      );
+      assert.equal(
+        tokensOf(listbox).includes('pointer-events-auto'),
+        false,
+        `the listbox must not re-enable the pointer (narrow=${narrow})`,
+      );
+      for (const chip of view.getAllByRole('option')) {
+        assert.ok(
+          tokensOf(chip).includes('pointer-events-auto'),
+          `a chip keeps the pointer; class read ${chip.className}`,
+        );
+      }
+
+      view.unmount();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('AC3: a wide chip leaves room for the spacer, so the first line never holds only the spacer', () => {
+    stubChipRowMatchMedia(false);
+    const { view } = renderComposer();
+
+    // The spacer plus the row gap (`gap-1` = 4px) is what the first chip has to share
+    // the line with. A chip allowed the full row would not fit beside it and would wrap
+    // to line two, leaving line one blank — the empty row this layout exists to remove.
+    const reserved = SUGGESTION_CHIP_PASS_THROUGH_PX + 4;
+    for (const chip of view.getAllByRole('option')) {
+      assert.ok(
+        tokensOf(chip).includes(`max-w-[calc(100%-${reserved}px)]`),
+        `a wide chip is capped at the row minus ${reserved}px; class read ${chip.className}`,
+      );
+    }
+
+    view.unmount();
+    vi.restoreAllMocks();
   });
 });
 

@@ -1175,9 +1175,6 @@ export default function ChatComposer({
                 chips={chipStrip.chips}
                 selectedIndex={chipStripSelectedIndex}
                 onAccept={chipStrip.onAccept}
-                // The row's own background (the gaps between chips) must focus the
-                // input instead of being eaten by the listbox.
-                onBackgroundPress={() => textareaRef.current?.focus()}
               />
             )}
             {/*

@@ -13,12 +13,6 @@ type InputSuggestionChipsProps = {
   selectedIndex: number | null;
   /** The one acceptance entry. What the chip does is its source's data, not this component's. */
   onAccept: (chip: SuggestionChip) => void;
-  /**
-   * Called when the strip's own background — the gaps between chips or the
-   * space past the last one — is pressed. The composer focuses its textarea
-   * here so a click aimed at the input is never swallowed by the listbox.
-   */
-  onBackgroundPress?: () => void;
 };
 
 /**
@@ -34,18 +28,23 @@ type InputSuggestionChipsProps = {
 const NARROW_CHIP_ROW_QUERY = '(max-width: 480px), (pointer: coarse)';
 
 /**
- * The width, in CSS pixels, of the strip's left edge that belongs to no element.
+ * The width, in CSS pixels, of the empty space BEFORE the strip's first chip.
  *
  * The strip is drawn over the empty textarea (they share one grid cell), so a
- * press anywhere on the strip would otherwise be eaten by the listbox instead of
- * reaching the box underneath. This gutter is left empty on purpose: the scroll
- * area starts after it, and the box below receives the native press there, which
- * is what opens the soft keyboard and the long-press paste menu on a phone. The
- * textarea keeps its 16px left padding, so the caret blinks inside the gutter as
- * the feedback that the box has focus.
+ * press on the strip would otherwise be eaten instead of reaching the box
+ * underneath. The space is the strip's first flow item and belongs to no
+ * pointer target: a press there falls through to the textarea, which is what
+ * opens the soft keyboard and the long-press paste menu on a phone, and the
+ * textarea's 16px left padding puts its caret inside the space as the feedback
+ * that the box has focus.
  *
- * One constant for both arrangements: the wide row gives up the same 44px, so a
- * window drag never changes how much of the strip the pointer can reach.
+ * It is an item of the row, not a margin of it. On the wide wrapping row only the
+ * first line is indented and the second starts flush left; on the narrow row it
+ * is the head of the scroll content, so a swipe slides it away with the chips
+ * rather than leaving a blank strip beside them.
+ *
+ * One constant for both arrangements, so a window drag never changes how much of
+ * the strip the pointer can reach.
  */
 export const SUGGESTION_CHIP_PASS_THROUGH_PX = 44;
 
@@ -99,9 +98,9 @@ function useNarrowChipRow(): boolean {
  * one-line textarea stays underneath.
  *
  * Because the strip lies over the box, it may not swallow presses aimed at the
- * box: the wrapper is `pointer-events-none`, the listbox re-enables the pointer
- * for itself only, and the leftmost `SUGGESTION_CHIP_PASS_THROUGH_PX` belongs to
- * no element at all — a press there falls through to the textarea.
+ * box: the wrapper AND the listbox are `pointer-events-none`, and only a chip turns
+ * the pointer back on. The leading spacer, the gaps between chips and the space
+ * past the last one therefore all fall through to the textarea.
  *
  * The row has two arrangements, chosen from the viewport (see
  * `NARROW_CHIP_ROW_QUERY`):
@@ -118,10 +117,9 @@ function useNarrowChipRow(): boolean {
  *   is still in `title`.
  *
  * There is deliberately no second-line preview: hovering or keyboard-selecting a
- * chip only highlights that chip, in either arrangement. A press on the listbox's
- * own background is cancelled and handed to `onBackgroundPress` so focus still
- * reaches the textarea; a press on a chip is cancelled too, so clicking a chip
- * neither moves the caret nor steals focus from the textarea. Selection itself is
+ * chip only highlights that chip, in either arrangement. A press on a chip
+ * is cancelled, so clicking a chip neither moves the caret nor steals focus from
+ * the textarea. Selection itself is
  * owned by the composer's keydown and mirrored through `aria-activedescendant`.
  *
  * Three sources share the strip in a fixed order — quoted selection, model
@@ -134,7 +132,6 @@ export function InputSuggestionChips({
   chips,
   selectedIndex,
   onAccept,
-  onBackgroundPress,
 }: InputSuggestionChipsProps) {
   const { t } = useTranslation('chat');
   const isNarrowRow = useNarrowChipRow();
@@ -150,24 +147,11 @@ export function InputSuggestionChips({
       // cell the textarea names (the composer switches its body to a grid and writes
       // the identical `gridArea` on the textarea). Both are placed explicitly —
       // an auto-placed item would be pushed to the next free row under the strip.
-      // `pointer-events-none` is what lets a press in the pass-through gutter reach
-      // the box below; only the listbox turns the pointer back on for itself.
+      // `pointer-events-none` on the wrapper and on the listbox is what lets a press
+      // anywhere but on a chip reach the box below.
       className="pointer-events-none relative z-10 w-full"
       style={{ gridArea: '1 / 1' }}
     >
-      {/*
-        The pass-through gutter. Deliberately OUTSIDE the scroll area, so the
-        native sideways pan on a narrow phone never slides it away with the chips,
-        and `pointer-events-none`, so the press lands on the textarea: no
-        programmatic `focus()` (which does not necessarily raise the soft keyboard
-        on iOS) is involved on this path.
-      */}
-      <div
-        data-slot="input-suggestion-chips-pass-through"
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-0"
-        style={{ width: SUGGESTION_CHIP_PASS_THROUGH_PX }}
-      />
       <div
         id={listId}
         role="listbox"
@@ -178,27 +162,24 @@ export function InputSuggestionChips({
         // scroll gesture is needed. Narrow: one line with the strip's own horizontal
         // scroll, so the row's height stays one chip tall. In both, the row's height
         // is content-driven, which is how the shared cell grows with it.
-        // The left margin is the pass-through gutter; it is the same value in both
-        // arrangements (one exported constant), so the pointer-reachable part of the
-        // strip does not change with the viewport.
+        // `pointer-events-none`: only a chip takes the pointer, so the leading spacer,
+        // the gaps and the row end are all presses on the textarea underneath. On the
+        // narrow row the chips' own touch pan still scrolls this container — the pan
+        // follows the touched element's ancestors, not their `pointer-events`.
         className={cn(
-          'pointer-events-auto flex min-w-0 items-start gap-1 px-4 py-2',
+          'pointer-events-none flex min-w-0 items-start gap-1 px-4 py-2',
           isNarrowRow
             ? 'scrollbar-hide flex-nowrap overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]'
             : 'flex-wrap',
         )}
-        style={{ marginLeft: SUGGESTION_CHIP_PASS_THROUGH_PX }}
-        onMouseDown={(event) => {
-          // Chips and their gaps bubble here; only a press on the listbox
-          // itself is background. Never let it swallow the click: cancel the
-          // default and let the composer put focus back in the textarea.
-          if (event.target !== event.currentTarget) {
-            return;
-          }
-          event.preventDefault();
-          onBackgroundPress?.();
-        }}
       >
+        {/* The pass-through spacer: the first flow item of the row (see the constant). */}
+        <span
+          data-slot="input-suggestion-chips-pass-through"
+          aria-hidden="true"
+          className="shrink-0 self-stretch"
+          style={{ width: SUGGESTION_CHIP_PASS_THROUGH_PX }}
+        />
         {chips.map((chip, index) => (
           <button
             key={chip.id}
@@ -214,16 +195,18 @@ export function InputSuggestionChips({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onAccept(chip)}
             className={cn(
-              'rounded-full border border-dashed border-border/70 px-2 py-0.5 text-left text-xs leading-5 text-muted-foreground transition-colors',
+              'pointer-events-auto rounded-full border border-dashed border-border/70 px-2 py-0.5 text-left text-xs leading-5 text-muted-foreground transition-colors',
               // Wide: two lines, then a clamp — the full text is still in `title`.
-              // `min-w-0` + `max-w-full` let a long chip shrink to the row and
-              // wrap instead of forcing the listbox wider than the composer.
+              // `min-w-0` + the cap let a long chip shrink and wrap instead of forcing
+              // the listbox wider than the composer. The cap is the row minus the
+              // spacer (44px) and one gap (4px): a chip allowed the whole row would not
+              // fit beside the spacer, wrap to line two, and leave line one empty.
               // Narrow: one line per chip, truncated at 85% of the row so the next
               // chip peeks and the horizontal swipe is discoverable; the chip never
               // shrinks, so the track overflows and actually scrolls.
               isNarrowRow
                 ? 'max-w-[85%] shrink-0 truncate whitespace-nowrap'
-                : 'line-clamp-2 min-w-0 max-w-full break-words',
+                : 'line-clamp-2 min-w-0 max-w-[calc(100%-48px)] break-words',
               'hover:border-primary/60 hover:text-foreground',
               // Every source draws the same dashed frame: the row has no legend,
               // and all three chips accept the same way, so a solid-vs-dashed

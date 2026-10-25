@@ -13,19 +13,19 @@ import enChat from '@/modules/i18n/locales/en/chat.json';
 import type { ComposerChipStrip } from '@/shared/types';
 
 /**
- * The suggestion strip's background is a click target of its own: the listbox
- * used to be `flex-1`, stretching over the textarea and eating every press
- * that landed outside a chip. jsdom has no layout, so the geometry half lives
- * in the task's real-page DoD; here one leg per contract:
+ * The suggestion strip's background is NOT a click target: the strip lies over the
+ * textarea, so every press that is not on a chip must reach the box underneath. The
+ * listbox used to be `flex-1` (then `pointer-events-auto` with a routed
+ * `onBackgroundPress`), which stretched it over the textarea and ate presses. jsdom
+ * has no hit-testing, so the geometry half lives in the real-page DoD; here one leg
+ * per contract:
  *
- * (a) a press on the listbox itself is cancelled and routed to the composer,
- * (b) a press on a chip is still cancelled but is not a background press,
- * (c) clicking a chip accepts exactly that chip,
- * (d) the hook is optional — no callback, no throw,
- * (e) through the real composer, that routed press focuses the textarea,
- * (f) the listbox no longer carries `flex-1`, the root cause's class.
+ * (a) a press on a chip is still cancelled (it neither moves the caret nor steals focus),
+ * (b) clicking a chip accepts exactly that chip,
+ * (c) the listbox takes no pointer itself and each chip does: that is what routes a
+ *     press on the gaps, the spacer or the row end to the textarea,
+ * (d) the listbox no longer carries `flex-1`, the root cause's class.
  */
-
 vi.mock('@/shared/api', () => {
   const okJson = (data: unknown) => Promise.resolve({ ok: true, json: async () => data });
   return {
@@ -110,31 +110,17 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('suggestion strip background press', () => {
-  it('(a) cancels a press on the listbox itself and calls onBackgroundPress once', () => {
-    const onBackgroundPress = vi.fn();
-    const view = renderChips({ onBackgroundPress });
-
-    const listbox = view.getByRole('listbox');
-    const mouseDown = press();
-    listbox.dispatchEvent(mouseDown);
-
-    assert.equal(mouseDown.defaultPrevented, true);
-    assert.equal(onBackgroundPress.mock.calls.length, 1);
-  });
-
-  it('(b) cancels a press on a chip without treating it as a background press', () => {
-    const onBackgroundPress = vi.fn();
-    const view = renderChips({ onBackgroundPress });
+  it('(a) cancels a press on a chip', () => {
+    const view = renderChips();
 
     const chip = view.getByRole('option', { name: '第一' });
     const mouseDown = press();
     chip.dispatchEvent(mouseDown);
 
     assert.equal(mouseDown.defaultPrevented, true);
-    assert.equal(onBackgroundPress.mock.calls.length, 0);
   });
 
-  it('(c) accepts the clicked chip with exactly that chip', () => {
+  it('(b) accepts the clicked chip with exactly that chip', () => {
     const onAccept = vi.fn();
     const view = renderChips({ onAccept });
 
@@ -146,16 +132,19 @@ describe('suggestion strip background press', () => {
     );
   });
 
-  it('(d) does not throw on a background press when the callback is omitted', () => {
+  it('(c) takes no pointer on the listbox, only on each chip', () => {
     const view = renderChips();
 
+    const tokens = (element: Element) => element.className.split(/\s+/).filter(Boolean);
     const listbox = view.getByRole('listbox');
-    assert.doesNotThrow(() => {
-      listbox.dispatchEvent(press());
-    });
+    assert.equal(tokens(listbox).includes('pointer-events-none'), true);
+    assert.equal(tokens(listbox).includes('pointer-events-auto'), false);
+    for (const chip of view.getAllByRole('option')) {
+      assert.equal(tokens(chip).includes('pointer-events-auto'), true);
+    }
   });
 
-  it('(f) keeps `flex-1` off the listbox, the class that stretched it over the textarea', () => {
+  it('(d) keeps `flex-1` off the listbox, the class that stretched it over the textarea', () => {
     const view = renderChips();
 
     const listbox = view.getByRole('listbox');
@@ -258,7 +247,7 @@ function baseChipStrip(overrides: Partial<ComposerChipStrip> = {}): ComposerChip
 }
 
 describe('composer wiring', () => {
-  it('(e) focuses the composer textarea when the strip background is pressed', () => {
+  it('(e) draws the strip in the textarea\'s own cell with nothing but the chips taking the pointer', () => {
     const textareaRef = React.createRef<HTMLTextAreaElement>();
     const view = render(React.createElement(ChatComposer, {
       ...composerBaseProps(),
@@ -271,13 +260,12 @@ describe('composer wiring', () => {
     // nodes serialises them, and the message alone can exhaust the worker.
     assert.equal(textareaRef.current === textarea, true, 'the composer binds the ref to its own textarea');
 
-    // Start from a blurred box so focus can only come from the press below.
-    (document.activeElement as HTMLElement | null)?.blur();
-    assert.equal(document.activeElement !== textarea, true, 'the box starts blurred');
-
-    fireEvent.mouseDown(view.getByRole('listbox'));
-
-    assert.equal(document.activeElement === textarea, true, 'the press must leave focus in the textarea');
+    const strip = view.container.querySelector<HTMLElement>('[data-slot="input-suggestion-chips"]');
+    assert.ok(strip, 'the strip is drawn over the empty box');
+    assert.equal(strip.style.gridArea, textarea.style.gridArea, 'the strip names the textarea\'s own cell');
+    const tokens = (element: Element) => element.className.split(/\s+/).filter(Boolean);
+    assert.equal(tokens(strip).includes('pointer-events-none'), true, 'the wrapper takes no pointer');
+    assert.equal(tokens(view.getByRole('listbox')).includes('pointer-events-none'), true, 'the listbox takes no pointer');
   });
 });
 
