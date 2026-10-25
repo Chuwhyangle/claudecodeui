@@ -73,3 +73,13 @@ extra:
 
 <!-- dedup-ref -->
 去重/合并检查：`tasks/` 中无其他 todo/ready 任务提及 `useComposerMenuAnchor` / `ComposerMobileMoreMenu` / `ComposerMenuSurface`；`task-granularity-advice` 对上述 Touches 返回 `peers: []`、`mentions: []`。结论：none found，单独立案。
+
+## Blocker
+
+**2026-10-25T02:28:20.713Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/gap-composer-menu-anchor-overflows-mobile-viewport.md）⇒ 判惰性，⛔ 未调分类器
+fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
+fan-in-ff-merge: measure ff_only_locked=false
+- run_id：wk-prod-anchor
+- session_id：ac5b1b56-fe76-4580-966a-bf02f10dfbdb

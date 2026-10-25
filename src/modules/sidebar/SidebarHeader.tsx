@@ -321,8 +321,15 @@ export default function SidebarHeader({
             </a>
           )}
 
-          <div className="flex flex-shrink-0 gap-1.5">
-            <SidebarModeSwitch mode="sessions" selectedProjectId={selectedProjectId} t={t} />
+          <div className="flex flex-shrink-0 items-center gap-1.5">
+            {/* Sized to the 32px buttons beside it (segments 28px + the pill's padding), so the
+                row reads as one set of controls rather than a taller pill among small buttons. */}
+            <SidebarModeSwitch
+              mode="sessions"
+              selectedProjectId={selectedProjectId}
+              controlSizeClass="min-h-7 min-w-7 px-1.5"
+              t={t}
+            />
             <button
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/50 transition-all active:scale-95"
               onClick={onShowSettings}
