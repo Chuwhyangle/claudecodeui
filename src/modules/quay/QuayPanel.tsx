@@ -474,7 +474,7 @@ function StageGoals({ goals }: { goals: QuaySnapshot['goals'] }) {
 /** Tests card: the current suite reading plus a timeline of the recent history rounds over the panel's shared window. */
 function TestsCard({ tests, window }: { tests: QuaySnapshot['tests']; window: QuayTimelineWindow }) {
   const current = tests?.current ?? null;
-  // The range mapping is shared with the cockpit's `PulseStrip` (`timelineMapping.ts`), so the
+  // The range mapping is shared with the cockpit's pulse strip (`timelineMapping.ts`), so the
   // tab and the cockpit cannot place a round differently.
   const ranges = testsTimelineRanges(tests);
 
@@ -531,7 +531,7 @@ function TestsCard({ tests, window }: { tests: QuaySnapshot['tests']; window: Qu
 /** Fan-in card: a timeline of recent lock windows over the panel's shared window, plus the last five task/outcome rows. */
 function FanInCard({ fanIn, window }: { fanIn: QuaySnapshot['fanIn']; window: QuayTimelineWindow }) {
   const attempts = fanIn?.recent ?? [];
-  // The range mapping is shared with the cockpit's `PulseStrip` (`timelineMapping.ts`); the
+  // The range mapping is shared with the cockpit's pulse strip (`timelineMapping.ts`); the
   // carrier stores lock epochs in Unix seconds and that module converts them.
   const ranges = fanInTimelineRanges(fanIn);
   // Newest first for the text list, even though the timeline reads left to right.
