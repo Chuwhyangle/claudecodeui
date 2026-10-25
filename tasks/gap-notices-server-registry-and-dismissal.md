@@ -176,11 +176,3 @@ HTTP 403
 3. 两个文件经 `task_write` 补进 `## Touches`（否则 anti-drift 报 out-of-declared）。
 
 复量：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` → `pass 14 / fail 0`（80.5s）。两个新判据文件本身仍为 `pass 5 / fail 0` 与 `pass 9 / fail 0`。
-
-## Blocker
-
-**2026-10-25T03:38:25.775Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=86589 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792899115420
-- run_id：wk-prod-anchor
-- session_id：ab5f5529-1129-4a8b-8578-ac89c436f2ae
