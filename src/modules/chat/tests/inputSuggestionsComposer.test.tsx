@@ -945,6 +945,67 @@ describe('merged strip at the component surface', () => {
   });
 });
 
+describe('every source shares the one dashed frame', () => {
+  /**
+   * The strip has no legend, and a model reply, a habit and a quoted passage
+   * all accept the same way. So the frame must not encode a difference between
+   * them: every chip is dashed. Only the quoted chip's colour and tint mark
+   * WHAT it inserts, not which mechanism produced it.
+   */
+  it('AC: model, habit and quoted chips are all dashed; only quoted is tinted', () => {
+    const view = renderMergedChips();
+    const options = view.getAllByRole('option');
+    const tokensOf = (element: Element) => element.className.split(/\s+/).filter(Boolean);
+
+    assert.deepEqual(
+      options.map((option) => option.getAttribute('data-chip-source')),
+      ['quoted', 'model', 'habit'],
+      'the case must actually exercise all three sources',
+    );
+
+    for (const option of options) {
+      const tokens = tokensOf(option);
+      assert.ok(
+        tokens.includes('border-dashed'),
+        `every chip draws a dashed frame; class read ${option.className}`,
+      );
+      assert.equal(
+        tokens.includes('border-solid'),
+        false,
+        `no chip keeps a solid frame; class read ${option.className}`,
+      );
+    }
+
+    const bySource = (source: string) => options.find(
+      (option) => option.getAttribute('data-chip-source') === source,
+    ) as HTMLElement;
+
+    const quotedTokens = tokensOf(bySource('quoted'));
+    assert.ok(
+      quotedTokens.includes('border-primary/50'),
+      `a quoted chip keeps the theme-coloured edge; class read ${bySource('quoted').className}`,
+    );
+    assert.ok(
+      quotedTokens.includes('bg-primary/5'),
+      `a quoted chip keeps the tinted background; class read ${bySource('quoted').className}`,
+    );
+
+    for (const source of ['model', 'habit']) {
+      const tokens = tokensOf(bySource(source));
+      assert.equal(
+        tokens.includes('border-primary/50'),
+        false,
+        `${source} chips keep the neutral edge; class read ${bySource(source).className}`,
+      );
+      assert.equal(
+        tokens.includes('bg-primary/5'),
+        false,
+        `${source} chips keep no tint; class read ${bySource(source).className}`,
+      );
+    }
+  });
+});
+
 describe('the strip wraps and draws no second-line preview', () => {
   const previewOf = (view: ReturnType<typeof render>) => view.container.querySelector('[data-suggestion-preview]');
 

@@ -50,7 +50,10 @@ export function InlineQuoteChip({ chip, chipRef, position, onAccept }: InlineQuo
       onClick={() => onAccept(chip)}
       style={{ left: position?.left ?? 0, top: position?.top ?? 0 }}
       className={cn(
-        'pointer-events-auto absolute z-20 inline-flex h-6 max-w-[calc(100%-2rem)] items-center truncate rounded-full border border-solid border-primary/50 bg-primary/5 px-2 text-xs text-muted-foreground transition-colors',
+        // The frame matches the row's quoted chip exactly — dashed like every
+        // chip there, with the same theme-coloured edge and tint — so the same
+        // quoted passage does not change appearance when it moves into the draft.
+        'pointer-events-auto absolute z-20 inline-flex h-6 max-w-[calc(100%-2rem)] items-center truncate rounded-full border border-dashed border-primary/50 bg-primary/5 px-2 text-xs text-muted-foreground transition-colors',
         'hover:border-primary/60 hover:text-foreground',
         position === null && 'opacity-0',
       )}

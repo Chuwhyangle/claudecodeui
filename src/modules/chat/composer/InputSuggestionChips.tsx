@@ -178,8 +178,12 @@ export function InputSuggestionChips({
                 ? 'max-w-[85%] shrink-0 truncate whitespace-nowrap'
                 : 'line-clamp-2 min-w-0 max-w-full break-words',
               'hover:border-primary/60 hover:text-foreground',
-              chip.source === 'model' && 'border-solid',
-              chip.source === 'quoted' && 'border-solid border-primary/50 bg-primary/5',
+              // Every source draws the same dashed frame: the row has no legend,
+              // and all three chips accept the same way, so a solid-vs-dashed
+              // split would only read as a difference that does not exist. The
+              // quoted chip keeps its own theme-coloured frame and tint, which
+              // mark what it inserts rather than which mechanism made it.
+              chip.source === 'quoted' && 'border-primary/50 bg-primary/5',
               selectedIndex === index && 'border-primary bg-primary/10 text-foreground',
             )}
           >

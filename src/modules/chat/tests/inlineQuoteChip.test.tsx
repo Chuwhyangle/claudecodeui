@@ -381,6 +381,29 @@ describe('inline chip button', () => {
     assert.equal(digestOf(zhChat), ZH_KEY_SET_DIGEST, 'zh-CN key set unchanged');
   });
 
+  it('(k) draws the same dashed theme-framed chip the strip uses for a quoted passage', () => {
+    const { view } = showInlineChip('前面后面', 2);
+    const button = inlineButtonOf(view);
+    const tokens = button.className.split(/\s+/).filter(Boolean);
+
+    // The same quoted passage must not change appearance when it moves from the
+    // strip into the draft: dashed frame, theme-coloured edge, tinted background.
+    assert.ok(tokens.includes('border-dashed'), `the inline chip is dashed; class read ${button.className}`);
+    assert.equal(
+      tokens.includes('border-solid'),
+      false,
+      `the inline chip keeps no solid frame; class read ${button.className}`,
+    );
+    assert.ok(
+      tokens.includes('border-primary/50'),
+      `the inline chip keeps the theme-coloured edge; class read ${button.className}`,
+    );
+    assert.ok(
+      tokens.includes('bg-primary/5'),
+      `the inline chip keeps the tinted background; class read ${button.className}`,
+    );
+  });
+
   it('(g) cancels mousedown so the transcript selection survives the press', () => {
     const { view } = showInlineChip('前面后面', 2);
     const button = inlineButtonOf(view);
