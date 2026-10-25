@@ -658,3 +658,10 @@
 #   coverage floor green now that the tree collects 439 server test files).
 2879	server/modules/notices/tests/notice-registry.test.ts
 1872	server/modules/system/tests/deploy-notice-provider.test.ts
+#   and the session-mentions row by gap-quay-session-mentions-and-lanes-only-readings, measured one
+#   file at a time on 2026-10-25 with
+#   `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs
+#   --test server/modules/quay/tests/session-mentions.test.ts` (dur=2217ms; its own new criterion; no
+#   green round contains it yet — the row also keeps the 90% coverage floor green now that the tree
+#   collects 440 server test files).
+2217	server/modules/quay/tests/session-mentions.test.ts

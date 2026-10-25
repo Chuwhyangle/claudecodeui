@@ -1633,3 +1633,120 @@ test('the installed `lanes` verb answers this service’s shape and re-selects w
     + ` + ${lanesThree.overflow} overflow; 12h → ${intervalCount(lanesTwelve.lanes)} interval(s)`,
   );
 });
+
+/* ── the lanes-only reading (gap-quay-session-mentions-and-lanes-only-readings) ─────────── */
+
+/**
+ * A runner that answers `lanes` with a document carrying the REQUESTED window and every other
+ * whitelisted verb with `[]`, recording each argv it saw. A window-echoing fixture is what lets
+ * a test tell "the requested window reached the verb" from "the default answered instead".
+ */
+function createWindowEchoLanesRunner(recorded: string[]): QuayCommandRunner {
+  return async (_cwd: string, args: readonly string[]): Promise<QuayCommandResult> => {
+    recorded.push(args.join(' '));
+    if (args[0] === 'lanes') {
+      const windowHours = Number(args[args.length - 1]);
+      // `lanesDocument` is deliberately `unknown` (it feeds the parser); the echo needs its
+      // documented shape, so this arm spells the object out.
+      return {
+        ok: true,
+        code: 0,
+        stdout: JSON.stringify({
+          windowHours,
+          nowMs: LANES_NOW_MS,
+          lanes: [[{
+            taskId: 'gap-lanes-only',
+            runId: 'run-gap-lanes-only',
+            startMs: LANES_NOW_MS - 600_000,
+            endMs: LANES_NOW_MS,
+            phase: 'implementing',
+            finalState: null,
+            fanInOutcome: null,
+          }]],
+          overflow: 0,
+        }),
+        stderr: '',
+      };
+    }
+    return { ok: true, code: 0, stdout: '[]', stderr: '' };
+  };
+}
+
+test('the lanes-only reading spawns one `lanes` child, nothing else, and reuses it inside the TTL', async () => {
+  const recorded: string[] = [];
+  let now = 1_000_000;
+  const service = createQuayService(createDependencies({
+    runCommand: createWindowEchoLanesRunner(recorded),
+    now: () => now,
+  }));
+
+  const six = await service.getQuayLanes('project-1', '6');
+  assert.ok(six !== null);
+  assert.equal(six.ok, true);
+  assert.equal(six.gantt?.windowHours, 6);
+  assert.equal(six.ganttUnavailable, null);
+  assert.equal(six.generatedAt, new Date(now).toISOString());
+  assert.deepEqual(
+    recorded,
+    ['lanes --json --window-hours 6'],
+    'the title bar’s reading must not spawn task list, goal list, adr list or any driver read',
+  );
+
+  // A poll inside the TTL is answered from the (project, window) cache without a new child.
+  now += 1_000;
+  const again = await service.getQuayLanes('project-1', 6);
+  assert.deepEqual(again?.gantt, six.gantt);
+  assert.deepEqual(recorded, ['lanes --json --window-hours 6']);
+
+  // An off-set window and an unparseable one both fall back to the default 3h window.
+  now += 1_000;
+  const seven = await service.getQuayLanes('project-1', '7');
+  assert.equal(seven?.gantt?.windowHours, 3);
+  assert.deepEqual(recorded, [
+    'lanes --json --window-hours 6',
+    'lanes --json --window-hours 3',
+  ]);
+
+  now += 1_000;
+  const abc = await service.getQuayLanes('project-1', 'abc');
+  assert.equal(abc?.gantt?.windowHours, 3);
+  assert.deepEqual(
+    recorded,
+    ['lanes --json --window-hours 6', 'lanes --json --window-hours 3'],
+    'hours=abc normalises onto the cached default window instead of spawning again',
+  );
+});
+
+test('the lanes-only reading carries the same gantt and failure reading the snapshot gives for that window', async () => {
+  const recorded: string[] = [];
+  const service = createQuayService(createDependencies({
+    runCommand: createWindowEchoLanesRunner(recorded),
+    now: () => LANES_NOW_MS,
+  }));
+
+  const lanes = await service.getQuayLanes('project-1', 6);
+  const snapshot = await service.getQuaySnapshot('project-1', { windowHours: 6 });
+  assert.ok(lanes !== null && snapshot !== null);
+  assert.deepEqual(lanes.gantt, snapshot.gantt, 'the title bar and the Loop pulse plot the same document');
+  assert.deepEqual(lanes.ganttUnavailable, snapshot.ganttUnavailable);
+});
+
+test('the lanes-only reading classifies an un-upgraded verb and an unreadable document apart', async () => {
+  // A plugin predating the `lanes` verb: the CLI refuses the sub-command with a non-zero exit.
+  const missingVerb = createQuayService(createDependencies({
+    runCommand: async (_cwd, args) => (args[0] === 'lanes'
+      ? { ok: false, code: 1, stdout: '', stderr: 'unknown command', failureKind: 'nonzero-exit' }
+      : { ok: true, code: 0, stdout: '[]', stderr: '' }),
+  }));
+  const missing = await missingVerb.getQuayLanes('project-1');
+  assert.equal(missing?.gantt, null);
+  assert.equal(missing?.ganttUnavailable, 'plugin-lacks-lanes-verb');
+
+  // The verb ran but printed something that is not a lane document.
+  const unreadable = createQuayService(createDependencies({
+    runCommand: async () => ({ ok: true, code: 0, stdout: 'not a lane document', stderr: '' }),
+  }));
+  const broken = await unreadable.getQuayLanes('project-1');
+  assert.equal(broken?.gantt, null);
+  assert.equal(broken?.ganttUnavailable, 'lanes-read-failed');
+});

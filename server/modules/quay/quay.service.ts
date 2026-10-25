@@ -390,6 +390,23 @@ export function normalizeGanttWindowHours(value: unknown): number {
 }
 
 /**
+ * The lanes-ONLY reading behind the workspace title bar's always-on mini gantt.
+ *
+ * It is deliberately not a `QuaySnapshot`: a pulse strip sits on every tab of the title bar, so
+ * the reading it polls must cost one `quay lanes` child and nothing else. The snapshot would
+ * spawn the task/goal/ADR/driver/config reads on the same poll, none of which the strip plots.
+ * `gantt` / `ganttUnavailable` carry exactly the snapshot's fields and failure semantics, so a
+ * strip and the Loop pulse card can never disagree about the same window.
+ */
+export type QuayLanesReading = {
+  ok: true;
+  gantt: QuayGanttLanes | null;
+  ganttUnavailable: QuayGanttUnavailableReason | null;
+  /** When this reading was assembled (ISO-8601). */
+  generatedAt: string;
+};
+
+/**
  * Projects `quay lanes --json`'s payload onto the card's `QuayGanttLanes` contract.
  *
  * `null` — never a `{lanes: [], overflow: 0}` object — when the payload is not the documented
@@ -2195,6 +2212,33 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
   };
 
   /**
+   * The lanes-only reading (`GET /api/quay/:projectId/lanes`): one `quay lanes` read, reused
+   * inside its TTL, with the window normalised through the same closed set the snapshot uses.
+   *
+   * It rides {@link loadGantt} rather than re-implementing the read, so the TTL cache, the
+   * in-flight dedupe and the `plugin-lacks-lanes-verb` / `lanes-read-failed` classification are
+   * the ones the snapshot already has. `null` is an unknown project, which the route answers 404.
+   */
+  const getQuayLanes = async (
+    projectId: string,
+    windowHoursInput?: unknown,
+  ): Promise<QuayLanesReading | null> => {
+    const projectPath = dependencies.resolveProjectPathById(projectId);
+    if (!projectPath) {
+      return null;
+    }
+
+    const windowHours = normalizeGanttWindowHours(windowHoursInput);
+    const { gantt, unavailable } = await loadGantt(projectId, projectPath, windowHours);
+    return {
+      ok: true,
+      gantt,
+      ganttUnavailable: unavailable,
+      generatedAt: new Date(dependencies.now()).toISOString(),
+    };
+  };
+
+  /**
    * The snapshot itself, WITHOUT the fleet registry join. Kept separate so every branch above
    * (cache hit, in-flight join, window-switch reuse, full pass) is stamped with
    * `fleetProjectId` exactly once, in {@link getQuaySnapshot}.
@@ -2567,6 +2611,9 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     getQuayStatus,
     getQuaySnapshot,
     getCachedSnapshot,
+    // The title bar's lanes-only reading: one `lanes` child per (project, window) per TTL,
+    // and nothing else. `gantt`/`ganttUnavailable` are the snapshot's own fields.
+    getQuayLanes,
     // The `changes` Quay source (AC-348): a reader that never loads, plus the
     // non-blocking request that fills it. These two are why `changes` can report
     // full coverage without ever waiting on — or spawning — a snapshot.

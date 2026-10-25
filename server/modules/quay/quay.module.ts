@@ -15,6 +15,11 @@ import { QUAY_COMMAND_TIMEOUT_MS, createQuayProcessRunner } from './quay-process
 import { createQuayRouter } from './quay.routes.js';
 import { createQuayService, type QuayFileReader } from './quay.service.js';
 import {
+  createSessionMentionsService,
+  type SessionMentionsGoalRow,
+  type SessionMentionsTaskRow,
+} from './session-mentions.service.js';
+import {
   createSessionTaskChainService,
   type SessionTaskChainDependencies,
   type SessionTaskStoreRecord,
@@ -253,6 +258,54 @@ function isGitAncestor(projectPath: string, ancestor: string, descendant: string
   }
 }
 
+/** A transcript file's size in bytes, or `null` when it cannot be stat-ed. */
+async function readTranscriptSize(transcriptPath: string): Promise<number | null> {
+  try {
+    const stats = await fs.promises.stat(transcriptPath);
+    return stats.isFile() ? stats.size : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bytes from `start` to EOF decoded as UTF-8, or `null` when the file cannot be read.
+ *
+ * Shared by both session readers (the write-chain scan and the mention scan): the two read the
+ * same transcript under the same byte-offset contract, and a second implementation could drift
+ * on the one thing they must agree about — where a chunk begins.
+ */
+async function readTranscriptRangeFrom(transcriptPath: string, start: number): Promise<string | null> {
+  let handle: fs.promises.FileHandle | null = null;
+  try {
+    handle = await fs.promises.open(transcriptPath, 'r');
+    const { size } = await handle.stat();
+    if (start >= size) return '';
+    const buffer = Buffer.alloc(size - start);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } catch {
+    return null;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+/** Parses one whitelisted command's JSON stdout, or `null` when it is not a JSON document. */
+function parseJsonStdout(stdout: string): unknown {
+  if (stdout.trim() === '') return null;
+  try {
+    return JSON.parse(stdout) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a value is a non-array object. */
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * The session → task flow chain reading. Every dependency is a reader: task files, the
  * project's git history and the two build fingerprints. Nothing here writes, builds or restarts.
@@ -260,29 +313,8 @@ function isGitAncestor(projectPath: string, ancestor: string, descendant: string
 export const sessionTaskChain = createSessionTaskChainService({
   resolveProjectPath: (projectId) => projectsDb.getProjectPathById(projectId),
   resolveTranscriptPath: ({ sessionId }) => sessionsDb.getSessionById(sessionId)?.jsonl_path ?? null,
-  transcriptSize: async (transcriptPath) => {
-    try {
-      const stats = await fs.promises.stat(transcriptPath);
-      return stats.isFile() ? stats.size : null;
-    } catch {
-      return null;
-    }
-  },
-  readTranscriptRange: async (transcriptPath, start) => {
-    let handle: fs.promises.FileHandle | null = null;
-    try {
-      handle = await fs.promises.open(transcriptPath, 'r');
-      const { size } = await handle.stat();
-      if (start >= size) return '';
-      const buffer = Buffer.alloc(size - start);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
-      return buffer.subarray(0, bytesRead).toString('utf8');
-    } catch {
-      return null;
-    } finally {
-      await handle?.close().catch(() => undefined);
-    }
-  },
+  transcriptSize: readTranscriptSize,
+  readTranscriptRange: readTranscriptRangeFrom,
   readTask: readProjectTask,
   worktreeTaskIds: readWorktreeTaskIds,
   findLandCommit,
@@ -292,6 +324,73 @@ export const sessionTaskChain = createSessionTaskChainService({
     builtSha: readFingerprintGitSha(path.join(SESSION_CHAIN_APP_ROOT, 'dist-server', 'build-info.json')),
     runningSha: RUNNING_BUILD_SHA,
   }),
+  now: () => Date.now(),
+});
+
+/** One `task list --json --no-body` array narrowed to the mention join's rows, or `null`. */
+function parseTaskRowsForMentions(stdout: string): SessionMentionsTaskRow[] | null {
+  const parsed = parseJsonStdout(stdout);
+  if (!Array.isArray(parsed)) return null;
+
+  const rows: SessionMentionsTaskRow[] = [];
+  for (const item of parsed) {
+    if (!isRecordValue(item) || typeof item.id !== 'string') continue;
+    rows.push({
+      taskId: item.id,
+      title: typeof item.title === 'string' && item.title !== '' ? item.title : item.id,
+      status: typeof item.status === 'string' ? item.status : 'unknown',
+      // `--no-body` rows still carry `goal_ac`; the shared index row type deliberately does
+      // not, so this reading carries its own copy rather than widening the MCP-visible shape.
+      goalAc: typeof item.goal_ac === 'string' && item.goal_ac.trim() !== '' ? item.goal_ac.trim() : null,
+    });
+  }
+  return rows;
+}
+
+/** One `goal list --json` array narrowed to goals AND their criterion rows, or `null`. */
+function parseGoalRowsForMentions(stdout: string): SessionMentionsGoalRow[] | null {
+  const parsed = parseJsonStdout(stdout);
+  if (!Array.isArray(parsed)) return null;
+
+  const rows: SessionMentionsGoalRow[] = [];
+  for (const item of parsed) {
+    if (!isRecordValue(item) || typeof item.id !== 'string') continue;
+    rows.push({
+      id: item.id,
+      title: typeof item.title === 'string' ? item.title : '',
+      status: typeof item.status === 'string' ? item.status : 'unknown',
+      kind: typeof item.kind === 'string' ? item.kind : null,
+      goal: typeof item.goal === 'string' && item.goal.trim() !== '' ? item.goal.trim() : null,
+    });
+  }
+  return rows;
+}
+
+/**
+ * The session's mention reading: which tasks and goals the conversation's prose names.
+ *
+ * Its two vocabulary reads reuse the display service's whitelisted command boundary (so the
+ * exact-match whitelist stays the single way a `quay` child is spawned here), and its phase join
+ * reuses `getQuayLanes` — the same `lanes` reading the Loop pulse plots — rather than a second
+ * gantt read.
+ */
+export const sessionMentions = createSessionMentionsService({
+  resolveProjectPath: (projectId) => projectsDb.getProjectPathById(projectId),
+  resolveTranscriptPath: ({ sessionId }) => sessionsDb.getSessionById(sessionId)?.jsonl_path ?? null,
+  transcriptSize: readTranscriptSize,
+  readTranscriptRange: readTranscriptRangeFrom,
+  readTaskRows: async (projectPath) => {
+    const result = await quayService.runQuayCommand(projectPath, ['task', 'list', '--json', '--no-body']);
+    return result.ok ? parseTaskRowsForMentions(result.stdout) : null;
+  },
+  readGoalRows: async (projectPath) => {
+    const result = await quayService.runQuayCommand(projectPath, ['goal', 'list', '--json']);
+    return result.ok ? parseGoalRowsForMentions(result.stdout) : null;
+  },
+  readLanes: async ({ projectId }) => {
+    const reading = await quayService.getQuayLanes(projectId);
+    return reading?.gantt ?? null;
+  },
   now: () => Date.now(),
 });
 
@@ -305,4 +404,5 @@ export const quayRoutes = createQuayRouter({
   readLastOpenedSession: () => uiLastOpenedDb.read(),
   initiatives: quayInitiatives,
   sessionTaskChain,
+  sessionMentions,
 });

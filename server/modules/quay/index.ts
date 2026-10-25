@@ -60,6 +60,23 @@ export {
   QUAY_TASK_INDEX_TITLE_LIMIT,
   QUAY_TASK_INDEX_TTL_MS,
 } from './quay.service.js';
+// createSessionMentionsService: the session → mentions reader (the prose's task/goal ids,
+// joined against the store). Re-exported so a criterion can drive it with stubs.
+export {
+  createSessionMentionsService,
+  mentionTokens,
+  readMessageText,
+} from './session-mentions.service.js';
+export type {
+  SessionMentionGoalReading,
+  SessionMentionsDependencies,
+  SessionMentionsGoalRow,
+  SessionMentionsReading,
+  SessionMentionsService,
+  SessionMentionsTaskRow,
+  SessionMentionTaskReading,
+  SessionMessageText,
+} from './session-mentions.service.js';
 export type {
   QuayCommandResult,
   QuayCommandRunner,
@@ -84,6 +101,8 @@ export type {
   QuayInFlightTask,
   QuayProjectStatus,
   QuaySnapshot,
+  /** Consumed by the title bar's always-on mini gantt: the lanes-only reading. */
+  QuayLanesReading,
   /** Consumed by the MCP gateway's `changes` tool: one project's full-coverage status index, read without loading. */
   QuayTaskIndexReading,
   QuayTaskIndexState,

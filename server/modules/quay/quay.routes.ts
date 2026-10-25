@@ -9,6 +9,8 @@
  * - `GET  /api/quay/last-opened-session`                  — the browser's last-opened pointer.
  * - `GET  /api/quay/:projectId/status`                    — Tier 1, whether `.quay/config.yml` exists.
  * - `GET  /api/quay/:projectId/snapshot`                  — Tier 2, task/goal/ADR/driver counts.
+ * - `GET  /api/quay/:projectId/lanes`                     — the title bar's lanes-only gantt read.
+ * - `GET  /api/quay/:projectId/session-mentions`          — what this session's prose names.
  * - `GET  /api/quay/:projectId/interface-session`         — the fleet's pinned target conversation.
  * - `PUT  /api/quay/:projectId/interface-session`         — pin that conversation.
  * - `DELETE /api/quay/:projectId/interface-session`       — un-pin it.
@@ -32,6 +34,7 @@ import type {
   QuayInitiativesService,
 } from './quay-initiatives.js';
 import type { QuayUriErrorCode } from './quay-uri-resolve.js';
+import type { SessionMentionsService } from './session-mentions.service.js';
 import type { SessionTaskChainService } from './session-task-chain.service.js';
 import type { createQuayService } from './quay.service.js';
 
@@ -67,6 +70,11 @@ type QuayRouterDependencies = {
    * for a display-only composition; production (`quay.module.ts`) always binds it.
    */
   sessionTaskChain?: SessionTaskChainService;
+  /**
+   * The session's task/goal mention reading (what the prose names, not what it wrote). Absent
+   * answers `session-mentions-unavailable`; production always binds it.
+   */
+  sessionMentions?: SessionMentionsService;
 };
 
 /** What the router answers when no fleet registry was composed in. */
@@ -395,6 +403,51 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
       });
       if (reading === null) {
         return res.status(404).json({ ok: false, reason: 'project-or-session-not-found' });
+      }
+
+      return res.json(reading);
+    }),
+  );
+
+  /**
+   * The session's mention reading: every task and goal the conversation's own message text
+   * names. Read-only; the route parses the query and relays the service's value (`null` =
+   * unknown project or session).
+   */
+  router.get(
+    '/:projectId/session-mentions',
+    asyncHandler(async (req, res) => {
+      const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
+      const sessionId = readNonEmptyString(req.query.sessionId);
+      if (sessionId === null) {
+        return res.status(400).json({ ok: false, reason: 'session-id-required' });
+      }
+      if (dependencies.sessionMentions === undefined) {
+        return res.status(503).json({ ok: false, reason: 'session-mentions-unavailable' });
+      }
+
+      const reading = await dependencies.sessionMentions.readSessionMentions({ projectId, sessionId });
+      if (reading === null) {
+        return res.status(404).json({ ok: false, reason: 'project-or-session-not-found' });
+      }
+
+      return res.json(reading);
+    }),
+  );
+
+  /**
+   * The lanes-only reading behind the title bar's mini gantt: one `quay lanes` child, nothing
+   * else. `hours` is normalised to the closed set 1/3/6/12 by the service, so a stray value
+   * reads as the default rather than widening the read.
+   */
+  router.get(
+    '/:projectId/lanes',
+    asyncHandler(async (req, res) => {
+      const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
+      const windowHours = typeof req.query.hours === 'string' ? req.query.hours : undefined;
+      const reading = await quayService.getQuayLanes(projectId, windowHours);
+      if (reading === null) {
+        return res.status(404).json({ ok: false, error: 'Project not found', projectId });
       }
 
       return res.json(reading);
