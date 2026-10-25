@@ -1,0 +1,56 @@
+@startuml
+title 一次 worker-stall 的全程：事件 → 条目 → 策略 → 呈现 → 自动撤销
+skinparam shadowing false
+autonumber
+
+participant "quay driver" as drv
+participant "events.jsonl" as ev
+participant "规则 (fleet)" as rules
+participant "attention.json" as att
+participant "AttentionHub" as hub
+participant "InterruptPolicy" as pol
+participant "驾驶舱队列" as q
+participant "会话页 S0" as s0
+participant "Web Push" as push
+actor "人" as human
+
+note over drv, rules
+  示意：事件类型与条目类别都是实测存在的，
+  但「哪条规则把哪个事件映射成 worker-stall」未核对 R1..R6 的条件。
+end note
+
+drv -> ev : driver.heartbeat_stale
+ev -> rules : 新事件
+rules -> att : 建条目 worker-stall\ngrade=escalate, state=open
+att -> hub : 读到新条目
+hub -> hub : 归类 actionable\n推导 subject = quay://<项目>/board
+hub -> pol : trigger=created, class=actionable, grade=escalate
+
+alt 人在驾驶舱页（有在线 display）
+  pol -> q : surface=queue（队首，同时只 1 条打断）
+else 人不在线
+  pol -> push : surface=push（一次，封顶）
+end
+
+note over pol
+  策略是纯函数：
+  (条目, 触发类型, 类别, 在线状态) -> InterruptDecision
+  informational / proposal 一律 surface=none，只进 feed
+end note
+
+hub -> hub : 沿 originated_by 边找发起该任务的会话
+opt 该条目与某会话有直接关系
+  hub -> s0 : 该会话标题行字形变色（不新增行高）
+end
+
+human -> q : 查看 / 确认(feedback)
+q -> att : ack（经 fleet 的 ack 动词）
+hub -> hub : UserAttentionState.seen / feedback
+
+drv -> ev : driver.heartbeat_resumed
+ev -> rules : 来源条件消失
+rules -> att : state=resolved（自动）
+att -> hub : 读到 resolved
+hub -> q : 撤下条目
+hub -> s0 : 字形恢复
+@enduml

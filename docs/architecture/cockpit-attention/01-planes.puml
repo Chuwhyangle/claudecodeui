@@ -1,0 +1,80 @@
+@startuml
+title 驾驶舱注意力架构：四个平面与呈现面（扩展现有层，不新建第四套）
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+package "来源（产生事实）" as SRC {
+  [quay 任务库 / goal / driver] as quay
+  [会话转写与运行时] as sess
+  [部署读数 deploy-readiness] as dep
+  [架构分析] as arch
+}
+
+package "事件平面 Event（fleet 拥有，主机级，只追加）" as EVP {
+  database "events.jsonl\n类型化事件\n(task.status_changed / driver.heartbeat_stale ...)" as ev
+}
+
+package "注意力平面 Attention（fleet 拥有）" as ATP {
+  [规则\nR1..R6 / plan.*\n(decisions.jsonl)] as rules
+  database "attention.json\nAttentionItem\ngrade / state / ack / options" as att
+  queue "outbox.jsonl\n推送行" as outbox
+}
+
+package "状态平面 State（CloudCLI observation 层，已存在）" as STP {
+  [producers\nsession-digest / project-truth\narchitecture-delta] as prod
+  database "ObservedObject\nstatus 四态 + digest + 修订 delta" as obs
+  database "SeenCursor / Pin\n按用户，跨设备" as cur
+}
+
+package "CloudCLI 注意力读模型（新增，薄）" as HUBP {
+  [AttentionHub\n只读投影 + 归类 + 主体链接] as hub
+  database "UserAttentionState\nseen / feedback(useful|noise)\n按用户" as uas
+  database "CloudCLI 自有条目\n同一 schema，命名空间 cloudcli:" as own
+  [InterruptPolicy\n纯函数；先影子模式] as pol
+}
+
+package "呈现面" as SURF {
+  package "驾驶舱（fleet / 项目 / initiative 层）" as CK {
+    [观察墙 Wall] as wall
+    [注意力队列\n含待决 options] as queue
+    [项目磁贴：计数徽标] as tile
+  }
+  package "会话页（session 层，后期）" as SS {
+    [标题行字形 S0] as s0
+    [popover 列表] as pop
+    [转写内锚定 S1] as s1
+  }
+  package "离页通道" as OFF {
+    [Web Push / 桌面通知] as push
+    [bridge → 会话] as bridge
+  }
+}
+
+quay --> ev
+quay --> prod
+sess --> prod
+dep --> prod
+arch --> prod
+ev --> rules
+rules --> att
+att --> outbox
+outbox --> bridge
+prod --> obs
+obs --> wall
+obs ..> cur
+dep --> own : 部署失败
+sess --> own : 运行失败
+att --> hub : 读（fleet 文件不由 CloudCLI 写）
+own --> hub
+obs --> hub : about 链接
+hub --> uas
+hub --> pol
+pol --> queue : 打断
+pol --> push : 离页时
+pol --> s0 : 仅与本会话相关
+hub --> tile : 计数向上汇总
+hub --> pop
+hub --> s1
+@enduml

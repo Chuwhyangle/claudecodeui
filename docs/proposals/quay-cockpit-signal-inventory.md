@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | **讨论稿（未定）**——只做清点与分类，不含任何实现决定 |
+| 状态 | **已被取代（2026-10-25）**：分类由 14 天实测数据替代，见 `docs/architecture/cockpit-attention/README.md` §2；本稿仅留作历史 |
 | 日期 | 2026-10-25 |
 | 目的 | 按用户的顺序：先在 quay tab 与驾驶舱明确「哪些事务/状态需要通知或提醒」，再设计 Chat 页的显示与交互。前置约束见 `notice-registry-and-dismissal.md` 的「暂停说明」 |
 | 依据 | `src/shared/types.ts` 的 `QuaySnapshot` 与相关类型、`QuayPanel.tsx` / `CockpitPage.tsx` / `DecisionQueue.tsx` / `DeployReadiness.tsx` 的现有渲染、`fleet-overview-SPEC.md` §5、`context-layers-and-delegation-ladder.md` §4 |

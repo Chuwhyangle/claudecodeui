@@ -1,0 +1,33 @@
+@startuml
+title AttentionItem 生命周期（状态集合取自 attention.json 实测）
+skinparam shadowing false
+[*] --> open : 规则命中并去重后建条目
+open --> surfaced : 首次送达 / 展示\nnotifyCount += 1
+surfaced --> surfaced : 重新提醒\n(封顶，实测最多 5 次)
+open --> acked : 人确认（feedback）
+surfaced --> acked : 人确认（feedback = useful | noise）
+open --> resolved : 来源条件消失\n（重读来源，自动）
+surfaced --> resolved : 来源条件消失\n（重读来源，自动）
+acked --> resolved : 来源条件消失
+open --> expired : 窗口过去仍未处理
+surfaced --> expired : 窗口过去仍未处理
+resolved --> [*]
+expired --> [*]
+
+note right of acked
+  acked 不等于结束：
+  条件还在，只是人已知晓。
+  feedback 是校准信号，喂给 AttentionClass。
+end note
+
+note right of resolved
+  实测：行动类条目几乎全部走到 resolved，
+  且是「来源条件消失」触发，不是人点掉。
+end note
+
+note right of expired
+  实测：digest 456 条中 450 条走到这里，
+  goal-achieved 186 条中 172 条。
+  过期未读 = 它从一开始就不该成为条目。
+end note
+@enduml
