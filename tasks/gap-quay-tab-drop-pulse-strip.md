@@ -1,7 +1,7 @@
 ---
 id: gap-quay-tab-drop-pulse-strip
 title: Quay tab：先去掉顶部脉搏条（PulseStrip 组件与 cockpit 用法保留）
-status: todo
+status: ready
 labels:
   - gap
   - defect
