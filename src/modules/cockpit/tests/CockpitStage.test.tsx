@@ -313,7 +313,8 @@ const FLEET: QuayFleetSummary = {
       projectPath: '/work/claudecodeui',
       driver: { state: 'running' },
       tasks: { total: 4, todo: 1, ready: 2, needsHuman: 1, done: 0 },
-      // The tile's pulse reading: one running task and one live obstruction with a dependent.
+      // The tile's pulse reading: one running task, one suite round and one fan-in attempt over
+      // the lane reading's window, plus one live obstruction (retained, not drawn by the strip).
       pulse: {
         generatedAt: '2026-10-23T00:00:00.000Z',
         inFlight: [
@@ -325,9 +326,48 @@ const FLEET: QuayFleetSummary = {
             workerPid: 7,
           },
         ],
-        gantt: null,
-        tests: { current: null, recentRounds: [] },
-        fanIn: { recent: [] },
+        gantt: {
+          windowHours: 24,
+          nowMs: Date.parse('2026-10-23T00:00:00.000Z'),
+          lanes: [
+            [
+              {
+                taskId: 'task-live',
+                runId: 'worker-task-live',
+                startMs: Date.parse('2026-10-22T23:00:00.000Z'),
+                endMs: Date.parse('2026-10-23T00:00:00.000Z'),
+                phase: 'implementing',
+                finalState: null,
+                fanInOutcome: null,
+              },
+            ],
+          ],
+          overflow: 0,
+        },
+        tests: {
+          current: null,
+          recentRounds: [
+            {
+              round: 1,
+              startedAt: '2026-10-22T22:00:00.000Z',
+              durationMs: 10_000,
+              pass: 10,
+              fail: 0,
+              tests: 10,
+              state: 'green',
+            },
+          ],
+        },
+        fanIn: {
+          recent: [
+            {
+              task: 'task-ok',
+              outcome: 'landed',
+              lockAcquireEpoch: Date.parse('2026-10-22T23:10:00.000Z') / 1000,
+              lockReleaseEpoch: Date.parse('2026-10-22T23:20:00.000Z') / 1000,
+            },
+          ],
+        },
         blockers: [
           {
             taskId: 'task-blocked',
@@ -1541,13 +1581,13 @@ describe('AC3: phone narrow layout classes', () => {
 });
 
 /**
- * The pulse strip in the cockpit: one per project tile (the 「全部项目」 view), and the same
- * component at the top of a board's Quay panel. The two surfaces must address the TASK a mark
- * names, with the fleet registry id as the project segment — the board's rail already declares
- * those tasks, so activating a mark there moves focus to the declared object.
+ * The pulse strip in the cockpit: one per project tile (the 「全部项目」 view). It composes the
+ * Quay tab's three existing charts — Loop pulse, Tests, Fan-in — stacked over one shared window;
+ * it is an experiment, and its marks are display-only (the tab's surfaces keep their own
+ * focusable objects). The strip is not drawn for a project whose pulse was never reported.
  */
 describe('pulse strip', () => {
-  it('draws a strip at the foot of every tile that reported a pulse reading', async () => {
+  it('draws the three composed charts at the foot of every tile that reported a pulse reading', async () => {
     renderCockpit('/cockpit?view=fleet');
 
     const strips = await screen.findAllByTestId('cockpit-fleet-tile-pulse');
@@ -1555,21 +1595,26 @@ describe('pulse strip', () => {
     expect(strips).toHaveLength(1);
 
     const tile = screen.getAllByTestId('cockpit-fleet-tile')[0];
-    expect(within(tile).getByTestId('cockpit-fleet-pulse-p1')).toBeTruthy();
-    expect(within(tile).getByTestId('cockpit-fleet-pulse-p1-inflight-line')).toBeTruthy();
-    // The blocked segment's end label is the impact reading: one task is waiting.
-    expect(within(tile).getByTestId('cockpit-fleet-pulse-p1-blocker-impact').textContent).toContain('⛔ 1');
+    const strip = within(tile).getByTestId('cockpit-fleet-pulse-p1');
+    // The same components the Quay tab draws, in one column: the gantt plus two timeline bars.
+    expect(within(strip).getByTestId('quay-gantt-svg')).toBeTruthy();
+    expect(within(strip).getByTestId('cockpit-fleet-pulse-p1-tests')).toBeTruthy();
+    expect(within(strip).getByTestId('cockpit-fleet-pulse-p1-fanin')).toBeTruthy();
   });
 
-  it('a fleet tile mark asks to focus the task URI it names, not the tile’s board', async () => {
+  it('is display-only: activating a composed chart mark asks for no task focus', async () => {
     renderCockpit('/cockpit?view=fleet');
 
-    const line = await screen.findByTestId('cockpit-fleet-pulse-p1-inflight-line');
+    const tile = (await screen.findAllByTestId('cockpit-fleet-tile'))[0];
+    const bar = await within(tile).findByTestId('quay-gantt-bar');
     const before = sentEvents('focus').length;
-    fireEvent.click(line);
+    fireEvent.click(bar);
 
-    const focuses = sentEvents('focus').slice(before);
-    expect(focuses.map((event) => event.uri)).toEqual(['quay://claudecodeui/task/task-live']);
+    // The strip's mark is display-only — it asks for no task focus. The click still bubbles to
+    // the tile, whose own handler opens the board (the pre-existing tile behaviour).
+    const focuses = sentEvents('focus').slice(before).map((event) => String(event.uri));
+    expect(focuses).toEqual(['quay://claudecodeui/board']);
+    expect(focuses.some((uri) => uri.includes('/task/'))).toBe(false);
   });
 
   // The board surface used to carry its own strip, and this suite drove its marks to prove the

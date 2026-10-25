@@ -1,7 +1,7 @@
 ---
 id: gap-cockpit-pulse-strip-composes-existing-charts-aligned
 title: Cockpit 脉搏条实验：内部改用 Loop pulse / Tests / Fan-in 三张图的现有画法，叠成一列、时间轴对齐
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -26,23 +26,36 @@ depends_on:
 
 ## AC
 
-- [ ] `PulseStrip.tsx` 复用现有组件：`git grep -c "LoopPulseGantt" -- src/modules/quay/PulseStrip.tsx` ≥ 1 且 `git grep -c "TimelineBar" -- src/modules/quay/PulseStrip.tsx` ≥ 1（用 `|| true` 形式处理零命中）。
-- [ ] 无自造编码：`src/modules/quay/PulseStrip.tsx` 的代码与注释中不再含 `✕`、`⛔`、`fail-glyph`（`git grep -c` 逐个为 0）。
-- [ ] 几何常量单一来源：`git grep -n "const PLOT_WIDTH = " -- src/modules/quay | wc -l` 输出 1（只剩共享模块里那一处定义）。
-- [ ] 映射单一来源：`QuayPanel.tsx` 与 `PulseStrip.tsx` 都 import 同一个映射函数，`git grep -c` 该函数的定义名只在新文件出现 1 次。
-- [ ] `npx vitest run src/modules/quay/tests/PulseStrip.test.tsx` 含例：同一份快照下渲染出的三张图（Loop pulse、Tests、Fan-in）为同一父容器的纵向兄弟，暴露的窗口端点读数相同，且各自 viewBox 宽度同为共享常量；取假：把其中一张换成独立宽度，该例必须红。exit 0。
-- [ ] `npx vitest run src/modules/quay/tests/TimelineBar.test.tsx src/modules/quay/tests/LoopPulseGantt.test.tsx src/modules/quay/tests/QuayPanel.test.tsx src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0，其中 `TimelineBar.test.tsx` 与 `LoopPulseGantt.test.tsx` 无被删减或放宽的既有 `expect`（`git diff` 只允许新增）。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [x] `PulseStrip.tsx` 复用现有组件：`git grep -c "LoopPulseGantt" -- src/modules/quay/PulseStrip.tsx` ≥ 1 且 `git grep -c "TimelineBar" -- src/modules/quay/PulseStrip.tsx` ≥ 1（用 `|| true` 形式处理零命中）。
+- [x] 无自造编码：`src/modules/quay/PulseStrip.tsx` 的代码与注释中不再含 `✕`、`⛔`、`fail-glyph`（`git grep -c` 逐个为 0）。
+- [x] 几何常量单一来源：`git grep -n "const PLOT_WIDTH = " -- src/modules/quay | wc -l` 输出 1（只剩共享模块里那一处定义）。
+- [x] 映射单一来源：`QuayPanel.tsx` 与 `PulseStrip.tsx` 都 import 同一个映射函数，`git grep -c` 该函数的定义名只在新文件出现 1 次。
+- [x] `npx vitest run src/modules/quay/tests/PulseStrip.test.tsx` 含例：同一份快照下渲染出的三张图（Loop pulse、Tests、Fan-in）为同一父容器的纵向兄弟，暴露的窗口端点读数相同，且各自 viewBox 宽度同为共享常量；取假：把其中一张换成独立宽度，该例必须红。exit 0。
+- [x] `npx vitest run src/modules/quay/tests/TimelineBar.test.tsx src/modules/quay/tests/LoopPulseGantt.test.tsx src/modules/quay/tests/QuayPanel.test.tsx src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0，其中 `TimelineBar.test.tsx` 与 `LoopPulseGantt.test.tsx` 无被删减或放宽的既有 `expect`（`git diff` 只允许新增）。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
 
 ## DoD
 
 真实页面验证（AGENTS.md「UI 验证」，cockpit 走隔离实例，参照 `cockpit-verify-isolated-instance-and-scenario-runner-gap` 的做法，不碰 live 实例）：MCP 浏览器打开 cockpit 的 fleet 视图，PC 1440×900 与手机 390×844 各截图存 `tmp/` 并贴出，并用 `browser_evaluate` 贴出读数：某个有 `pulse` 读数的项目卡片底部，三张图 plot 区 `getBoundingClientRect()` 左、右边缘逐一相等（±1px），窗口中点的时间戳在三张图上换算的 x 相等（±1px）；卡片内容未被遮挡或溢出；同一项目在 Quay tab 里的 Loop pulse / Tests / Fan-in 图形与 cockpit 里的画法一致（贴并排截图，肉眼确认没有新增叉号、图例或标签列）。再跑 `node scripts/ui-scenario.mjs` 中涉及 cockpit 的场景并贴 JSON 报告。fixture 单测只是必要条件，不算落地。
+
+### DoD 实跑（2026-10-25）
+
+本会话没有浏览器 MCP，按 `no-mcp-browser-use-throwaway-playwright-spec` 的等价路径，用一次性 Playwright spec（真实 client+server+Chromium，quay 两读在 HTTP 边界打桩；spec 跑完已删除，未提交）在隔离 e2e 实例上执行：
+
+- 截图：`tmp/pulse-strip-cockpit-1440.png`、`tmp/pulse-strip-cockpit-390.png`、`tmp/pulse-strip-quay-tab-1440.png`。
+- 读数（`tmp/pulse-strip-reading-1440.json` / `-390.json`）：
+  - 1440×900：三图 `plotLeft=223.4755`、`plotRight=589.8526`、`midX=406.6641`，逐对相等；viewBox 宽均 600；`occluded={gantt:false,tests:false,fanIn:false}`；`chartCount=3`；strip `bottom=376` ≤ tile `bottom=389`、`right=592.33` ≤ tile `right=605.33`；`glyphs=false`、`hasLegend=false`、`hasLabelColumn=false`。
+  - 390×844：三图 `plotLeft=31.2133`、`plotRight=358.7867`、`midX=195.0000`，逐对相等；无遮挡；strip 未越出 tile。
+- Quay tab 并排（`tmp/pulse-strip-quay-tab-1440.png`）：三图 `viewBoxWidths=[600,600,600]`，window start/end 三图一致，面板文本无 `✕`/`⛔`；与 cockpit 的图形画法一致，无新增叉号、图例或标签列。
+- `node scripts/ui-scenario.mjs`（cockpit 语义场景，报告 `tmp/pulse-strip-scenario-report.json`）：`ok=true`，`route="/cockpit?view=fleet"`，`cockpit.view="fleet"`，`cockpitFocusIs=null`，1 个 checkpoint 截图。
 
 ## Touches
 
 - src/modules/quay/PulseStrip.tsx
 - src/modules/quay/LoopPulseGantt.tsx
 - src/modules/quay/TimelineBar.tsx
+- src/modules/quay/chartGeometry.ts
+- src/modules/quay/timelineMapping.ts
 - src/modules/quay/QuayPanel.tsx
 - src/modules/quay/index.ts
 - src/modules/cockpit/CockpitStage.tsx

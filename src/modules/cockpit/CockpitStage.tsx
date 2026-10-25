@@ -463,13 +463,13 @@ function FleetView({
               </p>
             )}
             {/*
-              THE PULSE STRIP AT THE TILE'S FOOT. Four rows in 48 px: what is running, whether
-              fan-in and the suite are landing or failing, and what is blocked for whom. It is
-              drawn only when the server reported a reading — an unreported pulse is not an idle
-              project, and an empty strip would say "nothing happened" about a fact nobody read.
-              A mark activates the task it names: the fleet view's declared focusables are
-              boards, so the page receives the task URI and can focus it on the board surface
-              (the Quay panel's own strip emits the same address with the same handler).
+              THE PULSE STRIP AT THE TILE'S FOOT. It composes the Quay tab's three existing time
+              charts — Loop pulse, Tests, Fan-in — stacked over one shared window, so the fleet
+              view and the tab cannot drift into two visual languages. The tile grows to the
+              charts' natural height (well past the old 48 px strip) but stays inside its own
+              block: nothing below it is overlapped, and the strip is only drawn when the server
+              reported a reading — an unreported pulse is not an idle project. The composed charts
+              are display-only during this experiment, so no mark asks to focus a task.
             */}
             {project.pulse !== undefined && project.pulse !== null && (
               <div className="mt-2" data-testid="cockpit-fleet-tile-pulse">

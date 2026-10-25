@@ -1,5 +1,16 @@
 import type { QuayTimelineWindow } from '@/shared/types';
 import { cn } from '@/shared/utils';
+import {
+  MIN_BAR_WIDTH,
+  PAD,
+  PLOT_LEFT,
+  PLOT_WIDTH,
+  PLOT_WIDTH_INNER,
+  TIMELINE_AXIS_Y,
+  TIMELINE_BAR_HEIGHT,
+  TIMELINE_BAR_TOP,
+  TIMELINE_PLOT_HEIGHT,
+} from '@/modules/quay/chartGeometry';
 
 /** One interval drawn on a `TimelineBar`, in Unix epoch milliseconds. */
 export type TimelineBarRange = {
@@ -32,21 +43,11 @@ type TimelineBarProps = {
   testId: string;
 };
 
-// The bar is drawn in the same fixed 600-wide coordinate space as the Loop pulse gantt
-// (`LoopPulseGantt`) and scaled to the host width uniformly by CSS (`w-full h-auto`). It
-// deliberately does NOT stretch with `preserveAspectRatio="none"`: the axis labels are real
-// text, and non-uniform scaling would distort them — the same reason the gantt scales
-// uniformly. Sharing the geometry is what lets a moment line up between the two charts.
-const PLOT_WIDTH = 600;
-const PAD = 4;
-const PLOT_LEFT = PAD;
-const PLOT_WIDTH_INNER = PLOT_WIDTH - 2 * PAD;
-const PLOT_TOP = 4;
-const BAR_HEIGHT = 12;
-const AXIS_Y = PLOT_TOP + BAR_HEIGHT + 4;
-const PLOT_HEIGHT = AXIS_Y + 14;
-/** A zero-length interval would be invisible, so every rect keeps at least this width. */
-const MIN_BAR_WIDTH = 1.5;
+// The bar is drawn in the shared `PLOT_WIDTH`-wide coordinate space (`chartGeometry`) and
+// scaled to the host width uniformly by CSS (`w-full h-auto`). It deliberately does NOT
+// stretch with `preserveAspectRatio="none"`: the axis labels are real text, and non-uniform
+// scaling would distort them — the same reason the gantt scales uniformly. The shared
+// `PLOT_LEFT`/`PLOT_WIDTH_INNER` are what let a moment line up between the charts.
 
 /** Colour per status key; both test rounds (`green`/`red`) and fan-in outcomes (`landed`/`failed`) map onto the same palette. */
 const STATE_TEXT_CLASSES: Record<string, string> = {
@@ -101,7 +102,7 @@ export default function TimelineBar({ ranges, window, emptyText, testId }: Timel
 
   return (
     <svg
-      viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+      viewBox={`0 0 ${PLOT_WIDTH} ${TIMELINE_PLOT_HEIGHT}`}
       role="img"
       aria-label="timeline"
       className="h-auto w-full"
@@ -121,9 +122,9 @@ export default function TimelineBar({ ranges, window, emptyText, testId }: Timel
           <rect
             key={`${range.label}-${index}`}
             x={left}
-            y={PLOT_TOP}
+            y={TIMELINE_BAR_TOP}
             width={Math.max(MIN_BAR_WIDTH, toX(Math.max(end, start + 1)) - left)}
-            height={BAR_HEIGHT}
+            height={TIMELINE_BAR_HEIGHT}
             fill="currentColor"
             className={cn(STATE_TEXT_CLASSES[range.state] ?? DEFAULT_STATE_CLASS)}
             data-testid={`${testId}-rect`}
@@ -137,9 +138,9 @@ export default function TimelineBar({ ranges, window, emptyText, testId }: Timel
           see where "now" sits relative to the records — the gantt marks the same edge. */}
       <line
         x1={nowX}
-        y1={PLOT_TOP}
+        y1={TIMELINE_BAR_TOP}
         x2={nowX}
-        y2={AXIS_Y}
+        y2={TIMELINE_AXIS_Y}
         stroke="currentColor"
         strokeWidth={1}
         className="text-amber-500"
@@ -148,10 +149,10 @@ export default function TimelineBar({ ranges, window, emptyText, testId }: Timel
         <title>{`now ${formatClock(windowEnd)}`}</title>
       </line>
 
-      <line x1={PLOT_LEFT} y1={AXIS_Y} x2={PLOT_WIDTH - PAD} y2={AXIS_Y} stroke="currentColor" className="text-border" />
+      <line x1={PLOT_LEFT} y1={TIMELINE_AXIS_Y} x2={PLOT_WIDTH - PAD} y2={TIMELINE_AXIS_Y} stroke="currentColor" className="text-border" />
       <text
         x={PLOT_LEFT}
-        y={PLOT_HEIGHT - 1}
+        y={TIMELINE_PLOT_HEIGHT - 1}
         fontSize={9}
         fill="currentColor"
         className="text-muted-foreground"
@@ -161,7 +162,7 @@ export default function TimelineBar({ ranges, window, emptyText, testId }: Timel
       </text>
       <text
         x={PLOT_WIDTH - PAD}
-        y={PLOT_HEIGHT - 1}
+        y={TIMELINE_PLOT_HEIGHT - 1}
         fontSize={9}
         textAnchor="end"
         fill="currentColor"
