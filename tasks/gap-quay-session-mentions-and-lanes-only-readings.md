@@ -1,7 +1,7 @@
 ---
 id: gap-quay-session-mentions-and-lanes-only-readings
 title: Quay 服务端：会话正文提及读数（task/goal 完整 id 及状态）与仅 lanes 的轻读数，供标题栏脉冲条与 popover 取数
-status: ready
+status: done
 labels:
   - gap
 parent: null
