@@ -65,4 +65,19 @@ describe('chat banners are paused', () => {
       'WorkspaceMain still passes noticeSlot to ChatInterface; the chat banners are paused',
     );
   });
+
+  it('the chat page keeps the generic slot seam', () => {
+    // The pause removes the MOUNT, not the seam: a later signal design (or another caller) can
+    // still hand the chat page a node, and an absent one must render nothing rather than a bar.
+    const source = readSource('src/modules/chat/ChatInterface.tsx');
+
+    assert.ok(
+      source.includes('noticeSlot?: React.ReactNode;'),
+      'ChatInterface dropped the generic noticeSlot prop; the pause only removes the mount',
+    );
+    assert.ok(
+      source.includes('{noticeSlot}'),
+      'ChatInterface no longer renders its noticeSlot child',
+    );
+  });
 });
