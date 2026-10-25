@@ -29,14 +29,14 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/notices/tests/NoticeSlot.test.tsx` 退出码 0；用例覆盖：多条目时只渲染 1 条完整条目且带「另有 N 条」折叠计数；blocking 排在 attention 前；blocking 无忽略按钮；点忽略调用 dismiss 并带当前 revision；dismiss 返回 409 时重新拉取而非报错（N2、N4）。
-- [ ] 同一文件覆盖：主操作只打开确认面板，未点确认按钮时不发 `POST /api/system/deploy`（N7）。
-- [ ] `npx vitest run src/modules/notices/tests/NoticeInbox.test.tsx` 退出码 0，已忽略项出现在收件箱的「已忽略」分组（N6）。
-- [ ] `npx vitest run src/modules/notices/tests/i18nNoticesCompleteness.test.ts` 退出码 0，12 个 locale 的 `notices` 块 key 与占位符一致。
-- [ ] `npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` 退出码 0（驾驶舱页的完整形态与确认面板行为不变；原先断言 `compact` 形态的用例随该形态下线而删除或改写，完成记录里列出被删改的用例名）。
-- [ ] 假形态：让 `NoticeSlot` 对 blocking 也渲染忽略按钮，blocking 无忽略按钮的用例必须变红；让它渲染全部条目而非 1 条，N4 用例必须变红（贴出两次变红输出，随后还原）。
-- [ ] `grep -n "DeployReadiness" src/modules/project-workspace/WorkspaceMain.tsx` 零命中，`grep -n "NoticeSlot" src/modules/project-workspace/WorkspaceMain.tsx` 至少一处命中。
-- [ ] `npm run typecheck` 与 `npx oxlint src/modules/notices src/modules/cockpit src/modules/project-workspace` 退出码 0。
+- [x] `npx vitest run src/modules/notices/tests/NoticeSlot.test.tsx` 退出码 0；用例覆盖：多条目时只渲染 1 条完整条目且带「另有 N 条」折叠计数；blocking 排在 attention 前；blocking 无忽略按钮；点忽略调用 dismiss 并带当前 revision；dismiss 返回 409 时重新拉取而非报错（N2、N4）。
+- [x] 同一文件覆盖：主操作只打开确认面板，未点确认按钮时不发 `POST /api/system/deploy`（N7）。
+- [x] `npx vitest run src/modules/notices/tests/NoticeInbox.test.tsx` 退出码 0，已忽略项出现在收件箱的「已忽略」分组（N6）。
+- [x] `npx vitest run src/modules/notices/tests/i18nNoticesCompleteness.test.ts` 退出码 0，12 个 locale 的 `notices` 块 key 与占位符一致。
+- [x] `npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` 退出码 0（驾驶舱页的完整形态与确认面板行为不变；原先断言 `compact` 形态的用例随该形态下线而删除或改写，完成记录里列出被删改的用例名）。
+- [x] 假形态：让 `NoticeSlot` 对 blocking 也渲染忽略按钮，blocking 无忽略按钮的用例必须变红；让它渲染全部条目而非 1 条，N4 用例必须变红（贴出两次变红输出，随后还原）。
+- [x] `grep -n "DeployReadiness" src/modules/project-workspace/WorkspaceMain.tsx` 零命中，`grep -n "NoticeSlot" src/modules/project-workspace/WorkspaceMain.tsx` 至少一处命中。
+- [x] `npm run typecheck` 与 `npx oxlint src/modules/notices src/modules/cockpit src/modules/project-workspace` 退出码 0。
 
 ## DoD
 
@@ -71,3 +71,23 @@ UI 任务的真实落地标准（按仓库 UI 验证规则）：在隔离实例�
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/gap-notices-client-slot-replaces-compact-deploy-strip.md
+
+## Notes（完成记录）
+
+**单元测试**：`NoticeSlot.test.tsx` 9 例、`NoticeInbox.test.tsx` 3 例、`i18nNoticesCompleteness.test.ts` 4 例、`DeployReadiness.test.tsx` 10 例，全部通过（26 tests）；`npm run typecheck` 退出 0；`npx oxlint src/modules/notices src/modules/cockpit src/modules/project-workspace` 退出 0。
+
+**假形态（随后均已还原）**：
+- 让 `isDismissible` 对 blocking 也返回 true ⇒ `renders no dismiss button for a blocking entry` 变红：断言处收到 `<button data-testid="notice-dismiss">Dismiss</button>`（`expected null`）。
+- 临时把 `others` 也渲染成 `notice-entry` ⇒ `renders exactly one entry and folds the remaining count` 变红：`expected [ <div …>, … ] to have a length of 1 but got 3`。
+
+**被删改的 compact 用例**（`DeployReadiness.test.tsx`，describe `the session page compact form` 整段删除）：
+- `renders nothing while the deployment is fresh`
+- `renders the same sentence when the deployment is not fresh`
+`renderStrip` 辅助函数同步去掉 `compact` 参数；其余状态文案、pending-build 计数、last deploy、failure tail、确认面板只发一次、cancel 不发等用例保持原样。`CockpitPage.tsx` 移动端的 `<DeployReadiness compact />` 分支随形态下线，改为常驻完整形态。
+
+**DoD 真实页面验证**（隔离实例：worktree 的 tsx 后端 `:3199` + Vite `:5199`；全新隔离库注册 `dod` 用户、`SERVER_SETTINGS_PATH` 关 `residentRestore`；未触碰 live `:3001`，未点确认、未发 `POST /api/system/deploy`）：
+- 截图存 `tmp/notice-dod/shots/`：`01-pending.png`（pending 部署条）→ `02-dismissed.png`（点忽略后从聊天页消失）→ `03-reload-still-hidden.png`（刷新仍隐藏，服务端 dismissal 持久）→ `04-reappeared-after-new-commit.png`（新增触及 `src/` 的提交后以新 revision 重新出现）→ `05-confirm-panel-no-deploy.png`（「构建并重启」只打开共享确认面板）→ `06-failure-blocking-no-dismiss.png`（构造 `lastDeploy.ok=false` 后 blocking 无忽略按钮）→ `07-multi-folded.png`（3 条只显示 1 条 +「2 more」）→ `08-inbox-with-dismissed.png`（收件箱 +「Dismissed」分组）。
+- 结构化报告：`tmp/notice-dod/report.json`（每步 DOM 读数、`GET /api/notices` 的 active/dismissed、`pageErrors=[]`、`deployRequests=[]`）。
+- N1 实测：忽略 revision `125167b…`；新增提交 `19b990e…` 后 `GET /api/notices` 的 active revision 变为 `19b990e…`（旧 revision 的忽略不再生效）。
+- 多条目一步用 Playwright route 夹具呈现（P1 只注册一个部署 provider，真实服务端不可能同时产出两条 notice）：夹具 3 active + 1 dismissed，仅验证客户端折叠计数与收件箱渲染；其余各步均走真实服务端与真实 DB。
+- `scripts/ui-scenario.mjs` 的 `open` 词汇表不覆盖聊天页/notices（无可用场景），故本次以真实服务端 + 一次性 Playwright 驱动完成，未跑场景运行器。
