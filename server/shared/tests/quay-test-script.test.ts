@@ -326,8 +326,12 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // files), and architecture-archguard-refresh-trigger added its two criteria
     // server/modules/architecture/tests/refreshJob.test.ts and refreshRoutes.test.ts
     // (435 + 2 = 437 collected server test files).
-    // This fixture names 3 known files, so 437 - 3 = 434.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=434$/);
+    // Then gap-notices-server-registry-and-dismissal added its two criteria
+    // server/modules/notices/tests/notice-registry.test.ts and
+    // server/modules/system/tests/deploy-notice-provider.test.ts (437 + 2 = 439 collected
+    // server test files).
+    // This fixture names 3 known files, so 439 - 3 = 436.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=436$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -376,9 +380,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // Same collection as AC2 — 437 files on this tree — but this fixture names ONE known
-    // file, so 437 - 1 = 436 (AC2 reads 434 because its fixture names 3).
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=436$/);
+    // Same collection as AC2 — 439 files on this tree — but this fixture names ONE known
+    // file, so 439 - 1 = 438 (AC2 reads 436 because its fixture names 3).
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=438$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

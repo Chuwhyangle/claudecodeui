@@ -170,9 +170,10 @@ function createStateStore(filePath: string) {
  * Builds the authenticated system router for the server entrypoint using the
  * installation details it already resolves for health and startup metadata.
  *
- * Returns the module's two faces: the router (mounted under `/api/system`) and the boot
- * verifier (`verifyPendingDeploy`), which the entrypoint runs after `listen` so a deploy's
- * target sha can be checked against the process that just came up.
+ * Returns the module's three faces: the router (mounted under `/api/system`), the boot verifier
+ * (`verifyPendingDeploy`), which the entrypoint runs after `listen` so a deploy's target sha can
+ * be checked against the process that just came up, and the deploy reading
+ * (`readDeployReadiness`), which the composition root bridges into the notice registry.
  */
 export function createSystemModule(options: SystemModuleOptions) {
   const homeDirectory = os.homedir();
@@ -260,6 +261,13 @@ export function createSystemModule(options: SystemModuleOptions) {
 
   return {
     router: createSystemRouter(systemUpdateService, deployService),
+    /**
+     * The deploy reading, exposed so the composition root can bridge it into the notice
+     * registry's deploy provider. Nothing inside this module reads it through this seam — the
+     * `/api/system/deploy-readiness` route keeps calling the service directly — so this is the
+     * one-way arrow the notice model requires (the notice module never imports system, N8).
+     */
+    readDeployReadiness: deployService.readReadiness,
     /**
      * Runs once, after `listen`. Reads the state file the deploy action wrote and records the
      * verification in the same file, so the reading after this boot answers 「重启成功了吗」

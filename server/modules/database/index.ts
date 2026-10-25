@@ -49,6 +49,9 @@ export type {
 } from '@/modules/database/repositories/observation.repository.js';
 export { notificationChannelEndpointsDb } from '@/modules/database/repositories/notification-channel-endpoints.js';
 export { notificationPreferencesDb } from '@/modules/database/repositories/notification-preferences.js';
+// noticeDismissalsDb: used by the notices registry to persist which revision of a notice each
+// user dismissed, so the same dismissal holds on every device (N5).
+export { noticeDismissalsDb } from '@/modules/database/repositories/notice-dismissals.js';
 // providerModelsDb: used by Providers to persist user-managed custom model rows.
 export { providerModelsDb } from '@/modules/database/repositories/provider-models.js';
 // projectsDb: used by Projects, Worktrees, Git, WebSocket, and notification modules to persist and resolve project records.

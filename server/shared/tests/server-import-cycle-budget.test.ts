@@ -214,6 +214,14 @@ const CYCLE_GROUPS: readonly string[][] = [
  * `modules -> modules/reply-suggestions` inbound edge. The directory still imports only
  * `server/shared/**` and itself and sits in no SCC; registering it here is the sanctioned
  * escape hatch, not a cycle and not a budget raise.
+ * A NINTH ENTRY WAS ADDED, by `gap-notices-server-registry-and-dismissal` (2026-10-25), under the
+ * same escape hatch: `modules/notices` is the P1 notice-registry feature directory. It imports
+ * `server/shared/**` and itself only — the per-user dismissal table comes from
+ * `modules/database`'s barrel via injection at the composition root, and the deploy provider is
+ * built in `server/index.ts` from `modules/system`'s reading, which is what keeps `modules/notices`
+ * from importing `modules/system` (N8). The one inbound edge is `modules/system` importing the
+ * notices TYPES, and it is acyclic because notices points back at nothing. Registering the
+ * directory is the sanctioned shape, not a new cycle member.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -234,6 +242,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/liaison',
   'modules/logging',
   'modules/mcp-gateway',
+  'modules/notices',
   'modules/notifications',
   'modules/notifications/services',
   'modules/notifications/websocket',
