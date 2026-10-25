@@ -43,6 +43,8 @@ depends_on:
 - src/modules/quay/PulseStrip.tsx
 - src/modules/quay/LoopPulseGantt.tsx
 - src/modules/quay/TimelineBar.tsx
+- src/modules/quay/chartGeometry.ts
+- src/modules/quay/timelineMapping.ts
 - src/modules/quay/QuayPanel.tsx
 - src/modules/quay/index.ts
 - src/modules/cockpit/CockpitStage.tsx
