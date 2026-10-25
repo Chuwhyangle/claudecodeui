@@ -33,7 +33,7 @@ depends_on:
 - [ ] 同一文件覆盖：主操作只打开确认面板，未点确认按钮时不发 `POST /api/system/deploy`（N7）。
 - [ ] `npx vitest run src/modules/notices/tests/NoticeInbox.test.tsx` 退出码 0，已忽略项出现在收件箱的「已忽略」分组（N6）。
 - [ ] `npx vitest run src/modules/notices/tests/i18nNoticesCompleteness.test.ts` 退出码 0，12 个 locale 的 `notices` 块 key 与占位符一致。
-- [ ] `npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx src/modules/cockpit/tests/CockpitPage.test.tsx` 退出码 0（驾驶舱页的完整形态与确认面板行为不变；若后一个文件不存在则只跑前一个并在完成记录里写明）。
+- [ ] `npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` 退出码 0（驾驶舱页的完整形态与确认面板行为不变；原先断言 `compact` 形态的用例随该形态下线而删除或改写，完成记录里列出被删改的用例名）。
 - [ ] 假形态：让 `NoticeSlot` 对 blocking 也渲染忽略按钮，blocking 无忽略按钮的用例必须变红；让它渲染全部条目而非 1 条，N4 用例必须变红（贴出两次变红输出，随后还原）。
 - [ ] `grep -n "DeployReadiness" src/modules/project-workspace/WorkspaceMain.tsx` 零命中，`grep -n "NoticeSlot" src/modules/project-workspace/WorkspaceMain.tsx` 至少一处命中。
 - [ ] `npm run typecheck` 与 `npx oxlint src/modules/notices src/modules/cockpit src/modules/project-workspace` 退出码 0。
