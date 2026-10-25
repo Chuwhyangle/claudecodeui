@@ -54,8 +54,8 @@ extra:
 
 ## Blocker
 
-**2026-10-25T14:30:46.669Z — worker 未落地（exited-not-landed）**
+**2026-10-25T15:18:22.211Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-resident-busy-input.test.ts:   AssertionError [ERR_ASSERTION]: the leg-2 frame must be readable with its own uuid
+- 未落地原因：step=suite: __PERFILE__ duration_ms=45174 server/modules/mcp-gateway/tests/mcp-session-lifecycle.test.ts passed=false end_ms=1792940273723
 - run_id：wk-prod-anchor
-- session_id：2bfce5d5-3e5c-4c71-bfe8-87cf1255d5b2
+- session_id：690cdea0-0d24-49b3-b602-674f57a8583f
