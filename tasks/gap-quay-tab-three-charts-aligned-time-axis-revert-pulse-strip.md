@@ -1,7 +1,7 @@
 ---
 id: gap-quay-tab-three-charts-aligned-time-axis-revert-pulse-strip
 title: Quay tab：撤掉脉搏条，把 Loop pulse / Tests / Fan-in 三张现有图的时间轴对齐（不新增任何图形编码）
-status: ready
+status: superseded
 labels:
   - gap
   - defect
