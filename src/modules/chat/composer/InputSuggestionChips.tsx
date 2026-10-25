@@ -1,11 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
 
 import { cn } from '@/shared/utils';
-import {
-  suggestionOptionId,
-  truncateSuggestionLabel,
-} from '@/modules/chat/utils/inputSuggestions';
+import { suggestionOptionId } from '@/modules/chat/utils/inputSuggestions';
 import type { SuggestionChip } from '@/shared/types';
 
 type InputSuggestionChipsProps = {
@@ -22,63 +18,32 @@ type InputSuggestionChipsProps = {
    * here so a click aimed at the input is never swallowed by the listbox.
    */
   onBackgroundPress?: () => void;
-  /**
-   * Whether the second-line preview may be drawn. Absent means "yes unless the
-   * pointer is coarse and cannot hover" — the same rule the proposal states.
-   */
-  showPreview?: boolean;
 };
 
 /**
- * The second line's reading for one chip.
+ * Composer suggestion chips, rendered by ChatComposer as a flow row under the
+ * (empty) textarea.
  *
- * A quoted chip inserts its passage verbatim, so its preview is that passage's
- * first line — what a click actually writes, with no marker in front of it. The
- * preview's own `truncate` class shortens a long line. Model and habit chips
- * fill their own text, so their preview is that complete text.
- */
-function previewTextFor(chip: SuggestionChip): string {
-  if (chip.source !== 'quoted') {
-    return chip.text;
-  }
-  const [firstLine = ''] = chip.text.split(/\r?\n/u);
-  return firstLine;
-}
-
-/** Touch devices have no hover, so a preview would only be a flash before the fill. */
-function isCoarsePointer(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false;
-  }
-  try {
-    return window.matchMedia('(pointer: coarse) and (hover: none)').matches;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Composer suggestion chips, rendered by ChatComposer inside PromptInputBody on
- * top of the (empty) textarea.
+ * The row is part of the layout, not an overlay: every chip occupies real space,
+ * so a strip that grows to a second or third line pushes the composer's box (and
+ * therefore shrinks the transcript) instead of covering the box's own text. The
+ * listbox wraps (`flex-wrap`) rather than scrolling horizontally, which is what
+ * makes every chip reachable with a pointer at any width — there is no hidden
+ * track to drag, and touch and desktop use the same layout.
  *
- * Absolutely positioned against the body so it adds no row: the body measures
- * the same height whether or not a chip is showing. The listbox hugs its chips
- * (`flex: 0 1 auto`) rather than filling the row, so it only covers the chips
- * and their gaps; a press on its own background is cancelled and handed to
- * `onBackgroundPress` so focus still reaches the textarea underneath. A press
- * on a chip is cancelled too, so clicking a chip neither moves the caret nor
- * steals focus from the textarea. Selection itself is owned by the composer's
- * keydown and mirrored through `aria-activedescendant`.
+ * A chip shows as much of its text as two lines hold (`line-clamp-2`); the
+ * complete text stays in `title`. There is deliberately no second-line preview:
+ * hovering or keyboard-selecting a chip only highlights that chip. A press on
+ * the listbox's own background is cancelled and handed to `onBackgroundPress`
+ * so focus still reaches the textarea; a press on a chip is cancelled too, so
+ * clicking a chip neither moves the caret nor steals focus from the textarea.
+ * Selection itself is owned by the composer's keydown and mirrored through
+ * `aria-activedescendant`.
  *
  * Three sources share the strip in a fixed order — quoted selection, model
  * replies, then habits. Clicking any of them calls the same `onAccept(chip)`:
  * what differs per source is described by its accept descriptor, not here, so a
- * new source needs no new prop. The label is shortened to one line; the complete
- * text lives in `title` and in the second-line preview the keyboard selection and
- * the mouse hover reveal.
- *
- * Below 480px the chips stay one line and scroll horizontally, and the key
- * hint is not shown (there is no keyboard to name keys for).
+ * new source needs no new prop.
  */
 export function InputSuggestionChips({
   listId,
@@ -86,42 +51,27 @@ export function InputSuggestionChips({
   selectedIndex,
   onAccept,
   onBackgroundPress,
-  showPreview,
 }: InputSuggestionChipsProps) {
   const { t } = useTranslation('chat');
-  // Which chip the pointer is over. Null means "no hover"; the preview then falls
-  // back to the keyboard selection, then to the first model chip.
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   if (chips.length === 0) {
     return null;
   }
 
-  const previewEnabled = showPreview ?? !isCoarsePointer();
-  // The chip the pointer is over wins, then the keyboard selection. Only when
-  // neither exists does the preview fall back to the first model chip; the
-  // quoted chip is never a fallback because it is not a reply to send.
-  const activeIndex = hoveredIndex ?? selectedIndex;
-  const previewChip = previewEnabled
-    ? (activeIndex === null
-      ? chips.find((chip) => chip.source === 'model') ?? null
-      : chips[activeIndex] ?? null)
-    : null;
-
   return (
     <div
       data-slot="input-suggestion-chips"
-      className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-4 py-2"
+      className="relative z-10 w-full"
     >
       <div
         id={listId}
         role="listbox"
         aria-label={t('input.suggestions.listLabel', { defaultValue: 'Frequent inputs' })}
-        // `flex-[0_1_auto]` instead of `flex-1`: the listbox may shrink below
-        // its content (so a long row scrolls) but never grows past the chips,
-        // so it does not lay a transparent full-row hit target over the
-        // textarea. `mousedown` on that background is handed to the composer.
-        className="pointer-events-auto flex min-w-0 flex-[0_1_auto] items-center gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none]"
+        // `flex-wrap` is the layout: a chip wider than the remaining space moves
+        // to the next line, so nothing is silently clipped and no horizontal
+        // scroll gesture is needed. The row's height is content-driven, which is
+        // how the box above it grows with it.
+        className="pointer-events-auto flex min-w-0 flex-wrap items-start gap-1 px-4 py-2"
         onMouseDown={(event) => {
           // Chips and their gaps bubble here; only a press on the listbox
           // itself is background. Never let it swallow the click: cancel the
@@ -146,11 +96,12 @@ export function InputSuggestionChips({
             // the textarea's Tab handling, which keeps focus in one place.
             tabIndex={-1}
             onMouseDown={(event) => event.preventDefault()}
-            onMouseEnter={() => setHoveredIndex(index)}
-            onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
             onClick={() => onAccept(chip)}
             className={cn(
-              'h-6 shrink-0 rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors',
+              // Two lines, then a clamp — the full text is still in `title`.
+              // `min-w-0` + `max-w-full` let a long chip shrink to the row and
+              // wrap instead of forcing the listbox wider than the composer.
+              'line-clamp-2 min-w-0 max-w-full break-words rounded-full border border-dashed border-border/70 px-2 py-0.5 text-left text-xs leading-5 text-muted-foreground transition-colors',
               'hover:border-primary/60 hover:text-foreground',
               chip.source === 'model' && 'border-solid',
               chip.source === 'quoted' && 'border-solid border-primary/50 bg-primary/5',
@@ -160,35 +111,12 @@ export function InputSuggestionChips({
             {chip.source === 'quoted'
               ? t('input.suggestions.quoteChip', {
                 defaultValue: 'Quote: {{text}}',
-                text: truncateSuggestionLabel(chip.text),
+                text: chip.text,
               })
-              : truncateSuggestionLabel(chip.text)}
+              : chip.text}
           </button>
         ))}
       </div>
-      <span
-        aria-hidden="true"
-        className="hidden shrink-0 text-[11px] text-muted-foreground/70 min-[481px]:inline"
-      >
-        {[
-          t('input.suggestions.hintSelect', { defaultValue: 'Tab to select' }),
-          t('input.suggestions.hintAccept', { defaultValue: 'Enter to accept' }),
-          t('input.suggestions.hintHide', { defaultValue: 'Esc to hide' }),
-        ].join(' · ')}
-      </span>
-      {previewChip && (
-        // The textarea's second line: the complete text of the hovered or
-        // keyboard-selected chip, or the first model chip when neither exists.
-        // A quoted chip previews the first line it will insert, verbatim. Never
-        // a hit target — the chips above keep the pointer.
-        <span
-          data-suggestion-preview={previewChip.source}
-          aria-label={t('input.suggestions.previewHint', { defaultValue: 'Full suggestion' })}
-          className="pointer-events-none absolute left-4 right-4 top-7 truncate text-xs text-muted-foreground/70"
-        >
-          {previewTextFor(previewChip)}
-        </span>
-      )}
     </div>
   );
 }

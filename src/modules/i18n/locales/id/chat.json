@@ -161,8 +161,7 @@
       "suggest": "Saran",
       "suggesting": "Menyarankan…",
       "suggestHint": "Sarankan balasan dari percakapan sejauh ini",
-      "quoteChip": "Kutipan: {{text}}",
-      "previewHint": "Saran lengkap"
+      "quoteChip": "Kutipan: {{text}}"
     },
     "placeholder": "Ketik / untuk perintah, @ untuk file, atau tanyakan apa saja kepada {{provider}}...",
     "placeholderDefault": "Ketik pesan...",

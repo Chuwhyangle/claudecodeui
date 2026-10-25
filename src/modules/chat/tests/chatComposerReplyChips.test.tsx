@@ -261,16 +261,22 @@ describe('chip clicks at the composer surface', () => {
     assert.equal(view.queryByRole('button', { name: enChat.input.suggestions.suggest }), null);
   });
 
-  it('shows the complete text of the keyboard-selected chip on the second line', () => {
-    const habitText = '这是一条足够长的习惯文本，用来验证第二行预览完整出现';
+  it('draws no second-line preview for the keyboard-selected chip', () => {
+    const habitText = '这是一条足够长的习惯文本，用来验证选中时不会再出现第二行预览';
     const chips = buildSuggestionChips({ modelChips: ['模型一'], habitChips: [habitText] });
     const { view } = renderComposer({
       chipStrip: chipStripProps({ chips, selectedIndex: 1 }),
     });
 
-    const preview = view.container.querySelector('[data-suggestion-preview]');
-    assert.ok(preview, 'Tab selection must produce the second-line preview');
-    assert.equal(preview.textContent, habitText);
+    // Selection is a highlight on the chip itself; the strip has no preview row
+    // and no keyboard-hint copy beside it.
+    assert.equal(view.container.querySelector('[data-suggestion-preview]'), null);
+    assert.equal(view.container.textContent?.includes('Tab to select'), false);
+    assert.equal(
+      view.container.querySelector('[data-chip-source="habit"]')?.getAttribute('aria-selected'),
+      'true',
+      'the chip still marks itself as the keyboard selection',
+    );
   });
 
   it('draws the expansion chips under the textarea and routes a click to its callback', () => {

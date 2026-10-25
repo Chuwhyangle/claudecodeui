@@ -166,14 +166,10 @@
     "clickToChangeMode": "点击更改权限模式（或在输入框中按 Tab）",
     "suggestions": {
       "listLabel": "常用输入",
-      "hintSelect": "Tab 选择",
-      "hintAccept": "↵ 采用",
-      "hintHide": "Esc 隐藏",
       "suggest": "建议",
       "suggesting": "生成中…",
       "suggestHint": "根据上下文建议回复",
-      "quoteChip": "引用：{{text}}",
-      "previewHint": "完整建议"
+      "quoteChip": "引用：{{text}}"
     },
     "showAllCommands": "显示所有命令",
     "moreTools": "更多工具",

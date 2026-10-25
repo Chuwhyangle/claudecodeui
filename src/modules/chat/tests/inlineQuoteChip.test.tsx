@@ -358,10 +358,11 @@ describe('inline chip button', () => {
   const digestOf = (value: unknown): string => createHash('sha256')
     .update(keyPaths(value).sort().join('\n'))
     .digest('hex');
-  // Digests taken from the locale files BEFORE this task: the inline chip reuses
-  // the existing key and must not add one to any locale.
-  const EN_KEY_SET_DIGEST = '8cd18938525fb872c783e7a66ebd483fe9fca606199517beed30155ac15046f9';
-  const ZH_KEY_SET_DIGEST = '17a1a095c4b5622fbb08bb39637359884997dcfbc866d470c00a265436d89f81';
+  // Digests taken from the locale files AFTER the suggestion strip retired the
+  // second-line preview and the keyboard hint: the inline chip reuses the
+  // existing `quoteChip` key and must not add one to any locale.
+  const EN_KEY_SET_DIGEST = '6322ac76d8b216e9f833b1d0a93916acb97cd84f979eac4117cbca18dbd4fcf0';
+  const ZH_KEY_SET_DIGEST = '2bf40ffe33de095726e3c650f1089b57cd13335fad2f5a0b11cedf91bfe398e6';
 
   it('(f) has a readable name from the existing key and the complete text in title', () => {
     const { view } = showInlineChip('前面后面', 2);

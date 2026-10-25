@@ -1131,15 +1131,15 @@ export default function ChatComposer({
             {/* The strip is an EMPTY-box affordance. A non-empty box draws its quoted
                 chip in the text flow instead; when the inline mode cannot run (a listen
                 owns the box, or one just committed text) the strip must not fall back
-                over the words — there is no reserved row for it any more. */}
+                over the words — it is a flow row, so it would push them instead. */}
             {showSuggestionChips && chipStrip && !inlineChipActive && input === '' && (
               <InputSuggestionChips
                 listId={chipStripListId}
                 chips={chipStrip.chips}
                 selectedIndex={chipStripSelectedIndex}
                 onAccept={chipStrip.onAccept}
-                // The strip's background sits over the textarea; a press there
-                // must focus the input instead of being eaten by the listbox.
+                // The row's own background (the gaps between chips) must focus the
+                // input instead of being eaten by the listbox.
                 onBackgroundPress={() => textareaRef.current?.focus()}
               />
             )}
