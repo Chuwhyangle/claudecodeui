@@ -25,11 +25,11 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：空输入且有 chip 时，textarea 与 chip 条是同一个 grid 容器的子元素，并落在同一格（相同的 `grid-area` / `col-start-1 row-start-1` 类名或等价断言）；输入非空时 chip 条不渲染、textarea 独占布局；exit 0。取假：把 chip 条放回 textarea 之后的 flow 行，该例必须红。
-- [ ] 同一文件含一例：chip 滚动区的左侧让出量取自导出的单一常量（值为 44），且该占位元素不在滚动容器内部、含 `pointer-events-none`；窄屏与宽屏读同一个常量；exit 0。取假：把占位挪进滚动容器或改成可点击元素，该例必须红。
-- [ ] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx src/modules/chat/tests/inlineQuoteChip.test.tsx` exit 0，且这些文件里已有的 `expect` 没有被删减或放宽（`git diff` 只允许新增，或因布局改变而同步改写、并在提交说明里逐条列出）。
-- [ ] 源码里不再依赖「flow 行在 textarea 之后」：`git grep -n "flow row" -- src/modules/chat/composer/ChatComposer.tsx || true` 不再含描述旧摆法的注释（注释须改写为同格重叠）。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [x] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：空输入且有 chip 时，textarea 与 chip 条是同一个 grid 容器的子元素，并落在同一格（相同的 `grid-area` / `col-start-1 row-start-1` 类名或等价断言）；输入非空时 chip 条不渲染、textarea 独占布局；exit 0。取假：把 chip 条放回 textarea 之后的 flow 行，该例必须红。
+- [x] 同一文件含一例：chip 滚动区的左侧让出量取自导出的单一常量（值为 44），且该占位元素不在滚动容器内部、含 `pointer-events-none`；窄屏与宽屏读同一个常量；exit 0。取假：把占位挪进滚动容器或改成可点击元素，该例必须红。
+- [x] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx src/modules/chat/tests/inlineQuoteChip.test.tsx` exit 0，且这些文件里已有的 `expect` 没有被删减或放宽（`git diff` 只允许新增，或因布局改变而同步改写、并在提交说明里逐条列出）。
+- [x] 源码里不再依赖「flow 行在 textarea 之后」：`git grep -n "flow row" -- src/modules/chat/composer/ChatComposer.tsx || true` 不再含描述旧摆法的注释（注释须改写为同格重叠）。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
 
 ## DoD
 
