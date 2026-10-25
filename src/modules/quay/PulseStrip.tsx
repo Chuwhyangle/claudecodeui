@@ -13,27 +13,40 @@ import type {
 import { cn } from '@/shared/utils';
 
 /**
- * The pulse strip: one project's last N hours in four thin rows — in flight, fan-in
- * outcomes, suite rounds and live blockers.
+ * The pulse strip: one project's last N hours in four labelled rows — in flight, fan-in
+ * outcomes, suite rounds and live blockers — under a time axis.
  *
  * WHY IT EXISTS. The Quay panel's Loop pulse card is a full chart with axis labels and a
  * 600×H coordinate space; it answers "what ran" when a person is already looking at one
  * project. The cockpit needs the opposite reading: every project, on one screen, continuously,
- * in a form that costs ~48 px and can be scanned without reading. So this component is
- * deliberately dense:
+ * in a form that can be scanned without reading. The first version of this strip was dense to
+ * the point of being illegible: the rows only had `aria-label`s, there was no time axis, and the
+ * window selector was squeezed into a 44 px column that actually overflowed leftwards beneath
+ * the in-flight row (its 6 h button could not be clicked). This version keeps the density of the
+ * marks but spends vertical space on the three things a reader needs:
  *
- *   1. in flight  (16 px) — one 2 px line per running task, length = elapsed, colour = phase;
- *                           a task whose heartbeat is older than the worker's round interval
- *                           ends in a HOLLOW DOT instead of a solid line end.
- *   2. fan-in     (10 px) — one thin vertical mark per mechanical attempt. Success rises from
- *                           the baseline, failure sinks below it; retry/ff is `serious`.
- *   3. suite      (10 px) — one vertical mark per round, height ∝ duration / median;
- *                           a failing round is `critical`.
- *   4. blocked    (10 px) — one horizontal segment per live failure signature, from its first
- *                           occurrence to now, ending in `⛔ N` (N = dependent tasks).
+ *   chrome (24 px)   — the 6 h / 24 h / 72 h segmented control, in its own region above the plot
+ *                      (a coarse pointer gets 44 px buttons instead of 24 px ones).
+ *   in flight (30 px) — up to three lanes of ≥8 px bars, one per running task. A bar is only a
+ *                      few percent of the window wide for a freshly started task, so its id is
+ *                      drawn inside the bar only when it fits; otherwise the id stays in the
+ *                      tooltip / accessible name. Heartbeat older than the worker's round
+ *                      interval ⇒ the bar ends in a HOLLOW DOT.
+ *   fan-in    (10 px) — one thin vertical mark per mechanical attempt. Success rises from the
+ *                      baseline, failure sinks below it; retry/ff is `serious`.
+ *   suite     (10 px) — one vertical mark per round, height ∝ duration / median; a failing round
+ *                      is `critical` and carries `✕`. The row label carries a `?` legend that
+ *                      spells out both encodings (and is tappable, not hover-only).
+ *   blocked   (10 px) — one horizontal segment per live failure signature, from its first
+ *                      occurrence to now, ending in `⛔ N` (N = dependent tasks).
+ *   axis      (12 px) — `-{window}h` … `-{window/2}h` … now, under the data column.
+ *
+ * Every row's visible label lives in a fixed 56 px column, so the label and the data track can
+ * never overlap; and because the window selector sits in the chrome above the plot, it is not a
+ * descendant of — and cannot be covered by — a row.
  *
  * COLOUR IS NEVER THE ONLY CHANNEL (dataviz rule): every state also carries a shape — the
- * in-flight line's end (solid vs hollow), a fan-in mark's direction (up vs down), the
+ * in-flight bar's stale end (solid vs hollow), a fan-in mark's direction (up vs down), the
  * `✕` on a failing suite round, the `⛔` glyph on a blocked segment. The two palettes are
  * DISJOINT BY CONSTRUCTION: in-flight phases use categorical hues (blue/violet/cyan/indigo)
  * and only health uses the status hues (green/amber/orange/red), so 「紫的那条」 can never be
@@ -43,22 +56,71 @@ import { cn } from '@/shared/utils';
  * `QuaySnapshot` or a fleet entry's `QuayPulseSummary`) and draws exactly it.
  */
 
-/** The height the strip promises, in CSS pixels. Rows: 16 + 10 + 10 + 10 + 2 baseline padding. */
-export const PULSE_STRIP_HEIGHT_PX = 48;
+/** The chrome row's height: the window selector lives here, above the plot. */
+export const PULSE_CHROME_HEIGHT_PX = 24;
+
+/** The fixed width of each row's label column, in CSS pixels. */
+export const PULSE_LABEL_COLUMN_PX = 56;
+
+/** The time axis under the data column. */
+export const PULSE_AXIS_HEIGHT_PX = 12;
+
+/** The visible height of the segmented window control (a coarse pointer gets 44 px). */
+export const PULSE_SELECTOR_HEIGHT_PX = 24;
+/** The coarse-pointer hit target the selector must reach, in CSS pixels. */
+export const PULSE_SELECTOR_TOUCH_TARGET_PX = 44;
+
+/** The in-flight bar height. Exported because the readability criterion reads the real value. */
+export const PULSE_IN_FLIGHT_BAR_HEIGHT_PX = 8;
+/** One lane's vertical pitch inside the in-flight row. */
+export const PULSE_IN_FLIGHT_LANE_HEIGHT_PX = 10;
+/** How many lanes the in-flight row offers before tasks start sharing one. */
+export const PULSE_IN_FLIGHT_LANE_COUNT = 3;
+/** The in-flight row: three lanes of 10 px. */
+export const PULSE_IN_FLIGHT_ROW_HEIGHT_PX = PULSE_IN_FLIGHT_LANE_COUNT * PULSE_IN_FLIGHT_LANE_HEIGHT_PX;
+
+/**
+ * A bar narrower than this percentage of the window draws no label (the id stays in the
+ * tooltip / accessible name). A 1 h task in a 24 h window is 4.2 % wide: below the threshold,
+ * which is correct — 4 % of a desktop track is not enough for a task id.
+ */
+export const PULSE_INFLIGHT_LABEL_MIN_PERCENT = 5;
+
+const FAN_IN_ROW_HEIGHT = 10;
+const SUITE_ROW_HEIGHT = 10;
+const BLOCKER_ROW_HEIGHT = 10;
+const PULSE_ROWS_HEIGHT_PX =
+  PULSE_IN_FLIGHT_ROW_HEIGHT_PX + FAN_IN_ROW_HEIGHT + SUITE_ROW_HEIGHT + BLOCKER_ROW_HEIGHT;
+const PULSE_PLOT_HEIGHT_PX = PULSE_ROWS_HEIGHT_PX + PULSE_AXIS_HEIGHT_PX;
+
+/**
+ * The height the strip promises on a fine pointer, in CSS pixels: chrome + rows + axis.
+ * (On a coarse pointer the chrome grows to 44 px, so the strip grows with it.)
+ */
+export const PULSE_STRIP_HEIGHT_PX = PULSE_CHROME_HEIGHT_PX + PULSE_PLOT_HEIGHT_PX;
+
+/**
+ * The layout constants the disjointness criterion reads instead of jsdom geometry:
+ * the chrome ends exactly where the plot begins, so no row can be under the selector.
+ */
+export const PULSE_STRIP_LAYOUT = {
+  chromeTopPx: 0,
+  chromeHeightPx: PULSE_CHROME_HEIGHT_PX,
+  plotTopPx: PULSE_CHROME_HEIGHT_PX,
+  plotHeightPx: PULSE_PLOT_HEIGHT_PX,
+  labelColumnPx: PULSE_LABEL_COLUMN_PX,
+  axisHeightPx: PULSE_AXIS_HEIGHT_PX,
+  selectorHeightPx: PULSE_SELECTOR_HEIGHT_PX,
+  selectorTouchTargetPx: PULSE_SELECTOR_TOUCH_TARGET_PX,
+  inFlightBarHeightPx: PULSE_IN_FLIGHT_BAR_HEIGHT_PX,
+} as const;
 
 /** The windows the strip offers, in hours, with 24 h (one day) as its default reading. */
 export const PULSE_WINDOW_HOURS = [6, 24, 72] as const;
 export const DEFAULT_PULSE_WINDOW_HOURS = 24;
 
-/** Row heights, in CSS pixels. Their sum (+ 2 px of breathing room) is the strip's height. */
-const IN_FLIGHT_ROW_HEIGHT = 16;
-const FAN_IN_ROW_HEIGHT = 10;
-const SUITE_ROW_HEIGHT = 10;
-const BLOCKER_ROW_HEIGHT = 10;
-const STRIP_PADDING = 2;
-
 /**
- * How old an in-flight task's heartbeat may be before its line ends in a hollow dot.
+ * How old an in-flight task's heartbeat may be before its bar ends in a hollow dot.
  *
  * The worker-driver's own round interval (five minutes): a driver that missed a whole round
  * without touching its carrier has stopped heartbeating, which is a different fact from a task
@@ -112,7 +174,7 @@ export type PulseStripProps = {
    * carries `data-unread`, and if every row is unread/empty the strip says so once.
    */
   inFlight: QuayInFlightTask[] | null;
-  /** Lane reading, used only to place each in-flight line on the lane the gantt would draw it. */
+  /** Lane reading, used only to place each in-flight bar on the lane the gantt would draw it. */
   gantt?: QuayGanttLanes | null;
   tests: QuayTestsSummary;
   fanIn: QuayFanInSummary;
@@ -122,9 +184,9 @@ export type PulseStripProps = {
   generatedAt: string;
   /** Controlled window in hours. Omitted ⇒ the strip keeps its own (default 24). */
   windowHours?: number;
-  /** Invoked when a window is picked; omitted ⇒ the selector is not rendered. */
+  /** Invoked when a window is picked; omitted ⇒ the selector still works internally. */
   onWindowChange?: (hours: number) => void;
-  /** Invoked with the task id behind an activated in-flight line / blocked segment. */
+  /** Invoked with the task id behind an activated in-flight bar / blocked segment. */
   onFocusTask?: (taskId: string) => void;
   /** Prefix for the component's test ids. */
   testId?: string;
@@ -231,7 +293,8 @@ function fallbackNow(
 
 /**
  * Renders one project's pulse strip. Display-only: it owns the selected window (unless the host
- * controls it) and the hover tooltip, and reports activation upward through `onFocusTask`.
+ * controls it), the hover tooltip and the suite legend, and reports activation upward through
+ * `onFocusTask`.
  */
 export default function PulseStrip({
   inFlight,
@@ -248,6 +311,7 @@ export default function PulseStrip({
   const { t } = useTranslation();
   const [internalWindow, setInternalWindow] = useState<number>(DEFAULT_PULSE_WINDOW_HOURS);
   const [hover, setHover] = useState<HoverReading | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
 
   const hours = windowHours ?? internalWindow;
   const nowMs = fallbackNow(generatedAt, inFlight, tests);
@@ -271,7 +335,7 @@ export default function PulseStrip({
     if (startMs === null) {
       return [];
     }
-    const laneIndex = lane ?? index % 4;
+    const laneIndex = (lane ?? index) % PULSE_IN_FLIGHT_LANE_COUNT;
     const heartbeatMs = toEpochMs(task.lastHeartbeat);
     const stale = heartbeatMs !== null && nowMs - heartbeatMs > PULSE_STALE_AFTER_MS;
     const phase = IN_FLIGHT_PHASES[task.phase];
@@ -279,7 +343,9 @@ export default function PulseStrip({
     const width = Math.max(0.4, toPercent(nowMs) - left);
     const tooltip = `${task.taskId} · ${t(phase.labelKey)} · ${formatDuration(nowMs - Math.max(startMs, windowStartMs))}`
       + (stale ? ` · ${t('cockpit.pulseStaleInFlight')}` : '');
-    return [{ task, phase, lane: laneIndex, left, width, stale, tooltip }];
+    // A bar too narrow for its id keeps the id in the tooltip / accessible name only.
+    const showLabel = width >= PULSE_INFLIGHT_LABEL_MIN_PERCENT;
+    return [{ task, phase, lane: laneIndex, left, width, stale, tooltip, showLabel }];
   });
 
   // ── Row 2: fan-in ───────────────────────────────────────────────────────────────────────
@@ -365,218 +431,342 @@ export default function PulseStrip({
 
   const rows = useMemo(
     () => [
-      { id: 'inflight', height: IN_FLIGHT_ROW_HEIGHT, unread: inFlight === null },
-      { id: 'fanin', height: FAN_IN_ROW_HEIGHT, unread: false },
-      { id: 'suite', height: SUITE_ROW_HEIGHT, unread: false },
-      { id: 'blocked', height: BLOCKER_ROW_HEIGHT, unread: blockers === null },
+      {
+        id: 'inflight',
+        height: PULSE_IN_FLIGHT_ROW_HEIGHT_PX,
+        unread: inFlight === null,
+        labelKey: 'cockpit.pulseRowInFlight',
+      },
+      { id: 'fanin', height: FAN_IN_ROW_HEIGHT, unread: false, labelKey: 'cockpit.pulseRowFanIn' },
+      { id: 'suite', height: SUITE_ROW_HEIGHT, unread: false, labelKey: 'cockpit.pulseRowSuite' },
+      { id: 'blocked', height: BLOCKER_ROW_HEIGHT, unread: blockers === null, labelKey: 'cockpit.pulseRowBlocked' },
     ],
     [inFlight, blockers],
   );
 
   return (
     <div
-      className="relative w-full select-none"
-      style={{ height: PULSE_STRIP_HEIGHT_PX }}
+      className="relative flex w-full select-none flex-col"
+      style={{ minHeight: PULSE_STRIP_HEIGHT_PX }}
       data-testid={testId}
       data-height-px={PULSE_STRIP_HEIGHT_PX}
       data-window-hours={hours}
       data-empty={isEmpty ? 'true' : undefined}
     >
-      {/* The one baseline the strip keeps: a 1 px rule at the foot, no axis text. */}
-      <div className="absolute inset-x-0 bottom-0 h-px bg-border" data-testid={`${testId}-baseline`} />
-
-      {/* Window selector: three tiny labels in a reserved 44 px column at the right end, where
-          the 「24h」 label would be. Selecting a window re-selects the records; the strip's
-          height never changes (the rows are laid out in the plot column beside it). */}
+      {/*
+        CHROME — the window selector's own region, above the plot. It is a normal-flow sibling of
+        the plot (not an absolute child of a row), so the three buttons can never sit under the
+        in-flight marks: the old `w-11` + `justify-end` column overflowed leftwards and ate the
+        6 h button. `h-6` is the 24 px visible control; the coarse-pointer variant gives each
+        button a 44 px hit target instead.
+      */}
       <div
-        className="absolute right-0 top-1 flex w-11 flex-row items-center justify-end gap-0.5"
-        data-testid={`${testId}-windows`}
+        className="flex h-6 shrink-0 items-center justify-end [@media(pointer:coarse)]:h-11"
+        data-testid={`${testId}-chrome`}
+        data-layout-region="chrome"
+        data-layout-top-px={PULSE_STRIP_LAYOUT.chromeTopPx}
+        data-layout-height-px={PULSE_STRIP_LAYOUT.chromeHeightPx}
       >
-        {PULSE_WINDOW_HOURS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => selectWindow(option)}
-            aria-pressed={option === hours}
-            className={cn(
-              'rounded px-1 text-[9px] leading-3 tabular-nums',
-              option === hours
-                ? 'bg-muted font-semibold text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-            data-testid={`${testId}-window-${option}`}
-          >
-            {option}h
-          </button>
-        ))}
+        <div
+          role="group"
+          aria-label={t('cockpit.pulseWindowGroup')}
+          className="flex h-6 items-center gap-0.5 rounded-md border border-border bg-muted/40 [@media(pointer:coarse)]:h-11"
+          data-testid={`${testId}-windows`}
+          data-layout-region="chrome"
+          data-control-height-px={PULSE_SELECTOR_HEIGHT_PX}
+          data-touch-target-px={PULSE_SELECTOR_TOUCH_TARGET_PX}
+        >
+          {PULSE_WINDOW_HOURS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => selectWindow(option)}
+              aria-pressed={option === hours}
+              className={cn(
+                'h-6 min-w-8 rounded px-1.5 text-[10px] leading-none tabular-nums transition-colors',
+                '[@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:min-w-11',
+                option === hours
+                  ? 'bg-primary font-semibold text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+              data-testid={`${testId}-window-${option}`}
+            >
+              {option}h
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="absolute inset-y-0 left-0 right-11 flex flex-col" style={{ paddingBottom: STRIP_PADDING }}>
+      {/* PLOT — the labelled rows, then the time axis. */}
+      <div
+        className="relative flex min-h-0 flex-1 flex-col"
+        data-testid={`${testId}-plot`}
+        data-layout-region="plot"
+        data-layout-top-px={PULSE_STRIP_LAYOUT.plotTopPx}
+        data-layout-height-px={PULSE_STRIP_LAYOUT.plotHeightPx}
+      >
         {rows.map((row) => (
           <div
             key={row.id}
-            className="relative w-full"
+            className="relative flex w-full items-center"
             style={{ height: row.height }}
             data-testid={`${testId}-row-${row.id}`}
             data-row-height={row.height}
+            data-layout-region="row"
             data-unread={row.unread ? 'true' : undefined}
-            aria-label={t(`cockpit.pulseRow${row.id === 'inflight' ? 'InFlight' : row.id === 'fanin' ? 'FanIn' : row.id === 'suite' ? 'Suite' : 'Blocked'}`)}
+            aria-label={t(row.labelKey)}
           >
-            {row.id === 'inflight' &&
-              inFlightRows.map((entry) => (
+            {/* The fixed label column: visible text for every row, never overlapping the track. */}
+            <span
+              className="flex shrink-0 items-center gap-0.5 pr-1"
+              style={{ width: PULSE_LABEL_COLUMN_PX }}
+            >
+              <span
+                className="truncate text-[10px] font-medium text-muted-foreground"
+                data-testid={`${testId}-row-${row.id}-label`}
+              >
+                {t(row.labelKey)}
+              </span>
+              {row.id === 'suite' && (
                 <button
-                  key={entry.task.taskId}
                   type="button"
+                  aria-label={t('cockpit.pulseLegend')}
+                  title={t('cockpit.pulseLegend')}
+                  aria-expanded={legendOpen}
                   onClick={(event) => {
-                    // The strip is embedded inside the fleet tile, whose own click opens the
-                    // board. Activating a mark must focus the TASK, not also trigger that.
                     event.stopPropagation();
-                    onFocusTask?.(entry.task.taskId);
+                    setLegendOpen((open) => !open);
                   }}
-                  onMouseEnter={() => showTooltip(entry.tooltip, entry.left)}
-                  onMouseLeave={() => setHover(null)}
-                  aria-label={entry.tooltip}
-                  title={entry.tooltip}
-                  className={cn(
-                    'absolute rounded-full',
-                    entry.phase.className,
-                    onFocusTask !== undefined && 'cursor-pointer',
-                  )}
-                  style={{ left: `${entry.left}%`, width: `${entry.width}%`, top: entry.lane * 4 + 1, height: 2 }}
-                  data-testid={`${testId}-inflight-line`}
-                  data-phase={entry.task.phase}
-                  data-lane={entry.lane}
-                  data-shape="in-flight-line"
-                  data-stale={entry.stale ? 'true' : undefined}
-                />
-              ))}
+                  className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-border text-[8px] leading-none text-muted-foreground hover:text-foreground"
+                  data-testid={`${testId}-legend`}
+                >
+                  ?
+                </button>
+              )}
+            </span>
 
-            {row.id === 'inflight' &&
-              inFlightRows
-                .filter((entry) => entry.stale)
-                .map((entry) => (
-                  <span
-                    key={`stale-${entry.task.taskId}`}
-                    aria-label={t('cockpit.pulseStaleInFlight')}
-                    title={t('cockpit.pulseStaleInFlight')}
+            <div
+              className="relative h-full flex-1"
+              data-testid={`${testId}-row-${row.id}-track`}
+              data-layout-region="track"
+            >
+              {row.id === 'inflight' &&
+                inFlightRows.map((entry) => (
+                  <button
+                    key={entry.task.taskId}
+                    type="button"
+                    onClick={(event) => {
+                      // The strip is embedded inside the fleet tile, whose own click opens the
+                      // board. Activating a mark must focus the TASK, not also trigger that.
+                      event.stopPropagation();
+                      onFocusTask?.(entry.task.taskId);
+                    }}
+                    onMouseEnter={() => showTooltip(entry.tooltip, entry.left)}
+                    onMouseLeave={() => setHover(null)}
+                    aria-label={entry.tooltip}
+                    title={entry.tooltip}
                     className={cn(
-                      'absolute h-1.5 w-1.5 rounded-full border bg-transparent',
-                      'border-red-600 dark:border-red-400',
+                      'absolute flex items-center overflow-hidden rounded-[2px] text-[9px] font-medium leading-none',
+                      'text-white dark:text-slate-950',
+                      entry.phase.className,
+                      onFocusTask !== undefined && 'cursor-pointer',
                     )}
-                    style={{ left: `calc(${entry.left + entry.width}% - 3px)`, top: entry.lane * 4, }}
-                    data-testid={`${testId}-inflight-stale-dot`}
-                    data-shape="hollow-dot"
+                    style={{
+                      left: `${entry.left}%`,
+                      width: `${entry.width}%`,
+                      top: entry.lane * PULSE_IN_FLIGHT_LANE_HEIGHT_PX,
+                      height: PULSE_IN_FLIGHT_BAR_HEIGHT_PX,
+                    }}
+                    data-testid={`${testId}-inflight-line`}
+                    data-phase={entry.task.phase}
+                    data-lane={entry.lane}
+                    data-bar-height-px={PULSE_IN_FLIGHT_BAR_HEIGHT_PX}
+                    data-show-label={entry.showLabel ? 'true' : undefined}
+                    data-shape="in-flight-bar"
+                    data-stale={entry.stale ? 'true' : undefined}
+                  >
+                    {entry.showLabel && (
+                      <span className="pointer-events-none truncate px-1">{entry.task.taskId}</span>
+                    )}
+                  </button>
+                ))}
+
+              {row.id === 'inflight' &&
+                inFlightRows
+                  .filter((entry) => entry.stale)
+                  .map((entry) => (
+                    <span
+                      key={`stale-${entry.task.taskId}`}
+                      aria-label={t('cockpit.pulseStaleInFlight')}
+                      title={t('cockpit.pulseStaleInFlight')}
+                      className={cn(
+                        'absolute h-1.5 w-1.5 rounded-full border bg-transparent',
+                        'border-red-600 dark:border-red-400',
+                      )}
+                      style={{
+                        left: `calc(${entry.left + entry.width}% - 3px)`,
+                        top: entry.lane * PULSE_IN_FLIGHT_LANE_HEIGHT_PX
+                          + (PULSE_IN_FLIGHT_BAR_HEIGHT_PX - 6) / 2,
+                      }}
+                      data-testid={`${testId}-inflight-stale-dot`}
+                      data-shape="hollow-dot"
+                    />
+                  ))}
+
+              {row.id === 'inflight' && inFlight !== null && inFlightRows.length === 0 && (
+                <span
+                  className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground"
+                  data-testid={`${testId}-inflight-empty`}
+                >
+                  {t('cockpit.inFlightEmpty')}
+                </span>
+              )}
+
+              {row.id === 'fanin' &&
+                fanInMarks.map((mark, index) => (
+                  <span
+                    key={`${mark.attempt.task}-${mark.at}-${index}`}
+                    onMouseEnter={() => showTooltip(mark.tooltip, mark.left)}
+                    onMouseLeave={() => setHover(null)}
+                    title={mark.tooltip}
+                    aria-label={mark.tooltip}
+                    className={cn(
+                      // The visual is one thin line; the `before` box is an invisible 5 px hit
+                      // target so a pointer can actually land on it (density must not make the
+                      // reading unhoverable).
+                      'absolute w-px before:absolute before:-inset-x-2 before:inset-y-0 before:content-[""]',
+                      STATUS_STYLES[mark.severity].className,
+                    )}
+                    style={{
+                      left: `${mark.left}%`,
+                      // Success rises from the baseline (row middle) and failure sinks below it.
+                      ...(mark.success ? { bottom: '50%', height: 4 } : { top: '50%', height: 4 }),
+                    }}
+                    data-testid={`${testId}-fanin-mark`}
+                    data-outcome={mark.attempt.outcome}
+                    data-direction={mark.success ? 'up' : 'down'}
+                    data-severity={mark.severity}
+                    data-shape={mark.success ? 'fan-in-up' : 'fan-in-down'}
                   />
                 ))}
 
-            {row.id === 'fanin' &&
-              fanInMarks.map((mark, index) => (
-                <span
-                  key={`${mark.attempt.task}-${mark.at}-${index}`}
-                  onMouseEnter={() => showTooltip(mark.tooltip, mark.left)}
-                  onMouseLeave={() => setHover(null)}
-                  title={mark.tooltip}
-                  aria-label={mark.tooltip}
-                  className={cn(
-                    // The visual is one thin line; the `before` box is an invisible 5 px hit
-                    // target so a pointer can actually land on it (density must not make the
-                    // reading unhoverable).
-                    'absolute w-px before:absolute before:-inset-x-2 before:inset-y-0 before:content-[""]',
-                    STATUS_STYLES[mark.severity].className,
-                  )}
-                  style={{
-                    left: `${mark.left}%`,
-                    // Success rises from the baseline (row middle) and failure sinks below it.
-                    ...(mark.success ? { bottom: '50%', height: 4 } : { top: '50%', height: 4 }),
-                  }}
-                  data-testid={`${testId}-fanin-mark`}
-                  data-outcome={mark.attempt.outcome}
-                  data-direction={mark.success ? 'up' : 'down'}
-                  data-severity={mark.severity}
-                  data-shape={mark.success ? 'fan-in-up' : 'fan-in-down'}
-                />
-              ))}
-
-            {row.id === 'suite' &&
-              suiteMarks.map((mark, index) => (
-                <span
-                  key={`${mark.round.round}-${mark.at}-${index}`}
-                  onMouseEnter={() => showTooltip(mark.tooltip, mark.left)}
-                  onMouseLeave={() => setHover(null)}
-                  title={mark.tooltip}
-                  aria-label={mark.tooltip}
-                  className={cn(
-                    'absolute bottom-0 w-px before:absolute before:-inset-x-2 before:inset-y-0 before:content-[""]',
-                    STATUS_STYLES[mark.severity].className,
-                  )}
-                  style={{ left: `${mark.left}%`, height: mark.height }}
-                  data-testid={`${testId}-suite-mark`}
-                  data-state={mark.round.state}
-                  data-severity={mark.severity}
-                  data-duration-ms={mark.round.durationMs ?? undefined}
-                  // The failing round carries an explicit glyph, not just the red hue.
-                  data-shape={mark.failed ? 'suite-fail' : 'suite-pass'}
-                >
-                  {mark.failed && (
-                    <span
-                      className={cn('pointer-events-none absolute -top-1 left-0 text-[7px] leading-none', STATUS_STYLES.critical.text)}
-                      data-testid={`${testId}-suite-fail-glyph`}
-                    >
-                      ✕
-                    </span>
-                  )}
-                </span>
-              ))}
-
-            {row.id === 'blocked' &&
-              blockerSegments.map((segment, index) => (
-                <button
-                  key={`${segment.blocker.taskId}-${index}`}
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onFocusTask?.(segment.blocker.taskId);
-                  }}
-                  onMouseEnter={() => showTooltip(segment.tooltip, segment.left)}
-                  onMouseLeave={() => setHover(null)}
-                  aria-label={segment.tooltip}
-                  title={segment.tooltip}
-                  className={cn(
-                    'absolute h-0.5 rounded-full',
-                    STATUS_STYLES.critical.className,
-                    onFocusTask !== undefined && 'cursor-pointer',
-                  )}
-                  style={{ left: `${segment.left}%`, width: `${segment.width}%`, top: 4 }}
-                  data-testid={`${testId}-blocker-segment`}
-                  data-signature={segment.blocker.signature}
-                  data-occurrences={segment.blocker.occurrences}
-                  data-dependents={segment.dependents}
-                  data-shape="blocked"
-                >
+              {row.id === 'suite' &&
+                suiteMarks.map((mark, index) => (
                   <span
+                    key={`${mark.round.round}-${mark.at}-${index}`}
+                    onMouseEnter={() => showTooltip(mark.tooltip, mark.left)}
+                    onMouseLeave={() => setHover(null)}
+                    title={mark.tooltip}
+                    aria-label={mark.tooltip}
                     className={cn(
-                      'pointer-events-none absolute -top-2 left-full whitespace-nowrap text-[8px] font-semibold leading-none',
-                      STATUS_STYLES.critical.text,
+                      'absolute bottom-0 w-px before:absolute before:-inset-x-2 before:inset-y-0 before:content-[""]',
+                      STATUS_STYLES[mark.severity].className,
                     )}
-                    data-testid={`${testId}-blocker-impact`}
+                    style={{ left: `${mark.left}%`, height: mark.height }}
+                    data-testid={`${testId}-suite-mark`}
+                    data-state={mark.round.state}
+                    data-severity={mark.severity}
+                    data-duration-ms={mark.round.durationMs ?? undefined}
+                    // The failing round carries an explicit glyph, not just the red hue.
+                    data-shape={mark.failed ? 'suite-fail' : 'suite-pass'}
                   >
-                    {`⛔ ${segment.dependents}`}
-                    {segment.blocker.occurrences > 1 ? ` ×${segment.blocker.occurrences}` : ''}
+                    {mark.failed && (
+                      <span
+                        className={cn('pointer-events-none absolute -top-1 left-0 text-[7px] leading-none', STATUS_STYLES.critical.text)}
+                        data-testid={`${testId}-suite-fail-glyph`}
+                      >
+                        ✕
+                      </span>
+                    )}
                   </span>
-                </button>
-              ))}
+                ))}
+
+              {row.id === 'blocked' &&
+                blockerSegments.map((segment, index) => (
+                  <button
+                    key={`${segment.blocker.taskId}-${index}`}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onFocusTask?.(segment.blocker.taskId);
+                    }}
+                    onMouseEnter={() => showTooltip(segment.tooltip, segment.left)}
+                    onMouseLeave={() => setHover(null)}
+                    aria-label={segment.tooltip}
+                    title={segment.tooltip}
+                    className={cn(
+                      'absolute h-0.5 rounded-full',
+                      STATUS_STYLES.critical.className,
+                      onFocusTask !== undefined && 'cursor-pointer',
+                    )}
+                    style={{ left: `${segment.left}%`, width: `${segment.width}%`, top: 4 }}
+                    data-testid={`${testId}-blocker-segment`}
+                    data-signature={segment.blocker.signature}
+                    data-occurrences={segment.blocker.occurrences}
+                    data-dependents={segment.dependents}
+                    data-shape="blocked"
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none absolute -top-2 left-full whitespace-nowrap text-[8px] font-semibold leading-none',
+                        STATUS_STYLES.critical.text,
+                      )}
+                      data-testid={`${testId}-blocker-impact`}
+                    >
+                      {`⛔ ${segment.dependents}`}
+                      {segment.blocker.occurrences > 1 ? ` ×${segment.blocker.occurrences}` : ''}
+                    </span>
+                  </button>
+                ))}
+            </div>
           </div>
         ))}
+
+        {/* TIME AXIS — aligned with the data column (the label column is its left inset). */}
+        <div
+          className="relative shrink-0"
+          style={{ height: PULSE_AXIS_HEIGHT_PX, marginLeft: PULSE_LABEL_COLUMN_PX }}
+          data-testid={`${testId}-axis`}
+          data-layout-region="axis"
+        >
+          {[0, 25, 50, 75, 100].map((position) => (
+            <span
+              key={position}
+              aria-hidden="true"
+              className="absolute top-0 h-1 w-px bg-border"
+              style={{ left: `${position}%` }}
+            />
+          ))}
+          <div className="absolute inset-x-0 top-1 flex items-center justify-between text-[9px] leading-none text-muted-foreground tabular-nums">
+            <span data-testid={`${testId}-axis-start`}>{`-${hours}h`}</span>
+            <span data-testid={`${testId}-axis-mid`}>{`-${hours / 2}h`}</span>
+            <span data-testid={`${testId}-axis-now`}>{t('cockpit.pulseNow')}</span>
+          </div>
+        </div>
+
+        {isEmpty && (
+          <p
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground"
+            data-testid={`${testId}-empty`}
+          >
+            {t('cockpit.pulseNoActivity', { hours })}
+          </p>
+        )}
+
+        {legendOpen && (
+          <div
+            role="tooltip"
+            className="absolute left-0 z-50 max-w-[260px] rounded bg-popover px-1.5 py-1 text-[10px] text-popover-foreground shadow"
+            style={{ top: PULSE_IN_FLIGHT_ROW_HEIGHT_PX + FAN_IN_ROW_HEIGHT + 4 }}
+            data-testid={`${testId}-legend-text`}
+          >
+            {t('cockpit.pulseLegend')}
+          </div>
+        )}
       </div>
 
-      {isEmpty && (
-        <p
-          className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-[10px] text-muted-foreground"
-          data-testid={`${testId}-empty`}
-        >
-          {t('cockpit.pulseNoActivity', { hours })}
-        </p>
-      )}
+      {/* The one baseline the strip keeps: a 1 px rule at the foot, above no axis text. */}
+      <div className="absolute inset-x-0 bottom-0 h-px bg-border" data-testid={`${testId}-baseline`} />
 
       {hover !== null && (
         <div
