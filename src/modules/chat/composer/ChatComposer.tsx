@@ -642,13 +642,14 @@ export default function ChatComposer({
     bodyRef: composerBodyRef,
   });
   const inlineChipActive = inlineQuoteChip.active;
-  // The strip is the only content of an empty box, so the box itself drops to a single line and
-  // the strip's own flow row below it supplies the height. Without this the textarea keeps its
-  // two-row default (`rows=2`) above the strip, and since the placeholder is blank in that mode
-  // those two rows are pure blank space between the box top and the chips. Anything else — typed
-  // text, the inline quote-chip flow, or no chips at all — keeps the normal default and the
-  // auto-growth path in `useTextareaInteractionState`.
-  const suggestionChipsOwnEmptyLine =
+  // While the strip shows over an empty box it is laid in the SAME grid cell as the textarea (the
+  // body below switches to a one-cell grid), so the two share one line: the cell is as tall as the
+  // taller of them and there is no blank row between the box top and the chips. `rows=1` keeps the
+  // textarea's own half of that cell to a single line — the two-row default would otherwise make
+  // the shared cell two rows tall, because the placeholder is blank in this mode. Anything else —
+  // typed text, the inline quote-chip flow, or no chips at all — returns to the normal flow layout
+  // and the auto-growth path in `useTextareaInteractionState`.
+  const suggestionChipsShareEmptyLine =
     showSuggestionChips && !inlineChipActive && input === '';
   // Starting the next recording is the user answering the last failure, so it dismisses the notice.
   // Wrapped here rather than inside the button because the failing attempt's message is the
@@ -692,7 +693,8 @@ export default function ChatComposer({
   const hasQueuedDraft = Boolean(queuedDraft);
   // The chips are the empty box's content. While they are on screen the placeholder is blank so
   // the two are not drawn over each other, and the textarea drops to one line (see
-  // `suggestionChipsOwnEmptyLine`); the strip is a flow row beneath it, adding its own height.
+  // `suggestionChipsShareEmptyLine`); the strip shares that line's cell instead of adding a second
+  // row under it.
   // One listbox carries all three sources, so the strip reads a single prop.
   const canQueueDraft = isLoading && Boolean(input.trim() || attachedFiles.length > 0);
   // The same button press, two different outcomes. For a per-run session the text waits in this
@@ -1024,7 +1026,18 @@ export default function ChatComposer({
           */}
           <PromptInputBody
             ref={composerBodyRef}
-            className={areToolsInline ? 'flex min-w-0 flex-col' : undefined}
+            // The empty box's strip and textarea share one cell: `grid` puts both in the single
+            // implicit cell — each names it (`grid-area: 1 / 1`) so neither is auto-placed under
+            // the other — and the cell is as tall as the taller of them, so no blank line sits
+            // above the chips. `grid-cols-1` (a `minmax(0, 1fr)` track) is load-bearing: an
+            // auto-sized column would size to the chips' max-content and push the strip past the
+            // composer's clipped edge instead of letting its own `overflow-x-auto` scroll.
+            // Any other mode keeps the ordinary flow (and, on the inline-tools tier, the column
+            // stack).
+            className={cn(
+              suggestionChipsShareEmptyLine ? 'grid min-w-0 grid-cols-1' : undefined,
+              areToolsInline && !suggestionChipsShareEmptyLine ? 'flex min-w-0 flex-col' : undefined,
+            )}
           >
             {/*
               The overlay is the textarea's own text, drawn transparently, so it can carry a
@@ -1104,11 +1117,11 @@ export default function ChatComposer({
               // mirror layer carries it instead (see `useInlineQuoteChip`).
               data-inline-chip-mode={inlineChipActive ? 'true' : undefined}
               placeholder={showSuggestionChips ? '' : placeholder}
-              // One line while the strip below is the empty box's content: the two blank rows the
-              // `rows=2` default would reserve are what put a block of space above the chips. The
-              // map back to the default is `undefined` (not 2) so the browser default is never
-              // restated; the `height` written by `resizeTextarea` is left untouched.
-              rows={suggestionChipsOwnEmptyLine ? 1 : undefined}
+              // One line while the strip shares this empty box's cell: the two blank rows the
+              // `rows=2` default would reserve would make the shared cell two rows taller than the
+              // chip row. The map back to the default is `undefined` (not 2) so the browser default
+              // is never restated; the `height` written by `resizeTextarea` is left untouched.
+              rows={suggestionChipsShareEmptyLine ? 1 : undefined}
               aria-activedescendant={
                 showSuggestionChips && !inlineChipActive && chipStripSelectedIndex !== null
                   ? suggestionOptionId(chipStripListId, chipStripSelectedIndex)
@@ -1118,9 +1131,19 @@ export default function ChatComposer({
               // the textarea's own, so a long draft would spend the transcript's budget to grow.
               // An inline style rather than another class because the class cap carries `sm:`,
               // and a variant sorts after a bare utility — a plain `max-h-*` would lose to it.
-              // Only `maxHeight` is written here, so the `height` `resizeTextarea` sets on the
-              // element is never touched by React's style diffing.
-              style={areToolsInline ? { maxHeight: 'min(300px,30vh)' } : undefined}
+              // Only `maxHeight` and the shared cell's `gridArea` are written here; the `height`
+              // `resizeTextarea` sets on the element is never touched by React's style diffing.
+              // `gridArea` names the SAME cell as the chip strip (`1 / 1`): the strip is placed
+              // explicitly, so the textarea must be too — an auto-placed item would be pushed to
+              // the next free row under the strip instead of sharing row 1.
+              style={
+                areToolsInline || suggestionChipsShareEmptyLine
+                  ? {
+                    ...(areToolsInline ? { maxHeight: 'min(300px,30vh)' } : null),
+                    ...(suggestionChipsShareEmptyLine ? { gridArea: '1 / 1' } : null),
+                  }
+                  : undefined
+              }
               // Read-only while a Claude Code background job holds the
               // conversation: there is no turn this input could start, and the
               // notice above it says so. `disabled` rather than `readOnly`
@@ -1141,10 +1164,11 @@ export default function ChatComposer({
                 onAccept={chipStrip.onAccept}
               />
             )}
-            {/* The strip is an EMPTY-box affordance. A non-empty box draws its quoted
-                chip in the text flow instead; when the inline mode cannot run (a listen
-                owns the box, or one just committed text) the strip must not fall back
-                over the words — it is a flow row, so it would push them instead. */}
+            {/* The strip is an EMPTY-box affordance, drawn in the textarea's own grid cell. A
+                non-empty box draws its quoted chip in the text flow instead; when the inline
+                mode cannot run (a listen owns the box, or one just committed text) the strip
+                must not fall back onto the words — it is drawn over that cell, so over a draft
+                it would sit on top of the text being edited. */}
             {showSuggestionChips && chipStrip && !inlineChipActive && input === '' && (
               <InputSuggestionChips
                 listId={chipStripListId}

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import type { KeyboardEvent, RefObject } from 'react';
 
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
-import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
+import { InputSuggestionChips, SUGGESTION_CHIP_PASS_THROUGH_PX } from '@/modules/chat/composer/InputSuggestionChips';
 import { useChatComposerState } from '@/modules/chat/hooks/useChatComposerState';
 import { useInputHistory } from '@/modules/chat/hooks/useInputHistory';
 import { useInputSuggestions } from '@/modules/chat/hooks/useInputSuggestions';
@@ -860,6 +860,156 @@ describe('the strip owns the empty box\'s single line', () => {
     assert.equal(textarea.getAttribute('rows'), '1', 'clearing returns to the single-line box');
     assert.equal(textarea.style.height, 'auto', 'the empty box is handed back to the default height');
     assert.ok(view.getByRole('listbox'), 'the strip is back with the empty box');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The strip shares the empty textarea's grid cell
+// ---------------------------------------------------------------------------
+
+/**
+ * The strip used to be a second flow row under the empty textarea: `rows=1` had
+ * removed the two-row default, but the textarea's own 40px line still sat above
+ * the chips as a blank band. The fix lays both in ONE grid cell, so the box is as
+ * tall as the taller of the two and the chips start at the box top.
+ */
+describe('the strip shares the empty textarea\'s cell', () => {
+  const bodyOf = (view: ReturnType<typeof render>) => {
+    const body = view.container.querySelector<HTMLElement>('[data-slot="prompt-input-body"]');
+    assert.ok(body, 'the composer must render its body wrapper');
+    return body;
+  };
+  const stripOf = (view: ReturnType<typeof render>) => view.container.querySelector<HTMLElement>(
+    '[data-slot="input-suggestion-chips"]',
+  );
+  const tokensOf = (element: Element) => element.className.split(/\s+/).filter(Boolean);
+
+  it('AC1: an empty box puts the strip in the textarea\'s own grid cell, and a draft returns to flow', () => {
+    const { view, rerender } = renderComposer();
+
+    const textarea = view.container.querySelector('textarea');
+    assert.ok(textarea, 'the composer must render a textarea');
+    const strip = stripOf(view);
+    assert.ok(strip, 'the empty box draws the strip');
+    const body = bodyOf(view);
+
+    // One grid container, of which both are direct children.
+    assert.equal(textarea.parentElement, body, 'the textarea is a direct child of the body');
+    assert.equal(strip.parentElement, body, 'the strip is a direct child of the same body');
+    assert.ok(
+      tokensOf(body).includes('grid'),
+      `the body must lay its children out as a grid; class read ${body.className}`,
+    );
+
+    // And the same cell: both name `grid-area: 1 / 1` explicitly. Explicit on BOTH
+    // matters — an auto-placed item is pushed to the next free row under the strip,
+    // which is exactly the old "one blank line above the chips" layout.
+    // (Absolutely positioned layers, such as the highlight overlay, take no cell.)
+    assert.equal(
+      textarea.style.gridArea,
+      '1 / 1',
+      `the textarea names the shared cell; style reads ${JSON.stringify(textarea.getAttribute('style'))}`,
+    );
+    assert.equal(
+      strip.style.gridArea,
+      textarea.style.gridArea,
+      `the strip names the SAME cell as the textarea; strip style reads ${JSON.stringify(strip.getAttribute('style'))}`,
+    );
+    const inFlowChildren = Array.from(body.children).filter(
+      (child) => !tokensOf(child).includes('absolute'),
+    );
+    assert.equal(inFlowChildren.length, 2, 'the single-cell grid has exactly two in-flow children');
+    assert.equal(inFlowChildren[0], textarea, 'the textarea is the first in-flow child');
+    assert.equal(inFlowChildren[1], strip, 'the strip is the second in-flow child, sharing the cell');
+
+    // The previous arrangement — the strip as a flow row AFTER the textarea — must
+    // fail here: that body is not a grid, and neither child carries cell placement.
+    rerender({ input: 'draft', hasInput: true });
+    const typedTextarea = view.container.querySelector('textarea');
+    assert.equal(stripOf(view), null, 'a typed draft draws no strip');
+    const typedBody = bodyOf(view);
+    assert.equal(
+      tokensOf(typedBody).includes('grid'),
+      false,
+      `without chips the body returns to the ordinary flow; class read ${typedBody.className}`,
+    );
+    assert.equal(
+      typedTextarea?.style.gridArea,
+      '',
+      'without the shared cell the textarea writes no grid placement',
+    );
+    assert.equal(typedTextarea?.parentElement, typedBody, 'the textarea keeps its place in the flow layout');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The strip's left pass-through gutter
+// ---------------------------------------------------------------------------
+
+/**
+ * The strip lies over the box, so its leftmost strip must not swallow the press
+ * that should focus the textarea (and raise the phone's keyboard). The gutter is
+ * a placeholder OUTSIDE the scroll container, `pointer-events-none`, sized from
+ * the one exported constant, in both arrangements.
+ */
+describe('the strip\'s left pass-through gutter', () => {
+  const stubChipRowMatchMedia = (matches: boolean) => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia);
+  };
+  const tokensOf = (element: Element) => element.className.split(/\s+/).filter(Boolean);
+
+  it('AC2: the scroll area gives up the same 44px constant, outside its own scroll box', () => {
+    assert.equal(
+      SUGGESTION_CHIP_PASS_THROUGH_PX,
+      44,
+      `the pass-through gutter is 44px; the exported constant reads ${SUGGESTION_CHIP_PASS_THROUGH_PX}`,
+    );
+
+    for (const narrow of [true, false]) {
+      stubChipRowMatchMedia(narrow);
+      const { view } = renderComposer();
+
+      const listbox = view.getByRole('listbox');
+      const gutter = view.container.querySelector<HTMLElement>(
+        '[data-slot="input-suggestion-chips-pass-through"]',
+      );
+      assert.ok(gutter, `a pass-through placeholder exists (narrow=${narrow})`);
+      assert.equal(
+        gutter.style.width,
+        `${SUGGESTION_CHIP_PASS_THROUGH_PX}px`,
+        `the placeholder reads the one constant (narrow=${narrow})`,
+      );
+      assert.equal(
+        listbox.style.marginLeft,
+        `${SUGGESTION_CHIP_PASS_THROUGH_PX}px`,
+        `the scroll area gives up the same constant (narrow=${narrow})`,
+      );
+      assert.equal(
+        listbox.contains(gutter),
+        false,
+        `the placeholder is outside the scroll container (narrow=${narrow})`,
+      );
+      assert.ok(
+        tokensOf(gutter).includes('pointer-events-none'),
+        `the placeholder must not take the press; class read ${gutter.className}`,
+      );
+      assert.ok(
+        tokensOf(listbox).includes('pointer-events-auto'),
+        `the scroll area itself stays interactive; class read ${listbox.className}`,
+      );
+
+      view.unmount();
+      vi.restoreAllMocks();
+    }
   });
 });
 

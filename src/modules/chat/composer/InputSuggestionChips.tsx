@@ -33,6 +33,22 @@ type InputSuggestionChipsProps = {
  */
 const NARROW_CHIP_ROW_QUERY = '(max-width: 480px), (pointer: coarse)';
 
+/**
+ * The width, in CSS pixels, of the strip's left edge that belongs to no element.
+ *
+ * The strip is drawn over the empty textarea (they share one grid cell), so a
+ * press anywhere on the strip would otherwise be eaten by the listbox instead of
+ * reaching the box underneath. This gutter is left empty on purpose: the scroll
+ * area starts after it, and the box below receives the native press there, which
+ * is what opens the soft keyboard and the long-press paste menu on a phone. The
+ * textarea keeps its 16px left padding, so the caret blinks inside the gutter as
+ * the feedback that the box has focus.
+ *
+ * One constant for both arrangements: the wide row gives up the same 44px, so a
+ * window drag never changes how much of the strip the pointer can reach.
+ */
+export const SUGGESTION_CHIP_PASS_THROUGH_PX = 44;
+
 const readNarrowChipRow = (): boolean => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false;
@@ -73,12 +89,19 @@ function useNarrowChipRow(): boolean {
 }
 
 /**
- * Composer suggestion chips, rendered by ChatComposer as a flow row under the
- * (empty) textarea.
+ * Composer suggestion chips, rendered by ChatComposer over the (empty)
+ * textarea's own grid cell.
  *
- * The row is part of the layout, not an overlay: every chip occupies real space,
- * so a strip that grows to a second or third line pushes the composer's box (and
- * therefore shrinks the transcript) instead of covering the box's own text.
+ * The strip occupies the SAME cell as the textarea, not a row under it: the cell
+ * is as tall as the taller of the two, so an empty box with chips shows the chip
+ * row directly at the top of the box instead of one blank textarea line above it.
+ * When a desktop row wraps to a second line the cell grows with it, and the
+ * one-line textarea stays underneath.
+ *
+ * Because the strip lies over the box, it may not swallow presses aimed at the
+ * box: the wrapper is `pointer-events-none`, the listbox re-enables the pointer
+ * for itself only, and the leftmost `SUGGESTION_CHIP_PASS_THROUGH_PX` belongs to
+ * no element at all — a press there falls through to the textarea.
  *
  * The row has two arrangements, chosen from the viewport (see
  * `NARROW_CHIP_ROW_QUERY`):
@@ -123,8 +146,28 @@ export function InputSuggestionChips({
   return (
     <div
       data-slot="input-suggestion-chips"
-      className="relative z-10 w-full"
+      // The second occupant of the textarea's cell: `gridArea: 1 / 1` is the same
+      // cell the textarea names (the composer switches its body to a grid and writes
+      // the identical `gridArea` on the textarea). Both are placed explicitly —
+      // an auto-placed item would be pushed to the next free row under the strip.
+      // `pointer-events-none` is what lets a press in the pass-through gutter reach
+      // the box below; only the listbox turns the pointer back on for itself.
+      className="pointer-events-none relative z-10 w-full"
+      style={{ gridArea: '1 / 1' }}
     >
+      {/*
+        The pass-through gutter. Deliberately OUTSIDE the scroll area, so the
+        native sideways pan on a narrow phone never slides it away with the chips,
+        and `pointer-events-none`, so the press lands on the textarea: no
+        programmatic `focus()` (which does not necessarily raise the soft keyboard
+        on iOS) is involved on this path.
+      */}
+      <div
+        data-slot="input-suggestion-chips-pass-through"
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0"
+        style={{ width: SUGGESTION_CHIP_PASS_THROUGH_PX }}
+      />
       <div
         id={listId}
         role="listbox"
@@ -134,13 +177,17 @@ export function InputSuggestionChips({
         // moves to the next line, so nothing is silently clipped and no horizontal
         // scroll gesture is needed. Narrow: one line with the strip's own horizontal
         // scroll, so the row's height stays one chip tall. In both, the row's height
-        // is content-driven, which is how the box above it grows with it.
+        // is content-driven, which is how the shared cell grows with it.
+        // The left margin is the pass-through gutter; it is the same value in both
+        // arrangements (one exported constant), so the pointer-reachable part of the
+        // strip does not change with the viewport.
         className={cn(
           'pointer-events-auto flex min-w-0 items-start gap-1 px-4 py-2',
           isNarrowRow
             ? 'scrollbar-hide flex-nowrap overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]'
             : 'flex-wrap',
         )}
+        style={{ marginLeft: SUGGESTION_CHIP_PASS_THROUGH_PX }}
         onMouseDown={(event) => {
           // Chips and their gaps bubble here; only a press on the listbox
           // itself is background. Never let it swallow the click: cancel the
