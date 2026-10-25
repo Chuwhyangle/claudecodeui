@@ -36,20 +36,48 @@ extra:
 
 ## AC
 
-- [ ] 提取只读正文：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/quay/tests/session-mentions.test.ts` exit 0；其中一组用例用同一份词表，在六种承载里各放一个 id：assistant 的 text 块、user 的字符串内容、assistant 的 tool_use input、user 的 tool_result content、thinking 块、attachment 行；断言只有前两种命中。取假：把 tool 块纳入扫描，这组用例必须红。
-- [ ] 闭集精确匹配：同一测试文件含用例：词表同时有 `gap-foo` 与 `gap-foo-bar` 而文本只写 `gap-foo-bar`，只命中后者；词表只有 `gap-foo` 而文本写 `gap-foo-bar`，零命中；`GOAL-049` 与 `goal-049` 都命中且输出规范写法；紧邻反引号、中文标点、句末句号的 id 与 `quay://p/task/<id>` 里的 id 命中；`AC-417` 与词表外的 kebab 词不命中。
-- [ ] 全量与增量：同一测试文件含用例：一份不少于 3000 行的 transcript，唯一一次提及在第 1 行，仍被报出；追加若干行后再次请求，`readTranscriptRange` 收到的 start 大于 0 且等于上次消费到的偏移，计数随之增加；文件被换成更短内容时从 0 重扫；两次请求之间词表新增一个 id，而该 id 早已出现在先前扫描过的文本里，第二次请求报出它。
-- [ ] 联表：同一测试文件含用例（注入任务索引、goal 列表行与 lanes 读数的桩）：任务 status 取自索引；在飞任务带 phase，非在飞为 null；任务 → `goal_ac` → AC 行 → goal 的反查正确；goals 同时覆盖「只被正文直接提到」「只经任务带出」「两者皆有」，viaTaskCount 与 mentionedDirectly 正确；`goal_ac` 指向不存在的 AC 时 goalId 为 null 而不抛错；排序确定。
-- [ ] 路由：同一测试文件含用例，经 `createQuayRouter` 挂载：缺 sessionId → 400 `session-id-required`；未注入服务 → 503 `session-mentions-unavailable`；服务返回 null → 404 `project-or-session-not-found`；成功 → 200 且 body 形状符合上文。
-- [ ] 仅 lanes 的读数：`server/modules/quay/tests/quay.service.test.ts` 新增用例，用记录调用的命令桩：请求该读数只触发一次 `lanes` 命令，不触发 task list、goal list、adr list、driver 状态等命令；同窗口 TTL 内第二次不再 spawn；`hours=7` 与 `hours=abc` 回落到 3；返回的 gantt 与 ganttUnavailable 和同一桩下 `getQuaySnapshot` 对同窗口给出的深度相等；桩返回无 lanes verb 或文档不可读时分别得到 `plugin-lacks-lanes-verb` 与 `lanes-read-failed`。对应的 `GET /:projectId/lanes` 路由用例（200 形状、非法窗口回落）放在 `session-mentions.test.ts` 里。
-- [ ] MCP 网关不受影响：`git diff --stat -- server/modules/mcp-gateway` 无输出；`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/mcp-gateway/tests/mcp-changes.test.ts server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts server/modules/mcp-gateway/tests/mcp-english-only.test.ts` exit 0。
-- [ ] 既有读数不被改变：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/quay/tests/quay.service.test.ts server/modules/quay/tests/session-task-chain.test.ts` exit 0，且 `git diff --stat -- server/modules/quay/session-task-chain.service.ts` 无输出。
-- [ ] 钉子不红：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/shared/tests/quay-test-script.test.ts server/shared/tests/server-import-cycle-budget.test.ts` exit 0。新增 1 个 server 测试文件会移动覆盖率地板与 unknown 计数钉子：在 `scripts/suite-duration-baseline.tsv` 追加该文件的一行并同步 `quay-test-script.test.ts` 的计数；导入环预算不得增长。
-- [ ] 类型与静态检查：`npx tsc --noEmit -p server/tsconfig.json` exit 0，且 `npx oxlint server/modules/quay` exit 0。
+- [x] 提取只读正文：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/quay/tests/session-mentions.test.ts` exit 0；其中一组用例用同一份词表，在六种承载里各放一个 id：assistant 的 text 块、user 的字符串内容、assistant 的 tool_use input、user 的 tool_result content、thinking 块、attachment 行；断言只有前两种命中。取假：把 tool 块纳入扫描，这组用例必须红。
+- [x] 闭集精确匹配：同一测试文件含用例：词表同时有 `gap-foo` 与 `gap-foo-bar` 而文本只写 `gap-foo-bar`，只命中后者；词表只有 `gap-foo` 而文本写 `gap-foo-bar`，零命中；`GOAL-049` 与 `goal-049` 都命中且输出规范写法；紧邻反引号、中文标点、句末句号的 id 与 `quay://p/task/<id>` 里的 id 命中；`AC-417` 与词表外的 kebab 词不命中。
+- [x] 全量与增量：同一测试文件含用例：一份不少于 3000 行的 transcript，唯一一次提及在第 1 行，仍被报出；追加若干行后再次请求，`readTranscriptRange` 收到的 start 大于 0 且等于上次消费到的偏移，计数随之增加；文件被换成更短内容时从 0 重扫；两次请求之间词表新增一个 id，而该 id 早已出现在先前扫描过的文本里，第二次请求报出它。
+- [x] 联表：同一测试文件含用例（注入任务索引、goal 列表行与 lanes 读数的桩）：任务 status 取自索引；在飞任务带 phase，非在飞为 null；任务 → `goal_ac` → AC 行 → goal 的反查正确；goals 同时覆盖「只被正文直接提到」「只经任务带出」「两者皆有」，viaTaskCount 与 mentionedDirectly 正确；`goal_ac` 指向不存在的 AC 时 goalId 为 null 而不抛错；排序确定。
+- [x] 路由：同一测试文件含用例，经 `createQuayRouter` 挂载：缺 sessionId → 400 `session-id-required`；未注入服务 → 503 `session-mentions-unavailable`；服务返回 null → 404 `project-or-session-not-found`；成功 → 200 且 body 形状符合上文。
+- [x] 仅 lanes 的读数：`server/modules/quay/tests/quay.service.test.ts` 新增用例，用记录调用的命令桩：请求该读数只触发一次 `lanes` 命令，不触发 task list、goal list、adr list、driver 状态等命令；同窗口 TTL 内第二次不再 spawn；`hours=7` 与 `hours=abc` 回落到 3；返回的 gantt 与 ganttUnavailable 和同一桩下 `getQuaySnapshot` 对同窗口给出的深度相等；桩返回无 lanes verb 或文档不可读时分别得到 `plugin-lacks-lanes-verb` 与 `lanes-read-failed`。对应的 `GET /:projectId/lanes` 路由用例（200 形状、非法窗口回落）放在 `session-mentions.test.ts` 里。
+- [x] MCP 网关不受影响：`git diff --stat -- server/modules/mcp-gateway` 无输出；`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/mcp-gateway/tests/mcp-changes.test.ts server/modules/mcp-gateway/tests/mcp-changes-quay-index.test.ts server/modules/mcp-gateway/tests/mcp-changes-cursor-bounds.test.ts server/modules/mcp-gateway/tests/mcp-changes-session-paging.test.ts server/modules/mcp-gateway/tests/mcp-english-only.test.ts` exit 0。
+- [x] 既有读数不被改变：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/quay/tests/quay.service.test.ts server/modules/quay/tests/session-task-chain.test.ts` exit 0，且 `git diff --stat -- server/modules/quay/session-task-chain.service.ts` 无输出。
+- [x] 钉子不红：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/shared/tests/quay-test-script.test.ts server/shared/tests/server-import-cycle-budget.test.ts` exit 0。新增 1 个 server 测试文件会移动覆盖率地板与 unknown 计数钉子：在 `scripts/suite-duration-baseline.tsv` 追加该文件的一行并同步 `quay-test-script.test.ts` 的计数；导入环预算不得增长。
+- [x] 类型与静态检查：`npx tsc --noEmit -p server/tsconfig.json` exit 0，且 `npx oxlint server/modules/quay` exit 0。
 
 ## DoD
 
 真实读数（后端任务，不需要浏览器）：在隔离实例（`scripts/isolated-instance.sh`；起之前按记忆关掉 residentRestore）里对本项目请求两条路由并贴出 JSON。第一条，`session-mentions` 取三个真实会话：一个人类会话、一个 worker 分发会话（首条 user 消息含 `Task: <id>`）、一个不少于 1000 条消息的长会话。对每个会话另写一个不超过 30 行的独立脚本（放 `tmp/`，不入库）：逐行解析 JSON，只取 user/assistant 的 text，按 `[A-Za-z0-9][A-Za-z0-9-]*` 切词，对同一时刻的 `quay task list --json --no-body` 与 `quay goal list --json` 词表查表，算出 id 集合；贴出两侧集合并确认相等，worker 会话的集合应含它被分发的任务 id。第二条，`lanes?hours=6` 返回的 gantt 与 `snapshot?hours=6` 里的 gantt 深度相等，并贴出一次 lanes 请求期间 `quay` 子进程的证据：只出现一次 `quay lanes`。
+
+## DoD 实测（2026-10-25，隔离实例）
+
+隔离实例：`scripts/isolated-instance.sh start`（worktree 构建的 `dist-server`，port 21707），日志 `resident-restore started=0`（randomRestore 关闭）。
+
+读数一 — `GET /api/quay/b0a96771-c926-468a-bf18-09a5b3708039/session-mentions?sessionId=<id>`：
+
+| 会话 | 类型 | tasks | goals |
+| --- | --- | --- | --- |
+| `1a7f3e6a-1f86-42df-a778-ea20ff662b1a` | 人类会话（300 行） | 13 | 0 |
+| `a21eecb7-c084-43dd-be23-187eabb9f2dd` | worker 分发会话（920 行，首条 user 消息含 `Task: gap-chat-suggestion-chips-share-the-empty-textarea-line`） | 1 | 0 |
+| `98c54580-0b24-4b59-819b-286efba8400d` | 长会话（5042 行 / 1643 条 user+assistant 消息） | 15 | 2 |
+
+独立脚本 `tmp/mention-ids.cjs`（30 行，不入库）：逐行解析同一 transcript，只取 user/assistant 的 text，按 `[A-Za-z0-9][A-Za-z0-9-]*` 切词，对同一时刻的 `quay task list --json --no-body`（1096 行）与 `quay goal list --json`（49 条 kind=goal）查表，再补「任务 → `goal_ac` → AC 行 → goal」得到的 goal。两侧集合：
+
+- `1a7f3e6a`：tasks 13 = 13；goals `[]` = `[]` → 相等
+- `a21eecb7`：tasks 1 = 1（`gap-chat-suggestion-chips-share-the-empty-textarea-line`，即它被分发的任务 id）；goals `[]` = `[]` → 相等
+- `98c54580`：tasks 15 = 15；goals `["goal-045","goal-047"]` = `["goal-045","goal-047"]` → 相等
+
+`98c54580` 的 goal 读数正好覆盖两条来源：`GOAL-045 {viaTaskCount:1, mentionedDirectly:false}`（只经任务带出）、`GOAL-047 {viaTaskCount:0, mentionedDirectly:true}`（只被正文直接提到）。
+
+读数二 — lanes：
+
+- `GET /:projectId/lanes?hours=6` → `{"ok":true,"gantt":{"windowHours":6,"lanes":5,"intervals":11,…},"ganttUnavailable":null,"generatedAt":"…"}`。
+- 先取默认窗口 `snapshot` 暖缓存，再取 `lanes?hours=6` 与 `snapshot?hours=6`：两侧 `gantt` 深度相等（`nowMs=1792932396024`，11 intervals，`JSON.stringify` 逐字相同），`ganttUnavailable` 两侧同为 `null`。
+- 子进程证据：请求 `lanes?hours=12` 期间以 5ms 间隔采样 `/proc`，唯一命中 `node .../quay/dist/quay.js lanes --json --window-hours 12`（pid 3291966）；同窗口第二次请求命中 TTL，1.6ms 返回且无新子进程。
+
+（`tmp/` 下的脚本与采样日志均不入库。）
 
 ## Touches
 
