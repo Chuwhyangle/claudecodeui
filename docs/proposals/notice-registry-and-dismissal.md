@@ -2,11 +2,27 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | **design note（未实施）**——先定模型/不变量，第一阶段只接入部署一个来源 |
+| 状态 | **暂停（2026-10-25）**——P1 已落地，但 Chat 页挂载已由 `gap-chat-banners-paused-pending-signal-redesign` 摘除；语义与架构待重定，见下方「暂停说明」 |
 | 日期 | 2026-10-25 |
 | 基线 | `author` @ `1ddd2e531` |
 | 起因 | 聊天页顶部的部署 banner（`DeployReadiness compact`，经 `noticeSlot` 注入）无法关闭；同时系统没有统一的应用内通知机制 |
 | 已拍板 | ① 忽略状态存**服务端**、按用户；② 打断位**同时只显示 1 条**，其余折叠计数；③ **先只接部署**，`decisionQueue` / `useVersionCheck` / quay 异常留待后续阶段 |
+
+---
+
+## 暂停说明（2026-10-25，先于正文阅读）
+
+P1 的两个任务（`gap-notices-server-registry-and-dismissal`、`gap-notices-client-slot-replaces-compact-deploy-strip`）已落地。用户随后判定该方案**语义过窄、侵入性过高**，决定先停用 Chat 页的全部常驻状态 banner（含 `SessionTaskChain`），待 quay tab 与驾驶舱明确哪些事务/状态需要通知后，再重新设计 Chat 页的显示与交互。服务端 `notices` module 与忽略表保留休眠，驾驶舱的完整部署条保留。
+
+后续重设计必须满足的约束（来自用户，优先于下文正文）：
+
+1. **显示与交互机制和事件/状态源解耦**：不得只服务于 ClaudeCodeUI 项目或 quay 的状态/任务；显示层只认识抽象的信号契约，来源以适配器接入。
+2. **交互克制**：Chat 页只显示与**当前会话有直接关系**的状态和事件，显示与交互方式的侵入性尽可能小；常驻多行文字 banner 不合格。
+3. **开发者相关信息要更主动地呈现，但须经系统化设计**，而不是逐个加条。
+
+讨论中形成、尚未定稿的设计材料（供重设计时取用，不构成决定）：Signal / Concern / Relevance / Surface 四个与来源无关的概念；按「该会话是否为主体或发起者」判定相关性；呈现面按侵入性分级（标题行字形 → 转写内锚定装饰 → 瞬时 toast → 仅在需要动手时的行动卡）；与 `context-layers-and-delegation-ladder.md` §4.1（统一事件流）和 `fleet-overview-SPEC.md` P4（事件主干、铃铛、feed）对账。
+
+下文的 §3–§9 是被暂停的 P1 方案，保留作历史记录，**不再作为落地依据**。
 
 ---
 
