@@ -1,7 +1,7 @@
 ---
 id: gap-chat-suggestion-chips-share-the-empty-textarea-line
 title: Chat 建议 chip：与空 textarea 叠在同一格，chip 上方不留空行；左侧留 44px 穿透区便于点击唤起键盘
-status: ready
+status: done
 labels:
   - gap
   - defect
