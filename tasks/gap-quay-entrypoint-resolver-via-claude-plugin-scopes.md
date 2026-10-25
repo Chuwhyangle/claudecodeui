@@ -1,7 +1,7 @@
 ---
 id: gap-quay-entrypoint-resolver-via-claude-plugin-scopes
 title: Quay 适配器：按 Claude Code 插件 scope 解析 quay CLI 入口，不再依赖项目的 .quay/plugin 符号链接
-status: todo
+status: ready
 labels:
   - gap
 parent: null
