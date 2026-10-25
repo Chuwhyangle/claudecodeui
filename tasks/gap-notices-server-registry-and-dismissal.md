@@ -2,7 +2,7 @@
 id: gap-notices-server-registry-and-dismissal
 title: Notice 注册表 P1（服务端）：notices module + 按用户的忽略表 + GET /api/notices + POST
   dismiss + 部署 provider
-status: todo
+status: ready
 labels:
   - gap
 parent: null
