@@ -1,7 +1,7 @@
 ---
 id: gap-quay-snapshot-loop-status-version-drain-orphan
 title: Quay 服务端：snapshot 增加 loop 整体状态读数（版本偏差、drain、版本目录 orphan 倒计时、.quay/plugin 指针状态）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
