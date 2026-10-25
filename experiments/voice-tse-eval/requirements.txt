@@ -1,0 +1,19 @@
+# Tested on Python 3.12, CPU only, 2026-10-20.
+# torch/torchaudio come from https://download.pytorch.org/whl/cpu
+numpy==2.5.4
+scipy==1.18.1
+soundfile==0.14.0
+librosa==1.0.0
+onnxruntime==1.31.0
+sherpa-onnx==1.13.8
+open-voicefilter-lite==0.2.0
+voxlock==1.1.1
+torch==2.14.1
+torchaudio==2.11.0
+resemblyzer
+asteroid==0.7.0
+asteroid-filterbanks==0.4.0
+einops==0.8.2
+webrtcvad-wheels
+requests>=2.31
+soxr>=0.3
