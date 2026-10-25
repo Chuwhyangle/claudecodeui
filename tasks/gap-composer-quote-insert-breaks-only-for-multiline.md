@@ -136,6 +136,13 @@ numstat：chatComposerReplyChips `+29/−4`；suggestionChipAcceptContract `+56/
 - `leg-4b-middle-multi-line.png`
 - `leg-5-before-send.png`
 
+**第 2 轮复核（2026-10-25T14:56Z）：前一轮 suite 红是 develop 侧，不是本任务 delta。**
+
+前一轮 blocker 的 `server/modules/mcp-gateway/tests/mcp-session-lifecycle.test.ts` 本轮在 worktree 内单跑（`node --import tsx --import ./scripts/undici-blocked-ports-preload.mjs --test`，包在 `scripts/with-memory-cap.sh` 里）仍 exit 1：`the returned runId must be the registry current run verbatim`（actual `'null'`）与 `the run registry must record the aborted terminal state`（actual `'unknown'`）⇒ 不是一次性负载抖动。但读驱动自己的 develop 基线跑 `.quay/fan-in-suite-gap-composer-quote-insert-breaks-only-for-multiline~wk-prod-anchor~baseline-1792939760749-22e83a.log`（跑在 `.baseline-red-gap-composer-quote-insert-breaks-only-for-multiline-wk-prod-anchor/` 的纯 develop 检出里），同一批文件逐字 `passed=false`：`mcp-session-lifecycle`、`mcp-session-send`、`mcp-cancel-queued`、`debug-agent-control-queue`、`claude-resident-busy-input`；兄弟任务 `gap-quay-snapshot-loop-status-version-drain-orphan` 的 Blocker 也是同一条 `claude-resident-busy-input`。⇒ 红在 develop 侧且跨任务复现；本任务 delta 只含 `src/modules/chat/**` 的 4 个前端文件，与这些文件没有导入交集，未改也未碰它们。
+
+本轮复核读数：AC-1 `quoteInsertion.test.ts` → exit 0，18 passed；AC-3 `suggestionChipAcceptContract.test.tsx` + `chatComposerReplyChips.test.tsx` → exit 0，50 passed（12 + 38）；AC-4 `inputSuggestionsComposer.test.tsx` → exit 0，49 passed；AC-5 `npm run typecheck` exit 0、`npm run lint` exit 0（仅既有 warning）。`git merge develop` 干净（只带进两份 task 文件的 blocker 记录），worktree clean。
+
+
 ## Touches
 
 - `src/modules/chat/utils/inputSuggestions.ts`
