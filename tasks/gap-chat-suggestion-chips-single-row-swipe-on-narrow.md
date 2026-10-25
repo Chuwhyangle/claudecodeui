@@ -1,6 +1,6 @@
 ---
 id: gap-chat-suggestion-chips-single-row-swipe-on-narrow
-title: Chat 建议 chip：窄屏（手机）限制为一行、横向滑动，压低空输入时的输入区高度
+title: Chat 建议 chip：窄屏单行滑动压低输入区高度；chip 外框统一为虚线（quoted 保留主题色虚线边+淡底）
 status: ready
 labels:
   - gap
@@ -10,11 +10,9 @@ children: []
 extra:
   schema: execution
 ---
-> **RETREATED / 搁置（用户 2026-10-25 裁定把「chip 外框统一为虚线（quoted 保留主题色虚线边+淡底）」并进本任务重派；原窄屏单行部分已 done 并保留其勾选与验证记录。）**
-
 ## Proposal
 
-<!-- dedup-ref --> 接续 `gap-chat-suggestion-chips-wrap-no-default-preview`（done，chip 换行）与 `gap-chat-suggestion-chips-empty-textarea-reserves-two-rows`（ready，空 textarea 改 `rows=1`），机制不同：那两个任务处理 PC 的可见性与空白，本任务只处理窄屏上 chip 换行造成的高度。kept separate：前者的 `rows=1` 已在途，本任务不改它，只改 chip 行在窄屏的排布。
+<!-- dedup-ref --> 接续 `gap-chat-suggestion-chips-wrap-no-default-preview`（done，chip 换行）与 `gap-chat-suggestion-chips-empty-textarea-reserves-two-rows`（ready，空 textarea 改 `rows=1`），机制不同：那两个任务处理 PC 的可见性与空白，本任务只处理窄屏上 chip 换行造成的高度，以及 chip 外框样式。kept separate：前者的 `rows=1` 已在途，本任务不改它，只改 chip 行在窄屏的排布与外框样式。
 
 2026-10-25 在隔离实例手机视口 390×844 实测（截图 `tmp/ux-m-chip-height-before.png`）：输入为空、只有 3 个很短的 chip，输入区（`.chat-composer-shell`）高 203px，占屏高 24%：空 textarea 64px + chip 行 72px（3 个 chip 折成 2 行，每个 26px，加行距与上下 padding 16px）+ 底栏约 67px（推算值）。真机弹出键盘后可视高度只剩约 400–450px，这 203px 会占一半以上，transcript 几乎被挤没。单靠 `rows=1` 只省 24px，输入区仍约 180px。
 
@@ -23,13 +21,17 @@ extra:
 - PC（宽 ≥ 481px 且非粗指针）保持现有换行（`flex-wrap` + `line-clamp-2`），不改。
 - 目标：手机 390×844、空输入、3 个短 chip 时，输入区高度 ≤ 150px（textarea 40 + chip 单行约 42 + 底栏约 67，推算值，以实测为准）。
 - 不新增预览行、键盘提示或展开按钮；点击 chip 的填入/聚焦行为不变。
+- **外框样式统一（2026-10-25 追加，用户裁定）：** 现状 `InputSuggestionChips.tsx` 里模型建议（`model`）是实线、历史高频输入（`habit`）是虚线、引用（`quoted`）是实线 + 主题色边 + 淡底，界面上没有任何图例，两类 chip 的点击行为完全相同，这个差异只增加认知负担。改为：**所有 chip 一律虚线**（`border-dashed`，不再有 `border-solid` 分支）；`quoted` 保留主题色边（`border-primary/50`）与淡底（`bg-primary/5`），但边也是虚线。键盘选中态（`border-primary bg-primary/10`）与 hover 样式不变。`InlineQuoteChip.tsx`（同一个 quoted chip 画进输入框正文的形态，现为 `border-solid border-primary/50 bg-primary/5`）同步改成虚线，保持 quoted chip 两种形态一致。
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：窄屏（`matchMedia` 桩为 ≤480px）渲染 6 个长文本 chip 时，列表容器 class 含 `flex-nowrap` 与 `overflow-x-auto`、不含 `flex-wrap`，每个 chip 含 `whitespace-nowrap`；exit 0。
-- [ ] 同一文件含一例：宽屏（≥481px、细指针）列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto`，chip 含 `line-clamp-2`（PC 行为不变）；exit 0。
-- [ ] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx` exit 0。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [x] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：窄屏（`matchMedia` 桩为 ≤480px）渲染 6 个长文本 chip 时，列表容器 class 含 `flex-nowrap` 与 `overflow-x-auto`、不含 `flex-wrap`，每个 chip 含 `whitespace-nowrap`；exit 0。
+- [x] 同一文件含一例：宽屏（≥481px、细指针）列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto`，chip 含 `line-clamp-2`（PC 行为不变）；exit 0。
+- [x] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx` exit 0。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [ ] 外框统一为虚线：`npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：同时渲染 `model`、`habit`、`quoted` 三种来源的 chip，每个 chip 的 class 都含 `border-dashed` 且都不含 `border-solid`；`quoted` chip 另含 `border-primary/50` 与 `bg-primary/5`，`model` / `habit` chip 不含 `border-primary/50`；exit 0。取假：给 `model` 加回 `border-solid`，该例必须红。
+- [ ] `InlineQuoteChip` 同步：`npx vitest run src/modules/chat/tests/inlineQuoteChip.test.tsx` 含一例：内嵌 quoted chip 的 class 含 `border-dashed`、不含 `border-solid`，并保留 `border-primary/50` 与 `bg-primary/5`；exit 0。
+- [ ] 源码里不再有 chip 的实线分支：`git grep -n "border-solid" -- src/modules/chat/composer/InputSuggestionChips.tsx src/modules/chat/composer/InlineQuoteChip.tsx || true` 无输出（代码与注释都不得再出现该字面量）。
 
 ## DoD
 
@@ -40,10 +42,14 @@ extra:
 - PC 1440×900、细指针：listbox class 含 `flex-wrap`、无 `overflow-x-auto`，`scrollWidth == clientWidth == 866`，3 个 chip 全部完整可见（`line-clamp-2`），截图 `tmp/chip-dod/desktop-1440x900.png`。
 - pageerror 0、console error 0（三条腿）。报告 `tmp/chip-dod/report.json`。
 
+**重派追加的 DoD（外框统一，上面的读数不覆盖这一项）：** 在同一隔离实例再截 PC 与手机各一张，会话需同时出现 model chip 与 habit chip（空输入）；另在输入框里选中 transcript 文字生成一个 quoted chip，分别截「空框 quoted chip」与「内嵌在正文里的 quoted chip」两种形态。用 `browser_evaluate` 贴出每个 chip 的 `getComputedStyle(chip).borderTopStyle`（须全为 `dashed`，改前 model 为 `solid`），以及 quoted chip 的 `borderTopColor` 带主题色、`backgroundColor` 非透明。贴改前后并排截图，肉眼确认三类 chip 外框同为虚线、quoted 仍有主题色边与淡底。
+
 ## Touches
 
 - src/modules/chat/composer/InputSuggestionChips.tsx
+- src/modules/chat/composer/InlineQuoteChip.tsx
 - src/modules/chat/tests/inputSuggestionsComposer.test.tsx
+- src/modules/chat/tests/inlineQuoteChip.test.tsx
 - src/modules/chat/tests/chatComposerReplyChips.test.tsx
 - src/modules/chat/tests/chatComposerResponsive.test.tsx
 - tasks/gap-chat-suggestion-chips-single-row-swipe-on-narrow.md
