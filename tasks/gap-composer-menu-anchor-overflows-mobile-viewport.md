@@ -1,7 +1,7 @@
 ---
 id: gap-composer-menu-anchor-overflows-mobile-viewport
 title: 移动端输入框「…」更多菜单 popover 溢出屏幕：useComposerMenuAnchor 按视口夹紧
-status: todo
+status: ready
 labels:
   - gap
   - defect
