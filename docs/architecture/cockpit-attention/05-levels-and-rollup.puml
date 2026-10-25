@@ -1,0 +1,52 @@
+@startuml
+title 层级与汇总规则：状态不汇总，只汇总「未解决条目计数」
+skinparam shadowing false
+left to right direction
+
+object "quay://fleet/initiative/architecture-graph" as init {
+  kind = initiative
+  跨多个项目
+}
+object "quay://claudecodeui/board" as p1 {
+  kind = project
+  status = attention
+  自身状态，不被下层改色
+}
+object "quay://quay/board" as p2 {
+  kind = project
+  status = ok
+}
+object "quay://claudecodeui/task/gap-x" as t1 {
+  kind = task
+  status = red
+}
+object "cloudcli://session/2b24..." as s1 {
+  kind = session
+  status = ok
+}
+object "AttentionItem worker-stall" as a1 {
+  grade = escalate
+  class = actionable
+  subject = t1
+}
+
+init --> p1 : contains
+init --> p2 : contains
+p1 --> t1 : contains
+t1 --> s1 : originated_by
+a1 ..> t1 : about
+
+note bottom of p1
+  项目磁贴显示：
+  - 自身 status（颜色）
+  - 「3 条未解决」计数徽标（自身与后代）
+  计数向上汇总，颜色不向上汇总。
+end note
+
+note bottom of s1
+  会话页只显示与本会话直接相关的条目：
+  about 指向 s1，或 about 指向 s1 所发起的 task。
+  s1 的标题行字形取这些条目的最高 grade。
+  全局条目（如其它项目的失败）不进会话页。
+end note
+@enduml

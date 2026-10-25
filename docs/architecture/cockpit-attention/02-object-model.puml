@@ -1,0 +1,100 @@
+@startuml
+title 对象与关系模型
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+enum ObjectKind {
+  fleet
+  project
+  initiative
+  task
+  session
+  architecture
+}
+
+class ObservedObject <<状态平面，已存在>> {
+  uri : string
+  kind : ObjectKind
+  status : ok | attention | red | unevaluated
+  reason : string  (unevaluated 必填)
+  digest : json
+  revision : int
+  blindSpots : string[]
+}
+
+class ObservedRevision <<已存在>> {
+  uri
+  revision
+  deltaItems : string[]
+}
+
+class SeenCursor <<已存在，按用户>> {
+  userId
+  uri
+  revision
+}
+
+class AttentionItem <<注意力平面，fleet 拥有>> {
+  attentionId : att_xxxx
+  dedupKey : string
+  category : string
+  grade : notify | escalate
+  state : open | surfaced | acked | resolved | expired
+  subject : uri  (新增：由 projectId + entity 推导)
+  options : {id,label}[]
+  evidence : ref[]  (events.jsonl@id)
+  notifyCount : int
+  ack : {by, feedback}
+}
+
+class AttentionClass <<新增，推导值>> {
+  actionable
+  informational
+  proposal
+}
+
+class UserAttentionState <<新增，按用户>> {
+  userId
+  attentionId
+  seenAt
+  feedback : useful | noise
+}
+
+class Edge <<新增，推导，不存储>> {
+  from : uri
+  to : uri
+  kind : originated_by | contains | blocks | about
+}
+
+class InterruptDecision <<新增，纯函数输出>> {
+  attentionId
+  trigger : created | escalated | renotified
+  surface : none | queue | s0 | push
+  reason : string
+}
+
+ObservedObject "1" o-- "*" ObservedRevision
+ObservedObject "1" -- "*" SeenCursor
+ObservedObject --> ObjectKind
+AttentionItem "*" --> "1" ObservedObject : subject
+AttentionItem "*" --> "1" AttentionClass : category 归类
+AttentionItem "1" -- "*" UserAttentionState
+Edge "*" --> "2" ObservedObject
+AttentionItem ..> InterruptDecision : 策略输入
+AttentionClass ..> InterruptDecision : 策略输入
+
+note right of AttentionItem
+  待决 Decision 不是独立模型：
+  options 非空的 AttentionItem 即待决。
+  decisionQueue 只是一个过滤视图。
+end note
+
+note bottom of Edge
+  originated_by : task -> session（会话转写扫描）
+  contains : project -> task / session
+  blocks : task -> task（depends_on / Blocker）
+  about : AttentionItem -> object
+  状态不沿边汇总；只汇总「未解决条目计数」。
+end note
+@enduml

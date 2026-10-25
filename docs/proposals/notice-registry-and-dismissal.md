@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | **暂停（2026-10-25）**——P1 已落地，但 Chat 页挂载已由 `gap-chat-banners-paused-pending-signal-redesign` 摘除；语义与架构待重定，见下方「暂停说明」 |
+| 状态 | **已被取代（2026-10-25）**，见 `docs/architecture/cockpit-attention/README.md`；原：暂停——P1 已落地，但 Chat 页挂载已由 `gap-chat-banners-paused-pending-signal-redesign` 摘除；语义与架构待重定，见下方「暂停说明」 |
 | 日期 | 2026-10-25 |
 | 基线 | `author` @ `1ddd2e531` |
 | 起因 | 聊天页顶部的部署 banner（`DeployReadiness compact`，经 `noticeSlot` 注入）无法关闭；同时系统没有统一的应用内通知机制 |
