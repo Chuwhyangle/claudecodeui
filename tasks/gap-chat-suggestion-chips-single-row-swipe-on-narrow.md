@@ -1,7 +1,7 @@
 ---
 id: gap-chat-suggestion-chips-single-row-swipe-on-narrow
 title: Chat 建议 chip：窄屏（手机）限制为一行、横向滑动，压低空输入时的输入区高度
-status: done
+status: ready
 labels:
   - gap
   - defect
@@ -10,6 +10,8 @@ children: []
 extra:
   schema: execution
 ---
+> **RETREATED / 搁置（用户 2026-10-25 裁定把「chip 外框统一为虚线（quoted 保留主题色虚线边+淡底）」并进本任务重派；原窄屏单行部分已 done 并保留其勾选与验证记录。）**
+
 ## Proposal
 
 <!-- dedup-ref --> 接续 `gap-chat-suggestion-chips-wrap-no-default-preview`（done，chip 换行）与 `gap-chat-suggestion-chips-empty-textarea-reserves-two-rows`（ready，空 textarea 改 `rows=1`），机制不同：那两个任务处理 PC 的可见性与空白，本任务只处理窄屏上 chip 换行造成的高度。kept separate：前者的 `rows=1` 已在途，本任务不改它，只改 chip 行在窄屏的排布。
@@ -24,10 +26,10 @@ extra:
 
 ## AC
 
-- [x] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：窄屏（`matchMedia` 桩为 ≤480px）渲染 6 个长文本 chip 时，列表容器 class 含 `flex-nowrap` 与 `overflow-x-auto`、不含 `flex-wrap`，每个 chip 含 `whitespace-nowrap`；exit 0。
-- [x] 同一文件含一例：宽屏（≥481px、细指针）列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto`，chip 含 `line-clamp-2`（PC 行为不变）；exit 0。
-- [x] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx` exit 0。
-- [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [ ] `npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例：窄屏（`matchMedia` 桩为 ≤480px）渲染 6 个长文本 chip 时，列表容器 class 含 `flex-nowrap` 与 `overflow-x-auto`、不含 `flex-wrap`，每个 chip 含 `whitespace-nowrap`；exit 0。
+- [ ] 同一文件含一例：宽屏（≥481px、细指针）列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto`，chip 含 `line-clamp-2`（PC 行为不变）；exit 0。
+- [ ] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/chatComposerResponsive.test.tsx src/modules/chat/tests/suggestionChipAcceptContract.test.tsx` exit 0。
+- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0。
 
 ## DoD
 
