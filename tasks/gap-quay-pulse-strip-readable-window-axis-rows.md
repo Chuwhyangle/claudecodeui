@@ -29,17 +29,33 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/quay/tests/PulseStrip.test.tsx` 含一例：渲染后窗口按钮不是行容器（`row-*`）的后代，且选择器容器与行容器的包围盒不相交（以布局常量/类名断言，不依赖 jsdom 几何）；并对 6h、24h、72h 各点击一次，`data-window-hours` 依次变为 6、24、72，exit 0。
-- [ ] 同一测试文件含一例：四行均渲染可见文本标签（`getByText`，不是只有 `aria-label`），文本取自 `cockpit.pulseRow*` 翻译键，exit 0。
-- [ ] 同一测试文件含一例：strip 渲染时间轴，含 `现在`/`now` 与随窗口变化的起点标签（6h 时为 `-6h`，72h 时为 `-72h`），exit 0。
-- [ ] 同一测试文件含一例：一个进行中任务渲染为带 `taskId` 文本或 `aria-label` 的条形，高度 ≥ 8px（取自导出的布局常量）；无进行中任务时 In flight 行显示空态说明文字，exit 0。
-- [ ] `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0（Quay 面板与 cockpit 既有用例不被改坏；若旧用例钉住 9px/44px 布局，按本任务设计同步改写而非删除断言）。
-- [ ] 新增的可见文案键（空态、图例、时间轴 `now`）在 12 个 `src/modules/i18n/locales/*/common.json` 中键集合一致，仓库既有 i18n parity 测试 exit 0。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [x] `npx vitest run src/modules/quay/tests/PulseStrip.test.tsx` 含一例：渲染后窗口按钮不是行容器（`row-*`）的后代，且选择器容器与行容器的包围盒不相交（以布局常量/类名断言，不依赖 jsdom 几何）；并对 6h、24h、72h 各点击一次，`data-window-hours` 依次变为 6、24、72，exit 0。
+- [x] 同一测试文件含一例：四行均渲染可见文本标签（`getByText`，不是只有 `aria-label`），文本取自 `cockpit.pulseRow*` 翻译键，exit 0。
+- [x] 同一测试文件含一例：strip 渲染时间轴，含 `现在`/`now` 与随窗口变化的起点标签（6h 时为 `-6h`，72h 时为 `-72h`），exit 0。
+- [x] 同一测试文件含一例：一个进行中任务渲染为带 `taskId` 文本或 `aria-label` 的条形，高度 ≥ 8px（取自导出的布局常量）；无进行中任务时 In flight 行显示空态说明文字，exit 0。
+- [x] `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0（Quay 面板与 cockpit 既有用例不被改坏；若旧用例钉住 9px/44px 布局，按本任务设计同步改写而非删除断言）。
+- [x] 新增的可见文案键（空态、图例、时间轴 `now`）在 12 个 `src/modules/i18n/locales/*/common.json` 中键集合一致，仓库既有 i18n parity 测试 exit 0。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
 
 ## DoD
 
 真实页面验证（AGENTS.md「UI 验证」）：MCP 浏览器在 PC 1440×900 与手机 390×844 打开真实 Quay tab（隔离实例 `scripts/isolated-instance.sh`，复制库带真实任务史），截图存 `tmp/` 并贴出，须看到并实际操作：(a) 依次点击 6h、24h、72h 三个窗口，每次图都重绘、选中态清晰，且在浏览器里 `document.elementFromPoint(6h 按钮中心)` 返回该按钮本身（贴出读数）；(b) 四行都有可见标签，底部有时间轴；(c) 有进行中任务时（可用 `quay-dogfood` 类夹具或真实项目）看到带任务 id、有长度的条形，无进行中任务时看到空态说明；(d) 手机上选择器热区 ≥44px、标签不被裁。再跑 `node scripts/ui-scenario.mjs` 中涉及 Quay tab 的场景（若存在）并贴出 JSON 报告。fixture 单测只是必要条件，不算落地。
+
+## Evidence
+
+实现与自检（2026-10-25，worktree 分支 `task/gap-quay-pulse-strip-readable-window-axis-rows`，实现 commit `a2b876d97`）：
+
+- `npx vitest run src/modules/quay/tests/PulseStrip.test.tsx` → 14 passed，exit 0（含本任务新增的窗口/标签/时间轴/任务条四例）。
+- `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx src/modules/cockpit/tests/CockpitStage.test.tsx` → 73 passed，exit 0。
+- `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` → 11 passed，exit 0；`pulseNow` / `pulseLegend` / `pulseWindowGroup` 同时加入了 12 个 locale（空态复用既有 `cockpit.inFlightEmpty`）。
+- `npx tsc --noEmit -p tsconfig.json` → exit 0。
+- 真实页面验证（本会话无 MCP 浏览器；按 `no-mcp-browser-use-throwaway-playwright-spec` 用一次性 Playwright spec 驱动真实 server+client，跑完已删除）：
+  - PC 1440×900：依次点击 6h/24h/72h，`data-window-hours` 依次 6/24/72；三次 `document.elementFromPoint` 都命中按钮本身，读数 `{"hit":true,"hitTestId":"cockpit-fleet-pulse-p1-window-6|24|72","hitTag":"BUTTON","rect":{"height":24,"width":32}}`。截图 `tmp/pulse-strip-dod/pc-6h.png`、`pc-24h.png`、`pc-72h.png`。
+  - 四行可见标签、底部时间轴（`-24h` / `-12h` / `now`）、带 id 的进行中任务条 `gap-pulse-wide-task`（≥8px）、无进行中任务的 `No in-flight tasks declared.` 空态：`tmp/pulse-strip-dod/pc-empty-inflight.png`。
+  - 手机 390×844（`pointer: coarse`）：6h 按钮实测 44×44、`elementFromPoint` 命中按钮本身；四个行标签 `scrollWidth == clientWidth`（不裁切）：`tmp/pulse-strip-dod/phone-6h.png`。
+  - 同一组件在 board 的 Quay panel（`quay-panel-pulse-strip`）上同样渲染标签/轴/任务条：`tmp/pulse-strip-dod/board-quay-panel.png`。
+  - 诚实标注：Quay 读取在 HTTP 边界用确定性夹具 stub（与仓库既有 `e2e/cockpit-visual.spec.ts` 的做法一致），页面、组件、Tailwind 与布局都是真实引擎；未走隔离实例+复制库，因为本会话无 MCP 浏览器，改走仓库既有的一次性 spec 路径。
+- `scripts/ui-scenario.mjs`：现有场景（`e2e/scenarios/cockpit-mode-switch.json`、`quay-wall-focus-pin-utter.json`）均不驱动 PulseStrip，语义面也未暴露脉搏条读数，故无相关场景可跑（DoD 的「若存在」条件不成立）。
 
 ## Touches
 
@@ -48,6 +64,16 @@ extra:
 - src/modules/quay/tests/PulseStrip.test.tsx
 - src/modules/quay/tests/QuayPanel.test.tsx
 - src/modules/cockpit/tests/CockpitStage.test.tsx
+- src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
+- src/modules/i18n/locales/es/common.json
+- src/modules/i18n/locales/fr/common.json
+- src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/it/common.json
+- src/modules/i18n/locales/ja/common.json
+- src/modules/i18n/locales/ko/common.json
+- src/modules/i18n/locales/ru/common.json
+- src/modules/i18n/locales/tr/common.json
 - src/modules/i18n/locales/zh-CN/common.json
+- src/modules/i18n/locales/zh-TW/common.json
 - tasks/gap-quay-pulse-strip-readable-window-axis-rows.md
