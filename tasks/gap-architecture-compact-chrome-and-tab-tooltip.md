@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-compact-chrome-and-tab-tooltip
 title: Architecture 顶部压成一行：Export+Legend 收进溢出菜单、读数行折叠为一行摘要，并修复 tab tooltip 点击后不消失
-status: todo
+status: ready
 labels:
   - gap
 parent: null
