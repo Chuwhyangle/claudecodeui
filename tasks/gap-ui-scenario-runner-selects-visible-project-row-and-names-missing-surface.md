@@ -1,7 +1,7 @@
 ---
 id: gap-ui-scenario-runner-selects-visible-project-row-and-names-missing-surface
 title: ui-scenario 运行器：选项目要点可见行，缺语义面要说清原因
-status: todo
+status: ready
 labels:
   - gap
   - defect
