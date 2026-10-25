@@ -290,11 +290,27 @@ function expectationFailures(expect, reading) {
  * @param {import('playwright').Page} page
  */
 async function waitForSurface(page) {
-  await page.waitForFunction(
-    () => Boolean(/** @type {any} */ (globalThis).__cloudcliScenario),
-    undefined,
-    { timeout: BOOT_TIMEOUT_MS },
-  );
+  try {
+    await page.waitForFunction(
+      () => Boolean(/** @type {any} */ (globalThis).__cloudcliScenario),
+      undefined,
+      { timeout: BOOT_TIMEOUT_MS },
+    );
+  } catch (error) {
+    // A timeout here has ONE dominant cause, and it is worth naming: the surface is gated on a
+    // development build. Without this the run dies on a generic `waitForFunction` timeout that
+    // reads like a broken app or a bad scenario, when the page was simply never drivable.
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new Error(
+        `the semantic surface (window.__cloudcliScenario) was not mounted within ${BOOT_TIMEOUT_MS}ms. `
+        + 'It is installed only by a development build: main.tsx gates it on import.meta.env.DEV '
+        + "plus localStorage['ui-scenario']='on'. A page served from a production dist/ build (for "
+        + 'example an instance started by scripts/isolated-instance.sh) has no semantic surface to '
+        + 'drive. Point --base-url at the Vite dev server instead (`npm run client`, or `npm run dev`).',
+      );
+    }
+    throw error;
+  }
 }
 
 /** Reads the surface's structured state in one round trip.
@@ -325,6 +341,24 @@ async function waitForPublishedView(page) {
 }
 
 /**
+ * The first exact-text match Playwright judges visible, in DOM order.
+ *
+ * WHY VISIBILITY IS PART OF THE SELECTOR: the sidebar renders a project's display name and its
+ * path suffix side by side in one flex row. When the row's action group and badges squeeze the
+ * name, the `truncate` span carrying it measures zero width, and Playwright calls a zero-width
+ * element invisible even though the row it belongs to is plainly on screen. An unfiltered
+ * `.first()` can resolve to exactly that span, so `waitFor({ state: 'visible' })` times out and
+ * the run reports "the project never appeared" — a lie about the sidebar. Filtering on visibility
+ * keeps the DOM-order preference and skips anything that cannot be clicked.
+ *
+ * @param {import('playwright').Page} page
+ * @param {string} text
+ */
+function firstVisibleExactText(page, text) {
+  return page.getByText(text, { exact: true }).filter({ visible: true }).first();
+}
+
+/**
  * Selects one project and then one of its sessions from the sidebar, from a freshly loaded `/`.
  *
  * Shared by every opener that lands on a session: the Quay view starts from the same selection
@@ -337,8 +371,8 @@ async function waitForPublishedView(page) {
  * @param {{ project: string, session: string }} target
  */
 async function selectProjectSession(page, target) {
-  const projectRow = page.getByText(target.project, { exact: true }).first();
-  const sessionRow = page.getByText(target.session, { exact: true }).first();
+  const projectRow = firstVisibleExactText(page, target.project);
+  const sessionRow = firstVisibleExactText(page, target.session);
 
   await page.goto('/');
   /** @param {number} timeout */

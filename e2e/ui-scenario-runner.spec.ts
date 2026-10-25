@@ -30,9 +30,10 @@
  */
 
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 import { expect, request, test } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
@@ -65,6 +66,18 @@ const MAIN_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-main');
 const CONTROL_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-control');
 const COCKPIT_MAIN_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-cockpit-main');
 const COCKPIT_CONTROL_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-cockpit-control');
+const ZERO_WIDTH_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-zero-width');
+const NO_SURFACE_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-no-surface');
+
+/**
+ * The runner's own boot budget (`BOOT_TIMEOUT_MS` in `scripts/ui-scenario.mjs`).
+ *
+ * The surface-less arm asserts the runner gives up ON that budget instead of hanging; it is not
+ * pinned in the runner because nothing is allowed to read this file from there. Kept as a literal
+ * on purpose: a change to the runner's budget should make a reader re-check this line, not
+ * silently rewrite the assertion's meaning.
+ */
+const BOOT_TIMEOUT_MS = 30_000;
 
 type ScenarioStep = { open?: string; drive?: Record<string, unknown>; expect?: Record<string, unknown>; checkpoint?: boolean };
 type Scenario = { name?: string; description?: string; steps: ScenarioStep[] };
@@ -265,30 +278,141 @@ const waitForFixtureProject = async (
   throw new Error(`the fixture project never appeared after ${budgetMs}ms: ${last}`);
 };
 
-/** Runs the runner and parses the report it printed on stdout. */
-const runRunner = (scenarioFile: string, outDir: string, token: string) => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      RUNNER,
-      scenarioFile,
-      '--base-url', CLIENT_URL,
-      '--auth-token', token,
-      '--project', WORKSPACE_NAME,
-      '--session', SESSION_NAME,
-      '--out', outDir,
-    ],
-    { cwd: REPO_ROOT, encoding: 'utf8', timeout: 180_000, maxBuffer: 64 * 1024 * 1024 },
-  );
-  const stdout = result.stdout ?? '';
-  const stderr = result.stderr ?? '';
-  let report: RunnerReport | null = null;
+type RunnerRun = { status: number | null; stdout: string; stderr: string; report: RunnerReport | null };
+
+/** The runner's argv, shared by the synchronous and asynchronous launchers. */
+const runnerArgs = (scenarioFile: string, outDir: string, token: string, baseUrl: string): string[] => [
+  RUNNER,
+  scenarioFile,
+  '--base-url', baseUrl,
+  '--auth-token', token,
+  '--project', WORKSPACE_NAME,
+  '--session', SESSION_NAME,
+  '--out', outDir,
+];
+
+/** Parses the report the runner prints on stdout; `null` when it printed none. */
+const parseReport = (stdout: string): RunnerReport | null => {
   try {
-    report = JSON.parse(stdout) as RunnerReport;
+    return JSON.parse(stdout) as RunnerReport;
   } catch {
-    report = null;
+    return null;
   }
-  return { status: result.status, stdout, stderr, report };
+};
+
+/** Runs the runner and parses the report it printed on stdout. */
+const runRunner = (scenarioFile: string, outDir: string, token: string, baseUrl = CLIENT_URL): RunnerRun => {
+  const result = spawnSync(process.execPath, runnerArgs(scenarioFile, outDir, token, baseUrl), {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    timeout: 180_000,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const stdout = result.stdout ?? '';
+  return { status: result.status, stdout, stderr: result.stderr ?? '', report: parseReport(stdout) };
+};
+
+/**
+ * Runs the runner WITHOUT blocking this process's event loop.
+ *
+ * The two cases below point the runner at an HTTP fixture served by THIS process, so a
+ * `spawnSync` would deadlock: the child asks the fixture page for `/` and this process, blocked
+ * inside `spawnSync`, never answers it. `runRunner` stays synchronous for the server-backed arms,
+ * whose pages are served by the Vite webServer in another process.
+ */
+const runRunnerAsync = (
+  scenarioFile: string,
+  outDir: string,
+  token: string,
+  baseUrl: string,
+): Promise<RunnerRun> => new Promise((resolve, reject) => {
+  const child = spawn(process.execPath, runnerArgs(scenarioFile, outDir, token, baseUrl), {
+    cwd: REPO_ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout += chunk; });
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => { stderr += chunk; });
+  child.on('error', reject);
+  child.on('close', (status) => resolve({ status, stdout, stderr, report: parseReport(stdout) }));
+});
+
+/**
+ * The app-shaped page the two runner cases below point at.
+ *
+ * It is deliberately not the real client. Both cases are about the RUNNER's own two failure
+ * branches — picking a clickable element out of exact-text matches, and naming a missing semantic
+ * surface — and the real sidebar cannot be made to render a zero-width decoy ahead of its row on
+ * demand. The page reproduces the exact shapes those branches read:
+ *
+ *   · a zero-width span carrying the project name BEFORE the visible row that carries it too —
+ *     the shape a flex-squeezed `truncate` display name produces in the real sidebar;
+ *   · the session row, the cockpit mode switch, and the cockpit page's `data-testid`;
+ *   · when `withSurface`, `window.__cloudcliScenario` returning the readings that
+ *     `cockpit-mode-switch.json` asserts.
+ */
+const staticAppHtml = (pathname: string, withSurface: boolean): string => {
+  const sessionPath = `/session/${SESSION_ID}`;
+  const inCockpit = pathname.startsWith('/cockpit');
+  const reading = `
+      const route = location.pathname;
+      const inCockpit = route.startsWith('/cockpit');
+      return {
+        route,
+        activeView: inCockpit ? 'cockpit' : 'session',
+        focus: null,
+        focusLabel: null,
+        lastInputPack: null,
+        views: ['fixture'],
+        cockpit: inCockpit
+          ? { view: 'fleet', focus: null, focusLabel: null, echo: null, wallObjects: [] }
+          : null,
+      };`;
+  return `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>ui-scenario fixture</title></head>
+<body>
+  <aside>
+    <span data-zero-width-project-name style="display:inline-block;width:0;height:0;overflow:hidden">${WORKSPACE_NAME}</span>
+    <a href="${sessionPath}"><span class="truncate">${WORKSPACE_NAME}</span></a>
+    <a href="${sessionPath}"><span class="truncate">${SESSION_NAME}</span></a>
+    <a data-mode-switch-link="cockpit" href="/cockpit">cockpit</a>
+    <a data-mode-switch-link="sessions" href="${sessionPath}">sessions</a>
+  </aside>
+  ${inCockpit ? '<main data-testid="cockpit-page">cockpit stage</main>' : `<main>${SESSION_NAME}</main>`}
+  ${withSurface ? `<script>
+    window.__cloudcliScenario = {
+      read() {${reading}
+      },
+      drive() {},
+    };
+  </script>` : ''}
+</body>
+</html>
+`;
+};
+
+type StaticApp = { url: string; close: () => Promise<void> };
+
+/** Serves {@link staticAppHtml} from an ephemeral loopback port; every path gets the page. */
+const startStaticApp = async (withSurface: boolean): Promise<StaticApp> => {
+  const server = http.createServer((request, response) => {
+    const { pathname } = new URL(request.url ?? '/', 'http://127.0.0.1');
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    response.end(staticAppHtml(pathname, withSurface));
+  });
+  await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve); });
+  const address = server.address();
+  if (typeof address !== 'object' || address === null) {
+    throw new Error('the static fixture server did not bind a port');
+  }
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    }),
+  };
 };
 
 /**
@@ -445,5 +569,86 @@ test.describe('the UI scenario runner on the Quay wall', () => {
 
     // The step before the mutation still passed, so the red is the mutated reading itself.
     expect(controlReport.steps[0]?.ok, `control step 1 must pass: ${JSON.stringify(controlReport.steps[0])}`).toBe(true);
+  });
+});
+
+/**
+ * The runner's two unusable-run branches, read against a page this spec serves itself.
+ *
+ * These cases do NOT measure the app: they measure what the runner does when the sidebar's DOM
+ * shape is hostile (an exact-text span no click can land on) or when the page it was pointed at
+ * cannot be driven at all (no semantic surface). Served from an ephemeral port in this process,
+ * so the page is exactly what the case needs rather than whatever the shared fixture project
+ * happens to render.
+ */
+test.describe('the UI scenario runner on a hostile or surface-less page', () => {
+  test('skips a zero-width project-name span that precedes the visible row', async ({ page }) => {
+    test.setTimeout(120_000);
+    const app = await startStaticApp(true);
+    try {
+      // THE FIXTURE'S SHAPE IS PART OF THE READING: if the decoy were not really zero-width, or
+      // did not come first, an unfiltered `.first()` would already hit the visible row and this
+      // case would pass without exercising the fix at all.
+      await page.goto(app.url);
+      const decoy = page.locator('[data-zero-width-project-name]');
+      await expect(decoy).toHaveCount(1);
+      expect(
+        await decoy.evaluate((element) => element.getBoundingClientRect().width),
+        'the decoy project-name span must be zero-width, which is what makes Playwright call it invisible',
+      ).toBe(0);
+      await expect(decoy, 'Playwright must judge the zero-width decoy invisible').toBeHidden();
+      const exactMatches = await page.evaluate((name) => {
+        const spans = [...document.querySelectorAll('span')].filter((element) => element.textContent === name);
+        return {
+          count: spans.length,
+          firstIsDecoy: spans[0]?.hasAttribute('data-zero-width-project-name') ?? false,
+        };
+      }, WORKSPACE_NAME);
+      expect(exactMatches.count, 'the project name must match more than one element').toBeGreaterThanOrEqual(2);
+      expect(exactMatches.firstIsDecoy, 'the zero-width decoy must come first in DOM order').toBe(true);
+
+      fs.rmSync(ZERO_WIDTH_OUT, { recursive: true, force: true });
+      const run = await runRunnerAsync(COCKPIT_SCENARIO_FILE, ZERO_WIDTH_OUT, 'fixture-token', app.url);
+      expect(
+        run.status,
+        `the runner must reach the visible row and finish the cockpit scenario\nstdout=${run.stdout}\nstderr=${run.stderr}`,
+      ).toBe(0);
+      const report = run.report as RunnerReport;
+      expect(report.ok, JSON.stringify(report.steps)).toBe(true);
+      expect(report.failedStep).toBeNull();
+      expect(report.stepCount).toBe(3);
+      expect(report.steps.every((step) => step.ok), JSON.stringify(report.steps)).toBe(true);
+      expect(report.checkpoints.length).toBe(3);
+      for (const checkpoint of report.checkpoints) {
+        expect(fs.existsSync(checkpoint.file), `checkpoint screenshot ${checkpoint.file} must exist`).toBe(true);
+        expect(fs.statSync(checkpoint.file).size, `checkpoint screenshot ${checkpoint.file} must be non-empty`).toBeGreaterThan(0);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('names why the run is unusable when the page comes without the semantic surface', async () => {
+    test.setTimeout(120_000);
+    const app = await startStaticApp(false);
+    try {
+      fs.rmSync(NO_SURFACE_OUT, { recursive: true, force: true });
+      const startedAt = Date.now();
+      const run = await runRunnerAsync(COCKPIT_SCENARIO_FILE, NO_SURFACE_OUT, 'fixture-token', app.url);
+      const elapsedMs = Date.now() - startedAt;
+
+      expect(
+        run.status,
+        `a page with no semantic surface is an unusable run (exit 2)\nstdout=${run.stdout}\nstderr=${run.stderr}`,
+      ).toBe(2);
+      expect(run.report, 'an unusable run prints no report').toBeNull();
+      expect(run.stderr, 'the error must name WHAT was missing, not just that a wait timed out').toContain('semantic surface');
+      expect(
+        elapsedMs,
+        'the run must end on its boot budget rather than hang — budget plus browser launch and navigation',
+      ).toBeLessThan(BOOT_TIMEOUT_MS + 15_000);
+    } finally {
+      await app.close();
+    }
   });
 });
