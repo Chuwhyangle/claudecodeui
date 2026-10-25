@@ -16,7 +16,13 @@
  *       worker-authored HTML, so (1)'s reading cannot pass because the harness rejects everything;
  *   (3) a failed NON-navigation fetch with no cache entry settles REJECTED, not `Response.error()`;
  *   (4) a failed NON-navigation fetch WITH a cache entry still serves that entry — the network-first
- *       fallback was narrowed, not removed.
+ *       fallback was narrowed, not removed;
+ *   (5) a CROSS-ORIGIN request never reaches `respondWith` — the worker cannot serve it from its
+ *       cache and intercepting it only rewrites the browser's own error (ERR_NAME_NOT_RESOLVED
+ *       becomes ERR_FAILED) and leaves an "Uncaught (in promise)" line behind;
+ *   (6) a NON-GET request is left alone for the same reason. Reading (3) is the control for both:
+ *       it requires `respondWith` on a same-origin GET, so an unconditional early return cannot
+ *       pass this file.
  */
 
 import assert from 'node:assert/strict';
@@ -51,7 +57,7 @@ self.addEventListener('fetch', event => {
 });
 `;
 
-type RequestLike = { url: string; mode: string };
+type RequestLike = { url: string; mode: string; method: string };
 type FetchEventLike = {
   request: RequestLike;
   respondWith: (response: Promise<Response>) => void;
@@ -64,6 +70,12 @@ type Settled =
 type Worker = {
   /** Fires the worker's fetch listener for one request and settles the respondWith promise. */
   respond: (request: RequestLike) => Promise<Settled>;
+  /**
+   * Fires the worker's fetch listener and reports whether it took the request at all.
+   * The pass-through readings use this: a request the worker cannot serve must leave
+   * `respondWith` uncalled so the browser handles it on its own network path.
+   */
+  handles: (request: RequestLike) => boolean;
   /** Replaces the network layer for the readings that follow. */
   setFetch: (impl: (request: unknown) => Promise<Response>) => void;
   /** Replaces the CacheStorage lookup for the readings that follow. */
@@ -132,6 +144,19 @@ function loadWorker(source: string): Worker {
     setCached: (response) => {
       cachedResponse = response;
     },
+    handles: (request) => {
+      let responded = false;
+      fetchListener({
+        request,
+        respondWith: (response) => {
+          responded = true;
+          // A worker that wrongly handles a pass-through request must still leave no
+          // unhandled rejection behind for the runner to report.
+          void response.catch(() => {});
+        },
+      });
+      return responded;
+    },
     respond: async (request) => {
       let responded: Promise<Response> | undefined;
       fetchListener({
@@ -151,8 +176,12 @@ function loadWorker(source: string): Worker {
   };
 }
 
-const NAVIGATION: RequestLike = { url: 'https://app.example.test/session/2f0e', mode: 'navigate' };
-const PLAIN_GET: RequestLike = { url: 'https://app.example.test/data/board.json', mode: 'cors' };
+const NAVIGATION: RequestLike = { url: 'https://app.example.test/session/2f0e', mode: 'navigate', method: 'GET' };
+const PLAIN_GET: RequestLike = { url: 'https://app.example.test/data/board.json', mode: 'cors', method: 'GET' };
+/** Same app-shaped path, another origin: the worker's cache can never answer it. */
+const CROSS_ORIGIN_GET: RequestLike = { url: 'https://cdn.example.test/data/board.json', mode: 'cors', method: 'GET' };
+/** Same-origin and not an API/asset path, so only the method decides its fate. */
+const SAME_ORIGIN_POST: RequestLike = { url: 'https://app.example.test/data/board.json', mode: 'cors', method: 'POST' };
 
 test('a transient navigation failure passes through instead of being replaced by a worker-authored page', async () => {
   const worker = loadWorker(SW_SOURCE);
@@ -215,4 +244,24 @@ test('a transient non-navigation failure still serves a cached entry when one ex
   const response = expectFulfilled(settled);
 
   assert.equal(await response.text(), 'cached body', 'the network-first fallback must still serve a cached copy');
+});
+
+test('a cross-origin request is left to the browser instead of being answered by the worker', () => {
+  const worker = loadWorker(SW_SOURCE);
+
+  assert.equal(
+    worker.handles(CROSS_ORIGIN_GET),
+    false,
+    'a request the worker can never serve from its cache must not be taken: taking it turns the browser\'s precise network failure into a generic ERR_FAILED and an uncaught rejection',
+  );
+});
+
+test('a non-GET request is left to the browser instead of being answered by the worker', () => {
+  const worker = loadWorker(SW_SOURCE);
+
+  assert.equal(
+    worker.handles(SAME_ORIGIN_POST),
+    false,
+    'a POST has no cache entry to fall back on, so the worker has nothing to add and must not take it',
+  );
 });

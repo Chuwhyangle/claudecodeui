@@ -1,7 +1,9 @@
 // Service Worker for CloudCLI PWA
 // Cache only manifest (needed for PWA install). HTML and JS are never pre-cached
 // so a rebuild + refresh always picks up the latest assets.
-const CACHE_NAME = 'claude-ui-v2';
+const CACHE_PREFIX = 'claude-ui-';
+// Bumped from v2 so activating this worker drops the unbounded v2 asset cache once.
+const CACHE_NAME = 'claude-ui-v3';
 const urlsToCache = [
   '/manifest.json'
 ];
@@ -17,10 +19,35 @@ self.addEventListener('install', event => {
 
 // Fetch event — network-first for everything except hashed assets
 self.addEventListener('fetch', event => {
-  const url = event.request.url;
+  const request = event.request;
+
+  // Only requests this worker can actually answer belong here. A request it can never serve
+  // from its cache — a non-GET method, another origin, a scheme that is not http(s) — has
+  // nothing to gain from the detour, and `respondWith` rewrites its network failure into a
+  // generic `net::ERR_FAILED` plus an "Uncaught (in promise)" line attributed to this file,
+  // hiding the precise diagnosis the browser would have reported (ERR_NAME_NOT_RESOLVED and
+  // friends). Returning without calling `respondWith` leaves the request on the browser's own
+  // path, so its failure is reported as it happened. Cross-origin is also where the API
+  // requests live (the GitHub release/star reads), and those are never in this cache.
+  if (request.method !== 'GET') {
+    return;
+  }
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
   // Never intercept API requests or WebSocket upgrades
-  if (url.includes('/api/') || url.includes('/ws')) {
+  const { pathname } = url;
+  if (pathname === '/api' || pathname.startsWith('/api/') || pathname === '/ws') {
     return;
   }
 
@@ -28,7 +55,6 @@ self.addEventListener('fetch', event => {
   // pages and JSON-RPC, not part of the app shell, and a consent form's 302 chain ends on
   // another origin: routing that navigation through this worker added nothing and left an
   // unhandled "Failed to convert value to 'Response'" behind when the chain was cut short.
-  const pathname = new URL(url).pathname;
   if (pathname.startsWith('/oauth/') || pathname.startsWith('/.well-known/') || pathname === '/mcp') {
     return;
   }
@@ -45,7 +71,7 @@ self.addEventListener('fetch', event => {
   }
 
   // Hashed assets (JS/CSS in /assets/) — cache-first since filenames change per build
-  if (url.includes('/assets/')) {
+  if (pathname.startsWith('/assets/')) {
     event.respondWith(
       caches.match(event.request).then(cached => {
         if (cached) return cached;
@@ -79,18 +105,20 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Activate event — purge old caches
+// Activate event — purge this worker's own old caches, and only those.
+// The origin also holds the on-device speech model (`voice-client-asr-model-v1`, ~239 MB,
+// 8–10 minutes to download), which this worker has no business deleting: a blanket
+// "every name except CACHE_NAME" purge wiped it on every worker update.
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames =>
       Promise.all(
         cacheNames
-          .filter(name => name !== CACHE_NAME)
+          .filter(name => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME)
           .map(name => caches.delete(name))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // Push notification event
