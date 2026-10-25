@@ -1,0 +1,292 @@
+{
+  "schema": "caret-item-matching/viewport-probe/1",
+  "ranAt": "2026-10-25T15:19:28.712Z",
+  "corpus": {
+    "root": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui",
+    "days": 21,
+    "files": 3366,
+    "megabytes": 4633.5,
+    "scanSeconds": 28.4,
+    "windowMessages": 12,
+    "minRun": 20
+  },
+  "counts": {
+    "turns": 3496,
+    "deicticTurns": 1297,
+    "quoteTurns": 506,
+    "quoteFromAssistant": 400,
+    "quoteFromUser": 106,
+    "quoteFromLastAssistant": 287,
+    "quoteFromEarlierThanLastAssistant": 219,
+    "quoteWithinLastThree": 393,
+    "quoteEarlierThanLastThree": 113,
+    "quoteTurnsAlsoDeictic": 366,
+    "deicticWithoutQuote": 931
+  },
+  "rates": {
+    "quoteTurnShare": 0.1447,
+    "lastAssistantShareOfQuotes": 0.5672,
+    "earlierThanLastAssistantShare": 0.4328,
+    "withinLastThreeShare": 0.7767,
+    "deicticShare": 0.371,
+    "deicticWithoutQuoteShare": 0.2663
+  },
+  "distances": {
+    "p50": 1,
+    "p90": 7,
+    "p95": 9,
+    "max": 12
+  },
+  "runLengths": {
+    "p50": 39,
+    "p90": 143,
+    "p95": 200,
+    "max": 1079
+  },
+  "examples": {
+    "lastAssistant": [
+      {
+        "utterance": "gap-voice-streaming-vad-endpointing\t10-04 10:01 CST（02:01Z）\tdone\t流式 VAD：AudioWorklet 逐帧判定 + 端点（停顿切段）+ 最长段长，判决逻辑与批处理共用\nga",
+        "source": "最近 2 天（本地 CST/GMT+8：10-02 下午 → 现在）**实际执行并过门**的 VAD 任务只有 4 条，全部落在 10-04 上午，来自同一份提案 `docs/proposals/voice-continuous-captu",
+        "role": "assistant",
+        "distance": 1,
+        "run": 238
+      },
+      {
+        "utterance": "note 推广（方案 A）直接作为缺陷立案。\n退出路径「无待提交 ⇒ 不发 response.create」：允许\nconn2 的「噪声放行 ⇒ 误报横幅」这个小缺陷，要单独记一条\n\n按你的建议，推进。",
+        "source": "没有改任何文件，下面都是只读核查的结果。\n\n## 一、上一轮的分析：哪些对，哪些要更正\n\n| 上一轮的断言 | 复核结果 |\n|---|---|\n| 第二条投递是模型改写后的幻影消息，你没说过 | **成立**。06:06 之后零 `spe",
+        "role": "assistant",
+        "distance": 1,
+        "run": 24
+      },
+      {
+        "utterance": "A. forced commit 之后端点不开 response（10 秒问题的直接原因）\n\n---\n\n讨论该问题原因，并建议解决方案。",
+        "source": "# 今天 Live Voice 讨论与发现总结\n\n## 0. 今天新定的原则\n\n- **ASR（`transcription.completed`）之后，response 必须在 10 秒内出来并进入 queue；超时即缺陷。**\n- 当前",
+        "role": "assistant",
+        "distance": 1,
+        "run": 37
+      },
+      {
+        "utterance": "forced commit 之后，若 committed 到来时前面没有 speech_stopped（= 端点没闭段），则端点不会自动回答 → 这时不补一个 response.create（或逐字兜底），而是给模型补更多音频输入，会不会更",
+        "source": "查清楚了，证据在 `e2b96f7b….jsonl` 的完整协议流里，结论是确定性的。\n\n## 一、直接答案：response 只会跟在端点的 `speech_stopped` 后面\n\n我把整条连接的 6 次 forced commit 全",
+        "role": "assistant",
+        "distance": 1,
+        "run": 60
+      },
+      {
+        "utterance": "response.create（状态驱动，我更推荐）：判据「committed 到来时无 speech_stopped」精确区分「端点不会自答」，此时补发一次 response.create 强制出 response；有 speech_st",
+        "source": "实验跑完了，预算内（~¥0.02，墙钟 52s）。**结论：你提的「commit 后持续补音频」这条路被证伪了。**\n\n## 结果（8 run，全部一致）\n\n| 段 | feed | speech_stopped | response | ",
+        "role": "assistant",
+        "distance": 1,
+        "run": 153
+      },
+      {
+        "utterance": "补这个 response.create 臂，把方案的动作也验证掉。",
+        "source": "直说：**实验支持了这套方案的「前提」，但没有验证它的「动作」。**\n\n## 已支持的部分\n\n1. **判据状态是真的、可复现的。** `feed=0` 这一臂在 8 run 里 100% 复现了「`committed` 有、`speech",
+        "role": "assistant",
+        "distance": 1,
+        "run": 28
+      },
+      {
+        "utterance": "\"并入下一句\" 本身不是什么大问题。实际上最近在 VAD 相关的调整中也一直在处理这一问题。\n\n我比较不满意的例子是：\n\n---\n\n2\t可能要花到二十到三十秒。\t但是我看到在我的屏幕上蹦出来，可能花了二十到三十秒。\t但是，我看它在我的屏幕上",
+        "source": "这一批有真东西可看了。**4 段 × 2 臂，上游提交 35 句、模型交付 21 条**，全文如下（`traces/tier1-production-2026-10-15T02-06-51-380Z.json`）。\n\n## spanA（1–",
+        "role": "assistant",
+        "distance": 1,
+        "run": 88
+      },
+      {
+        "utterance": "本质张力\n这是一个在代理 seam 上无法用文本侧手段裁决的两难：\n模型会改写/纠错 ⇒ 没法靠文本匹配判断「这条 message 覆盖了哪几句」。\n补录未覆盖句 ⇒ 遇到改写就重复投递（3d2d3b2c 的失败）。\n不补 ⇒ 遇到欠投递就",
+        "source": "分析完成。数据、机制、根因都定位到了。下面是完整结论。\n\n---\n\n## 结论确认\n\n会话「Claude Code 语音输出设计」（claudecodeui 会话 `a34987d6` → 底层 Claude Code 会话 `30b8c5",
+        "role": "assistant",
+        "distance": 1,
+        "run": 150
+      },
+      {
+        "utterance": "说明 VOICE_REALTIME_MODE=segmented 的机制。",
+        "source": "查清楚了。直接回答你的问题，然后给可选路径。\n\n## 直接回答：补录/不补 这一机制没有开关\n\n那个「补录未覆盖句」的 span guard **代码已被删除**，没有 env 或设置文件键能重新打开它。删除提交是：\n\n```\n0b9e9a",
+        "role": "assistant",
+        "distance": 1,
+        "run": 26
+      },
+      {
+        "utterance": "先把 occupiedBy 和 sessions[] 这两个问题定下来；然后按 B + C 创建任务。",
+        "source": "下面先讲现状里对方案有影响的几点，再讲方案和我的推荐。\n\n## 现状里对方案有影响的事实\n\n1. **服务端有一个可订阅的事件源，但还没有接出去。**\n   - `session-host-manager.service.ts` 里 hos",
+        "role": "assistant",
+        "distance": 1,
+        "run": 29
+      }
+    ],
+    "earlier": [
+      {
+        "utterance": "注意，上面这段“检查一下本会话到现在为止，已经采集到的语音、已经发给 realtime 模型的语音长度以及相应的费用。”和再前面一句是重复的。\n\n检查。",
+        "source": "检查一下本会话到现在为止，已经采集到的语音、已经发给 realtime 模型的语音长度以及相应的费用。",
+        "role": "user",
+        "distance": 2,
+        "run": 46
+      },
+      {
+        "utterance": "如果把所有的真实音频都发进去，模型还是判断要几十秒以后的下一句语音才触发 response ，我也只能接受。不要额外加那个 10s 逻辑判断，保持实现简单。\n\n请进一步讨论。",
+        "source": "如果把所有的真实音频都发进去，模型还是判断要几十秒以后的下一局语音才触发 response ，我也只能接受。不要额外加那个 10s 逻辑判断，保持实现简单。\n\n请进一步讨论。",
+        "role": "user",
+        "distance": 1,
+        "run": 45
+      },
+      {
+        "utterance": "不。我希望再好些：仅在“forced commit 之后，若 committed 到来时前面没有 speech_stopped（= 端点没闭段），则端点不会自动回答”才持续补音频；否则还是保持现有 VAD 过滤。\n\n请进一步讨论。",
+        "source": "查清楚了，证据在 `e2b96f7b….jsonl` 的完整协议流里，结论是确定性的。\n\n## 一、直接答案：response 只会跟在端点的 `speech_stopped` 后面\n\n我把整条连接的 6 次 forced commit 全",
+        "role": "assistant",
+        "distance": 6,
+        "run": 58
+      },
+      {
+        "utterance": "轮\tkeep 交付\ttwin 交付\n[2]\t我大概花了两秒时间。\t我大概花了两秒的时间。\n[3]\t就把话说完了。\t就把话说完了。\n[4]\t但是我看见这边有个动作。\t但是我看见这边有个动词。\n[5]\t可能花了五六秒。\t但是我看这边往外蹦字儿，",
+        "source": "Twin 臂现在删的是正确的 `input_audio` 条目了。**生产形状下，错位没有复现**：\n\n| 轮 | keep 交付 | twin 交付 |\n|---|---|---|\n| [2] | 我大概花了两秒时间。 | 我大概花了两秒",
+        "role": "assistant",
+        "distance": 5,
+        "run": 106
+      },
+      {
+        "utterance": "不用 VOICE_REALTIME_MODE=segmented。\n\n具体描述 路 C（代码改动）方案。",
+        "source": "查清楚了。直接回答你的问题，然后给可选路径。\n\n## 直接回答：补录/不补 这一机制没有开关\n\n那个「补录未覆盖句」的 span guard **代码已被删除**，没有 env 或设置文件键能重新打开它。删除提交是：\n\n```\n0b9e9a",
+        "role": "assistant",
+        "distance": 3,
+        "run": 26
+      },
+      {
+        "utterance": "现在已经退出 live voice 。\n\n上面的语音输入已经做得很好。但发现的一个问题是：在上面的 transcript 中，在 `你为什么会提出听到了但没投出去这件事儿？你找到了最近的历史记录吗？` 这句之前，就出现了关于这一问题的回答。",
+        "source": "你为什么会提出听到了但没投出去这件事儿？你找到了最近的历史记录吗？",
+        "role": "user",
+        "distance": 2,
+        "run": 31
+      },
+      {
+        "utterance": "这不是大问题。可以接受。\n\n还有个 UI 的问题，在你进行上一轮处理的开头十几甚至二十秒中，我看到的页面在：\n\n---\n\n现在已经退出 live voice 。\n上面的语音输入已经做得很好。但发现的一个问题是：在上面的 transcript",
+        "source": "现在已经退出 live voice 。\n\n上面的语音输入已经做得很好。但发现的一个问题是：在上面的 transcript 中，在 `你为什么会提出听到了但没投出去这件事儿？你找到了最近的历史记录吗？` 这句之前，就出现了关于这一问题的回答。",
+        "role": "user",
+        "distance": 2,
+        "run": 106
+      },
+      {
+        "utterance": "接口 A：ui_last_opened_session（scope: read）不需要拉取；接口 B：ui_visible_context（scope: read）拉。",
+        "source": "## 一、最近两天的 MCP 讨论与实践\n\n我只读了 git 历史、`server/modules/mcp-gateway/` 和两份提案文档，没有运行任何东西。\n\n**1. 网关已落地，约 9000 行，30 个测试文件。**\n- 依据是",
+        "role": "assistant",
+        "distance": 3,
+        "run": 31
+      },
+      {
+        "utterance": "工具在「询问」下立即返回 pending_user，最终结果通过后续查询取得，沿用上一轮的问题：并入 ui_visible_context 。不等用户。\n输入框有草稿时，保持「接受」行为。本项目已有机制为每个会话保存草稿。\n限速值写死常量。",
+        "source": "可以，而且你这个理由比我的更站得住：策略按设备区分，localStorage 正好合适。我上一轮把「所有浏览器一致」当成优点，是按单一策略想的，这里要改。\n\n## 策略放 localStorage 之后的变化\n\n**1. `拒绝` 不能在服",
+        "role": "assistant",
+        "distance": 3,
+        "run": 59
+      },
+      {
+        "utterance": "我这边刚在 ChatGPT 中刷新了 CloudCLI plugin tools。当前 ChatGPT 实际能看到的 CloudCLI 接口仍只有这 17 个：\nprojects_list, sessions_list, session_g",
+        "source": "六个任务和后来的 `ui_open_session` 都已 `done`，运行中的服务也已经带上了这些代码。但我还没有真正调用过这几个接口。\n\n**任务状态：** 7 个 `gap-mcp-ui-*` 任务全部是 `done`，`ui_op",
+        "role": "assistant",
+        "distance": 7,
+        "run": 37
+      },
+      {
+        "utterance": "我现在通过新加的 ui_visible_context 接口检查了浏览器当前打开的会话。设备是 Chrome · Windows，当前 selectedSession 就是本会话。\n\n发现一个实际问题：ui_visible_context ",
+        "source": "测完了，四个接口在运行中的服务上都能用，我已经在你的浏览器里打开了另一个会话。\n\n| 接口 | 结果 |\n|---|---|\n| `tools/list` | 21 个工具，新增的四个都在，包括 `ui_open_session` |\n| ",
+        "role": "assistant",
+        "distance": 5,
+        "run": 34
+      },
+      {
+        "utterance": "只分析 visibleMessages.first/last 偶尔为 null 的问题。不要修改代码、不要提交、不要重启服务。请基于当前真实运行状态给出：复现条件、根因判断、证据链、建议修复点，以及为什么刚才重新查询时 first/last",
+        "source": "先只分析这个 visibleMessages.first/last 为 null 的问题，不要修改代码、不要提交、不要重启服务。请先给出根因判断、证据链和建议修复点，等我确认后再动手。",
+        "role": "user",
+        "distance": 1,
+        "run": 25
+      }
+    ],
+    "deicticNoQuote": [
+      {
+        "utterance": "这两个会话的标题都是什么？",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "请检查当前这个新 resident session 实际看到/加载到的 quay 插件版本。请基于你在该会话环境里能直接观察到的事实进行检查，并明确给出版本号及你用来判断的依据。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "Live voice. 十月十六日一点第一次测试。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "前面这句不用再跑了，我们先聊后面的事儿吧。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "列出当前目录下的文件。\n停掉前面那个慢的 bash 命令，直接列出当前目录文件。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "检查上述的分析和建议是否正确。\n\n进一步检查：我们讨论过，希望能够把 `[The previous turn was interrupted ` 放在前面一条消息中。那条消息才是真正触发这一中断，并且要立刻面对可能的 `partial ch",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "嗯，还要写，做做优化，就是我们现在定性为一个完整的。这是10月17日Live Voice的第四次测试。在前面几次测试中，我们一直在发现Live Voice是否会丢话，所以我们现在并没有一个完整的……但当前的设置是我宁愿重复一些输入。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "那个会话中也丢了不少输入，把那个会话中真的完整的……现在又有问题了，我刚才说的这一段话只被处理了开头第一句，然后后面的一段一直没有被进到 queue 里。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "我记得我们之前处理过这个问题，把某一个时间窗口大概从400毫秒提到800毫秒，当时的分析是说这样子能够有效地促进它触发一个断句或者触发处理之类的。但现在看这个机制实际有效吗？",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "总结一下上面我们讨论和发现的问题。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "如果把所有的真实音频都发进去，模型还是判断要几十秒以后的下一局语音才触发 response ，我也只能接受。不要额外加那个 10s 逻辑判断，保持实现简单。\n\n请进一步讨论。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      },
+      {
+        "utterance": "设计实验验证。\n\n- 预算 0.5 人民币，10分钟\n- 先做小规模探针，再基于探针结果扩大实验规模\n- 使用并发测试，缩短测试墙钟\n\n说明实验方案，等我确认。",
+        "source": "",
+        "role": "",
+        "distance": 0,
+        "run": 0
+      }
+    ]
+  }
+}

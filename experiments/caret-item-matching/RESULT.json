@@ -1,0 +1,5071 @@
+{
+  "schema": "caret-item-matching/replay/1",
+  "ranAt": "2026-10-25T14:17:06.570Z",
+  "corpus": {
+    "root": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui",
+    "days": 14,
+    "files": 1837,
+    "megabytes": 2781.5,
+    "pairs": 979,
+    "scanSeconds": 11,
+    "filter": "one-line human user turns (1–200 chars) paired with the last assistant text record; isMeta/isSidechain and injected notifications excluded"
+  },
+  "extraction": {
+    "milliseconds": {
+      "count": 979,
+      "p50": 0.02915000000029977,
+      "p90": 0.08816699999988487,
+      "p95": 0.12122699999963515,
+      "p99": 0.20769499999914842,
+      "max": 0.35221199999978126
+    },
+    "targetsPerReply": {
+      "count": 979,
+      "p50": 8,
+      "p90": 29,
+      "p95": 40,
+      "p99": 72,
+      "max": 112
+    },
+    "meanTargetsPerReply": 12.0561797752809,
+    "totalsByKind": {
+      "path": 2747,
+      "identifier": 5910,
+      "code-line": 1382,
+      "heading": 1764,
+      "paragraph": 0
+    },
+    "repliesWithKind": {
+      "heading": 452,
+      "path": 628,
+      "identifier": 752,
+      "code-line": 185
+    }
+  },
+  "matchingLatencyMicroseconds": {
+    "count": 30660,
+    "p50": 1.05000000075961,
+    "p90": 23.02899999995134,
+    "p95": 38.91900000053283,
+    "p99": 103.14800000014657,
+    "max": 827.5310000008176
+  },
+  "numberedItemsDisabled": {
+    "repliesWithItems": 698,
+    "turnsTheOldPreviewWouldShow": 62,
+    "shareOfPairs": 0.0633,
+    "overlap": {
+      "bothSurfaces": 10,
+      "numberedOnly": 52,
+      "referenceTargetsOnly": 58
+    }
+  },
+  "scenarios": [
+    {
+      "label": "v1-default (code-shape gate, path+identifier+code+heading, min3, basename)",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 3,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 35,
+        "2": 6,
+        "3": 15
+      },
+      "firstHitChars": {
+        "count": 56,
+        "p50": 14,
+        "p90": 41,
+        "p95": 49,
+        "p99": 101,
+        "max": 101
+      },
+      "charsIntoToken": {
+        "count": 53,
+        "p50": 5,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 53,
+        "p50": 7,
+        "p90": 33,
+        "p95": 41,
+        "p99": 54,
+        "max": 54
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 2,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 26,
+        "2": 8,
+        "3": 10
+      },
+      "falseOfferTopKinds": {
+        "identifier": 10,
+        "path": 5
+      },
+      "noCopyTurnsWithTargets": 724,
+      "falseShownTurns": 15,
+      "settleShownRatio": 0.008157211716722283,
+      "meanTargetsPerReply": 12.0561797752809
+    },
+    {
+      "label": "allow-plain-words (gate off)",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 55,
+      "firstHitRank": {
+        "1": 55,
+        "2": 5,
+        "3": 3
+      },
+      "offersAtFirstHit": {
+        "1": 36,
+        "2": 8,
+        "3": 19
+      },
+      "firstHitChars": {
+        "count": 63,
+        "p50": 12,
+        "p90": 34,
+        "p95": 43,
+        "p99": 100,
+        "max": 100
+      },
+      "charsIntoToken": {
+        "count": 57,
+        "p50": 3,
+        "p90": 3,
+        "p95": 4,
+        "p99": 5,
+        "max": 5
+      },
+      "savedChars": {
+        "count": 57,
+        "p50": 11,
+        "p90": 34,
+        "p95": 41,
+        "p99": 55,
+        "max": 55
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 2,
+        "p95": 2,
+        "p99": 3,
+        "max": 3
+      },
+      "candidateSizes": {
+        "1": 77,
+        "2": 24,
+        "3": 22
+      },
+      "falseOfferTopKinds": {
+        "identifier": 31,
+        "path": 28
+      },
+      "noCopyTurnsWithTargets": 724,
+      "falseShownTurns": 59,
+      "settleShownRatio": 0.022803114571746386,
+      "meanTargetsPerReply": 12.0561797752809
+    },
+    {
+      "label": "min2",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 3,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 35,
+        "2": 6,
+        "3": 15
+      },
+      "firstHitChars": {
+        "count": 56,
+        "p50": 14,
+        "p90": 41,
+        "p95": 49,
+        "p99": 101,
+        "max": 101
+      },
+      "charsIntoToken": {
+        "count": 53,
+        "p50": 5,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 53,
+        "p50": 8,
+        "p90": 33,
+        "p95": 41,
+        "p99": 54,
+        "max": 54
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 2,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 46,
+        "2": 13,
+        "3": 15
+      },
+      "falseOfferTopKinds": {
+        "identifier": 13,
+        "heading": 13,
+        "path": 7,
+        "code-line": 1
+      },
+      "noCopyTurnsWithTargets": 724,
+      "falseShownTurns": 34,
+      "settleShownRatio": 0.013718946978123842,
+      "meanTargetsPerReply": 12.0561797752809
+    },
+    {
+      "label": "min4",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 3,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 36,
+        "2": 6,
+        "3": 14
+      },
+      "firstHitChars": {
+        "count": 56,
+        "p50": 15,
+        "p90": 41,
+        "p95": 49,
+        "p99": 102,
+        "max": 102
+      },
+      "charsIntoToken": {
+        "count": 53,
+        "p50": 5,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 53,
+        "p50": 7,
+        "p90": 32,
+        "p95": 41,
+        "p99": 53,
+        "max": 53
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 22,
+        "2": 8,
+        "3": 7
+      },
+      "falseOfferTopKinds": {
+        "identifier": 8,
+        "path": 4
+      },
+      "noCopyTurnsWithTargets": 724,
+      "falseShownTurns": 12,
+      "settleShownRatio": 0.006859473489061921,
+      "meanTargetsPerReply": 12.0561797752809
+    },
+    {
+      "label": "min5",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 3,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 39,
+        "2": 7,
+        "3": 10
+      },
+      "firstHitChars": {
+        "count": 56,
+        "p50": 16,
+        "p90": 41,
+        "p95": 49,
+        "p99": 103,
+        "max": 103
+      },
+      "charsIntoToken": {
+        "count": 53,
+        "p50": 6,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 53,
+        "p50": 7,
+        "p90": 31,
+        "p95": 40,
+        "p99": 52,
+        "max": 52
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 22,
+        "2": 8,
+        "3": 7
+      },
+      "falseOfferTopKinds": {
+        "identifier": 8,
+        "path": 4
+      },
+      "noCopyTurnsWithTargets": 724,
+      "falseShownTurns": 12,
+      "settleShownRatio": 0.006859473489061921,
+      "meanTargetsPerReply": 12.0561797752809
+    },
+    {
+      "label": "kinds:path+identifier",
+      "pairsWithTargets": 786,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 6,
+        "p90": 22,
+        "p95": 29,
+        "p99": 49,
+        "max": 68
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 3,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 36,
+        "2": 8,
+        "3": 12
+      },
+      "firstHitChars": {
+        "count": 56,
+        "p50": 14,
+        "p90": 41,
+        "p95": 49,
+        "p99": 101,
+        "max": 101
+      },
+      "charsIntoToken": {
+        "count": 53,
+        "p50": 5,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 53,
+        "p50": 7,
+        "p90": 33,
+        "p95": 41,
+        "p99": 54,
+        "max": 54
+      },
+      "softCopyTurns": 0,
+      "softUniqueTurns": 0,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {},
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 23,
+        "2": 8,
+        "3": 8
+      },
+      "falseOfferTopKinds": {
+        "identifier": 10,
+        "path": 5
+      },
+      "noCopyTurnsWithTargets": 718,
+      "falseShownTurns": 15,
+      "settleShownRatio": 0.007230255839822024,
+      "meanTargetsPerReply": 8.842696629213483
+    },
+    {
+      "label": "kinds:+paragraph",
+      "pairsWithTargets": 973,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 13,
+        "p90": 38,
+        "p95": 52,
+        "p99": 85,
+        "max": 201
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 3,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 31,
+        "2": 8,
+        "3": 17
+      },
+      "firstHitChars": {
+        "count": 56,
+        "p50": 14,
+        "p90": 41,
+        "p95": 49,
+        "p99": 101,
+        "max": 101
+      },
+      "charsIntoToken": {
+        "count": 53,
+        "p50": 5,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 53,
+        "p50": 7,
+        "p90": 33,
+        "p95": 41,
+        "p99": 54,
+        "max": 54
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 2,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 36,
+        "2": 11,
+        "3": 10
+      },
+      "falseOfferTopKinds": {
+        "paragraph": 7,
+        "identifier": 10,
+        "path": 5
+      },
+      "noCopyTurnsWithTargets": 904,
+      "falseShownTurns": 22,
+      "settleShownRatio": 0.010567296996662959,
+      "meanTargetsPerReply": 17.562819203268642
+    },
+    {
+      "label": "no-basename-keys",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 63,
+      "ambiguousTurns": 1,
+      "uniqueIntendedTurns": 62,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 2,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 37,
+        "2": 5,
+        "3": 13
+      },
+      "firstHitChars": {
+        "count": 55,
+        "p50": 14,
+        "p90": 41,
+        "p95": 49,
+        "p99": 101,
+        "max": 101
+      },
+      "charsIntoToken": {
+        "count": 54,
+        "p50": 5,
+        "p90": 9,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 54,
+        "p50": 7,
+        "p90": 33,
+        "p95": 41,
+        "p99": 54,
+        "max": 54
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 62,
+        "p50": 0,
+        "p90": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 22,
+        "2": 6,
+        "3": 8
+      },
+      "falseOfferTopKinds": {
+        "identifier": 10,
+        "path": 4,
+        "heading": 1
+      },
+      "noCopyTurnsWithTargets": 729,
+      "falseShownTurns": 15,
+      "settleShownRatio": 0.006674082313681869,
+      "meanTargetsPerReply": 12.0561797752809
+    },
+    {
+      "label": "cjk-suffix-4",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 52,
+      "firstHitRank": {
+        "1": 52,
+        "2": 3,
+        "3": 1
+      },
+      "offersAtFirstHit": {
+        "1": 35,
+        "2": 6,
+        "3": 15
+      },
+      "firstHitChars": {
+        "count": 56,
+        "p50": 14,
+        "p90": 41,
+        "p95": 49,
+        "p99": 101,
+        "max": 101
+      },
+      "charsIntoToken": {
+        "count": 53,
+        "p50": 5,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 53,
+        "p50": 7,
+        "p90": 33,
+        "p95": 41,
+        "p99": 54,
+        "max": 54
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 2,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 26,
+        "2": 8,
+        "3": 10
+      },
+      "falseOfferTopKinds": {
+        "identifier": 10,
+        "path": 5
+      },
+      "noCopyTurnsWithTargets": 724,
+      "falseShownTurns": 15,
+      "settleShownRatio": 0.008157211716722283,
+      "meanTargetsPerReply": 12.0561797752809
+    },
+    {
+      "label": "max-candidates-5",
+      "pairsWithTargets": 793,
+      "targetsPerReply": {
+        "count": 979,
+        "p50": 8,
+        "p90": 29,
+        "p95": 40,
+        "p99": 72,
+        "max": 112
+      },
+      "copyableTurns": 68,
+      "ambiguousTurns": 2,
+      "uniqueIntendedTurns": 66,
+      "firstHitTop1": 51,
+      "firstHitRank": {
+        "1": 51,
+        "2": 3,
+        "3": 1,
+        "4": 2
+      },
+      "offersAtFirstHit": {
+        "1": 34,
+        "2": 6,
+        "3": 6,
+        "4": 11
+      },
+      "firstHitChars": {
+        "count": 57,
+        "p50": 14,
+        "p90": 41,
+        "p95": 49,
+        "p99": 101,
+        "max": 101
+      },
+      "charsIntoToken": {
+        "count": 54,
+        "p50": 5,
+        "p90": 8,
+        "p95": 11,
+        "p99": 13,
+        "max": 13
+      },
+      "savedChars": {
+        "count": 54,
+        "p50": 7,
+        "p90": 33,
+        "p95": 41,
+        "p99": 54,
+        "max": 54
+      },
+      "softCopyTurns": 1,
+      "softUniqueTurns": 1,
+      "softFirstHitTop1": 0,
+      "softFirstHitRank": {
+        "2": 1
+      },
+      "top1Changes": {
+        "count": 66,
+        "p50": 0,
+        "p90": 1,
+        "p95": 2,
+        "p99": 2,
+        "max": 2
+      },
+      "candidateSizes": {
+        "1": 26,
+        "2": 8,
+        "3": 5,
+        "4": 5
+      },
+      "falseOfferTopKinds": {
+        "identifier": 10,
+        "path": 5
+      },
+      "noCopyTurnsWithTargets": 724,
+      "falseShownTurns": 15,
+      "settleShownRatio": 0.008157211716722283,
+      "meanTargetsPerReply": 12.0561797752809
+    }
+  ],
+  "examples": {
+    "v1-default (code-shape gate, path+identifier+code+heading, min3, basename)": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "还没有 GOA"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        },
+        {
+          "utterance": "重启 quay-fleet，执行 systemctl --user restart quay-fleet；P1 和部署就绪任务先不动，等它们合入再说",
+          "intended": "quay-fleet",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "重启 quay-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "基于上面挑选的音频样本，验证各 TSE 实现。",
+          "firstShownPrefix": "基于上面挑选的音频样本，验证各 TSE",
+          "offers": [
+            "TSE/ASR"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "换一个带系统音色的 TTS 模型.",
+          "firstShownPrefix": "换一个带系统音色的 TTS",
+          "offers": [
+            "TTS_NOT_CONFIGURED",
+            "tts_error",
+            "tts error announce-0 TTS_NOT_CONFIGURED: the TTS service needs a voice id"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "code-line"
+          ]
+        },
+        {
+          "utterance": "再次检查云端 TTS 状态。",
+          "firstShownPrefix": "再次检查云端 TTS",
+          "offers": [
+            "TTS_TIMEOUT"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "nvidia/magpie_tts_multilingual_357m",
+            "m1el/magpie-tts-multilingual-357m-gguf",
+            "//github.com/soniqo/speech-swift/blob/f7c017abfd7e49eb976cbe6fdbc2985e3312098b/docs/inference/magpie-tts.md"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "好了，我们再次进入了 Live Voice mode。这是第一段。",
+          "firstShownPrefix": "好了，我们再次进入了 Live Voice",
+          "offers": [
+            "VOICE_REALTIME_CLOSING_TURN"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+          "firstShownPrefix": "就是现在的 Live Voice",
+          "offers": [
+            "voice-realtime-closing-turn",
+            "voice-realtime-prefix-history-pruning"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "进一步检查，当前 Live Voice 在页面上显示的各种形态的信息太多太杂，而缺乏统一的模式，增加了用户负担和出错的几率。请检查和讨论如何改进。",
+          "firstShownPrefix": "进一步检查，当前 Live Voice",
+          "offers": [
+            "voiceClosedUnshown"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOA",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLA",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "allow-plain-words (gate off)": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "还没有 GOA"
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "firstHitChars": 17,
+          "prefixAtFirstHit": "现在的预期是什么？应当看到 arc"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 30,
+          "prefixAtFirstHit": "提交（feat(architecture): UML cla"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "建议一条 arc"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 23,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 pla"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "和 qua"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 23,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；sel"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "关于本会话实现的选择 transcript 时显示的 quote chip ：我发现当编辑框中已有文本时，选择 transcript 时仍显示 quote chip，但会与已有文本重叠，导致无法操作。请检查，并建议改进方案。",
+          "firstShownPrefix": "关于本会话实现的选择 transcript 时显示的 quote chip",
+          "offers": [
+            "chipStrip"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "应该是在输入框当前光标处插入这一 chip 。请进一步讨论。",
+          "firstShownPrefix": "应该是在输入框当前光标处插入这一 chip",
+          "offers": [
+            "chip-row-clearance"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "当然，为了支持这一功能，如何更实时地访问 Quay Task 和 goal 的状态是一个问题。请检查 Quay 是否提供了合适的接口。如有必要，可用用 SendMessage 和 quay 项目会话  `quay 的 qual 与 goal 状态接口` 讨论。",
+          "firstShownPrefix": "当然，为了支持这一功能，如何更实时地访问 Quay",
+          "offers": [
+            "QuayPanel.tsx"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "你们可以讨论，必要的话可以要求 quay 那边建任务。",
+          "firstShownPrefix": "你们可以讨论，必要的话可以要求 quay",
+          "offers": [
+            ".quay/task-status-events.jsonl",
+            "Quay 现有接口"
+          ],
+          "kinds": [
+            "path",
+            "heading"
+          ]
+        },
+        {
+          "utterance": "认可解析顺序和任务拆分；创建解析器任务并让 quay 立 Q1–Q3；anchor 现在迁",
+          "firstShownPrefix": "认可解析顺序和任务拆分；创建解析器任务并让 quay",
+          "offers": [
+            "quay.module.ts",
+            "quay-process.ts",
+            "quay.service.ts"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "最近本会话创建的任务都已执行了吗？都实际可用了吗？为什么我点击本会话 architect tab ，显示的图的尺寸和缩放还是不符合预期？",
+          "firstShownPrefix": "最近本会话创建的任务都已执行了吗？都实际可用了吗？为什么我点击本会话 architect",
+          "offers": [
+            "src/modules/architecture/elementRelationFilter.ts"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "goal-driver 不是应该创建 task 吗？",
+          "firstShownPrefix": "goal-driver 不是应该创建 task",
+          "offers": [
+            "task_list"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "重启 server 。",
+          "firstShownPrefix": "重启 server",
+          "offers": [
+            "server/index.ts",
+            "dist-server/server/index.js"
+          ],
+          "kinds": [
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "现在可以看到 architecture tab 了，但是有问题：这个图里所有箭头都一样，看不出层级。",
+          "firstShownPrefix": "现在可以看到 architecture",
+          "offers": [
+            "architectureTab.test.tsx",
+            "ArchitecturePanel"
+          ],
+          "kinds": [
+            "path",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "现在可以看到 architecture tab 了，但是有问题：这个图里所有箭头都一样，看不出继承等 UML 中的其它关系。请检查。",
+          "firstShownPrefix": "现在可以看到 architecture",
+          "offers": [
+            "architectureTab.test.tsx",
+            "ArchitecturePanel"
+          ],
+          "kinds": [
+            "path",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "提交；build + 重启 server 。",
+          "firstShownPrefix": "提交；build + 重启 server",
+          "offers": [
+            "server/modules/architecture/generator.ts"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "需要 npm run build（client + server）+ 重启 server",
+          "firstShownPrefix": "需要 npm run build（client + server",
+          "offers": [
+            "dist-server/server/modules/architecture/seed-extraction.js"
+          ],
+          "kinds": [
+            "path"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOA",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "prefix": "现在的预期是什么？应当看到 arc",
+          "intended": "ARCHITECTURE_TAB",
+          "offers": [
+            ".archguard/query/93e0a992/arch-index.json",
+            "ArchGuard",
+            "ARCHITECTURE_TAB"
+          ]
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "prefix": "建议一条 arc",
+          "intended": "architecture-diagram-zoom-fit",
+          "offers": [
+            "arch-dim",
+            "architecture-diagram-zoom-fit"
+          ]
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "prefix": "按 A / B / C 建任务（并先向 pla",
+          "intended": "plantuml-js",
+          "offers": [
+            "plantuml-js",
+            "PlantUML"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 qua",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 qua",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sid",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "min2": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 6,
+          "prefixAtFirstHit": "还没有 GO"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        },
+        {
+          "utterance": "重启 quay-fleet，执行 systemctl --user restart quay-fleet；P1 和部署就绪任务先不动，等它们合入再说",
+          "intended": "quay-fleet",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "重启 quay-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "同意：D 单独做，A 先落地；C 不吸收，保持原样；按你说的写 D，契约测试为核心，AC 要求新增来源只改数据、三个 prop 查不到",
+          "firstShownPrefix": "同意：D 单独做，A 先落地；C 不吸收，保持原样；按你说的写 D，契约测试为核心，AC",
+          "offers": [
+            "acceptSuggestion",
+            "acceptSuggestionChip",
+            "acceptQuotedSuggestion"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "同意，方案 A 和 SW P0/P1 一起做，补上两条测试；方案 B 先不动",
+          "firstShownPrefix": "同意，方案",
+          "offers": [
+            "方案 A（推荐，纯客户端）——等 socket 有机会连上再决定要不要读",
+            "方案 B（服务端语义扩展，可选）——区分「不知道这个会话」与「知道但还没活动」"
+          ],
+          "kinds": [
+            "heading",
+            "heading"
+          ]
+        },
+        {
+          "utterance": "检查代码，讨论改进方案。",
+          "firstShownPrefix": "检查代码",
+          "offers": [
+            "代码定位"
+          ],
+          "kinds": [
+            "heading"
+          ]
+        },
+        {
+          "utterance": "写一份简短 design note（不变量 + 状态机 + 事件）；为阶段 0 + 阶段 1 创建任务",
+          "firstShownPrefix": "写一份简短 design note（不变量 + 状态机 + 事件）；为阶段",
+          "offers": [
+            "阶段 3：清理",
+            "阶段 1：止血（不改协议）",
+            "阶段 0：先把问题变成可判定的"
+          ],
+          "kinds": [
+            "heading",
+            "heading",
+            "heading"
+          ]
+        },
+        {
+          "utterance": "检查进展；进一步检查待改善的封装。",
+          "firstShownPrefix": "检查进展；进一步检查待改善的封装",
+          "offers": [
+            "封装大盘收官"
+          ],
+          "kinds": [
+            "heading"
+          ]
+        },
+        {
+          "utterance": "做 verbatim 内容护栏（用它把这次 30 条重跑一遍，看能不能把 21/30 拉回 25+）",
+          "firstShownPrefix": "做 verbatim 内容护栏（用它把这次",
+          "offers": [
+            "这次怎么重切"
+          ],
+          "kinds": [
+            "heading"
+          ]
+        },
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "P0 已实际接线可用了吗？",
+          "firstShownPrefix": "P0",
+          "offers": [
+            "P0_ARTIFACT_DIR"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "基于上面挑选的音频样本，验证各 TSE 实现。",
+          "firstShownPrefix": "基于上面挑选的音频样本，验证各 TSE",
+          "offers": [
+            "TSE/ASR"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "检查上面这次语音生成的耗时。",
+          "firstShownPrefix": "检查上面这次语音生成的耗时",
+          "offers": [
+            "耗时:  首次含模型加载 1.92 s（进程内只加载一次）"
+          ],
+          "kinds": [
+            "code-line"
+          ]
+        },
+        {
+          "utterance": "激活 AC；commit T1（announce）。",
+          "firstShownPrefix": "激活 AC",
+          "offers": [
+            "AC-404/407"
+          ],
+          "kinds": [
+            "path"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GO",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CL",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "min4": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "还没有 GOAL"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        },
+        {
+          "utterance": "重启 quay-fleet，执行 systemctl --user restart quay-fleet；P1 和部署就绪任务先不动，等它们合入再说",
+          "intended": "quay-fleet",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "重启 quay-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "nvidia/magpie_tts_multilingual_357m",
+            "m1el/magpie-tts-multilingual-357m-gguf",
+            "//github.com/soniqo/speech-swift/blob/f7c017abfd7e49eb976cbe6fdbc2985e3312098b/docs/inference/magpie-tts.md"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "好了，我们再次进入了 Live Voice mode。这是第一段。",
+          "firstShownPrefix": "好了，我们再次进入了 Live Voice",
+          "offers": [
+            "VOICE_REALTIME_CLOSING_TURN"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+          "firstShownPrefix": "就是现在的 Live Voice",
+          "offers": [
+            "voice-realtime-closing-turn",
+            "voice-realtime-prefix-history-pruning"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "进一步检查，当前 Live Voice 在页面上显示的各种形态的信息太多太杂，而缺乏统一的模式，增加了用户负担和出错的几率。请检查和讨论如何改进。",
+          "firstShownPrefix": "进一步检查，当前 Live Voice",
+          "offers": [
+            "voiceClosedUnshown"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "请先给当前已经完成的第一次真实 Realtime 四臂回放的可核实结果表（A、TEN、Silero、WebRTC）及基线对比，注明截取窗口和工具调用内容提取失败/上游错误等缺口；不要为得出初步结果等待重复扫面。当前重复实验可继续由现有程序执行，但不要再额外启动大规模花费。请确认最窄新增任务 id 和状态。",
+          "firstShownPrefix": "请先给当前已经完成的第一次真实 Realtime 四臂回放的可核实结果表（A、TEN、Silero",
+          "offers": [
+            "silero/ten"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "buildSha",
+            "dist-server/build-info.json"
+          ],
+          "kinds": [
+            "identifier",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "buildSha"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOAL",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLAU",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "min5": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 6,
+          "prefixAtFirstHit": "chat-r"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 10,
+          "prefixAtFirstHit": "还没有 GOAL-0"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "和 quay-f"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 26,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-i"
+        },
+        {
+          "utterance": "重启 quay-fleet，执行 systemctl --user restart quay-fleet；P1 和部署就绪任务先不动，等它们合入再说",
+          "intended": "quay-fleet",
+          "firstHitChars": 9,
+          "prefixAtFirstHit": "重启 quay-f"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "nvidia/magpie_tts_multilingual_357m",
+            "m1el/magpie-tts-multilingual-357m-gguf",
+            "//github.com/soniqo/speech-swift/blob/f7c017abfd7e49eb976cbe6fdbc2985e3312098b/docs/inference/magpie-tts.md"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "好了，我们再次进入了 Live Voice mode。这是第一段。",
+          "firstShownPrefix": "好了，我们再次进入了 Live Voice",
+          "offers": [
+            "VOICE_REALTIME_CLOSING_TURN"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+          "firstShownPrefix": "就是现在的 Live Voice",
+          "offers": [
+            "voice-realtime-closing-turn",
+            "voice-realtime-prefix-history-pruning"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "进一步检查，当前 Live Voice 在页面上显示的各种形态的信息太多太杂，而缺乏统一的模式，增加了用户负担和出错的几率。请检查和讨论如何改进。",
+          "firstShownPrefix": "进一步检查，当前 Live Voice",
+          "offers": [
+            "voiceClosedUnshown"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "请先给当前已经完成的第一次真实 Realtime 四臂回放的可核实结果表（A、TEN、Silero、WebRTC）及基线对比，注明截取窗口和工具调用内容提取失败/上游错误等缺口；不要为得出初步结果等待重复扫面。当前重复实验可继续由现有程序执行，但不要再额外启动大规模花费。请确认最窄新增任务 id 和状态。",
+          "firstShownPrefix": "请先给当前已经完成的第一次真实 Realtime 四臂回放的可核实结果表（A、TEN、Silero",
+          "offers": [
+            "silero/ten"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "buildSha",
+            "dist-server/build-info.json"
+          ],
+          "kinds": [
+            "identifier",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "buildSha"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-r",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-f",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-f",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLAUD",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "kinds:path+identifier": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "还没有 GOA"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        },
+        {
+          "utterance": "重启 quay-fleet，执行 systemctl --user restart quay-fleet；P1 和部署就绪任务先不动，等它们合入再说",
+          "intended": "quay-fleet",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "重启 quay-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "基于上面挑选的音频样本，验证各 TSE 实现。",
+          "firstShownPrefix": "基于上面挑选的音频样本，验证各 TSE",
+          "offers": [
+            "TSE/ASR"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "换一个带系统音色的 TTS 模型.",
+          "firstShownPrefix": "换一个带系统音色的 TTS",
+          "offers": [
+            "TTS_NOT_CONFIGURED",
+            "tts_error"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "再次检查云端 TTS 状态。",
+          "firstShownPrefix": "再次检查云端 TTS",
+          "offers": [
+            "TTS_TIMEOUT"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "nvidia/magpie_tts_multilingual_357m",
+            "m1el/magpie-tts-multilingual-357m-gguf",
+            "//github.com/soniqo/speech-swift/blob/f7c017abfd7e49eb976cbe6fdbc2985e3312098b/docs/inference/magpie-tts.md"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "好了，我们再次进入了 Live Voice mode。这是第一段。",
+          "firstShownPrefix": "好了，我们再次进入了 Live Voice",
+          "offers": [
+            "VOICE_REALTIME_CLOSING_TURN"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+          "firstShownPrefix": "就是现在的 Live Voice",
+          "offers": [
+            "voice-realtime-closing-turn",
+            "voice-realtime-prefix-history-pruning"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "进一步检查，当前 Live Voice 在页面上显示的各种形态的信息太多太杂，而缺乏统一的模式，增加了用户负担和出错的几率。请检查和讨论如何改进。",
+          "firstShownPrefix": "进一步检查，当前 Live Voice",
+          "offers": [
+            "voiceClosedUnshown"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOA",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLA",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "kinds:+paragraph": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "还没有 GOA"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        },
+        {
+          "utterance": "重启 quay-fleet，执行 systemctl --user restart quay-fleet；P1 和部署就绪任务先不动，等它们合入再说",
+          "intended": "quay-fleet",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "重启 quay-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "做这两个小探针。",
+          "firstShownPrefix": "做这两个小探针",
+          "offers": [
+            "**两个小探针（这次没做）**"
+          ],
+          "kinds": [
+            "paragraph"
+          ]
+        },
+        {
+          "utterance": "搜索本项目过去 2 周曾提到过的典型 voice input / live voice 使用量估计，参考我过去几天的实际使用情况（实际上仍在开发过程中，所以每天使用总量可能比预期偏少），估算典型情况下每日 qwen3.8-omni-flash / qwen3.8-omni-flash-realtime 每日的使用量和费用。",
+          "firstShownPrefix": "搜索本项目过去 2 周曾提到过的典型 voice input / live voice 使用量估计，参考我过去几天的实际使用情况（实际上仍在开发过程中，所以每天使用总量可能比预期偏少），估算典型情况下每日 qwen3.8-omni-flash",
+          "offers": [
+            "`qwen3.8-omni-flash` 本身**没有开放权重**（API-only），所以不能自托管；能自托管的是上一代 Qwen3-Omni 或 MiniCPM-o。"
+          ],
+          "kinds": [
+            "paragraph"
+          ]
+        },
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "基于上面挑选的音频样本，验证各 TSE 实现。",
+          "firstShownPrefix": "基于上面挑选的音频样本，验证各 TSE",
+          "offers": [
+            "TSE/ASR"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "800ms ？不是改成 1500ms 了吗？检查。",
+          "firstShownPrefix": "800ms",
+          "offers": [
+            "800ms 静音一到，上游就认为这句话结束了，于是出现："
+          ],
+          "kinds": [
+            "paragraph"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "换一个带系统音色的 TTS 模型.",
+          "firstShownPrefix": "换一个带系统音色的 TTS",
+          "offers": [
+            "TTS_NOT_CONFIGURED",
+            "tts_error",
+            "tts error announce-0 TTS_NOT_CONFIGURED: the TTS service needs a voice id"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "code-line"
+          ]
+        },
+        {
+          "utterance": "再次检查云端 TTS 状态。",
+          "firstShownPrefix": "再次检查云端 TTS",
+          "offers": [
+            "TTS_TIMEOUT"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "nvidia/magpie_tts_multilingual_357m",
+            "m1el/magpie-tts-multilingual-357m-gguf",
+            "//github.com/soniqo/speech-swift/blob/f7c017abfd7e49eb976cbe6fdbc2985e3312098b/docs/inference/magpie-tts.md"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool",
+            "**Phase 1 落地的实况**"
+          ],
+          "kinds": [
+            "path",
+            "paragraph"
+          ]
+        },
+        {
+          "utterance": "我可以给你一个 token/key 。给我相应的 javascript code ，我在我的浏览器 console 中跑给你。",
+          "firstShownPrefix": "我可以给你一个 token/key 。给我相应的 javascript code ，我在我的浏览器",
+          "offers": [
+            "浏览器已经能打开运行中的 CloudCLI（`http://localhost:3001`，标题 \"CloudCLI UI\"），但它停在登录页，提示 \"Your session expired. Please log in again.\"——这是个自托管单用户系统，实例里已有账号 `yale`（和一个 probe 账号 `observer-…`），而我这边没有任何可用凭据。"
+          ],
+          "kinds": [
+            "paragraph"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOA",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLA",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "no-basename-keys": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "还没有 GOA"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "为 「桥接函数 + 渲染器接入」里不依赖 plantuml-js 发布的部分（比如后端确认 JSON 邻域 schema 稳定、前端把 cytoscape 组件的 props 结构整理成 plantuml 渲染器的接口）创建任务。",
+          "intended": "plantuml-js",
+          "firstHitChars": 30,
+          "prefixAtFirstHit": "为 「桥接函数 + 渲染器接入」里不依赖 plantuml-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "基于上面挑选的音频样本，验证各 TSE 实现。",
+          "firstShownPrefix": "基于上面挑选的音频样本，验证各 TSE",
+          "offers": [
+            "TSE/ASR"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "现在就按上面的切分，把 GOAL-0XX + 5 条 AC + 4 个 task 实际落进 goals/ 和 tasks/。",
+          "firstShownPrefix": "现在就按上面的切分，把 GOAL-0XX + 5 条 AC + 4 个 task 实际落进 goals/",
+          "offers": [
+            "goals/tasks",
+            "goals/AC-0XX-",
+            "goals/GOAL-0XX-"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "换一个带系统音色的 TTS 模型.",
+          "firstShownPrefix": "换一个带系统音色的 TTS",
+          "offers": [
+            "TTS_NOT_CONFIGURED",
+            "tts_error",
+            "tts error announce-0 TTS_NOT_CONFIGURED: the TTS service needs a voice id"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "code-line"
+          ]
+        },
+        {
+          "utterance": "再次检查云端 TTS 状态。",
+          "firstShownPrefix": "再次检查云端 TTS",
+          "offers": [
+            "TTS_TIMEOUT"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "Magpie TTS 357M 是什么、怎么跑"
+          ],
+          "kinds": [
+            "heading"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "好了，我们再次进入了 Live Voice mode。这是第一段。",
+          "firstShownPrefix": "好了，我们再次进入了 Live Voice",
+          "offers": [
+            "VOICE_REALTIME_CLOSING_TURN"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+          "firstShownPrefix": "就是现在的 Live Voice",
+          "offers": [
+            "voice-realtime-closing-turn",
+            "voice-realtime-prefix-history-pruning"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "进一步检查，当前 Live Voice 在页面上显示的各种形态的信息太多太杂，而缺乏统一的模式，增加了用户负担和出错的几率。请检查和讨论如何改进。",
+          "firstShownPrefix": "进一步检查，当前 Live Voice",
+          "offers": [
+            "voiceClosedUnshown"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOA",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLA",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "列出 goals/GOAL-037-*/AC-326~329 的合并冲突 的具体内容并建议处理办法。我来确认。",
+          "intended": "GOAL-037/AC-326~329",
+          "key": "GOAL-037/AC-326~329",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "goals/GOAL-037-",
+            "AC-326/327/328/329-",
+            "GOAL-037/AC-326~329"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "cjk-suffix-4": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "还没有 GOA"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        },
+        {
+          "utterance": "重启 quay-fleet，执行 systemctl --user restart quay-fleet；P1 和部署就绪任务先不动，等它们合入再说",
+          "intended": "quay-fleet",
+          "firstHitChars": 8,
+          "prefixAtFirstHit": "重启 quay-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "基于上面挑选的音频样本，验证各 TSE 实现。",
+          "firstShownPrefix": "基于上面挑选的音频样本，验证各 TSE",
+          "offers": [
+            "TSE/ASR"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "换一个带系统音色的 TTS 模型.",
+          "firstShownPrefix": "换一个带系统音色的 TTS",
+          "offers": [
+            "TTS_NOT_CONFIGURED",
+            "tts_error",
+            "tts error announce-0 TTS_NOT_CONFIGURED: the TTS service needs a voice id"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "code-line"
+          ]
+        },
+        {
+          "utterance": "再次检查云端 TTS 状态。",
+          "firstShownPrefix": "再次检查云端 TTS",
+          "offers": [
+            "TTS_TIMEOUT"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "nvidia/magpie_tts_multilingual_357m",
+            "m1el/magpie-tts-multilingual-357m-gguf",
+            "//github.com/soniqo/speech-swift/blob/f7c017abfd7e49eb976cbe6fdbc2985e3312098b/docs/inference/magpie-tts.md"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "好了，我们再次进入了 Live Voice mode。这是第一段。",
+          "firstShownPrefix": "好了，我们再次进入了 Live Voice",
+          "offers": [
+            "VOICE_REALTIME_CLOSING_TURN"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+          "firstShownPrefix": "就是现在的 Live Voice",
+          "offers": [
+            "voice-realtime-closing-turn",
+            "voice-realtime-prefix-history-pruning"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "进一步检查，当前 Live Voice 在页面上显示的各种形态的信息太多太杂，而缺乏统一的模式，增加了用户负担和出错的几率。请检查和讨论如何改进。",
+          "firstShownPrefix": "进一步检查，当前 Live Voice",
+          "offers": [
+            "voiceClosedUnshown"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOA",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLA",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode"
+          ]
+        },
+        {
+          "utterance": "现在这个 \"silence_duration_ms\": 1500 有几个地方会配置和使用？有没有重复和歧义？",
+          "prefix": "现在这个 \"silence_",
+          "intended": "silence_duration_ms",
+          "offers": [
+            "silenceMs",
+            "silence_duration_ms",
+            "\"silence_duration_ms\": 1500"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "key": "ArchGuard",
+          "queryAtToken": ".archguard",
+          "targetsOfKind": [
+            "AppTab",
+            "BASE_TABS",
+            "BROWSER_TAB",
+            "TASKS_TAB",
+            "QUAY_TAB",
+            "ARCHITECTURE_TAB",
+            "shouldShowArchitectureTab",
+            "activeTab",
+            "ArchGuard",
+            "maxEdges"
+          ]
+        },
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    },
+    "max-candidates-5": {
+      "hit": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "intended": "chat-reply-items-addressable",
+          "firstHitChars": 5,
+          "prefixAtFirstHit": "chat-"
+        },
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "intended": "ArchGuard",
+          "firstHitChars": 34,
+          "prefixAtFirstHit": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archg"
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "intended": "GOAL-049",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "还没有 GOA"
+        },
+        {
+          "utterance": "提交（feat(architecture): UML class-diagram arrow semantics）+ build + 重启服务。",
+          "intended": "class-diagram",
+          "firstHitChars": 33,
+          "prefixAtFirstHit": "提交（feat(architecture): UML class-"
+        },
+        {
+          "utterance": "建议一条 architecture-diagram-zoom-fit（feature，Touches：PlantUmlGraph.tsx、新建 svgViewport.ts、测试、i18n）。",
+          "intended": "architecture-diagram-zoom-fit",
+          "firstHitChars": 18,
+          "prefixAtFirstHit": "建议一条 architecture-"
+        },
+        {
+          "utterance": "按 A / B / C 建任务（并先向 plantuml-js 发那个成员上限选项请求）；第 5 条的搜索结果行和 Undo 并进\"手机抽屉与画布外观\"那个任务（必要的话重派任务）。",
+          "intended": "plantuml-js",
+          "firstHitChars": 29,
+          "prefixAtFirstHit": "按 A / B / C 建任务（并先向 plantuml-"
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "intended": "quay-fleet",
+          "firstHitChars": 7,
+          "prefixAtFirstHit": "和 quay-"
+        },
+        {
+          "utterance": "提交吧，两个都推到 author 分支；self-install 你来，重启我来；",
+          "intended": "self-install",
+          "firstHitChars": 25,
+          "prefixAtFirstHit": "提交吧，两个都推到 author 分支；self-"
+        }
+      ],
+      "falseOffer": [
+        {
+          "utterance": "b8360029 这组样本不要用了。这是一组信噪比极低的样本，不是识别的典型工作场景。",
+          "firstShownPrefix": "b8360029",
+          "offers": [
+            "b8360029-3",
+            "b8360029-6",
+            "b8360029-5",
+            "out/audio-fixed/b8360029-6.wav",
+            "out/audio-fixed/b8360029-3-4.wav"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "identifier",
+            "path",
+            "path"
+          ]
+        },
+        {
+          "utterance": "基于上面挑选的音频样本，验证各 TSE 实现。",
+          "firstShownPrefix": "基于上面挑选的音频样本，验证各 TSE",
+          "offers": [
+            "TSE/ASR"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "启用本地 Kokoro 。重启服务。",
+          "firstShownPrefix": "启用本地 Kokoro",
+          "offers": [
+            "~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "换一个带系统音色的 TTS 模型.",
+          "firstShownPrefix": "换一个带系统音色的 TTS",
+          "offers": [
+            "TTS_NOT_CONFIGURED",
+            "tts_error",
+            "tts error announce-0 TTS_NOT_CONFIGURED: the TTS service needs a voice id"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier",
+            "code-line"
+          ]
+        },
+        {
+          "utterance": "再次检查云端 TTS 状态。",
+          "firstShownPrefix": "再次检查云端 TTS",
+          "offers": [
+            "TTS_TIMEOUT"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "原型 Magpie：本机拉 GGUF、跑一句中文短句，先看质量与 CPU 延迟。",
+          "firstShownPrefix": "原型 Magpie",
+          "offers": [
+            "nvidia/magpie_tts_multilingual_357m",
+            "m1el/magpie-tts-multilingual-357m-gguf",
+            "//github.com/soniqo/speech-swift/blob/f7c017abfd7e49eb976cbe6fdbc2985e3312098b/docs/inference/magpie-tts.md",
+            "Magpie TTS 357M 是什么、怎么跑"
+          ],
+          "kinds": [
+            "path",
+            "path",
+            "path",
+            "heading"
+          ]
+        },
+        {
+          "utterance": "Build+安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Phase 1 已接线可用了吗？",
+          "firstShownPrefix": "Phase",
+          "offers": [
+            "phase/tool"
+          ],
+          "kinds": [
+            "path"
+          ]
+        },
+        {
+          "utterance": "好了，我们再次进入了 Live Voice mode。这是第一段。",
+          "firstShownPrefix": "好了，我们再次进入了 Live Voice",
+          "offers": [
+            "VOICE_REALTIME_CLOSING_TURN"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+          "firstShownPrefix": "就是现在的 Live Voice",
+          "offers": [
+            "voice-realtime-closing-turn",
+            "voice-realtime-prefix-history-pruning"
+          ],
+          "kinds": [
+            "identifier",
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "Build + 安全重启。",
+          "firstShownPrefix": "Build",
+          "offers": [
+            "build-info"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        },
+        {
+          "utterance": "进一步检查，当前 Live Voice 在页面上显示的各种形态的信息太多太杂，而缺乏统一的模式，增加了用户负担和出错的几率。请检查和讨论如何改进。",
+          "firstShownPrefix": "进一步检查，当前 Live Voice",
+          "offers": [
+            "voiceClosedUnshown"
+          ],
+          "kinds": [
+            "identifier"
+          ]
+        }
+      ],
+      "ambiguous": [
+        {
+          "utterance": "chat-reply-items-addressable 是哪个会话创建的？",
+          "prefix": "chat-",
+          "intended": "chat-reply-items-addressable",
+          "offers": [
+            "chat-reply-items-addressable",
+            "src/modules/chat/ChatInterface.tsx",
+            "tasks/chat-reply-items-addressable.md",
+            "src/modules/chat/utils/transcript/replyItems.ts",
+            "src/modules/chat/composer/ReplyReferencePreview.tsx"
+          ]
+        },
+        {
+          "utterance": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archguard ？",
+          "prefix": "需要显示的架构图文件是临时生成的，为什么需要浏览器访问 .archg",
+          "intended": "ArchGuard",
+          "offers": [
+            ".archguard/query/manifest.json",
+            ".archguard/output/overview/package.mmd",
+            "archguard_get_change_context",
+            "ArchGuard"
+          ]
+        },
+        {
+          "utterance": "还没有 GOAL-049 的任务。为什么？",
+          "prefix": "还没有 GOA",
+          "intended": "GOAL-049",
+          "offers": [
+            "GOAL-049",
+            "goal_get",
+            "goal-cli",
+            "goal-driver"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "和 quay-fleet 的会话讨论它的发布和安装问题。",
+          "prefix": "和 quay-",
+          "intended": "quay-fleet",
+          "offers": [
+            "quay-fleet",
+            "QUAY_FLEET_BIN"
+          ]
+        },
+        {
+          "utterance": "先提交 SidebarSessionItem.tsx 这处改动；ui-scenario 的 DoD 缺口另开单跟踪，窄屏截图也补上",
+          "prefix": "先提交 Sideb",
+          "intended": "SidebarSessionItem.tsx",
+          "offers": [
+            "SidebarProjectItem",
+            "sidebarRowProps",
+            "SidebarSessionItem.tsx"
+          ]
+        },
+        {
+          "utterance": "为最小可行版（默认 off、你在 .env 开 CLAUDE_RESIDENT_RESTORE=on，验证效果后再翻默认值）创建任务。",
+          "prefix": "为最小可行版（默认 off、你在 .env 开 CLA",
+          "intended": "CLAUDE_RESIDENT_RESTORE",
+          "offers": [
+            "CLAUDE_RESIDENT_RESTORE",
+            "CLAUDE_SESSION_SCOPE_SWEEP",
+            "CLAUDE_RESIDENT_RESTORE_MAX",
+            "CLAUDE_RESIDENT_RESTORE_MAX_AGE_MS",
+            "claude-session-synchronizer.provider.ts"
+          ]
+        },
+        {
+          "utterance": "把 #1（给 ClaudeResidentHostDriver 做扩展点重构的立项 + 结构判据）写成一条 quay task",
+          "prefix": "把 #1（给 Claud",
+          "intended": "ClaudeResidentHostDriver",
+          "offers": [
+            "ClaudeResidentHostDriver",
+            "claude-runtime.provider.ts",
+            "claude/codex/cursor/opencode",
+            "claude-session-scope.service.ts",
+            "server/modules/providers/list/claude/claude-host-driver.provider.ts"
+          ]
+        }
+      ],
+      "missed": [
+        {
+          "utterance": "现在的预期是什么？应当看到 architecture tab ？我没有看到。",
+          "intended": "ARCHITECTURE_TAB",
+          "key": "ARCHITECTURE_TAB",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "fan-in",
+            "AppTab",
+            "WorkspaceTabs",
+            "ARCHITECTURE_TAB",
+            "hasArchguardCache",
+            "mcp-overview-tools",
+            "resolveProjectPath",
+            "readSessionHistory",
+            "generateGraph",
+            "ChatComposer"
+          ]
+        },
+        {
+          "utterance": "在会话`输入框历史导航与输入建议`中打开 architecture tab ，如果隐藏 functions ，就只剩 2 个 class 了。这显然也是封装的不足。请检查。",
+          "intended": "src/modules/architecture",
+          "key": "architecture",
+          "queryAtToken": "architecture",
+          "targetsOfKind": [
+            "voice/projects",
+            "src/modules/architecture",
+            "ArchitecturePanel.tsx",
+            "read/write",
+            "readStoredScope/writeStoredScope/readStoredDetail/.../readStoredFilter/writeStoredFilter/readStoredTouchHintDismissed",
+            "isElementKind/isRelationPreset",
+            "addHidden/EMPTY_HIDDEN/truncationReading",
+            "PlantUmlGraph.tsx",
+            "DOM/cytoscape",
+            "adaptiveGrouping/elkAspectEngine/readableZoom/svgViewport/explosionLod/hierarchyIndex"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 。Gemini 2.5 / 3.5 Flash Lite",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "参考 scope-omni-relay 使用 context 的方法，再测一下 Gemini 2.5 / 3.5 Flash Lite 。",
+          "intended": "honors.prompt/context",
+          "key": "context",
+          "queryAtToken": "context",
+          "targetsOfKind": [
+            "shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts",
+            "src/modules/chat/hooks/useVoiceInput.ts",
+            "experiments/voice-omni-vs-realtime/RESULT.md",
+            "19/24",
+            "17/24",
+            "honors.prompt/context",
+            "23/24",
+            "dashscope-omni-relay.asr-provider.ts"
+          ]
+        },
+        {
+          "utterance": "把云端 leaf 换成 sherpa；模型下载位置：~/.cache/claudecodeui/tts/kokoro-multi-lang-v1_1/（不进仓库）。",
+          "intended": "multi-lang",
+          "key": "multi-lang",
+          "queryAtToken": "/.cache/claudecodeui/tts/kokoro-multi-lang",
+          "targetsOfKind": [
+            "multi-lang",
+            "sherpa-onnx",
+            "espeak-ng-data",
+            "zf_xiaobei",
+            "zh_xiaoni",
+            "zm_yunjian",
+            "OfflineTts",
+            "uplink-vad",
+            "loadDependency",
+            "sherpa-onnx-node"
+          ]
+        },
+        {
+          "utterance": "一个小的既有不一致顺手指出（未改）：footer 底部的键盘提示在空草稿时仍显示 \"Enter to send\"，而此时按钮已是 \"Start Live Voice\"、Enter 也不触发 voice——把这条提示在 voice 档改成一致文案。",
+          "intended": "live-voice-enter",
+          "key": "live-voice-enter",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "submitIsVoice",
+            "onLiveVoice",
+            "PromptInputSubmit",
+            "AudioLinesIcon",
+            "aria-label",
+            "VoiceInputButton",
+            "liveVoiceDisabled",
+            "aria-disabled",
+            "live-voice-notice",
+            "left-0"
+          ]
+        },
+        {
+          "utterance": "有 withdraw 按钮的气泡是哪一个？我注意到 live voice 和文本消息都会生成这个按钮；刚才的 3 个气泡也都是这种。",
+          "intended": "Edit/Delete/Withdraw",
+          "key": "Withdraw",
+          "queryAtToken": "withdraw",
+          "targetsOfKind": [
+            "voice-realtime-ws-proxy.service.ts",
+            "voice-realtime-live-executor.ts",
+            "10-13/10-14",
+            "heard/delivering",
+            "placeCaptions.ts",
+            "VoicePendingUtterance.tsx",
+            "ChatInterface.tsx",
+            "Edit/Delete/Withdraw"
+          ]
+        },
+        {
+          "utterance": "此处的 server VAD 是指 CloudCLI 服务还是 realtime 模型？我们明确要求过，CloudCLI 服务端 VAD 只做转发 realtime 前的音频过滤，不做其它用途。",
+          "intended": "server_vad",
+          "key": "server_vad",
+          "queryAtToken": "",
+          "targetsOfKind": [
+            "speech_stopped",
+            "item_IUSxQR4xxrXCPwB9rYQaI",
+            "speech_started",
+            "item_OS26gEk",
+            "turn_detected",
+            "turn_detection",
+            "DEFAULT_TURN_DETECTION",
+            "server_vad",
+            "ws-proxy",
+            "transcribedSinceWatermark"
+          ]
+        },
+        {
+          "utterance": "只读快速核查 ClaudeCodeUI Quay task store：此前 Live voice mode 会话起草的 TASK D「Live Voice continuous 模式下 Omni 无新语音重复 session_send/function_call 投递」是否已正式立案？给出准确 task ID、status、创建记录，若无则明确未立案。不要改动。",
+          "intended": "function_call",
+          "key": "function_call",
+          "queryAtToken": "session_send/function_call",
+          "targetsOfKind": [
+            "promotion-driver",
+            "function_call",
+            "session_send",
+            "call_id",
+            "deliveredSegmentSeqs",
+            "ws-proxy",
+            "self-start",
+            "fan-in"
+          ]
+        }
+      ]
+    }
+  }
+}

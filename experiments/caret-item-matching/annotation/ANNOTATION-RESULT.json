@@ -1,0 +1,1990 @@
+{
+  "schema": "caret-item-matching/annotation-result/1",
+  "analyzedAt": "2026-10-25T14:43:10.210Z",
+  "annotationsPath": "/data/home/yale/work/claudecodeui/experiments/caret-item-matching/annotation/annotations.json",
+  "sampleSeed": 20261025,
+  "completeness": {
+    "sample": 60,
+    "annotated": 60,
+    "missing": 0,
+    "missingIds": []
+  },
+  "labels": {
+    "specific": 14,
+    "whole": 8,
+    "none": 37,
+    "unclear": 1
+  },
+  "specific": {
+    "resolved": 13,
+    "unresolvedQuote": 1,
+    "spanKinds": {
+      "path": 0,
+      "identifier": 1,
+      "code-line": 0,
+      "heading": 1,
+      "paragraph": 11
+    },
+    "withCompletionTarget": 9,
+    "withoutCompletionTarget": 4,
+    "shippingOffered": 1,
+    "shippingOfferedRate": 0.111,
+    "shippingTop1": 0,
+    "shippingTop1Rate": 0,
+    "shippingTop3": 1,
+    "shippingTop3Rate": 0.111,
+    "completionTargetsNeverTyped": 8,
+    "rankDistribution": {
+      "1": 0,
+      "2": 1,
+      "3": 0
+    },
+    "paragraphTierOffered": 0,
+    "paragraphTierOfferedRate": 0,
+    "paragraphTierTop1": 0,
+    "paragraphTierTop1Rate": 0,
+    "firstOfferChars": {
+      "count": 3,
+      "p50": 24,
+      "p90": 37,
+      "p95": 37,
+      "p99": 37,
+      "max": 37
+    }
+  },
+  "none": {
+    "annotated": 37,
+    "falseOffersAtSettle": 2,
+    "falseOfferRate": 0.054,
+    "wouldUseYes": 0
+  },
+  "whole": {
+    "annotated": 8,
+    "matcherOfferedSomething": 1,
+    "wouldUseYes": 1
+  },
+  "wouldUse": {
+    "specific": {
+      "yes": 14,
+      "no": 0,
+      "unsure": 0
+    },
+    "semanticStratum": 1,
+    "controlStratum": 4
+  },
+  "labelHelp": {
+    "specific": {
+      "annotated": 14,
+      "yes": 14,
+      "no": 0,
+      "unsure": 0
+    },
+    "whole": {
+      "annotated": 8,
+      "yes": 1,
+      "no": 7,
+      "unsure": 0
+    },
+    "none": {
+      "annotated": 37,
+      "yes": 0,
+      "no": 37,
+      "unsure": 0
+    },
+    "unclear": {
+      "annotated": 1,
+      "yes": 0,
+      "no": 1,
+      "unsure": 0
+    }
+  },
+  "byStratum": {
+    "strong": {
+      "annotated": 10,
+      "specific": 3,
+      "whole": 0,
+      "none": 6,
+      "unclear": 1,
+      "wouldUseYes": 3,
+      "wouldUseNo": 7,
+      "wouldUseUnsure": 0
+    },
+    "numbered": {
+      "annotated": 10,
+      "specific": 6,
+      "whole": 3,
+      "none": 1,
+      "unclear": 0,
+      "wouldUseYes": 7,
+      "wouldUseNo": 3,
+      "wouldUseUnsure": 0
+    },
+    "semantic": {
+      "annotated": 20,
+      "specific": 1,
+      "whole": 4,
+      "none": 15,
+      "unclear": 0,
+      "wouldUseYes": 1,
+      "wouldUseNo": 19,
+      "wouldUseUnsure": 0
+    },
+    "control": {
+      "annotated": 20,
+      "specific": 4,
+      "whole": 1,
+      "none": 15,
+      "unclear": 0,
+      "wouldUseYes": 4,
+      "wouldUseNo": 16,
+      "wouldUseUnsure": 0
+    }
+  },
+  "agreement": {
+    "humanSpecificAndAutoCopied": 3,
+    "humanSpecificWithoutAutoCopied": 11,
+    "humanSpecificUnresolvedQuote": 1,
+    "humanNoneButAutoCopied": 6,
+    "humanWholeAndAutoNumbered": 3,
+    "humanNoneAndAutoNumbered": 1
+  },
+  "records": [
+    {
+      "id": "P01",
+      "stratum": "control",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "**任务**：`gap-voice-realtime-silent-closing-orphans-tool-resume-overflow`",
+      "resolved": {
+        "span": {
+          "text": "**任务**：`gap-voice-realtime-silent-closing-orphans-tool-resume-overflow`",
+          "kind": "paragraph",
+          "overlap": 56
+        },
+        "completion": {
+          "text": "gap-voice-realtime-silent-closing-orphans-tool-resume-overflow",
+          "kind": "identifier",
+          "overlap": 54
+        }
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P02",
+      "stratum": "semantic",
+      "reference": "whole",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P03",
+      "stratum": "control",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "- **A**：我去读那段「片段 → response」的代码，定位「50 ms 内下一段 speech_started 就把上一段吞掉」是谁判的（`session.update` 的 instructions 里“one text per segment”那条最可疑，仓库里有 `gap-live-voice-one-text-per-segment-prefer-response` 的历史）。",
+      "resolved": {
+        "span": {
+          "text": "gap-live-voice-one-text-per-segment-prefer-response",
+          "kind": "identifier",
+          "overlap": 43
+        },
+        "completion": {
+          "text": "gap-live-voice-one-text-per-segment-prefer-response",
+          "kind": "identifier",
+          "overlap": 43
+        }
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P04",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 108,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 108,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P05",
+      "stratum": "semantic",
+      "reference": "whole",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 57,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 57,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P06",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P07",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P08",
+      "stratum": "semantic",
+      "reference": "whole",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P09",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P10",
+      "stratum": "numbered",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "我的建议是：**先做 GTCRN 的离线 A/B；如果它能把 5.6–6.2dB 的转写损失明显降下来，再把它接到服务端 ASR 路径。** 如果 GTCRN 仍不够，再考虑 DTLN 或 DFN3 限幅，最后才是商用 SDK。",
+      "resolved": {
+        "span": {
+          "text": "我的建议是：**先做 GTCRN 的离线 A/B；如果它能把 5.6–6.2dB 的转写损失明显降下来，再把它接到服务端 ASR 路径。** 如果 GTCRN 仍不够，再考虑 DTLN 或 DFN3 限幅，最后才是商用 SDK。",
+          "kind": "paragraph",
+          "overlap": 84
+        },
+        "completion": null
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "reply"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P11",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P12",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 17,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 17,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P13",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P14",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P15",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P16",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P17",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P18",
+      "stratum": "control",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "`https://cloudcli.lrfz.com/`",
+      "resolved": {
+        "span": {
+          "text": "`https://cloudcli.lrfz.com/` is reachable.",
+          "kind": "paragraph",
+          "overlap": 20
+        },
+        "completion": null
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P19",
+      "stratum": "numbered",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "The browser log confirms the voice socket was cut by the network, not closed by our code. Most likely the Cloudflare tunnel between your browser and this machine briefly dropped.\n**Separate issue in the same log:** before the drop, the voice model was stopped twice by the guard against repeated tool calls (`TOOL_LOOP_GUARD`, 7 identical calls), alongside `RESPONSE_CONCURRENCY_CONFLICT`. The server shows `Unknown function call id` errors at 16:38:07. Those \"buffer too small\" errors are a known harmless upstream report.",
+      "resolved": {
+        "span": {
+          "text": "**Separate issue in the same log:** before the drop, the voice model was stopped twice by the guard against repeated tool calls (`TOOL_LOOP_GUARD`, 7 identical calls), alongside `RESPONSE_CONCURRENCY_CONFLICT`. The server shows `Unknown fun",
+          "kind": "paragraph",
+          "overlap": 188
+        },
+        "completion": {
+          "text": "RESPONSE_CONCURRENCY_CONFLICT",
+          "kind": "identifier",
+          "overlap": 27
+        }
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "mismatch"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P20",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P21",
+      "stratum": "numbered",
+      "reference": "whole",
+      "help": "yes",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "reply"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P22",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P23",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P24",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P25",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P26",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P27",
+      "stratum": "numbered",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "**(a)** 先把第 1/8 条的边界按端点实际 buffer 重切、扩到 ≥30 条再确认 7/7；",
+      "resolved": {
+        "span": {
+          "text": "下一步我建议二选一：**(a)** 先把第 1/8 条的边界按端点实际 buffer 重切、扩到 ≥30 条再确认 7/7；**(b)** 直接把「one-shot relay + 上下文」做成一个受设置控制的 provider 模式，在真实 voice input 里 A/B。你定方向。",
+          "kind": "paragraph",
+          "overlap": 33
+        },
+        "completion": null
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "items"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P28",
+      "stratum": "strong",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "## 第一层：端点的 server VAD —— 它决定「不为这一段开 response」",
+      "resolved": {
+        "span": {
+          "text": "第一层：端点的 server VAD —— 它决定「不为这一段开 response」",
+          "kind": "heading",
+          "overlap": 32
+        },
+        "completion": {
+          "text": "server_vad",
+          "kind": "identifier",
+          "overlap": 9
+        }
+      },
+      "auto": {
+        "copied": [
+          "server_vad"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P29",
+      "stratum": "semantic",
+      "reference": "whole",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P30",
+      "stratum": "numbered",
+      "reference": "whole",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "reply"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P31",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P32",
+      "stratum": "strong",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "**GOAL-046** 是 Live Voice 以模型改写为主投递、仅在确认遗漏时补发识别原文,规则语言无关,取代 settle producer 的兜底触发。\n| AC | 判据 | 当前 |\n|---|---|---|\n| AC-398 | `replay_rule.py --check`:在冻结的连接清单上用参数文件里的参数回放 v2,检查丢失 ≥7 字 ≤3%、识别原文占比 ≤15%、重复 ≤3.6%、补发延迟 p50 <H | 必红,参数文件和 `--check` 都还不存在 |\n| AC-399 | `replay_rule.py --check-labels`:补发对人工标注,补发数 ≥15,标 O 的占比 ≥80% | 必红 |\n| AC-400 | 服务端纯函数 `planOmissionFills` 的单测,以及与 Python 参考实现的逐例一致性(≥40 例) | 必红 |\n| AC-401 | ws-proxy 接入测试:settle 不再触发兜底,补发在 T_i 投递并写日志,`interrupt_response:false` | 必红 |",
+      "resolved": {
+        "span": {
+          "text": "**GOAL-046** 是 Live Voice 以模型改写为主投递、仅在确认遗漏时补发识别原文,规则语言无关,取代 settle producer 的兜底触发。",
+          "kind": "paragraph",
+          "overlap": 66
+        },
+        "completion": {
+          "text": "replay_rule.py",
+          "kind": "path",
+          "overlap": 12
+        }
+      },
+      "auto": {
+        "copied": [
+          "goal_ac"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 8,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 8,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P33",
+      "stratum": "strong",
+      "reference": "unclear",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [
+          "worker-round",
+          "ready-pool-check"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 13,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 13,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P34",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P35",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P36",
+      "stratum": "strong",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [
+          "ArchGuard"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 32,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 32,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P37",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P38",
+      "stratum": "numbered",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "**改进方案**\n1. **单一缩放，由语义引擎独占。**\n- Fit = 求最大的 `s`，使映射后的内容尺寸 ≤ 画布（对 `s` 做二分，映射尺寸随 `s` 单调增加，约 12 次求解，纯函数、代价很小）；之后画面始终 `k = 1`，不再叠加 CSS 缩放。\n- 在这个 `s` 下选档位（A / B / C，必要时 D）；缩放读数显示这个 `s`。\n- 放大小图：上限放宽到约 150%，让 S 在宽屏下也能填满。\n2. **适应是粘性的。** 状态 `fit: auto | manual`：缺省 auto，直到用户缩放或平移；auto 下任何画布尺寸变化（窗口、全屏、抽屉开合、旋转、图重排）都重新求解；manual 下保持当前 `s` 并夹紧滚动位置。独立页和全屏同样适用。\n3. **去掉缺省 Focus。** 缺省永远是整图 Overview 加自动适应；Focus 改成显式功能，含义是\"把选中的包放大到画布\"，同样走第 1 点的求解，字号仍不低于下限；缺省不出现 \"Readable zoom is on\" 横幅。\n4. **手机的外壳**：工具栏压成一行，摘要条默认折叠，Focus / Overview 与缩放控件放进画布外的保留边（或可收起），不再盖住图；这与已建的横屏布局任务一致，可并在一起。\n5. **守卫（关键）**：e2e 在 PC、宽屏、手机竖屏、手机横屏四个视口，用 S / M / L / Quay 四个夹具，在以下时刻读\"图在画布内（容差 2px）、最小字号 ≥ 下限、读数等于语义比例\"：加载后、点 Fit、改窗口大小、进出全屏、打开关闭 Inspector、旋转；控制臂是恢复\"CSS 叠加缩放\"和\"缺省 Focus\"时读数变红。\n建议建一个任务 `architecture-single-scale-fit-contract`，包含第 1、2、3 点和守卫；第 4 点并进 `architecture-landscape-phone-layout` 的后续或另立小任务。",
+      "resolved": {
+        "span": {
+          "text": "建议建一个任务 `architecture-single-scale-fit-contract`，包含第 1、2、3 点和守卫；第 4 点并进 `architecture-landscape-phone-layout` 的后续或另立小任务。",
+          "kind": "paragraph",
+          "overlap": 97
+        },
+        "completion": {
+          "text": "architecture-single-scale-fit-contract",
+          "kind": "identifier",
+          "overlap": 34
+        }
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "reply"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P39",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P40",
+      "stratum": "strong",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "1. **让「到底」自愈（推荐，治本）**：浏览器把视口 clamp 到新底部时，`scrollTop === scrollHeight - clientHeight`——无论谁放的，「在底就是贴底」。在 `handleScroll`（`:1364`）里，当视口在底、且没有手势窗口时，除了现有的 `transcriptGeometryRef` 重基线，**同步把 `lastPlacedTopRef` 重坐到当前底**。这样 2px clamp 不会留下 `lastPlacedTopRef` 陈旧值，下一次增长照常跟随。改动小、不碰容差语义。\n4. **补回归测试**：在 `transcriptScrollOwnership.test.tsx` 加一条「回合收尾产生 ≤2px 的 scrollTop clamp 后，下一条消息仍被贴底跟随」；修复前应红、修复后绿。这正是本 bug 的最小可复现形态。\n需要的话，我可以直接按方案 1 + 4 落地（改 `handleScroll` 的自愈逻辑 + 补测试），跑 `transcriptScrollOwnership` 和相关窄测验证。另外我在你实例里留了个临时会话（发了三条消息，消耗了一点 token），会话 id `15c04eaf-db7d-4d57-bd32-c741fef4f536`，你可以随手删掉。要我继续动手修吗？",
+      "resolved": {
+        "span": {
+          "text": "需要的话，我可以直接按方案 1 + 4 落地（改 `handleScroll` 的自愈逻辑 + 补测试），跑 `transcriptScrollOwnership` 和相关窄测验证。另外我在你实例里留了个临时会话（发了三条消息，消耗了一点 token），会话 id `15c04eaf-db7d-4d57-bd32-c741fef4f536`，你可以随手删掉。要我继续动手修吗？",
+          "kind": "paragraph",
+          "overlap": 152
+        },
+        "completion": {
+          "text": "transcriptScrollOwnership.test.tsx",
+          "kind": "path",
+          "overlap": 32
+        }
+      },
+      "auto": {
+        "copied": [
+          "handleScroll",
+          "transcriptScrollOwnership"
+        ],
+        "numberedKind": "reply"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 24,
+        "targetFirstHit": 56,
+        "targetRank": 2,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": [
+          "transcriptScrollOwnership",
+          "transcriptScrollOwnership.test.tsx"
+        ]
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 24,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P41",
+      "stratum": "semantic",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "要我把这个充分性缺口立成 task（E0 的补充：自动语音输出的端到端断言），还是先直接动手把 spec 的 announce/总结场景补上？",
+      "resolved": {
+        "span": {
+          "text": "要我把这个充分性缺口立成 task（E0 的补充：自动语音输出的端到端断言），还是先直接动手把 spec 的 announce/总结场景补上？",
+          "kind": "paragraph",
+          "overlap": 60
+        },
+        "completion": null
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 37,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 37,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P42",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P43",
+      "stratum": "numbered",
+      "reference": "whole",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "reply"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P44",
+      "stratum": "numbered",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "**1. 页脚\"N 个名字未找到\"被裁（`ArchitecturePanel.tsx:2832-2861`）**\n**2. 类图为空但文件图有内容（`ArchitecturePanel.tsx:3671` 附近）**\n**3. 手机端默认就是不可读的 25% 总览（`readableZoom.ts:306`）**\n**4. 节点点击面积（`graphDom.ts` / `graphStyles.ts`）**\n**5. 全屏（`ArchitecturePanel.tsx:3207-3242`、`useArchitectureFullscreen.ts`）**",
+      "resolved": {
+        "span": {
+          "text": "**5. 全屏（`ArchitecturePanel.tsx:3207-3242`、`useArchitectureFullscreen.ts`）**",
+          "kind": "paragraph",
+          "overlap": 58
+        },
+        "completion": {
+          "text": "useArchitectureFullscreen.ts",
+          "kind": "path",
+          "overlap": 27
+        }
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "items"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P45",
+      "stratum": "strong",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [
+          "budgetChars"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 15,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 15,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P46",
+      "stratum": "strong",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [
+          "ui-scenario"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 27,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 27,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P47",
+      "stratum": "control",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "**落地方式不变**：`VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=1500` 重启即可 A/B，无需改代码（`DEFAULT_TURN_DETECTION` 保持 800，env 覆盖）。要不要我先起 1500 的 A/B，量一轮「段数是否真的降、句尾延迟加了多少」？",
+      "resolved": {
+        "span": {
+          "text": "**落地方式不变**：`VOICE_REALTIME_TURN_DETECTION_SILENCE_MS=1500` 重启即可 A/B，无需改代码（`DEFAULT_TURN_DETECTION` 保持 800，env 覆盖）。要不要我先起 1500 的 A/B，量一轮「段数是否真的降、句尾延迟加了多少」？",
+          "kind": "paragraph",
+          "overlap": 117
+        },
+        "completion": {
+          "text": "VOICE_REALTIME_TURN_DETECTION_SILENCE_MS",
+          "kind": "identifier",
+          "overlap": 35
+        }
+      },
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P48",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P49",
+      "stratum": "strong",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [
+          "quay-fleet"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 7,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 7,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": true,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P50",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P51",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P52",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P53",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P54",
+      "stratum": "control",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P55",
+      "stratum": "numbered",
+      "reference": "specific",
+      "help": "yes",
+      "quote": "| ① 本地门降级 | proxy + 新判据 | 无 | 低；只影响 narrator 打断时机 |\n| ③ 固定句 + 预热缓存 | 新 phrases/cache 模块、proxy、index、两个判据 | 无（短语表先定） | 低；缓存失败自动回退现合成 |\n| ② 首帧即播 | tts leaf、proxy 帧契约、前端 hook、前后端判据 | 无 | 中；改动传输帧的时序语义，必须服务端/页面同版发布 |",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "mismatch"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P56",
+      "stratum": "control",
+      "reference": "whole",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P57",
+      "stratum": "semantic",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P58",
+      "stratum": "strong",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [
+          "src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts",
+          "modules/chat/voice-realtime/useVoiceRealtimeSession.ts",
+          "chat/voice-realtime/useVoiceRealtimeSession.ts",
+          "voice-realtime/useVoiceRealtimeSession.ts",
+          "useVoiceRealtimeSession.ts",
+          "paced-upload"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 4,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 4,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P59",
+      "stratum": "strong",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [
+          "captureReady"
+        ],
+        "numberedKind": "none"
+      },
+      "shipping": {
+        "offeredAny": true,
+        "firstOfferChars": 15,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": true,
+        "firstOfferChars": 15,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    },
+    {
+      "id": "P60",
+      "stratum": "numbered",
+      "reference": "none",
+      "help": "no",
+      "quote": "",
+      "resolved": null,
+      "auto": {
+        "copied": [],
+        "numberedKind": "items"
+      },
+      "shipping": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      },
+      "withParagraphs": {
+        "offeredAny": false,
+        "firstOfferChars": null,
+        "targetFirstHit": null,
+        "targetRank": null,
+        "offeredAtSettle": false,
+        "offersAtFirstHit": []
+      }
+    }
+  ]
+}

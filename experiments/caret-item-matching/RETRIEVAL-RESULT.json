@@ -1,0 +1,174 @@
+{
+  "schema": "caret-item-matching/retrieval-probe/1",
+  "ranAt": "2026-10-25T15:21:06.175Z",
+  "corpus": {
+    "root": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui",
+    "days": 21,
+    "files": 3367,
+    "megabytes": 4634.2,
+    "scanSeconds": 37.8
+  },
+  "counts": {
+    "turns": 3497,
+    "quoteTurns": 506,
+    "quoteOnlyTurns": 79,
+    "opinionTurns": 427,
+    "opinionWithGroundTruth": 390,
+    "skippedNoGroundTruth": 37
+  },
+  "rates": {
+    "window-3": {
+      "turns": 390,
+      "top1": 0.156,
+      "top3": 0.264
+    },
+    "window-3-distance-near": {
+      "turns": 296,
+      "top1": 0.206,
+      "top3": 0.348
+    },
+    "window-3-quote-long": {
+      "turns": 196,
+      "top1": 0.148,
+      "top3": 0.296
+    },
+    "window-5": {
+      "turns": 390,
+      "top1": 0.154,
+      "top3": 0.29
+    },
+    "window-5-distance-near": {
+      "turns": 296,
+      "top1": 0.179,
+      "top3": 0.331
+    },
+    "window-5-quote-long": {
+      "turns": 196,
+      "top1": 0.128,
+      "top3": 0.301
+    },
+    "window-12": {
+      "turns": 390,
+      "top1": 0.154,
+      "top3": 0.303
+    },
+    "window-12-distance-near": {
+      "turns": 296,
+      "top1": 0.152,
+      "top3": 0.284
+    },
+    "window-12-quote-long": {
+      "turns": 196,
+      "top1": 0.107,
+      "top3": 0.286
+    },
+    "window-3-quote-short": {
+      "turns": 194,
+      "top1": 0.165,
+      "top3": 0.232
+    },
+    "window-5-quote-short": {
+      "turns": 194,
+      "top1": 0.18,
+      "top3": 0.278
+    },
+    "window-12-quote-short": {
+      "turns": 194,
+      "top1": 0.201,
+      "top3": 0.32
+    },
+    "window-3-distance-far": {
+      "turns": 94,
+      "top1": 0,
+      "top3": 0
+    },
+    "window-5-distance-far": {
+      "turns": 94,
+      "top1": 0.074,
+      "top3": 0.16
+    },
+    "window-12-distance-far": {
+      "turns": 94,
+      "top1": 0.16,
+      "top3": 0.362
+    }
+  },
+  "examples": {
+    "hit": [
+      {
+        "draft": "如果把所有的真实音频都发进去，模型还是判断要几十秒以后的下一句 。",
+        "quoted": "语音才触发response我也只能接受不要额外加那个10s逻辑判断保持实现简单请进一步讨论",
+        "distance": 1,
+        "topScore": 0.597
+      },
+      {
+        "draft": "；然后按 B + C 创建任务。",
+        "quoted": "先把occupiedby和sessions这两个问题定下来",
+        "distance": 1,
+        "topScore": 0.107
+      },
+      {
+        "draft": "讨论改进方案。 ，不保留状态标注，不画消息气泡。",
+        "quoted": "识别出这条delivery已由一条乐观行代表时",
+        "distance": 1,
+        "topScore": 0.168
+      },
+      {
+        "draft": "只分析 visibleMessages.first/last 偶尔 基于当前真实运行状态给出：复现条件、根因判断、证据链、建议修复点，以及为什么刚才重新查询时 first/last 又变成了同一个非 null message id。",
+        "quoted": "为null的问题不要修改代码不要提交不要重启服务请",
+        "distance": 1,
+        "topScore": 0.463
+      },
+      {
+        "draft": "The requested UPDATED short-name round has not produced a visible final result yet. Please do it now and continue until you have a concrete ",
+        "quoted": "yinmixedchineseenglishspeechand",
+        "distance": 3,
+        "topScore": 0.778
+      },
+      {
+        "draft": "在当前验证中再加入一个关键测试：验证   是否支持真正的 tool/function calling。请给它定义一个无副作用的测试 function/tool（带明确参数 schema），通过语音输入一个应当触发该工具的自然指令，并检查服务端返回的是结构化 tool/functi",
+        "quoted": "qwen3omniflashrealtime",
+        "distance": 6,
+        "topScore": 0.219
+      }
+    ],
+    "miss": [
+      {
+        "draft": "note 推广（方案 A）直接作为缺陷立案。\n 」：允许\nconn2 的「噪声放行 ⇒ 误报横幅」这个小缺陷，要单独记一条\n\n按你的建议，推进。",
+        "quoted": "退出路径无待提交不发responsecreate",
+        "distance": 1,
+        "topScore": 0.643
+      },
+      {
+        "draft": "）\n\n---\n\n讨论该问题原因，并建议解决方案。",
+        "quoted": "aforcedcommit之后端点不开response10秒问题的直接原因",
+        "distance": 1,
+        "topScore": 0.153
+      },
+      {
+        "draft": "不。我希望再好些：仅在“ ”才持续补音频；否则还是保持现有 VAD 过滤。\n\n请进一步讨论。",
+        "quoted": "forcedcommit之后若committed到来时前面没有speechstopped端点没闭段则端点不会自动回答",
+        "distance": 6,
+        "topScore": 0.083
+      },
+      {
+        "draft": "。\n\n---\n\n上述实验对该方案的支持情况如何？",
+        "quoted": "responsecreate状态驱动我更推荐判据committed到来时无speechstopped精确区分端点不会自答此时补发一次responsecreate强制出response有speechstopped的46正常情形不发避开71e53da5的双重响应坑状态现成upstre",
+        "distance": 1,
+        "topScore": 0.075
+      },
+      {
+        "draft": "。\n\n---\n\n现在这一机制有设置开关，可以方便地切换吗？我考虑在两种测试下都使用一段时间体验下。",
+        "quoted": "本质张力这是一个在代理seam上无法用文本侧手段裁决的两难模型会改写纠错没法靠文本匹配判断这条message覆盖了哪几句补录未覆盖句遇到改写就重复投递3d2d3b2c的失败不补遇到欠投递就静默丢句本次764f0c7a的失败当前ruling选了后者所以连续说多句只投最后一句前面全丢",
+        "distance": 1,
+        "topScore": 0.068
+      },
+      {
+        "draft": "说明   的机制。",
+        "quoted": "voicerealtimemodesegmented",
+        "distance": 1,
+        "topScore": 0.125
+      }
+    ]
+  }
+}

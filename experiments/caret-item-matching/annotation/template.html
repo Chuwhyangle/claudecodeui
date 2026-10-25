@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference targets — 60 对人工标注</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1d1d1f; --muted: #6b6b70;
+    --line: #e3e3e0; --accent: #2f6f4f; --accent-soft: #e7f2ec; --warn: #b45309;
+    --quote: #f3efe4; --code: #f0f0ee;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --card: #1d1d20; --ink: #e9e9ea; --muted: #9a9aa0;
+      --line: #303036; --accent: #7fc3a0; --accent-soft: #1f2f27; --warn: #f0b36b;
+      --quote: #2a2720; --code: #242427;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 ui-sans-serif, system-ui, "Noto Sans CJK SC", "PingFang SC", sans-serif;
+  }
+  header.top {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    border-bottom: 1px solid var(--line); padding: 10px 20px;
+  }
+  .progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .progress > div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  .topline { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  .topline h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .topline .meta { color: var(--muted); font-size: 12px; }
+  .topline .spacer { flex: 1; }
+  button {
+    font: inherit; color: var(--ink); background: var(--card);
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  @media (prefers-color-scheme: dark) { button.primary { color: #10231a; } }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px; }
+  .intro { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+  .intro h2 { font-size: 14px; margin: 0 0 6px; }
+  .intro ol { margin: 6px 0 0 20px; padding: 0; }
+  .intro li { margin: 3px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .pill { font: 12px/1.4 ui-monospace, monospace; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+  .title { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cols { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 18px; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+  .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .utterance { font-size: 18px; line-height: 1.55; background: var(--accent-soft); border-radius: 10px; padding: 14px 16px; white-space: pre-wrap; word-break: break-word; }
+  .reply {
+    max-height: 440px; overflow: auto; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--code); padding: 6px 0;
+  }
+  .line { display: flex; gap: 10px; padding: 1px 10px; cursor: pointer; white-space: pre-wrap; word-break: break-word; }
+  .line:hover { background: rgba(127,127,127,.12); }
+  .line .n { color: var(--muted); font: 11px/1.9 ui-monospace, monospace; flex: 0 0 30px; text-align: right; user-select: none; }
+  .line .t { min-width: 0; }
+  .questions { margin-top: 18px; display: grid; gap: 16px; }
+  .q { border-top: 1px solid var(--line); padding-top: 14px; }
+  .q h3 { font-size: 14px; margin: 0 0 8px; }
+  .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .opts label {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 13px;
+  }
+  .opts input { accent-color: var(--accent); }
+  .opts label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  textarea, input[type="text"] {
+    width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; resize: vertical;
+  }
+  textarea { min-height: 76px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .nav { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+  .nav .spacer { flex: 1; }
+  .dots { display: grid; grid-template-columns: repeat(20, 1fr); gap: 4px; margin-top: 10px; }
+  .dot { height: 8px; border-radius: 2px; background: var(--line); border: none; padding: 0; cursor: pointer; }
+  .dot.done { background: var(--accent); }
+  .dot.current { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 18px; }
+  .warn { color: var(--warn); }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); max-width: 640px; width: calc(100% - 40px); }
+  dialog pre { white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow: auto; background: var(--code); padding: 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="topline">
+    <h1>Reference targets · 60 对人工标注</h1>
+    <span class="meta" id="progressText">0 / 60</span>
+    <span class="spacer"></span>
+    <button id="exportBtn" class="primary">导出 JSON</button>
+    <button id="copyBtn">复制 JSON</button>
+    <button id="resetBtn">清空</button>
+  </div>
+  <div class="progress"><div id="progressBar"></div></div>
+</header>
+
+<main>
+  <section class="intro">
+    <h2>怎么标</h2>
+    <ol>
+      <li>先读右边的 assistant 回复，再读左边这条 user 消息。</li>
+      <li><strong>标的是：这条消息在回复里指什么</strong>。不是判断匹配器对不对；页面上没有匹配结果。</li>
+      <li>如果指向一处具体文字：点回复里的行（可多行）把它填进引文框，或直接粘贴一小段能定位的文字。</li>
+      <li>再判断：如果你在输入框里打这条消息时出现一个补全候选，你会用它吗？</li>
+      <li>进度自动存在浏览器里。标完点「导出 JSON」，把文件放到 <code>experiments/caret-item-matching/annotation/annotations.json</code>。</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <span class="pill" id="itemId">P01</span>
+      <span class="title" id="itemTitle"></span>
+    </div>
+    <div class="cols">
+      <div>
+        <div class="label">User 消息</div>
+        <div class="utterance" id="utterance"></div>
+        <div class="questions">
+          <div class="q">
+            <h3>1. 这条消息指向回复里的什么？</h3>
+            <div class="opts" id="referenceOpts">
+              <label><input type="radio" name="reference" value="specific"> 具体一处</label>
+              <label><input type="radio" name="reference" value="whole"> 整条回复</label>
+              <label><input type="radio" name="reference" value="none"> 没有指代</label>
+              <label><input type="radio" name="reference" value="unclear"> 说不清</label>
+            </div>
+          </div>
+          <div class="q" id="quoteQ">
+            <h3>2. 被指到的那段文字</h3>
+            <textarea id="quote" placeholder="点右边的行，或粘贴/敲一小段能定位的文字。整条回复/没有指代时留空。"></textarea>
+            <div class="hint">点行 = 追加到引文；可以用「清空引文」重来。</div>
+          </div>
+          <div class="q">
+            <h3>3. 如果输入时出现补全候选，你会用它吗？</h3>
+            <div class="opts" id="helpOpts">
+              <label><input type="radio" name="help" value="yes"> 会</label>
+              <label><input type="radio" name="help" value="no"> 不会</label>
+              <label><input type="radio" name="help" value="unsure"> 不确定</label>
+            </div>
+          </div>
+          <div class="q">
+            <h3>4. 备注（可选）</h3>
+            <input type="text" id="comment" placeholder="比如：我指的是那个路径，不是同名概念">
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="label">Assistant 回复（点行可引用）</div>
+        <div class="reply" id="reply"></div>
+      </div>
+    </div>
+    <div class="nav">
+      <button id="prevBtn">← 上一条</button>
+      <button id="clearQuoteBtn">清空引文</button>
+      <span class="spacer"></span>
+      <span class="meta" id="navText"></span>
+      <button id="nextBtn" class="primary">下一条 →</button>
+      <button id="jumpUnfinishedBtn">跳到未完成</button>
+    </div>
+    <div class="dots" id="dots"></div>
+  </section>
+
+  <p class="foot">数据只在本机浏览器；导出后由分析脚本读取。不要在这个页面上看代码或匹配结果。</p>
+</main>
+
+<dialog id="exportDialog">
+  <h2>导出 JSON</h2>
+  <p class="hint">把内容保存为 <code>experiments/caret-item-matching/annotation/annotations.json</code>，或直接粘贴给会话。</p>
+  <pre id="exportJson"></pre>
+  <div class="nav">
+    <button id="downloadBtn" class="primary">下载文件</button>
+    <button id="closeDialogBtn">关闭</button>
+  </div>
+</dialog>
+
+<script>
+const ITEMS = __ITEMS__;
+const STORAGE_KEY = 'caret-item-matching-annotations-v1';
+let state = loadState();
+let current = firstUnfinished();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* file:// or private mode */ }
+  renderProgress();
+}
+function entry(id) {
+  if (!state[id]) state[id] = { reference: '', quote: '', help: '', comment: '' };
+  return state[id];
+}
+function isDone(id) {
+  return Boolean(state[id] && state[id].reference && state[id].help);
+}
+function firstUnfinished() {
+  const index = ITEMS.findIndex((item) => !isDone(item.id));
+  return index >= 0 ? index : 0;
+}
+function esc(value) {
+  return String(value);
+}
+
+function render() {
+  const item = ITEMS[current];
+  const value = entry(item.id);
+  document.getElementById('itemId').textContent = item.id;
+  document.getElementById('itemTitle').textContent = item.title || '';
+  document.getElementById('utterance').textContent = esc(item.utterance);
+  const reply = document.getElementById('reply');
+  reply.textContent = '';
+  item.reply.split(/\r?\n/).forEach((lineText, index) => {
+    const row = document.createElement('div');
+    row.className = 'line';
+    row.title = '点击追加这一行到引文';
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = String(index + 1);
+    const t = document.createElement('span');
+    t.className = 't';
+    t.textContent = lineText.length ? lineText : ' ';
+    row.append(n, t);
+    row.addEventListener('click', () => {
+      const quote = document.getElementById('quote');
+      const trimmed = lineText.trim();
+      if (!trimmed) return;
+      quote.value = quote.value ? quote.value + '\n' + trimmed : trimmed;
+      entry(item.id).quote = quote.value;
+      // Clicking a line is a specific reference unless the annotator says otherwise.
+      const specific = document.querySelector('input[name="reference"][value="specific"]');
+      if (specific && !document.querySelector('input[name="reference"]:checked')) {
+        specific.checked = true;
+        entry(item.id).reference = 'specific';
+      }
+      saveState();
+    });
+    reply.append(row);
+  });
+  document.querySelectorAll('input[name="reference"]').forEach((input) => {
+    input.checked = value.reference === input.value;
+  });
+  document.querySelectorAll('input[name="help"]').forEach((input) => {
+    input.checked = value.help === input.value;
+  });
+  document.getElementById('quote').value = value.quote || '';
+  document.getElementById('comment').value = value.comment || '';
+  document.getElementById('navText').textContent = (current + 1) + ' / ' + ITEMS.length;
+  renderProgress();
+}
+
+function renderProgress() {
+  const done = ITEMS.filter((item) => isDone(item.id)).length;
+  document.getElementById('progressText').textContent = done + ' / ' + ITEMS.length + ' 已完成';
+  document.getElementById('progressBar').style.width = (100 * done / ITEMS.length) + '%';
+  const dots = document.getElementById('dots');
+  dots.textContent = '';
+  ITEMS.forEach((item, index) => {
+    const dot = document.createElement('button');
+    dot.className = 'dot' + (isDone(item.id) ? ' done' : '') + (index === current ? ' current' : '');
+    dot.title = item.id;
+    dot.addEventListener('click', () => { current = index; render(); });
+    dots.append(dot);
+  });
+}
+
+function go(delta) {
+  current = Math.max(0, Math.min(ITEMS.length - 1, current + delta));
+  render();
+}
+
+document.getElementById('referenceOpts').addEventListener('change', (event) => {
+  const item = ITEMS[current];
+  entry(item.id).reference = event.target.value;
+  saveState();
+});
+document.getElementById('helpOpts').addEventListener('change', (event) => {
+  const item = ITEMS[current];
+  entry(item.id).help = event.target.value;
+  saveState();
+});
+document.getElementById('quote').addEventListener('input', (event) => {
+  const item = ITEMS[current];
+  entry(item.id).quote = event.target.value;
+  saveState();
+});
+document.getElementById('comment').addEventListener('input', (event) => {
+  const item = ITEMS[current];
+  entry(item.id).comment = event.target.value;
+  saveState();
+});
+document.getElementById('prevBtn').addEventListener('click', () => go(-1));
+document.getElementById('nextBtn').addEventListener('click', () => go(1));
+document.getElementById('clearQuoteBtn').addEventListener('click', () => {
+  const item = ITEMS[current];
+  entry(item.id).quote = '';
+  document.getElementById('quote').value = '';
+  saveState();
+});
+document.getElementById('jumpUnfinishedBtn').addEventListener('click', () => {
+  current = firstUnfinished();
+  render();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.target.matches('input, textarea')) return;
+  if (event.key === 'ArrowLeft') go(-1);
+  if (event.key === 'ArrowRight') go(1);
+  const map = { '1': 'specific', '2': 'whole', '3': 'none', '4': 'unclear' };
+  if (map[event.key]) {
+    const input = document.querySelector('input[name="reference"][value="' + map[event.key] + '"]');
+    if (input) { input.checked = true; entry(ITEMS[current].id).reference = map[event.key]; saveState(); }
+  }
+});
+
+function exportPayload() {
+  return {
+    schema: 'caret-item-matching/annotations/1',
+    exportedAt: new Date().toISOString(),
+    annotator: '',
+    items: ITEMS.map((item) => {
+      const value = state[item.id] || {};
+      return {
+        id: item.id,
+        reference: value.reference || '',
+        quote: value.quote || '',
+        help: value.help || '',
+        comment: value.comment || '',
+      };
+    }),
+  };
+}
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const missing = ITEMS.filter((item) => !isDone(item.id)).length;
+  if (missing && !window.confirm('还有 ' + missing + ' 条未完成（需要选 1 和 3）。仍然导出？')) return;
+  document.getElementById('exportJson').textContent = JSON.stringify(exportPayload(), null, 2);
+  document.getElementById('exportDialog').showModal();
+});
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const text = JSON.stringify(exportPayload(), null, 2);
+  try { await navigator.clipboard.writeText(text); document.getElementById('copyBtn').textContent = '已复制'; setTimeout(() => document.getElementById('copyBtn').textContent = '复制 JSON', 1200); }
+  catch { document.getElementById('exportJson').textContent = text; document.getElementById('exportDialog').showModal(); }
+});
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(exportPayload(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'annotations.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById('closeDialogBtn').addEventListener('click', () => document.getElementById('exportDialog').close());
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!window.confirm('清空全部标注？不可撤销。')) return;
+  state = {};
+  saveState();
+  current = 0;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
