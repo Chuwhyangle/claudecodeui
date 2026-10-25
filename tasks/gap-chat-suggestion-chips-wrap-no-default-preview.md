@@ -27,12 +27,12 @@ extra:
 
 ## AC
 
-- [ ] `InputSuggestionChips.tsx` 不再渲染预览行：`npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例「无悬停、无选中、有 model chip 时，DOM 中没有 `[data-suggestion-preview]`」，exit 0。
-- [ ] 同一测试文件含一例：渲染 6 个长文本 chip 时，列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto` 与 `whitespace-nowrap`，且每个 chip 都在 DOM 中；exit 0。
-- [ ] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx` exit 0，且该文件不再断言 `previewHint` / `Tab to select` 文案。
-- [ ] 12 个 `src/modules/i18n/locales/*/chat.json` 均不含 `hintSelect`、`hintAccept`、`hintHide`、`previewHint` 键：`node -e` 逐文件解析 `input.suggestions` 并断言四键不存在，exit 0；locale 键集合一致性检查（仓库既有 i18n parity 测试）exit 0。
-- [ ] 键盘行为不变：`npx vitest run src/modules/chat/tests/suggestionChipAcceptContract.test.tsx src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 中 Tab 选中、Enter 接受、Esc 隐藏的既有用例全部通过。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0（删除 prop 后无悬空引用）。
+- [x] `InputSuggestionChips.tsx` 不再渲染预览行：`npx vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 含一例「无悬停、无选中、有 model chip 时，DOM 中没有 `[data-suggestion-preview]`」，exit 0。
+- [x] 同一测试文件含一例：渲染 6 个长文本 chip 时，列表容器 class 含 `flex-wrap`、不含 `overflow-x-auto` 与 `whitespace-nowrap`，且每个 chip 都在 DOM 中；exit 0。
+- [x] `npx vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx` exit 0，且该文件不再断言 `previewHint` / `Tab to select` 文案。
+- [x] 12 个 `src/modules/i18n/locales/*/chat.json` 均不含 `hintSelect`、`hintAccept`、`hintHide`、`previewHint` 键：`node -e` 逐文件解析 `input.suggestions` 并断言四键不存在，exit 0；locale 键集合一致性检查（仓库既有 i18n parity 测试）exit 0。
+- [x] 键盘行为不变：`npx vitest run src/modules/chat/tests/suggestionChipAcceptContract.test.tsx src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 中 Tab 选中、Enter 接受、Esc 隐藏的既有用例全部通过。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0（删除 prop 后无悬空引用）。
 
 ## DoD
 
@@ -46,6 +46,17 @@ extra:
 - src/modules/chat/tests/chatComposerReplyChips.test.tsx
 - src/modules/chat/tests/inputSuggestionChipsBackground.test.tsx
 - src/modules/chat/tests/suggestionChipAcceptContract.test.tsx
+- src/modules/chat/tests/inlineQuoteChip.test.tsx
 - src/modules/i18n/locales/en/chat.json
 - src/modules/i18n/locales/zh-CN/chat.json
+- src/modules/i18n/locales/de/chat.json
+- src/modules/i18n/locales/es/chat.json
+- src/modules/i18n/locales/fr/chat.json
+- src/modules/i18n/locales/id/chat.json
+- src/modules/i18n/locales/it/chat.json
+- src/modules/i18n/locales/ja/chat.json
+- src/modules/i18n/locales/ko/chat.json
+- src/modules/i18n/locales/ru/chat.json
+- src/modules/i18n/locales/tr/chat.json
+- src/modules/i18n/locales/zh-TW/chat.json
 - tasks/gap-chat-suggestion-chips-wrap-no-default-preview.md
