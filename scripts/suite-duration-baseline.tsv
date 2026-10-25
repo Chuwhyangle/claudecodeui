@@ -145,9 +145,9 @@
 #   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
 #   and the quay-initiatives row by cockpit-initiative-view-and-decision-queue,
 #   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
-# so this file now covers 385 of the 427 files the current `find server -name '*.test.ts' -o -name
+# so this file now covers 396 of the 439 files the current `find server -name '*.test.ts' -o -name
 # '*.test.js' | sort` list collects; a row here is a dispatch ORDER hint only, so an unlisted file is
-# not skipped — it just sorts alphabetically after the listed ones. The remaining ~40 unlisted files
+# not skipped — it just sorts alphabetically after the listed ones. The remaining ~43 unlisted files
 # (claude-resident-dispatch-hook and voice-realtime-voice-active-marker among them) came in with
 # sibling tasks that moved the collected-count pins but left this baseline alone).
 #
@@ -650,3 +650,11 @@
 #   tree collects 437 server test files).
 12769	server/modules/architecture/tests/refreshJob.test.ts
 2520	server/modules/architecture/tests/refreshRoutes.test.ts
+#   and the two notices rows by gap-notices-server-registry-and-dismissal, measured one file at a
+#   time on 2026-10-25 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/notices/tests/notice-registry.test.ts`
+#   and the same for server/modules/system/tests/deploy-notice-provider.test.ts (dur=2879ms and
+#   dur=1872ms; their own new criteria; no green round contains them yet — the rows also keep the 90%
+#   coverage floor green now that the tree collects 439 server test files).
+2879	server/modules/notices/tests/notice-registry.test.ts
+1872	server/modules/system/tests/deploy-notice-provider.test.ts
