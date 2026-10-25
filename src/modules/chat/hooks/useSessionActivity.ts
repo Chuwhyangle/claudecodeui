@@ -180,10 +180,23 @@ function subscribe(listener: () => void): () => void {
 const snapshotFetched = new Set<string>();
 
 /**
- * The join read: fetch the session's snapshot over REST once, so a page that
- * mounts with no socket frame yet still restores the background panel from the
- * server's own snapshot. A failure is silent — the socket's own `activity.snapshot`
- * remains the primary path, and this is only the pre-socket anchor.
+ * How long the join read waits for the socket to connect before it falls back to REST.
+ *
+ * The server births a session in its activity store on `activity.subscribe` and answers 404
+ * to the REST read for anything it has not been told about, so firing the read at mount asks
+ * before the only event that creates an answer. On a cold store — any server restart — that
+ * is a guaranteed 404, which the browser logs as a failed resource and the client discards.
+ * A socket that connects within this window hands over the same snapshot on subscribe, so the
+ * common path never makes the request; only a genuinely dead socket falls back to it. Even
+ * then the read can only answer for another tab's subscription.
+ */
+const JOIN_READ_GRACE_MS = 2_000;
+
+/**
+ * The join read: fetch the session's snapshot over REST once, so a page whose socket never
+ * comes up can still restore the background panel when some other connection has subscribed
+ * the session. A failure is silent — the socket's own `activity.snapshot` remains the primary
+ * path, and this is only the fallback anchor.
  */
 function ensureSnapshotFetched(sessionId?: string | null): void {
   if (!sessionId || snapshotFetched.has(sessionId)) {
@@ -214,9 +227,17 @@ export function useSessionActivity(sessionId?: string | null): SessionActivityVi
   const sendMessage = contextConnection?.sendMessage;
   const isConnected = contextConnection?.isConnected ?? false;
 
+  // The join read is a fallback for a socket that does not come up, not a mount-time
+  // guarantee: a connected socket's subscribe reply is the anchor, and asking the REST route
+  // before the socket has subscribed asks a store that cannot answer yet (see
+  // `JOIN_READ_GRACE_MS`). When the socket connects, this effect re-runs and cancels the timer.
   useEffect(() => {
-    ensureSnapshotFetched(sessionId);
-  }, [sessionId]);
+    if (!sessionId || isConnected) {
+      return;
+    }
+    const timer = setTimeout(() => ensureSnapshotFetched(sessionId), JOIN_READ_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [sessionId, isConnected]);
 
   // Ask the server to start pushing this session's activity frames. The verb is
   // its own — deliberately not `chat.subscribe` — because a `chat.subscribe`
