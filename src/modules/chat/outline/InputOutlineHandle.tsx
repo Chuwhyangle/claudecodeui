@@ -39,6 +39,9 @@ export default function InputOutlineHandle({
   const cursorClass = isDragging ? 'cursor-grabbing' : 'cursor-pointer';
   const ariaLabel = isOpen ? t('inputOutline.close') : t('inputOutline.open');
 
+  // The icons swap when a drag starts. A touch stream stays bound to the node it began on, so an icon
+  // that is the touch target and then unmounts would drop every later touchmove/touchend;
+  // pointer-events-none keeps the button, which stays mounted, as the target.
   return (
     <button
       type="button"
@@ -58,11 +61,11 @@ export default function InputOutlineHandle({
       data-input-outline-handle
     >
       {isDragging ? (
-        <GripVertical className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+        <GripVertical className="pointer-events-none h-5 w-5 text-blue-500 dark:text-blue-400" />
       ) : isOpen ? (
-        <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+        <ChevronRight className="pointer-events-none h-5 w-5 text-gray-600 dark:text-gray-400" />
       ) : (
-        <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+        <ChevronLeft className="pointer-events-none h-5 w-5 text-gray-600 dark:text-gray-400" />
       )}
     </button>
   );

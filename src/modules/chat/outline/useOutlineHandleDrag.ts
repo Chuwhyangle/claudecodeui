@@ -268,17 +268,23 @@ export function useOutlineHandleDrag({ isMobile }: UseOutlineHandleDragProps) {
     const handleTouchEnd = () => {
       endDrag();
     };
+    // A system gesture can cancel the stream; without this the body scroll lock would never be released.
+    const handleTouchCancel = () => {
+      endDrag();
+    };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('touchmove', handleTouchMove, { passive: false });
     document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('touchcancel', handleTouchCancel);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchcancel', handleTouchCancel);
     };
   }, [endDrag, handleMove, isPointerDown]);
 
