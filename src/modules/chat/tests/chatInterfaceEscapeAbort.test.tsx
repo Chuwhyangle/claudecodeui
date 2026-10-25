@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import i18next from 'i18next';
 import React from 'react';
 import { initReactI18next } from 'react-i18next';
@@ -8,6 +8,7 @@ import { beforeEach, test, vi } from 'vitest';
 
 import ChatInterface from '@/modules/chat/ChatInterface';
 import enChat from '@/modules/i18n/locales/en/chat.json';
+import { SessionPulse } from '@/modules/quay';
 import type { Project, SessionActivity } from '@/shared/types';
 
 /**
@@ -115,6 +116,28 @@ vi.mock('@/shared/api', () => ({
   api: {
     forkSession: async () => ({ ok: true, json: async () => ({ data: { sessionId: SESSION_ID } }) }),
     commands: { list: async () => ({ ok: true, json: async () => ({ commands: [] }) }) },
+    // The title-bar pulse trigger polls lanes and reads mentions when its popover opens. Only
+    // the network hop is stubbed; the real trigger and popover render below.
+    quayLanes: async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        gantt: { windowHours: 3, nowMs: START, lanes: [[], [], [], [], []], overflow: 0 },
+        ganttUnavailable: null,
+        generatedAt: new Date(START).toISOString(),
+      }),
+    }),
+    quaySessionMentions: async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        sessionId: SESSION_ID,
+        projectId: PROJECT.projectId,
+        tasks: [],
+        goals: [],
+        generatedAt: new Date(START).toISOString(),
+      }),
+    }),
   },
 }));
 
@@ -337,4 +360,81 @@ test('desktop: Escape aborts once while the turn can be aborted, and not at all 
     `Escape must not reach the abort handler once the turn cannot be aborted; it reached it ${state.aborts} time(s)`,
   );
   idle.unmount();
+});
+
+/**
+ * The title bar's Loop pulse popover is the app's newest floating layer, and it is a
+ * `role="dialog"` — one of the roles the guard above reads before claiming Escape. This case
+ * renders the REAL trigger and popover beside the real ChatInterface, focuses the composer,
+ * and presses Escape: the popover must close and the running turn must survive.
+ *
+ * The falsifying edit is exactly the guard's premise: delete `role="dialog"` from the
+ * popover's root and this case's first key aborts the turn (and the popover stays open).
+ */
+test('desktop: Escape closes the open quay pulse popover without aborting the turn', async () => {
+  const view = render(
+    <>
+      <header data-app-header>
+        <SessionPulse
+          projectId={PROJECT.projectId}
+          sessionId={SESSION_ID}
+          isMobile={false}
+          onOpenQuayPanel={() => undefined}
+        />
+      </header>
+      <ChatInterface
+        isActive
+        selectedProject={PROJECT}
+        selectedSession={null}
+        ws={null}
+        sendMessage={() => undefined}
+      />
+    </>,
+  );
+
+  const pulseTrigger = view.container.querySelector('[data-testid="quay-pulse-trigger"]') as HTMLButtonElement | null;
+  assert.ok(pulseTrigger, 'premise: the quay project header must render the pulse trigger');
+
+  fireEvent.click(pulseTrigger);
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  assert.ok(
+    document.querySelector('[data-testid="quay-pulse-popover"]'),
+    'premise: clicking the trigger must open the popover',
+  );
+
+  const textarea = view.container.querySelector('textarea');
+  assert.ok(textarea, 'premise: the real composer must draw its textarea');
+  textarea.focus();
+  assert.equal(document.activeElement, textarea, 'premise: focus must be in the composer textarea');
+
+  fireEvent.keyDown(document, { key: 'Escape' });
+
+  assert.equal(
+    state.aborts,
+    0,
+    `Escape must close the popover, not abort the turn; it reached the abort handler ${state.aborts} time(s)`,
+  );
+  assert.equal(
+    document.querySelector('[data-testid="quay-pulse-popover"]'),
+    null,
+    'the open popover must consume the key and close itself',
+  );
+  assert.equal(
+    document.activeElement,
+    pulseTrigger,
+    'closing the popover must return focus to its trigger',
+  );
+
+  // Control arm: with the layer closed, the same key reaches the abort handler as before.
+  textarea.focus();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  assert.equal(
+    state.aborts,
+    1,
+    `with no floating layer the key still aborts; it reached the abort handler ${state.aborts} time(s)`,
+  );
+  view.unmount();
 });

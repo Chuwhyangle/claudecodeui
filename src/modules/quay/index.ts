@@ -11,3 +11,7 @@ export type { QuayParsedObject, QuayUriParseResult, QuayUriRejection } from '@/m
 // and by the cockpit's fleet tiles (one per project); both draw the same component so the two
 // surfaces cannot disagree about what "in flight / fan-in / suite / blocked" looks like.
 export { default as PulseStrip, DEFAULT_PULSE_WINDOW_HOURS, PULSE_STRIP_HEIGHT_PX, PULSE_WINDOW_HOURS } from '@/modules/quay/PulseStrip';
+// The workspace header's Loop pulse entry (trigger + session popover). Consumed only by
+// `WorkspaceHeader`; quay does not import that module back — "open the Quay panel" arrives as a
+// callback, so the tab switch stays project-workspace's decision.
+export { default as SessionPulse } from '@/modules/quay/SessionPulse';

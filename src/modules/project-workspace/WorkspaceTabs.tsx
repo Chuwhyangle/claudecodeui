@@ -319,14 +319,17 @@ export function CollapsedWorkspaceSelector({
         dialog that is not open.
       */}
       <DialogTrigger
+        // The trigger's visible text is gone (the pulse strip beside it needs the room), so the
+        // accessible name has to carry the active view: without it the control would announce
+        // only as "button".
+        aria-label={activeTabDefinition.label}
         aria-haspopup="dialog"
         aria-expanded={isPickerOpen}
         data-workspace-tab={activeTabDefinition.id}
         aria-current="true"
-        className="flex h-8 min-w-0 max-w-[8rem] shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2 text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        className="flex h-8 min-w-0 shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2 text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
         <WorkspaceTabIcon tab={activeTabDefinition} strokeWidth={2} />
-        <span className="truncate">{activeTabDefinition.label}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       </DialogTrigger>
 

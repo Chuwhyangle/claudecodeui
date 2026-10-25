@@ -980,5 +980,20 @@
         "title": "Son derleme veya yeniden başlatma başarısız oldu"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "quay nabız panelini aç",
+    "title": "Döngü nabzı",
+    "goalsHeading": "Hedefler · {{count}}",
+    "tasksHeading": "Görevler · {{count}}",
+    "done": "Tamamlanan · {{count}}",
+    "empty": "Bu oturumda henüz hiçbir quay görevi anılmadı.",
+    "loading": "Anılan görevler yükleniyor…",
+    "listError": "Bu oturumda anılan görevler okunamadı.",
+    "lanesNote": "Şerit okuması kullanılamıyor — görevler kayıtlı durumlarını aşama olmadan gösterir.",
+    "viaTasks": "{{count}} görev aracılığıyla",
+    "mentionedInMessage": "bir mesajda anıldı",
+    "mentionedAgo": "{{minutes}} dk önce anıldı",
+    "openQuayPanel": "Quay panelini aç"
   }
 }

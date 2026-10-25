@@ -980,5 +980,20 @@
         "title": "前回のビルドまたは再起動に失敗しました"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "quayパルスパネルを開く",
+    "title": "ループパルス",
+    "goalsHeading": "ゴール · {{count}}",
+    "tasksHeading": "タスク · {{count}}",
+    "done": "完了 · {{count}}",
+    "empty": "このセッションではまだquayタスクが言及されていません。",
+    "loading": "言及されたタスクを読み込み中…",
+    "listError": "このセッションで言及されたタスクを読み取れませんでした。",
+    "lanesNote": "レーンを読み取れません — タスクはフェーズなしの保存済みステータスを表示します。",
+    "viaTasks": "{{count}}件のタスク経由",
+    "mentionedInMessage": "メッセージで言及",
+    "mentionedAgo": "{{minutes}}分前に言及",
+    "openQuayPanel": "Quayパネルを開く"
   }
 }

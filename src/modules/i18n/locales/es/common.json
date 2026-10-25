@@ -980,5 +980,20 @@
         "title": "La última compilación o reinicio falló"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "Abrir el panel de pulso de quay",
+    "title": "Pulso del bucle",
+    "goalsHeading": "Objetivos · {{count}}",
+    "tasksHeading": "Tareas · {{count}}",
+    "done": "Hechas · {{count}}",
+    "empty": "Aún no se ha mencionado ninguna tarea de quay en esta sesión.",
+    "loading": "Cargando las tareas mencionadas…",
+    "listError": "No se pudieron leer las tareas mencionadas en esta sesión.",
+    "lanesNote": "Lectura de carriles no disponible: las tareas muestran su estado guardado sin fase.",
+    "viaTasks": "vía {{count}} tareas",
+    "mentionedInMessage": "mencionada en un mensaje",
+    "mentionedAgo": "Mencionada hace {{minutes}} min",
+    "openQuayPanel": "Abrir el panel de Quay"
   }
 }

@@ -980,5 +980,20 @@
         "title": "마지막 빌드 또는 재시작이 실패했습니다"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "quay 펄스 패널 열기",
+    "title": "루프 펄스",
+    "goalsHeading": "목표 · {{count}}",
+    "tasksHeading": "작업 · {{count}}",
+    "done": "완료 · {{count}}",
+    "empty": "이 세션에서 아직 quay 작업이 언급되지 않았습니다.",
+    "loading": "언급된 작업을 불러오는 중…",
+    "listError": "이 세션에서 언급된 작업을 읽을 수 없습니다.",
+    "lanesNote": "레인 읽기를 사용할 수 없음 — 작업은 단계 없이 저장된 상태를 표시합니다.",
+    "viaTasks": "{{count}}개 작업을 통해",
+    "mentionedInMessage": "메시지에서 언급됨",
+    "mentionedAgo": "{{minutes}}분 전에 언급됨",
+    "openQuayPanel": "Quay 패널 열기"
   }
 }

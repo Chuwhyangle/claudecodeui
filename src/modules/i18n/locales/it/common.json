@@ -980,5 +980,20 @@
         "title": "L'ultima compilazione o riavvio non è riuscito"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "Apri il pannello impulso quay",
+    "title": "Impulso del ciclo",
+    "goalsHeading": "Obiettivi · {{count}}",
+    "tasksHeading": "Attività · {{count}}",
+    "done": "Completate · {{count}}",
+    "empty": "Nessuna attività quay è ancora stata menzionata in questa sessione.",
+    "loading": "Caricamento delle attività menzionate…",
+    "listError": "Impossibile leggere le attività menzionate in questa sessione.",
+    "lanesNote": "Lettura delle corsie non disponibile — le attività mostrano lo stato salvato senza fase.",
+    "viaTasks": "tramite {{count}} attività",
+    "mentionedInMessage": "menzionata in un messaggio",
+    "mentionedAgo": "Menzionata {{minutes}} min fa",
+    "openQuayPanel": "Apri il pannello Quay"
   }
 }

@@ -1,4 +1,9 @@
 import type { QuayGanttInterval, QuayGanttLanes, QuayGanttUnavailableReason } from '@/shared/types';
+import {
+  QUAY_DEFAULT_STATE_TEXT_CLASS,
+  QUAY_STATE_TEXT_CLASSES,
+  QUAY_UNKNOWN_STATE,
+} from '@/shared/constants';
 import { cn } from '@/shared/utils';
 import {
   LOOP_PULSE_AXIS_Y,
@@ -37,33 +42,15 @@ export const GANTT_WINDOW_HOURS = [1, 3, 6, 12] as const;
 const HOUR_MS = 3_600_000;
 
 /**
- * Colour per state, on the same palette `TimelineBar` and the panel's status dots use.
- *
- * Every state carries its own class: quay publishes *which* states exist but never what
- * colour they are, so the mapping is ours — and two states sharing a colour would make
- * the gantt silently unreadable (a `failed` run indistinguishable from a `timed-out` one).
+ * The state key an interval is coloured by: the in-flight phase, else the terminal state. The
+ * title bar's trigger derives the same key the same way, from the shared state-colour map.
  */
-const STATE_TEXT_CLASSES: Record<string, string> = {
-  implementing: 'text-blue-500',
-  'fan-in': 'text-violet-500',
-  'awaiting-land': 'text-amber-500',
-  landed: 'text-green-500',
-  completed: 'text-emerald-600',
-  failed: 'text-red-600',
-  killed: 'text-rose-400',
-  'timed-out': 'text-orange-600',
-  'exited-not-landed': 'text-yellow-600',
-};
-const DEFAULT_STATE_CLASS = 'text-gray-400';
-const UNKNOWN_STATE = 'unknown';
-
-/** The state key an interval is coloured by: the in-flight phase, else the terminal state. */
 function intervalState(interval: QuayGanttInterval): string {
-  return interval.phase ?? interval.finalState ?? UNKNOWN_STATE;
+  return interval.phase ?? interval.finalState ?? QUAY_UNKNOWN_STATE;
 }
 
 function stateClass(state: string): string {
-  return STATE_TEXT_CLASSES[state] ?? DEFAULT_STATE_CLASS;
+  return QUAY_STATE_TEXT_CLASSES[state] ?? QUAY_DEFAULT_STATE_TEXT_CLASS;
 }
 
 /** Human-readable elapsed time for one interval's tooltip. */

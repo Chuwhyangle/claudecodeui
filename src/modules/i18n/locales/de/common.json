@@ -950,5 +950,20 @@
         "title": "Der letzte Build oder Neustart ist fehlgeschlagen"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "Quay-Puls-Panel öffnen",
+    "title": "Loop-Puls",
+    "goalsHeading": "Ziele · {{count}}",
+    "tasksHeading": "Aufgaben · {{count}}",
+    "done": "Erledigt · {{count}}",
+    "empty": "In dieser Sitzung wurden noch keine Quay-Aufgaben erwähnt.",
+    "loading": "Erwähnte Aufgaben werden geladen…",
+    "listError": "Die erwähnten Aufgaben dieser Sitzung konnten nicht gelesen werden.",
+    "lanesNote": "Lane-Lesung nicht verfügbar – Aufgaben zeigen ihren gespeicherten Status ohne Phase.",
+    "viaTasks": "über {{count}} Aufgaben",
+    "mentionedInMessage": "in einer Nachricht erwähnt",
+    "mentionedAgo": "Vor {{minutes}} Min. erwähnt",
+    "openQuayPanel": "Quay-Panel öffnen"
   }
 }
