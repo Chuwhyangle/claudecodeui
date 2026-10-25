@@ -158,3 +158,11 @@ HTTP 403
 ```
 
 隔离库实读：`user_notice_dismissals` 只有 `(user_id=1, notice_id='deploy:pending-build', revision='ac66b3b420…')` 一行；403 那次未写行。验证后已 `isolated-instance.sh stop`（`ok:true`、无残留 scope）并 `git reset --hard 7cde88f82` 丢弃 B/C 两个探针提交。
+
+## Blocker
+
+**2026-10-25T03:38:25.775Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=86589 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792899115420
+- run_id：wk-prod-anchor
+- session_id：ab5f5529-1129-4a8b-8578-ac89c436f2ae
