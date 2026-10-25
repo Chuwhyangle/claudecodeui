@@ -2,7 +2,7 @@
 id: gap-quay-pulse-popover-escape-copy-and-mobile-chip-label
 title: 标题栏脉冲 popover 三处缺陷：Escape 被 composer 先吞、「via 1 tasks」与只按分钟计的相对时间、非 quay
   项目的移动端 tab 下拉被去掉文字
-status: todo
+status: ready
 labels:
   - gap
   - defect
