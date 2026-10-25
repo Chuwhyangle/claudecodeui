@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 
-import { fireEvent, render, within } from '@testing-library/react';
+import { act, fireEvent, render, within } from '@testing-library/react';
 import i18next from 'i18next';
 import { useCallback, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { initReactI18next } from 'react-i18next';
-import { test, vi } from 'vitest';
+import { beforeEach, test, vi } from 'vitest';
 
 import type { AppTab, Project } from '@/shared/types';
 import enCommon from '@/modules/i18n/locales/en/common.json';
@@ -56,6 +56,27 @@ const { PLUGINS, ENABLED_PLUGIN_COUNT } = vi.hoisted(() => {
   };
 });
 
+// The pulse trigger polls the lanes endpoint whenever the Quay tab is offered. These cases are
+// about layout (and about the trigger's own visibility gate), so the network hop answers an
+// empty, successful reading; the mocks are spies so the gate case can count calls.
+const apiMock = vi.hoisted(() => ({ quayLanes: vi.fn(), quaySessionMentions: vi.fn() }));
+vi.mock('@/shared/api', () => ({ api: apiMock }));
+
+beforeEach(() => {
+  apiMock.quayLanes.mockReset();
+  apiMock.quaySessionMentions.mockReset();
+  apiMock.quayLanes.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ ok: true, gantt: null, ganttUnavailable: 'lanes-read-failed', generatedAt: '' }),
+  });
+  apiMock.quaySessionMentions.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ ok: true, sessionId: 's', projectId: 'p', tasks: [], goals: [], generatedAt: '' }),
+  });
+});
+
 vi.mock('@/modules/plugins', () => ({
   usePlugins: () => ({
     plugins: PLUGINS,
@@ -92,6 +113,10 @@ if (typeof globalThis.ResizeObserver !== 'function') {
   } as unknown as typeof ResizeObserver;
 }
 
+// jsdom also ships no scrollIntoView, and the header scrolls its active tab into view from a
+// requestAnimationFrame — which lands after the awaited assertions in the gate case.
+Element.prototype.scrollIntoView = () => {};
+
 const BUILT_IN_NAMES = ['Chat', 'Shell', 'Files', 'Source Control'];
 const CONDITIONAL_NAMES = ['Browser', 'Tasks'];
 const ENABLED_PLUGIN_NAMES = Array.from({ length: ENABLED_PLUGIN_COUNT }, (_, i) => `Probe Workspace ${i + 1}`);
@@ -106,6 +131,7 @@ const PROJECT: Project = {
 type HarnessProps = {
   isMobile: boolean;
   shouldShowTasksTab?: boolean;
+  shouldShowQuayTab?: boolean;
   shouldShowBrowserTab?: boolean;
   onSetActiveTab?: (update: SetStateAction<AppTab>) => void;
 };
@@ -118,6 +144,7 @@ type HarnessProps = {
 function HeaderHarness({
   isMobile,
   shouldShowTasksTab = false,
+  shouldShowQuayTab = false,
   shouldShowBrowserTab = false,
   onSetActiveTab,
 }: HarnessProps) {
@@ -135,6 +162,7 @@ function HeaderHarness({
       selectedProject={PROJECT}
       selectedSession={null}
       shouldShowTasksTab={shouldShowTasksTab}
+      shouldShowQuayTab={shouldShowQuayTab}
       shouldShowBrowserTab={shouldShowBrowserTab}
       isMobile={isMobile}
       onMenuClick={() => {}}
@@ -154,7 +182,10 @@ const focusedName = (): string => {
   return active ? `${active.tagName.toLowerCase()} "${accessibleName(active)}"` : '<no activeElement>';
 };
 
-const collapsedTrigger = (): HTMLElement | null => document.querySelector('[aria-haspopup="dialog"]');
+// The Quay pulse trigger also announces `aria-haspopup="dialog"`, so the workspace selector is
+// identified by its own contract (`data-workspace-tab`) rather than by that attribute alone.
+const collapsedTrigger = (): HTMLElement | null =>
+  document.querySelector('[data-workspace-tab][aria-haspopup="dialog"]');
 
 const workspaceDialog = (): HTMLElement | null => document.querySelector('[role="dialog"]');
 
@@ -222,6 +253,13 @@ test('mobile drops the tablist for a single trigger that reports the active work
   );
 
   const trigger = triggers[0] as HTMLElement;
+  // The label is now carried entirely by `aria-label`: the pulse strip beside the trigger needs
+  // the room the visible text used to take, so the button renders icon + chevron only.
+  assert.equal(
+    (trigger.textContent ?? '').trim(),
+    '',
+    `the collapsed trigger must show no visible text; it still rendered "${trigger.textContent}"`,
+  );
   assert.ok(
     accessibleName(trigger).includes('Chat'),
     `the trigger must name the active workspace; its name was "${accessibleName(trigger)}"`,
@@ -405,4 +443,61 @@ test('the Quay tab is labelled from tabs.quay, never the bare literal "tabs.quay
     enCommon.tabs.quay,
     `the Quay tab must be labelled from tabs.quay; its name was ${JSON.stringify(label)}`,
   );
+});
+
+// The header is the only surface that mounts the pulse trigger, so its visibility gate is read
+// here: no Quay tab ⇒ no trigger AND no lanes request; a Quay tab ⇒ the trigger at both layouts.
+test('shouldShowQuayTab gates the pulse trigger and its lanes read', async () => {
+  const noQuay = render(<HeaderHarness isMobile={false} />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  assert.equal(
+    noQuay.container.querySelector('[data-testid="quay-pulse-trigger"]'),
+    null,
+    'a project without the Quay tab must not render the pulse trigger',
+  );
+  assert.equal(apiMock.quayLanes.mock.calls.length, 0, 'a project without the Quay tab must not read lanes');
+  noQuay.unmount();
+
+  const desktop = render(<HeaderHarness isMobile={false} shouldShowQuayTab />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  assert.ok(desktop.container.querySelector('[data-testid="quay-pulse-trigger"]'), 'desktop quay trigger');
+  assert.ok(apiMock.quayLanes.mock.calls.length > 0, 'the desktop trigger polls lanes');
+  desktop.unmount();
+
+  const mobile = render(<HeaderHarness isMobile shouldShowQuayTab />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  assert.ok(mobile.container.querySelector('[data-testid="quay-pulse-trigger"]'), 'mobile quay trigger');
+});
+
+// With a quay project the mobile row carries TWO dialog-opening controls: the pulse trigger and
+// the workspace picker. The picker lost its visible text to make room for the pulse strip, so
+// its accessible name and its tab contract are the only things identifying it now.
+test('a quay project adds the pulse trigger beside a text-free workspace picker on mobile', () => {
+  render(<HeaderHarness isMobile shouldShowQuayTab />);
+
+  const pulse = document.querySelector('[data-testid="quay-pulse-trigger"]');
+  assert.ok(pulse, `the quay project must render its pulse trigger; button names were ${JSON.stringify(buttonNames())}`);
+
+  const picker = collapsedTrigger();
+  assert.ok(picker, `the workspace picker must still render; button names were ${JSON.stringify(buttonNames())}`);
+  assert.equal((picker.textContent ?? '').trim(), '', 'the picker renders icon + chevron, no text');
+  assert.ok(
+    accessibleName(picker).includes('Chat'),
+    `the picker must name the active view; its name was "${accessibleName(picker)}"`,
+  );
+  assert.equal(picker.getAttribute('data-workspace-tab'), 'chat');
+  assert.equal(picker.getAttribute('aria-current'), 'true');
+  assert.equal(picker.getAttribute('aria-haspopup'), 'dialog');
+  assert.equal(picker.getAttribute('aria-expanded'), 'false');
+
+  fireEvent.click(picker);
+  assert.ok(workspaceDialog(), 'the text-free picker must still open the workspace dialog');
+  fireEvent.click(within(workspaceDialog() as HTMLElement).getByRole('button', { name: 'Files' }));
+  assert.equal(document.querySelector('[aria-current="true"]')?.getAttribute('data-workspace-tab'), 'files');
 });

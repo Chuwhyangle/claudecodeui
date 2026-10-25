@@ -1063,5 +1063,20 @@
         "title": "Build atau restart terakhir gagal"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "Buka panel pulsa quay",
+    "title": "Pulsa loop",
+    "goalsHeading": "Tujuan · {{count}}",
+    "tasksHeading": "Tugas · {{count}}",
+    "done": "Selesai · {{count}}",
+    "empty": "Belum ada tugas quay yang disebut dalam sesi ini.",
+    "loading": "Memuat tugas yang disebut…",
+    "listError": "Tidak dapat membaca tugas yang disebut dalam sesi ini.",
+    "lanesNote": "Pembacaan lajur tidak tersedia — tugas menampilkan status tersimpan tanpa fase.",
+    "viaTasks": "melalui {{count}} tugas",
+    "mentionedInMessage": "disebut dalam sebuah pesan",
+    "mentionedAgo": "Disebut {{minutes}} menit lalu",
+    "openQuayPanel": "Buka panel Quay"
   }
 }

@@ -11,7 +11,15 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
-import type { FileStatusCode, LLMProvider, McpProvider, McpScope, McpTransport, SettingsMainTab } from '@/shared/types';
+import type {
+  FileStatusCode,
+  LLMProvider,
+  McpProvider,
+  McpScope,
+  McpTransport,
+  QuayInFlightPhase,
+  SettingsMainTab,
+} from '@/shared/types';
 import type { UserPreferenceKey } from '@/shared/userSettings';
 
 /** The four buckets the git changes view sorts working-tree files into. */
@@ -250,3 +258,108 @@ export const ACCESS_TOKEN_SCOPE_OPTIONS: readonly {
   // write scope — it changes what the user's screen shows.
   { scope: 'cloudcli:navigate', writable: true, labelKey: 'navigate' },
 ];
+
+// ---------------------------
+
+//----------------- QUAY PULSE ------------
+
+/*
+ * The three visual vocabularies the Quay tab's Loop pulse card and the title bar's pulse
+ * trigger/popover share. They live here — not in either component — because a second copy is
+ * exactly how the two surfaces would start drawing the same reading differently: the trigger's
+ * bars are compared against the card's by class, and the popover's phase badges against the
+ * in-flight card's. Every consumer imports these declarations, so equality is structural.
+ */
+
+/**
+ * Text colour per gantt bar state, on the palette `TimelineBar` and the panel's status dots use.
+ *
+ * Every state carries its own class: quay publishes *which* states exist but never what colour
+ * they are, and two states sharing a colour would make the gantt silently unreadable (a `failed`
+ * run indistinguishable from a `timed-out` one).
+ */
+export const QUAY_STATE_TEXT_CLASSES: Record<string, string> = {
+  implementing: 'text-blue-500',
+  'fan-in': 'text-violet-500',
+  'awaiting-land': 'text-amber-500',
+  landed: 'text-green-500',
+  completed: 'text-emerald-600',
+  failed: 'text-red-600',
+  killed: 'text-rose-400',
+  'timed-out': 'text-orange-600',
+  'exited-not-landed': 'text-yellow-600',
+};
+
+/** The colour a bar falls back to when quay publishes a state this build does not know. */
+export const QUAY_DEFAULT_STATE_TEXT_CLASS = 'text-gray-400';
+
+/** The state key used when an interval has neither an in-flight phase nor a terminal state. */
+export const QUAY_UNKNOWN_STATE = 'unknown';
+
+/**
+ * Coarse goal completion percentage for the Stage goals progress bar. `quay goal list --json`
+ * carries no completion ratio, so the bar is a status-derived visual aid only — the status
+ * text next to it is authoritative.
+ */
+export const QUAY_GOAL_STATUS_PERCENT: Record<string, number> = {
+  achieved: 100,
+  superseded: 100,
+  active: 50,
+};
+
+/**
+ * Visible label, colour class and SPOKEN colour per in-flight phase, covering every phase quay
+ * publishes (`QuayInFlightPhase`). The phases must render as *different* markers (text, colour
+ * and `data-testid`), so a reader — and the test that guards it — can never mistake a task
+ * parked in fan-in for one still being implemented. `color` is the same bucket the view
+ * contract publishes as a display attribute, kept here so 「红的那个」 and the drawn marker
+ * cannot drift apart.
+ */
+export const QUAY_IN_FLIGHT_PHASE_META: Record<
+  QuayInFlightPhase,
+  { label: string; className: string; color: string }
+> = {
+  implementing: {
+    label: 'implementing',
+    className: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+    color: 'blue',
+  },
+  'fan-in': {
+    label: 'fan-in',
+    className: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+    color: 'violet',
+  },
+  'awaiting-land': {
+    label: 'awaiting land',
+    className: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    color: 'amber',
+  },
+  landed: {
+    label: 'landed',
+    className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+    color: 'green',
+  },
+};
+
+/**
+ * The classes every quay task badge shares before its state colour is appended. The in-flight
+ * card and the title bar popover both build their badge as `cn(base, colourClass)`; sharing the
+ * base is what makes a phase badge in the two surfaces byte-identical.
+ */
+export const QUAY_TASK_BADGE_BASE_CLASS = 'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium';
+
+/**
+ * Badge colour per stored task status that is not an in-flight phase, written the same
+ * `bg-X-50 text-X-700 dark:bg-X-950 dark:text-X-300` way as the phase badges. `done` and
+ * `superseded` are the folded-away reading; `needs-human` is the one that needs a person.
+ */
+export const QUAY_TASK_STATUS_BADGE_CLASSES: Record<string, string> = {
+  'needs-human': 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  ready: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  todo: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  done: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
+  superseded: 'bg-muted text-muted-foreground',
+};
+
+/** The badge colour for a stored status this build does not know. */
+export const QUAY_DEFAULT_TASK_STATUS_BADGE_CLASS = 'bg-muted text-muted-foreground';

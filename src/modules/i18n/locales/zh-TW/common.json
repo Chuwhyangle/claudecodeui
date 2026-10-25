@@ -980,5 +980,20 @@
         "title": "上一次建置或重新啟動失敗"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "開啟 quay 脈衝面板",
+    "title": "循環脈衝",
+    "goalsHeading": "目標 · {{count}}",
+    "tasksHeading": "任務 · {{count}}",
+    "done": "已完成 · {{count}}",
+    "empty": "此工作階段尚未提及任何 quay 任務。",
+    "loading": "正在載入提及的任務…",
+    "listError": "無法讀取此工作階段提及的任務。",
+    "lanesNote": "泳道讀數不可用——任務僅顯示已儲存狀態，不顯示階段。",
+    "viaTasks": "經由 {{count}} 個任務",
+    "mentionedInMessage": "在訊息中提及",
+    "mentionedAgo": "{{minutes}} 分鐘前提及",
+    "openQuayPanel": "開啟 Quay 面板"
   }
 }

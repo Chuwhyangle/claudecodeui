@@ -5,12 +5,16 @@ import type { ReactNode } from 'react';
 import type {
   QuayDriverState,
   QuayFleetCliState,
-  QuayInFlightTask,
   QuayListItem,
   QuaySnapshot,
   QuayTimelineWindow,
   QuayViewContract,
 } from '@/shared/types';
+import {
+  QUAY_GOAL_STATUS_PERCENT,
+  QUAY_IN_FLIGHT_PHASE_META,
+  QUAY_TASK_BADGE_BASE_CLASS,
+} from '@/shared/constants';
 import { cn } from '@/shared/utils';
 import type { QuayPanelView } from '@/modules/quay/hooks/useQuayStatus';
 import LoopPulseGantt from '@/modules/quay/LoopPulseGantt';
@@ -81,51 +85,6 @@ const STATE_DOT_CLASSES: Record<string, string> = {
   'exited-not-landed': 'bg-amber-500',
 };
 const DEFAULT_DOT_CLASS = 'bg-gray-400';
-
-/**
- * Coarse goal completion percentage for the Stage goals progress bar. `quay goal
- * list --json` carries no completion ratio, so the bar is a status-derived
- * visual aid only — the status text next to it is authoritative.
- */
-const GOAL_STATUS_PERCENT: Record<string, number> = {
-  achieved: 100,
-  superseded: 100,
-  active: 50,
-};
-
-/**
- * Visible label, colour class and SPOKEN colour per in-flight `phase`, covering every phase
- * quay publishes (`QuayInFlightPhase`). The phases must render as *different* markers (text,
- * colour and `data-testid`), so a reader — and the test that guards it — can never mistake a
- * task parked in fan-in for one still being implemented. `color` is the same bucket the view
- * contract publishes as a display attribute, kept in this record so 「红的那个」 and the
- * drawn marker cannot drift apart.
- */
-const IN_FLIGHT_PHASE_META: Record<
-  QuayInFlightTask['phase'],
-  { label: string; className: string; color: string }
-> = {
-  implementing: {
-    label: 'implementing',
-    className: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-    color: 'blue',
-  },
-  'fan-in': {
-    label: 'fan-in',
-    className: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
-    color: 'violet',
-  },
-  'awaiting-land': {
-    label: 'awaiting land',
-    className: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
-    color: 'amber',
-  },
-  landed: {
-    label: 'landed',
-    className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-    color: 'green',
-  },
-};
 
 /**
  * How old an in-flight row's `lastHeartbeat` may read, relative to the snapshot's own
@@ -356,7 +315,7 @@ export function buildQuayInFlightContract(
       label: CIRCLED_ORDINALS[index] ?? `(${index + 1})`,
       display: {
         status: task.phase,
-        color: IN_FLIGHT_PHASE_META[task.phase].color,
+        color: QUAY_IN_FLIGHT_PHASE_META[task.phase].color,
         ordinal: index + 1,
         pos: { row: index + 1, column: 1 },
       },
@@ -458,7 +417,7 @@ function StageGoals({ goals }: { goals: QuaySnapshot['goals'] }) {
                   */}
                   {goal.status !== 'achieved' && (
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted" data-testid="quay-panel-stage-goals-bar">
-                      <div className="h-full rounded bg-primary" style={{ width: `${GOAL_STATUS_PERCENT[goal.status] ?? 0}%` }} />
+                      <div className="h-full rounded bg-primary" style={{ width: `${QUAY_GOAL_STATUS_PERCENT[goal.status] ?? 0}%` }} />
                     </div>
                   )}
                 </li>
@@ -655,7 +614,7 @@ function InFlightCard({
       ) : (
         <ul className="space-y-1" data-testid="quay-panel-inflight-list">
           {inFlight.map((task, index) => {
-            const phase = IN_FLIGHT_PHASE_META[task.phase];
+            const phase = QUAY_IN_FLIGHT_PHASE_META[task.phase];
             const heartbeatAgeMs = elapsedSince(task.lastHeartbeat, generatedAt);
             const stale = heartbeatAgeMs !== null && heartbeatAgeMs > IN_FLIGHT_STALE_AFTER_MS;
             const focusable = focusables[index];
@@ -681,7 +640,7 @@ function InFlightCard({
                   {task.taskId}
                 </span>
                 <span
-                  className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', phase.className)}
+                  className={cn(QUAY_TASK_BADGE_BASE_CLASS, phase.className)}
                   data-testid={`quay-panel-inflight-phase-${task.phase}`}
                 >
                   {phase.label}

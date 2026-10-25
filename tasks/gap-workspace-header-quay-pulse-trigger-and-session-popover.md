@@ -1,7 +1,7 @@
 ---
 id: gap-workspace-header-quay-pulse-trigger-and-session-popover
 title: 工作区标题栏：Quay 迷你甘特图/脉冲条触发器 + 会话 task/goal popover（移动端 tab 下拉去文本）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -51,25 +51,39 @@ depends_on:
 
 ## AC
 
-- [ ] 显隐：`npx vitest run src/modules/quay/tests/SessionPulse.test.tsx src/modules/project-workspace/tests/workspaceTabsResponsive.test.tsx` exit 0；含用例：`shouldShowQuayTab` 为假时标题栏里没有 `quay-pulse-trigger`，且 lanes 请求桩零次调用；为真时桌面与移动端都渲染。
-- [ ] 形态切换：同一测试文件含用例，用 ResizeObserver 桩驱动 header 宽度：1000 为 `data-variant="wide"`（宽 110），959 为 `narrow`（宽 43），移动端任何宽度都为 `narrow`。取假：把判据改成视口宽度 768，959 这一例必须红。
-- [ ] 常态与点击态：触发器常态 className 不含 `border` 与 `bg-accent`，打开态含 `bg-accent`；带 `aria-haspopup="dialog"`、`aria-expanded` 随开合切换、非空 `aria-label`；键盘焦点类为 `focus-visible:ring-2` 加 `ring-primary/60`。
-- [ ] 画法同源：同一份 lanes 分别渲染 `LoopPulseGantt` 与触发器，逐状态（completed、failed、timed-out、fan-in）比较 bar 的状态色类相等；lanes 为空仍有 5 条骨架线；lanes 为 null 时有骨架与 `quay-pulse-degraded`、无 bar。
-- [ ] 按项目存窗口：切换窗口写 localStorage 的 `quay-pulse-window:<projectId>`；换项目读回各自的值；缺省 3，`5` 与 `abc` 回落 3；整个过程不调用任何服务端保存接口；`git diff --stat -- src/modules/quay/hooks/useQuayStatus.ts` 无输出，`npx vitest run src/modules/quay/tests/QuayPanel.test.tsx src/modules/quay/tests/LoopPulseGantt.test.tsx` exit 0。
-- [ ] 轮询：用假定时器：30 秒一次，页面不可见时暂停、恢复后立即补一次；切项目后先前请求的慢响应被丢弃；父组件包一层渲染计数器，连续 3 次轮询后父层渲染次数不变。
-- [ ] popover 几何与风格：用例断言根节点 `role="dialog"`，className 含 `rounded-xl border border-border bg-popover` 与 `shadow-xl`；桌面宽度等于 `min(868, header 宽 − 16)` 且水平居中，移动端等于视口宽 − 16；内含 `quay-gantt` 与窗口选择器；选择窗口后触发器与 popover 的甘特图同步变化；Goals 与 Tasks 两个分区容器互为兄弟节点、标题与各自的行在同一容器内，列表区元素的 className 不含 `p-`、`px-`、`py-` 内边距类。
-- [ ] 行与徽标：对同一相位，popover 的任务徽标 className 与 `QuayPanel` in-flight 行的徽标 className 相等（逐相位比较 implementing、fan-in、awaiting land、landed）；goal 行状态不是 achieved 才有 `quay-pulse-goal-bar`，achieved 没有；排序为在飞与需处理在前；`done` 与 `superseded` 默认折叠在「Done · N」下，点击后展开并显示全部。
-- [ ] 四种状态：加载中、空、列表读取失败、lanes 读不到各有断言：空态甘特图仍在；列表读取失败时甘特图仍在；lanes 读不到时列表仍渲染、行没有相位徽标、出现 `quay-pulse-lanes-note`。
-- [ ] 取数时机：popover 未打开时不调用 `session-mentions`；打开时恰好调用一次，关闭再打开调用第二次；打开期间不轮询它。
-- [ ] 关闭与 Escape：`src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx` 新增用例：popover 打开且焦点在 composer 时按 Escape，不触发 abort、popover 关闭；popover 未打开时仍触发 abort（原用例保持）。取假：去掉 popover 根节点的 `role="dialog"`，该例必须红。点击外部关闭、关闭后焦点回到触发器各有断言。
-- [ ] 移动端 tab 下拉：`workspaceTabsResponsive.test.tsx` 更新：触发器无可见文本（`textContent` 去空白后为空），`aria-label` 含活动视图名，原有 `accessibleName(trigger).includes('Chat')` 与 `aria-haspopup`、`aria-expanded` 断言不变，选中视图、Escape、点击遮罩的原用例保持通过；`data-workspace-tab` 与 `aria-current` 契约不变。
-- [ ] 语言包：`npx vitest run src/modules/project-workspace/tests/i18nQuayTabCompleteness.test.ts` exit 0，其中新增断言覆盖全部 12 个语言包都含本任务新增的每个 `quayPulse.*` 键，占位符与英文一致，取值不是键名本身。
-- [ ] 模块边界与不复制：`git grep -n "@/modules/project-workspace" -- src/modules/quay` 无输出；`git grep -nE "@/modules/quay/" -- src/modules/project-workspace` 无输出；新增组件文件里没有十六进制或 rgb 字面颜色（`git grep -nE "#[0-9a-fA-F]{3,8}[^0-9a-fA-F]|rgb\(" -- src/modules/quay/SessionPulse.tsx src/modules/quay/SessionPulsePopover.tsx src/modules/quay/hooks/useSessionPulse.ts` 无输出）。
-- [ ] 类型与静态检查：`npx tsc --noEmit -p tsconfig.json` exit 0，`npx oxlint src/modules/quay src/modules/project-workspace src/shared` exit 0。
+- [x] 显隐：`npx vitest run src/modules/quay/tests/SessionPulse.test.tsx src/modules/project-workspace/tests/workspaceTabsResponsive.test.tsx` exit 0；含用例：`shouldShowQuayTab` 为假时标题栏里没有 `quay-pulse-trigger`，且 lanes 请求桩零次调用；为真时桌面与移动端都渲染。
+- [x] 形态切换：同一测试文件含用例，用 ResizeObserver 桩驱动 header 宽度：1000 为 `data-variant="wide"`（宽 110），959 为 `narrow`（宽 43），移动端任何宽度都为 `narrow`。取假：把判据改成视口宽度 768，959 这一例必须红。
+- [x] 常态与点击态：触发器常态 className 不含 `border` 与 `bg-accent`，打开态含 `bg-accent`；带 `aria-haspopup="dialog"`、`aria-expanded` 随开合切换、非空 `aria-label`；键盘焦点类为 `focus-visible:ring-2` 加 `ring-primary/60`。
+- [x] 画法同源：同一份 lanes 分别渲染 `LoopPulseGantt` 与触发器，逐状态（completed、failed、timed-out、fan-in）比较 bar 的状态色类相等；lanes 为空仍有 5 条骨架线；lanes 为 null 时有骨架与 `quay-pulse-degraded`、无 bar。
+- [x] 按项目存窗口：切换窗口写 localStorage 的 `quay-pulse-window:<projectId>`；换项目读回各自的值；缺省 3，`5` 与 `abc` 回落 3；整个过程不调用任何服务端保存接口；`git diff --stat -- src/modules/quay/hooks/useQuayStatus.ts` 无输出，`npx vitest run src/modules/quay/tests/QuayPanel.test.tsx src/modules/quay/tests/LoopPulseGantt.test.tsx` exit 0。
+- [x] 轮询：用假定时器：30 秒一次，页面不可见时暂停、恢复后立即补一次；切项目后先前请求的慢响应被丢弃；父组件包一层渲染计数器，连续 3 次轮询后父层渲染次数不变。
+- [x] popover 几何与风格：用例断言根节点 `role="dialog"`，className 含 `rounded-xl border border-border bg-popover` 与 `shadow-xl`；桌面宽度等于 `min(868, header 宽 − 16)` 且水平居中，移动端等于视口宽 − 16；内含 `quay-gantt` 与窗口选择器；选择窗口后触发器与 popover 的甘特图同步变化；Goals 与 Tasks 两个分区容器互为兄弟节点、标题与各自的行在同一容器内，列表区元素的 className 不含 `p-`、`px-`、`py-` 内边距类。
+- [x] 行与徽标：对同一相位，popover 的任务徽标 className 与 `QuayPanel` in-flight 行的徽标 className 相等（逐相位比较 implementing、fan-in、awaiting land、landed）；goal 行状态不是 achieved 才有 `quay-pulse-goal-bar`，achieved 没有；排序为在飞与需处理在前；`done` 与 `superseded` 默认折叠在「Done · N」下，点击后展开并显示全部。
+- [x] 四种状态：加载中、空、列表读取失败、lanes 读不到各有断言：空态甘特图仍在；列表读取失败时甘特图仍在；lanes 读不到时列表仍渲染、行没有相位徽标、出现 `quay-pulse-lanes-note`。
+- [x] 取数时机：popover 未打开时不调用 `session-mentions`；打开时恰好调用一次，关闭再打开调用第二次；打开期间不轮询它。
+- [x] 关闭与 Escape：`src/modules/chat/tests/chatInterfaceEscapeAbort.test.tsx` 新增用例：popover 打开且焦点在 composer 时按 Escape，不触发 abort、popover 关闭；popover 未打开时仍触发 abort（原用例保持）。取假：去掉 popover 根节点的 `role="dialog"`，该例必须红。点击外部关闭、关闭后焦点回到触发器各有断言。
+- [x] 移动端 tab 下拉：`workspaceTabsResponsive.test.tsx` 更新：触发器无可见文本（`textContent` 去空白后为空），`aria-label` 含活动视图名，原有 `accessibleName(trigger).includes('Chat')` 与 `aria-haspopup`、`aria-expanded` 断言不变，选中视图、Escape、点击遮罩的原用例保持通过；`data-workspace-tab` 与 `aria-current` 契约不变。
+- [x] 语言包：`npx vitest run src/modules/project-workspace/tests/i18nQuayTabCompleteness.test.ts` exit 0，其中新增断言覆盖全部 12 个语言包都含本任务新增的每个 `quayPulse.*` 键，占位符与英文一致，取值不是键名本身。
+- [x] 模块边界与不复制：`git grep -n "@/modules/project-workspace" -- src/modules/quay` 无输出；`git grep -nE "@/modules/quay/" -- src/modules/project-workspace` 无输出；新增组件文件里没有十六进制或 rgb 字面颜色（`git grep -nE "#[0-9a-fA-F]{3,8}[^0-9a-fA-F]|rgb\(" -- src/modules/quay/SessionPulse.tsx src/modules/quay/SessionPulsePopover.tsx src/modules/quay/hooks/useSessionPulse.ts` 无输出）。
+- [x] 类型与静态检查：`npx tsc --noEmit -p tsconfig.json` exit 0，`npx oxlint src/modules/quay src/modules/project-workspace src/shared` exit 0。
 
 ## DoD
 
 真实页面验证（AGENTS.md「UI 验证」）：隔离实例（`scripts/isolated-instance.sh`，按记忆关 residentRestore、把已 seed 的库拷进去再起）里用 MCP 浏览器在真实 quay 项目上亲手走一遍，截图存 `tmp/` 并贴出：(1) 视口 1440×900：header 不小于 960 宽，迷你甘特图 110px 的常态与展开；(2) 视口约 1100×900（侧栏常驻，header 小于 960）：脉冲条 43px；(3) 视口 390×844：tab 下拉去文本、脉冲条、展开；(4) 暗色各一张。用 `browser_evaluate` 贴读数：触发器 `data-variant` 与宽度；popover 与 transcript 栏的 `getBoundingClientRect`（桌面应几乎重合）；常态触发器的计算样式无边框、背景透明。选一个有提及的真实会话看到 Goals 与 Tasks 两个分区，再选或构造一个不少于 25 个任务的长会话，滚到中段贴吸顶标题位置读数（标题顶边为 0）与底部渐变。Escape 的探查只在空闲会话上做（正在跑的会话上按 Escape 会中断回合）。常态与展开态逐项对照上面的参考效果图，不一致处在 DoD 里逐条说明。若有可用场景，同时跑 `node scripts/ui-scenario.mjs <scenario.json>` 并贴 JSON 报告。另外 `npm run build:client` 与 `npm run typecheck` 与 `npm run lint` 均 exit 0。
+
+## Evidence
+
+真实页面（隔离实例 :3119，拷贝库 + `SERVER_SETTINGS_PATH` 关 residentRestore；本会话无 MCP 浏览器，按记忆用一次性 Playwright spec 等价操作真实 server+dist，报告 `tmp/pulse-shots/report.json`，截图 `tmp/pulse-shots/*.png`）：
+
+- 1440×900：header 1151px；触发器 `data-variant="wide"`、110×32、3 根 bar + 5 条骨架、计算样式 `border-width:0px`、`background:rgba(0,0,0,0)`。展开：popover `role=dialog`、宽 868、left 430.5、top 61；transcript 列 `getBoundingClientRect` = left 430.5 / width 868（逐像素重合）；Goals · 5 + Tasks · 30（Done · 30 折叠）。
+- 1100×900：header 811px，触发器 `data-variant="narrow"`、43×32。
+- 390×844：触发器 43×32；tab 下拉 `textContent` 去空白为空、`aria-label="Chat"`、`data-workspace-tab="chat"`、`aria-current="true"` 不变；popover 宽 374、left 8、top 49。
+- 暗色（`<html class="dark">`）：桌面与移动端各一张，颜色全部来自主题 token。
+- 长会话（seed 30 个真实 task + GOAL-001/023/025/032）：展开 Done 后把列表滚到中段，`TASKS · 30` 吸顶标题 `top - listTop = 0`（position:sticky），底部渐变存在；滚动容器 className 无 `p-/px-/py-`。
+- 空闲会话上按 Escape：popover 关闭、焦点回到触发器（`focusedTrigger:true`），无回合可中断。
+- 与效果图差异：效果图里的「Apply to / This project / Show in header」开关按任务正文明确不做；其余布局、分区、折叠、渐变一致。
+- 场景运行器：仓库内无 `*.scenario.json` 可用（`scripts/ui-scenario.mjs` 需有场景文件且语义面只在 dev 构建挂载），故未跑。
+- 静态门：`npm run build:client`、`npm run typecheck`、`npm run lint` 均 exit 0；六个相关测试文件 89 例全绿。
 
 ## Touches
 

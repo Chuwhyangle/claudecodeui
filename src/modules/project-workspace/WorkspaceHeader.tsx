@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import type { AppTab, Project, ProjectSession } from '@/shared/types';
 import { cn } from '@/shared/utils';
+import { SessionPulse } from '@/modules/quay';
 import MobileMenuButton from '@/modules/project-workspace/MobileMenuButton';
 import WorkspaceTabs, { CollapsedWorkspaceSelector } from '@/modules/project-workspace/WorkspaceTabs';
 import WorkspaceMenu from '@/modules/project-workspace/WorkspaceMenu';
@@ -115,6 +116,18 @@ export default function WorkspaceHeader({
     el.scrollBy({ left: direction * Math.max(180, el.clientWidth * 0.65), behavior: 'smooth' });
   };
 
+  // Stable identity so the memoized pulse subtree is not re-rendered by an unrelated header
+  // render (the trigger's own 30 s poll already never reaches this component).
+  const openQuayPanel = useCallback(() => setActiveTab('quay'), [setActiveTab]);
+  const sessionPulse = shouldShowQuayTab ? (
+    <SessionPulse
+      projectId={selectedProject.projectId}
+      sessionId={selectedSession?.id ?? null}
+      isMobile={isMobile}
+      onOpenQuayPanel={openQuayPanel}
+    />
+  ) : null;
+
   return (
     <header
       data-app-header
@@ -141,6 +154,7 @@ export default function WorkspaceHeader({
 
       {isMobile ? (
         <div className="flex flex-shrink-0 items-center gap-1">
+          {sessionPulse}
           <CollapsedWorkspaceSelector
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -154,6 +168,10 @@ export default function WorkspaceHeader({
         </div>
       ) : (
         <>
+        {/* Between the title block and the tab strip, as the header's own flex child: putting
+            it inside the tab container would leave that container's `max-w-full` no room to
+            give. */}
+        {sessionPulse}
         <div className="min-w-0 flex-1">
           <div className="relative ml-auto w-fit max-w-full">
             {canScrollLeft && (

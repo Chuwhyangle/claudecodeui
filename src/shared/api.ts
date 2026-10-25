@@ -425,6 +425,21 @@ export const api = {
       })}`,
     ),
   /**
+   * The lanes-only reading behind the title bar's mini gantt: one `quay lanes` read for one
+   * window, sharing the backend's TTL and in-flight dedupe with the snapshot. Polled by
+   * `useSessionPulse` every 30 seconds; it deliberately does not fetch the rest of the snapshot.
+   */
+  quayLanes: (projectId: string, hours?: number) =>
+    get(`/api/quay/${encodeURIComponent(projectId)}/lanes${query({ hours })}`),
+  /**
+   * What this session's own message text names: the mentioned tasks (joined against the task
+   * store) and goals. Read once when the title bar popover opens; never polled.
+   */
+  quaySessionMentions: (projectId: string, sessionId: string) =>
+    get(
+      `/api/quay/${encodeURIComponent(projectId)}/session-mentions${query({ sessionId })}`,
+    ),
+  /**
    * The project's pinned 「对人接口会话」, read from the fleet registry (`projects[].interfaceSessionId`).
    *
    * The cockpit's push-to-talk routes an unmatched phrase to this conversation. The answer is the

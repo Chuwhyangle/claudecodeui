@@ -980,5 +980,20 @@
         "title": "La dernière compilation ou redémarrage a échoué"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "Ouvrir le panneau d'impulsion quay",
+    "title": "Impulsion de boucle",
+    "goalsHeading": "Objectifs · {{count}}",
+    "tasksHeading": "Tâches · {{count}}",
+    "done": "Terminées · {{count}}",
+    "empty": "Aucune tâche quay n'a encore été mentionnée dans cette session.",
+    "loading": "Chargement des tâches mentionnées…",
+    "listError": "Impossible de lire les tâches mentionnées dans cette session.",
+    "lanesNote": "Lecture des voies indisponible — les tâches affichent leur statut enregistré sans phase.",
+    "viaTasks": "via {{count}} tâches",
+    "mentionedInMessage": "mentionnée dans un message",
+    "mentionedAgo": "Mentionnée il y a {{minutes}} min",
+    "openQuayPanel": "Ouvrir le panneau Quay"
   }
 }

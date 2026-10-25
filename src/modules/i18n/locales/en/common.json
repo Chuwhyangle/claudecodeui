@@ -1071,5 +1071,20 @@
         "title": "The last build or restart failed"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "Open quay pulse panel",
+    "title": "Loop pulse",
+    "goalsHeading": "Goals · {{count}}",
+    "tasksHeading": "Tasks · {{count}}",
+    "done": "Done · {{count}}",
+    "empty": "No quay tasks have been mentioned in this session yet.",
+    "loading": "Loading mentioned tasks…",
+    "listError": "Could not read this session's mentioned tasks.",
+    "lanesNote": "Lane reading unavailable — tasks show their stored status without a phase.",
+    "viaTasks": "via {{count}} tasks",
+    "mentionedInMessage": "mentioned in a message",
+    "mentionedAgo": "Mentioned {{minutes}} min ago",
+    "openQuayPanel": "Open Quay panel"
   }
 }

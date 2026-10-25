@@ -398,6 +398,65 @@ export type QuayGanttLanes = {
 export type QuayGanttUnavailableReason = 'plugin-lacks-lanes-verb' | 'lanes-read-failed';
 
 /**
+ * The lanes-only reading the title bar's mini gantt polls
+ * (`GET /api/quay/:projectId/lanes`), mirroring the backend's `QuayLanesReading` verbatim.
+ *
+ * It is deliberately narrower than `QuaySnapshot`: the title bar needs only the packed lanes,
+ * so polling the snapshot every 30 seconds would spawn the task/goal/ADR/driver reads for a
+ * chart that draws none of them. `gantt: null` is "no lane reading", never "nothing ran" —
+ * `ganttUnavailable` says why in that case.
+ */
+export type QuayLanesReading = {
+  ok: true;
+  gantt: QuayGanttLanes | null;
+  ganttUnavailable: QuayGanttUnavailableReason | null;
+  /** When the reading was assembled, ISO-8601. */
+  generatedAt: string;
+};
+
+/** One task the session's message text names, joined against the task store. */
+export type QuaySessionMentionTask = {
+  taskId: string;
+  title: string;
+  /** The task's stored status (`ready`, `needs-human`, `done`, `superseded`, …). */
+  status: string;
+  /** The task's in-flight lane phase, or `null` when it is not in flight. */
+  phase: string | null;
+  /** The goal the task belongs to, or `null` when it carries none. */
+  goalId: string | null;
+  /** How many times the id appeared across the session's message bodies. */
+  mentionCount: number;
+  /** The instant of the most recent mention (ISO-8601), or `null`. */
+  lastMentionAt: string | null;
+};
+
+/** One goal the session's reading names — directly in the text, through a task, or both. */
+export type QuaySessionMentionGoal = {
+  goalId: string;
+  title: string;
+  status: string;
+  /** How many of the listed tasks point at this goal. */
+  viaTaskCount: number;
+  /** Whether the goal's own id appeared in the message text. */
+  mentionedDirectly: boolean;
+};
+
+/**
+ * The session's mention reading (`GET /api/quay/:projectId/session-mentions`): every task and
+ * goal the conversation's own prose names. Read once when the title bar's popover opens, never
+ * polled — the transcript behind it only grows on the user's own turns.
+ */
+export type QuaySessionMentionsReading = {
+  ok: true;
+  sessionId: string;
+  projectId: string;
+  tasks: QuaySessionMentionTask[];
+  goals: QuaySessionMentionGoal[];
+  /** When this reading was assembled, ISO-8601. */
+  generatedAt: string;
+};
+
+/**
  * The one time window the Quay tab's three charts share, in Unix epoch milliseconds.
  *
  * Derived once by `QuayPanel` from the Loop pulse reading (`QuayGanttLanes.windowHours` and

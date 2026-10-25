@@ -980,5 +980,20 @@
         "title": "上一次构建或重启失败"
       }
     }
+  },
+  "quayPulse": {
+    "triggerLabel": "打开 quay 脉冲面板",
+    "title": "循环脉冲",
+    "goalsHeading": "目标 · {{count}}",
+    "tasksHeading": "任务 · {{count}}",
+    "done": "已完成 · {{count}}",
+    "empty": "本会话尚未提及任何 quay 任务。",
+    "loading": "正在加载提及的任务…",
+    "listError": "无法读取本会话提及的任务。",
+    "lanesNote": "泳道读数不可用——任务仅显示存储状态，不显示阶段。",
+    "viaTasks": "经由 {{count}} 个任务",
+    "mentionedInMessage": "在消息中提及",
+    "mentionedAgo": "{{minutes}} 分钟前提及",
+    "openQuayPanel": "打开 Quay 面板"
   }
 }
