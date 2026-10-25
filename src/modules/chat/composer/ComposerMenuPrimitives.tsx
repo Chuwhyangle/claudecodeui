@@ -26,7 +26,12 @@ export function ComposerMenuSurface({
       ref={menuRef}
       role="menu"
       aria-label={ariaLabel}
-      className="fixed z-[100] min-w-48 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl"
+      // `min-w-0` rather than a fixed minimum: a floor wider than the anchor's
+      // `maxWidth` would override the clamp and push the menu off a narrow
+      // screen. `overflow-x-hidden` keeps the `datetime-local` picker (whose
+      // intrinsic minimum is wider than a phone's menu) from widening the box;
+      // it would otherwise become a horizontal scroll area alongside `overflow-y`.
+      className="fixed z-[100] min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl"
       style={{
         right: anchor.right,
         bottom: anchor.bottom,
