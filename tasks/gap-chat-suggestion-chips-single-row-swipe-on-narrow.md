@@ -1,7 +1,7 @@
 ---
 id: gap-chat-suggestion-chips-single-row-swipe-on-narrow
 title: Chat 建议 chip：窄屏（手机）限制为一行、横向滑动，压低空输入时的输入区高度
-status: ready
+status: done
 labels:
   - gap
   - defect

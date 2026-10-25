@@ -24,10 +24,10 @@ extra:
 
 ## AC
 
-- [ ] `QuayPanel.tsx` 不再引用脉搏条：`git grep -c "PulseStrip" -- src/modules/quay/QuayPanel.tsx || true` 无输出或输出 0，且 `git grep -c "quay-panel-pulse" -- src/modules/quay/QuayPanel.tsx || true` 同样为 0（代码与注释都不得再出现这两个字面量）。
-- [ ] `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0，且含一例：渲染已加载快照后 `queryByTestId('quay-panel-pulse')` 为 null，Loop pulse / Tests / Fan-in 三张图仍在（`quay-gantt`、`quay-panel-tests-timeline`、`quay-panel-fanin-timeline`）。取假：把脉搏条区块加回去，该例必须红。
-- [ ] 保留项不被碰：`git diff --stat -- src/modules/quay/PulseStrip.tsx src/modules/quay/tests/PulseStrip.test.tsx src/modules/quay/index.ts src/modules/cockpit/CockpitStage.tsx` 无输出；`npx vitest run src/modules/quay/tests/PulseStrip.test.tsx src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0。
-- [ ] `npx tsc --noEmit -p tsconfig.json` exit 0。
+- [x] `QuayPanel.tsx` 不再引用脉搏条：`git grep -c "PulseStrip" -- src/modules/quay/QuayPanel.tsx || true` 无输出或输出 0，且 `git grep -c "quay-panel-pulse" -- src/modules/quay/QuayPanel.tsx || true` 同样为 0（代码与注释都不得再出现这两个字面量）。
+- [x] `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0，且含一例：渲染已加载快照后 `queryByTestId('quay-panel-pulse')` 为 null，Loop pulse / Tests / Fan-in 三张图仍在（`quay-gantt`、`quay-panel-tests-timeline`、`quay-panel-fanin-timeline`）。取假：把脉搏条区块加回去，该例必须红。
+- [x] 保留项不被碰：`git diff --stat -- src/modules/quay/PulseStrip.tsx src/modules/quay/tests/PulseStrip.test.tsx src/modules/quay/index.ts src/modules/cockpit/CockpitStage.tsx` 无输出；`npx vitest run src/modules/quay/tests/PulseStrip.test.tsx src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0。
+- [x] `npx tsc --noEmit -p tsconfig.json` exit 0。
 
 ## DoD
 
@@ -37,5 +37,6 @@ extra:
 
 - src/modules/quay/QuayPanel.tsx
 - src/modules/quay/tests/QuayPanel.test.tsx
+- src/modules/cockpit/tests/CockpitStage.test.tsx
 - e2e/zz-quay-panel-mobile-grid.spec.ts
 - tasks/gap-quay-tab-drop-pulse-strip.md
