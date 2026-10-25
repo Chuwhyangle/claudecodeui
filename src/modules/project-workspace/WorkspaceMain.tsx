@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
 import { ChatInterface } from '@/modules/chat';
-import { NoticeSlot } from '@/modules/notices';
 import { FileTree } from '@/modules/file-tree';
 import { StandaloneShell } from '@/modules/standalone-shell';
 import { GitPanel } from '@/modules/git-panel';
@@ -340,6 +339,7 @@ function WorkspaceMain({
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
           <div className={`h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
             <WorkspaceErrorBoundary showDetails>
+              {/* 暂停中，待 Chat 页信号设计定稿：不再向聊天页挂载常驻状态 banner。 */}
               <ChatInterface
                 isActive={activeTab === 'chat'}
                 selectedProject={selectedProject}
@@ -357,7 +357,6 @@ function WorkspaceMain({
                 newSessionTrigger={newSessionTrigger}
                 onShowAllTasks={tasksEnabled ? showAllTasks : null}
                 onRevealNavigate={revealNavigateTarget}
-                noticeSlot={<NoticeSlot />}
               />
             </WorkspaceErrorBoundary>
           </div>

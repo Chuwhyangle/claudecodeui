@@ -12,8 +12,10 @@ import { authenticatedFetch } from '@/shared/api';
  * nothing. Clicking the bar expands the per-task list; each task shows its stage and, when
  * the store carries one, the first line of its unlanded reason.
  *
- * Used by `ChatInterface` (mounted above the transcript) and by its criterion
- * `src/modules/chat/tests/SessionTaskChain.test.tsx`.
+ * Its former mount above the transcript in `ChatInterface` is paused
+ * (gap-chat-banners-paused-pending-signal-redesign) until the chat page's signal design is
+ * settled; the component and its criterion `src/modules/chat/tests/SessionTaskChain.test.tsx`
+ * remain, so the reading stays testable.
  */
 
 /** Mirrors the server's stage vocabulary; the UI never invents a stage the server cannot send. */
