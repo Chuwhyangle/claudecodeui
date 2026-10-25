@@ -52,7 +52,7 @@ extra:
 
 截图：`tmp/architecture-compact-chrome/dod-01-desktop-one-line.png` … `dod-13-phone-adjust-sheet.png`；结构化报告：`tmp/architecture-compact-chrome/dod-report.json`。仓库现成场景只有 `cockpit-mode-switch` 与 `quay-wall-focus-pin-utter`，没有 Architecture 场景可用，故上面的 Playwright 真实页面走查即作为场景报告。
 
-**已知残留**：当 filter 徽标进入两段式（`Hiding 4 · keeping 1`，即刚点过 Show mentioned 的状态）时，桌面工具栏会把 `⋯` 触发��挤到第二行；AC 量测的状态（徽标为 `Hiding 4`）是一行。未在本任务修：工具栏是刻意 wrap 而非滚动（滚动容器会裁掉搜索浮层），改成 nowrap 在 1024px 断点可能溢出控件。
+**已知残留**：当 filter 徽标进入两段式（`Hiding 4 · keeping 1`，即刚点过 Show mentioned 的状态）时，桌面工具栏会把 `⋯` 触发器挤到第二行；AC 量测的状态（徽标为 `Hiding 4`）是一行。未在本任务修：工具栏是刻意 wrap 而非滚动（滚动容器会裁掉搜索浮层），改成 nowrap 在 1024px 断点可能溢出控件。
 
 ## Touches
 
