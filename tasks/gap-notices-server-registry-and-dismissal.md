@@ -58,6 +58,8 @@ AC-394 提示：`server/modules/notices` 是新目录，`server/index.ts` 会 im
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.baseline.json
 - server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/gap-notices-server-registry-and-dismissal.md
 
 ## 完成记录
@@ -158,3 +160,27 @@ HTTP 403
 ```
 
 隔离库实读：`user_notice_dismissals` 只有 `(user_id=1, notice_id='deploy:pending-build', revision='ac66b3b420…')` 一行；403 那次未写行。验证后已 `isolated-instance.sh stop`（`ok:true`、无残留 scope）并 `git reset --hard 7cde88f82` 丢弃 B/C 两个探针提交。
+
+### 续跑轮（2026-10-25）：suite 红是本任务新增测试文件顶破了计数 pin
+
+上一轮 `exited-not-landed` 的 suite 红（`server/shared/tests/quay-test-script.test.ts`，rc=1）经隔离复跑确认不是环境抖动，而是本任务自己的 delta：两个新判据文件把 `find server -name '*.test.ts' -o -name '*.test.js'` 的收集数 437 → 439，三条腿同时红：
+
+- AC7：`baseline covers 394/439 collected files (< 90%)`（89.75%）；
+- AC2 dispatch pin：实读 `known=3 unknown=436`，钉的是 434；
+- AC3 dispatch pin：实读 `known=1 unknown=438`，钉的是 436。
+
+修法（提交 `7a464cc0e`）：
+
+1. `scripts/suite-duration-baseline.tsv` 追加两行，实测 `2879` / `1872` ms（单文件 `npx tsx --tsconfig server/tsconfig.json --test <file>` 量的），覆盖回到 `396/439 = 90.2%`；头部收集数同步 427 → 439。
+2. `server/shared/tests/quay-test-script.test.ts` 两条 exact pin 移到 `unknown=436` / `unknown=438`，注释里的收集数与来源记到 439。
+3. 两个文件经 `task_write` 补进 `## Touches`（否则 anti-drift 报 out-of-declared）。
+
+复量：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` → `pass 14 / fail 0`（80.5s）。两个新判据文件本身仍为 `pass 5 / fail 0` 与 `pass 9 / fail 0`。
+
+## Blocker
+
+**2026-10-25T03:38:25.775Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=86589 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792899115420
+- run_id：wk-prod-anchor
+- session_id：ab5f5529-1129-4a8b-8578-ac89c436f2ae
