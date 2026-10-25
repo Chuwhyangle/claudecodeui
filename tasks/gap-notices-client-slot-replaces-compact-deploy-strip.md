@@ -1,7 +1,7 @@
 ---
 id: gap-notices-client-slot-replaces-compact-deploy-strip
 title: Notice 注册表 P1（客户端）：NoticeSlot 打断位（1 条 + 折叠计数 + 忽略）与 NoticeInbox，取代聊天页紧凑部署条
-status: todo
+status: ready
 labels:
   - gap
 parent: null
