@@ -144,3 +144,11 @@ numstat：chatComposerReplyChips `+29/−4`；suggestionChipAcceptContract `+56/
 - `src/modules/chat/tests/chatComposerReplyChips.test.tsx`
 - `src/modules/chat/tests/inputSuggestionsComposer.test.tsx`
 - `tasks/gap-composer-quote-insert-breaks-only-for-multiline.md`
+
+## Blocker
+
+**2026-10-25T14:54:20.908Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=35801 server/modules/mcp-gateway/tests/mcp-session-lifecycle.test.ts passed=false end_ms=1792938842984
+- run_id：wk-prod-anchor
+- session_id：43fa44ba-ee3d-48fc-9a98-b051ce1b302e
