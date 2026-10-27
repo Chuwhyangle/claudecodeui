@@ -839,6 +839,45 @@ const addSessionLifecycleModeColumn = (db: Database): void => {
 };
 
 /**
+ * Adds the `isPinned` column: whether the user pinned a session to the top of
+ * its project's list.
+ *
+ * `DEFAULT 0` is the truthful value for every existing row — nothing was
+ * pinnable before this column existed — and it is also what makes the column
+ * safe to read unconditionally: an unpinned row and a row from before the
+ * feature are the same answer.
+ *
+ * Called after the sessions-table rebuilds for the same reason as
+ * `addSessionLifecycleModeColumn`: their copies use an explicit column list, so
+ * a column added earlier would be dropped again.
+ */
+const addSessionPinnedColumn = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'isPinned', 'BOOLEAN DEFAULT 0');
+};
+
+/**
+ * Adds `session_order`: the position the user dragged this session to inside
+ * its project's list, NULL until the list has been arranged by hand.
+ *
+ * The column is deliberately nullable rather than defaulted to a number: NULL
+ * is what a fresh session carries, and the listing sorts those above the
+ * arranged block, so a new session shows up at the top of the list instead of
+ * inheriting a position the user never chose for it.
+ *
+ * Added after every sessions-table rebuild for the same reason as the columns
+ * above — their copies use an explicit column list.
+ */
+const addSessionOrderColumn = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'session_order', 'INTEGER');
+};
+
+/**
  * Drops the two structures the removed launch-profile feature left in the
  * database: the `launch_profiles` table and the `sessions.launch_profile_id`
  * column.
@@ -1086,6 +1125,11 @@ export const runMigrations = (db: Database) => {
     // lifecycle_mode added before it would be dropped along with the old table
     // and every existing session would come back with the column missing.
     addSessionLifecycleModeColumn(db);
+    // And once more for the same reason: another sessions-table rebuild would
+    // drop an isPinned added before it.
+    addSessionPinnedColumn(db);
+    // The column that replaced the pin; same placement rule.
+    addSessionOrderColumn(db);
     ensureProjectsForSessionPaths(db);
     db.exec(SCHEDULED_MESSAGES_TABLE_SCHEMA_SQL);
     // OAuth storage (mcp-gateway-SPEC stage 5, AC-258). Order matters: the

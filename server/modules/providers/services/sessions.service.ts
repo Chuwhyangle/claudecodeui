@@ -1170,6 +1170,31 @@ export const sessionsService = {
   },
 
   /**
+   * Stores the order the user dragged a project's sessions into.
+   *
+   * The order is local presentation state, not something the provider store
+   * knows about: there is no transcript writeback and no broadcast here. The
+   * caller that made the change already holds the rows it just moved and gets
+   * the same order back from the next listing; a second open tab catches up on
+   * its next refresh.
+   */
+  async reorderProjectSessions(
+    projectId: string,
+    sessionIds: string[],
+  ): Promise<{ projectId: string; sessionIds: string[] }> {
+    const projectPath = projectsDb.getProjectPathById(projectId);
+    if (!projectPath) {
+      throw new AppError(`Project "${projectId}" was not found.`, {
+        code: 'PROJECT_NOT_FOUND',
+        statusCode: 404,
+      });
+    }
+
+    sessionsDb.updateSessionOrders(projectPath, sessionIds);
+    return { projectId, sessionIds };
+  },
+
+  /**
    * Reads the two facts a host-lifecycle verb needs about one session: the
    * provider whose driver would serve it, and the lifecycle mode the user asked
    * for.

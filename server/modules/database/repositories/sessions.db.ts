@@ -93,6 +93,14 @@ type SessionRow = {
   lifecycle_mode?: string;
   /** The app session this one was branched from; NULL unless it is a fork. */
   forked_from_session_id: string | null;
+  /**
+   * The position the user dragged this session to inside its project's list;
+   * NULL when the list has never been arranged by hand.
+   *
+   * Optional in the type the way `transcript_name` is — a hand-built row stays
+   * valid — but a row read out of the database always carries the column.
+   */
+  session_order?: number | null;
   isArchived: number;
   created_at: string;
   updated_at: string;
@@ -218,7 +226,7 @@ function sessionRowColumns(prefix = ''): string {
   ${displayNameSourceSql(prefix)} AS name_source,
   ${prefix}transcript_name, ${prefix}transcript_name_source,
   ${prefix}model, ${prefix}effort, ${prefix}permission_mode, ${prefix}lifecycle_mode,
-  ${prefix}forked_from_session_id, ${prefix}isArchived, ${prefix}created_at, ${prefix}updated_at`;
+  ${prefix}forked_from_session_id, ${prefix}session_order, ${prefix}isArchived, ${prefix}created_at, ${prefix}updated_at`;
 }
 
 const SESSION_ROW_COLUMNS = sessionRowColumns();
@@ -233,7 +241,7 @@ const SESSION_ROW_COLUMNS_QUALIFIED = sessionRowColumns('sessions.');
  * override, freezing the other row's reading into `custom_name`.
  */
 const SESSION_ROW_RAW_COLUMNS =
-  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, name_source, transcript_name, transcript_name_source, model, effort, permission_mode, lifecycle_mode, forked_from_session_id, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, name_source, transcript_name, transcript_name_source, model, effort, permission_mode, lifecycle_mode, forked_from_session_id, session_order, isArchived, created_at, updated_at';
 
 /**
  * Whether `name` is one of the addresses this app assigned to a session.
@@ -939,6 +947,46 @@ export const sessionsDb = {
   },
 
   /**
+   * Rewrites one project's manual session order.
+   *
+   * `orderedSessionIds` is the full order the user dropped the rows into; every
+   * id is stored at its index. The transaction also renumbers the project's
+   * other sessions *after* that block, in the order they were already in, so
+   * the listing never has to fall back to recency for a project whose rows the
+   * user has arranged: the whole list is either ordered or untouched.
+   *
+   * `updated_at` is deliberately left alone — arranging a list is a reading
+   * preference, not activity, and bumping the timestamp would feed the order
+   * back into the recency fallback it is meant to replace.
+   */
+  updateSessionOrders(projectPath: string, orderedSessionIds: string[]): void {
+    const db = getConnection();
+    const normalizedProjectPath = normalizeProjectPath(projectPath);
+    const currentRows = db
+      .prepare(
+        `SELECT session_id FROM sessions
+         WHERE project_path = ? AND isArchived = 0
+         ORDER BY (session_order IS NULL) DESC, session_order ASC,
+                  datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC`
+      )
+      .all(normalizedProjectPath) as Array<{ session_id: string }>;
+    const knownIds = new Set(currentRows.map((row) => row.session_id));
+    const listed = orderedSessionIds.filter((id) => knownIds.has(id));
+    const listedIds = new Set(listed);
+    // Unlisted rows follow the arranged block in the order the listing already
+    // showed them: dropping a row moves that row, not every page loaded before
+    // it.
+    const finalOrder = [...listed, ...currentRows.map((row) => row.session_id).filter((id) => !listedIds.has(id))];
+
+    const update = db.prepare('UPDATE sessions SET session_order = ? WHERE session_id = ?');
+    db.transaction(() => {
+      finalOrder.forEach((sessionId, index) => {
+        update.run(index, sessionId);
+      });
+    })();
+  },
+
+  /**
    * Records the name a session's transcript gives it, and which rung of the
    * provider's title ladder that name came from.
    *
@@ -1336,7 +1384,13 @@ export const sessionsDb = {
          WHERE project_path = ?
            AND isArchived = 0
            ${nameClause.clause}
-         ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+         -- Arranged rows first, in the user's own order; unarranged sessions
+         -- above them by recency, so a session created after the list was
+         -- arranged appears at the top rather than at an inherited position.
+         ORDER BY (session_order IS NULL) DESC,
+                  session_order ASC,
+                  datetime(COALESCE(updated_at, created_at)) DESC,
+                  session_id DESC
          LIMIT ? OFFSET ?`
       )
       .all(normalizedProjectPath, ...nameClause.params, limit, offset) as SessionRow[];

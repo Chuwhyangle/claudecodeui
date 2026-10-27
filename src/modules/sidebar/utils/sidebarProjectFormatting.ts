@@ -97,15 +97,41 @@ export const getAllSessions = (project: Project): SessionWithProvider[] => {
     return cached;
   }
 
-  // Grouped after sorting, not before: grouping reads recency rank to decide
-  // which slot a lineage group takes, so it has to see the final time order.
+  // Grouped after sorting, not before: grouping reads the final rank to decide
+  // which slot a lineage group takes, so it has to see the order the reader
+  // will see.
+  //
+  // The order is the user's own where there is one: rows the user dragged carry
+  // a `sessionOrder` and sort by it, so no amount of activity elsewhere moves
+  // them again. Rows without one — a session created after the list was
+  // arranged, or a project never arranged at all — sit above the arranged block
+  // in recency order. That is what keeps a brand-new session visible at the top
+  // instead of inheriting a position the user never chose for it.
   const sessions = groupSessionsByLineage(
     (project.sessions || []).map((session) => ({
       ...session,
       __provider: getSessionProvider(session),
-    })).sort(
-      (a, b) => getSessionDate(b).getTime() - getSessionDate(a).getTime(),
-    ),
+    })).sort((a, b) => {
+      const aOrder = typeof a.sessionOrder === 'number' ? a.sessionOrder : null;
+      const bOrder = typeof b.sessionOrder === 'number' ? b.sessionOrder : null;
+
+      if (aOrder === null && bOrder === null) {
+        return getSessionDate(b).getTime() - getSessionDate(a).getTime();
+      }
+      if (aOrder === null) {
+        return -1;
+      }
+      if (bOrder === null) {
+        return 1;
+      }
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      // Equal positions should not happen (the server renumbers every row it
+      // stores), but a stale optimistic overlay can produce one for a moment;
+      // recency is the least surprising way to break the tie.
+      return getSessionDate(b).getTime() - getSessionDate(a).getTime();
+    }),
     (session) => session.id,
   );
 

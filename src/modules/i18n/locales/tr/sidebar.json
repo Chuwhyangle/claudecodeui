@@ -121,7 +121,8 @@
     "restoreProjectError": "Proje geri yüklenirken hata oluştu. Lütfen tekrar dene.",
     "restoreSessionFailed": "Oturum geri yüklenemedi. Lütfen tekrar dene.",
     "restoreSessionError": "Oturum geri yüklenirken hata oluştu. Lütfen tekrar dene.",
-    "forkSessionError": "Bu oturum çatallanamadı. Lütfen tekrar deneyin."
+    "forkSessionError": "Bu oturum çatallanamadı. Lütfen tekrar deneyin.",
+    "reorderSessionsError": "Yeni sıra kaydedilemedi. Lütfen tekrar deneyin."
   },
   "version": {
     "updateAvailable": "Güncelleme mevcut",

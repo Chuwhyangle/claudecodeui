@@ -616,6 +616,10 @@ export const api = {
     post(`/api/providers/sessions/${encodeURIComponent(sessionId)}/fork`, body),
   renameSession: (sessionId: string, summary: string) =>
     put(`/api/providers/sessions/${sessionId}`, { summary }),
+  // Stores the order a project's session rows were dragged into. The whole
+  // list is sent because a single drop renumbers every row below it.
+  reorderProjectSessions: (projectId: string, sessionIds: string[]) =>
+    put(`/api/providers/projects/${encodeURIComponent(projectId)}/session-order`, { sessionIds }),
 
   // Scheduled messages: send a message to a session at a future time.
   scheduledMessages: {

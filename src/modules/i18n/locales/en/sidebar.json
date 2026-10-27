@@ -125,7 +125,8 @@
     "restoreProjectError": "Error restoring project. Please try again.",
     "restoreSessionFailed": "Failed to restore session. Please try again.",
     "restoreSessionError": "Error restoring session. Please try again.",
-    "forkSessionError": "Could not fork this session. Please try again."
+    "forkSessionError": "Could not fork this session. Please try again.",
+    "reorderSessionsError": "Could not save the new order. Please try again."
   },
   "version": {
     "updateAvailable": "Update available",

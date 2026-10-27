@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Check, Edit2, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
+import { Check, Edit2, GripVertical, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -35,6 +35,14 @@ type SidebarSessionItemProps = {
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
   onDeleteSession: (sessionId: string, sessionTitle: string) => void;
+  /**
+   * Drag state owned by the list. `isDragging` is the row being moved;
+   * `dropIndicator` says whether the dragged row would land above or below
+   * this one. Both are absent while nothing is being dragged, so a settled
+   * list hands every row the same props it always did.
+   */
+  isDragging?: boolean;
+  dropIndicator?: 'before' | 'after' | null;
   /** Branches this session into an independent one; absent when its provider cannot. */
   onForkSession?: (session: SessionWithProvider) => void;
   /** Opens the project's filter editor seeded from this session's name. */
@@ -59,6 +67,8 @@ function SidebarSessionItem({
   onProjectSelect,
   onSessionSelect,
   onDeleteSession,
+  isDragging = false,
+  dropIndicator = null,
   onForkSession,
   onHideSimilar,
   t,
@@ -141,7 +151,16 @@ function SidebarSessionItem({
 
   return (
     <div
-      className="group relative"
+      // The list's drag handlers read the row identity from this attribute
+      // through event delegation, so adding dragging did not put a handler on
+      // every row and defeat the memo boundary.
+      data-session-id={session.id}
+      className={cn(
+        'group relative',
+        isDragging && 'opacity-50',
+        dropIndicator === 'before' && 'before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full before:bg-primary',
+        dropIndicator === 'after' && 'after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary',
+      )}
       // The row-level contract: a running session publishes the phase (and, in
       // the tool phase, the tool's name) it is drawing, so a reader outside the
       // component can compare the row to the activity map. An idle session
@@ -404,6 +423,11 @@ function SidebarSessionItem({
       >
         <a
           href={`/session/${session.id}`}
+          // The whole row is the drag handle: a reader rearranges the list by
+          // dragging the row they want to move, not a separate grip. A row in
+          // rename mode is not draggable — the browser would otherwise turn a
+          // text selection inside the input into a row drag.
+          draggable={!isEditing}
           className={cn(
             buttonVariants({ variant: 'ghost' }),
             'h-auto w-full justify-start rounded-md border bg-card p-2 text-left font-normal transition-all duration-150',
@@ -426,6 +450,16 @@ function SidebarSessionItem({
           }}
         >
           <div className="flex w-full min-w-0 items-center gap-2">
+            {/* Revealed on hover, sized so its slot exists either way: the grip
+                is the row's only hint that it can be dragged, and a slot that
+                appears on hover would shift every label under the cursor. */}
+            <span
+              aria-hidden="true"
+              data-testid="session-drag-handle"
+              className="flex h-5 w-3 flex-shrink-0 items-center text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100"
+            >
+              <GripVertical className="h-3 w-3" />
+            </span>
             <div
               className={cn(
                 'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',

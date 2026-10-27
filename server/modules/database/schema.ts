@@ -196,6 +196,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- normally. Informational only: a fork is a fully independent provider
     -- session, and deleting the source does not affect it.
     forked_from_session_id TEXT,
+    -- Deprecated: the first cut of manual ordering stored a boolean pin here.
+    -- It was replaced by session_order because a pin only lifted a row above
+    -- the recency order while every other row kept moving; a reader must
+    -- ignore this column, and the migration is kept only so an upgraded
+    -- install and a fresh one still share one shape.
+    isPinned BOOLEAN DEFAULT 0,
+    -- The user's own position for this session inside its project's list, or
+    -- NULL when the session has never been part of a manual order. Rows with a
+    -- value sort by it; rows without one sit above them in recency order, so a
+    -- session created after the user arranged the list appears at the top
+    -- instead of being buried at the bottom.
+    session_order INTEGER,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

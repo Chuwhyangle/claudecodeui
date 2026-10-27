@@ -121,6 +121,11 @@ export type ProjectSession = {
   // started on its own. The sidebar keeps a fork beside its source and renders a
   // branch marker from it, so a fork is never mistaken for a duplicate row.
   forkedFromSessionId?: string | null;
+  // The position the user dragged this session to inside its project's list,
+  // or null/absent when it has never been part of a manual order. Rows with a
+  // value sort by it; rows without one sit above them in recency order, which
+  // is how a session created after the list was arranged lands at the top.
+  sessionOrder?: number | null;
   __provider?: LLMProvider;
   // Tags the session with the owning project's DB `projectId` so UI handlers
   // (session switching, sidebar focus, etc.) can match against selectedProject.
@@ -3237,6 +3242,12 @@ export type SessionRowActions = {
   onCancelEditingSession: () => void;
   onSaveEditingSession: (projectId: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   onDeleteSession: (sessionId: string, sessionTitle: string) => void;
+  /**
+   * Stores the order a project's session rows were dragged into. Optional
+   * because the archived and recents views render the same rows without a
+   * list that can be rearranged.
+   */
+  onReorderSessions?: (projectId: string, sessionIds: string[]) => void;
   /** Branches a session into an independent one. Rows hide it for providers that cannot. */
   onForkSession?: (session: SessionWithProvider) => void;
 };

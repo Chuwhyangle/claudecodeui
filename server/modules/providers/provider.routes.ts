@@ -324,6 +324,49 @@ const parseSessionForkPayload = (payload: unknown): { upToAnchorId?: string; tit
   };
 };
 
+/**
+ * Reads the session order a drop produced.
+ *
+ * The list is the caller's whole arrangement, so it has to be a non-empty array
+ * of distinct, non-empty ids: an empty list would mean "arrange nothing", which
+ * is not a state this route can store, and duplicates would leave one of two
+ * positions silently winning. An id the project does not own is tolerated by
+ * the service (a stale tab may still list a session that has just been
+ * deleted); a malformed body is not.
+ */
+const parseSessionOrderPayload = (payload: unknown): string[] => {
+  const sessionIds = payload && typeof payload === 'object'
+    ? (payload as Record<string, unknown>).sessionIds
+    : undefined;
+  if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+    throw new AppError('sessionIds must be a non-empty array.', {
+      code: 'INVALID_SESSION_ORDER',
+      statusCode: 400,
+    });
+  }
+
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const entry of sessionIds) {
+    if (typeof entry !== 'string' || entry.trim().length === 0) {
+      throw new AppError('Every session id must be a non-empty string.', {
+        code: 'INVALID_SESSION_ORDER',
+        statusCode: 400,
+      });
+    }
+    if (seen.has(entry)) {
+      throw new AppError(`Session id "${entry}" appears twice in the order.`, {
+        code: 'INVALID_SESSION_ORDER',
+        statusCode: 400,
+      });
+    }
+    seen.add(entry);
+    ordered.push(entry);
+  }
+
+  return ordered;
+};
+
 const parseSessionRenameSummary = (payload: unknown): string => {
   if (!payload || typeof payload !== 'object') {
     throw new AppError('Request body must be an object.', {
@@ -988,6 +1031,23 @@ router.put(
     const sessionId = parseSessionId(req.params.sessionId);
     const summary = parseSessionRenameSummary(req.body);
     const result = await sessionsService.renameSessionById(sessionId, summary);
+    res.json(createApiSuccessResponse(result));
+  }),
+);
+
+/**
+ * Stores a project's manual session order, as produced by a drag.
+ *
+ * Keyed by project rather than session because a drop can move one row and
+ * renumber everything below it; sending the whole list is what keeps the
+ * arrangement unambiguous when several rows shift at once.
+ */
+router.put(
+  '/projects/:projectId/session-order',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = parseSessionId(req.params.projectId);
+    const sessionIds = parseSessionOrderPayload(req.body);
+    const result = await sessionsService.reorderProjectSessions(projectId, sessionIds);
     res.json(createApiSuccessResponse(result));
   }),
 );

@@ -150,6 +150,17 @@ export function useSidebarController({
   const [recentConversationsError, setRecentConversationsError] = useState(false);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [optimisticStarByProjectId, setOptimisticStarByProjectId] = useState<Map<string, boolean>>(new Map());
+  // Orders that a drag has produced and the server has not confirmed yet, per
+  // project and session. The rows must land where they were dropped the moment
+  // the drop happens, while the refresh that follows carries the stored order.
+  const [optimisticOrderByProjectId, setOptimisticOrderByProjectId] = useState<Map<string, Map<string, number>>>(new Map());
+  // Bumped on every overlay write, so the composed list below knows its cached
+  // array predates the map. Without it the WeakMap would keep handing back the
+  // pre-drop order for the same project object.
+  const orderOverlayVersionRef = useRef(0);
+  // Projects with a reorder request on the wire, so a second drop cannot race
+  // the first one's answer. A ref, not state: nothing renders.
+  const reorderInFlightRef = useRef<Set<string>>(new Set());
   // Which projects have a "load more" request in flight, as the row reads it. Browser state,
   // not server state: it only exists so the button can say "Loading sessions..." and stay
   // disabled while its own page request is unanswered.
@@ -798,7 +809,38 @@ export function useSidebarController({
     [resolveProjectStarState],
   );
 
-  const getProjectSessions = useCallback((project: Project) => getAllSessions(project), []);
+  // Composed lists for the short window a drop is in flight, keyed by the
+  // project object the caller passed. `getAllSessions` already caches per
+  // project; this is the same contract over the overlay's temporary copy, so a
+  // row's props stay referentially stable across renders while an order
+  // settles.
+  const orderOverlayCacheRef = useRef(new WeakMap<Project, { version: number; sessions: SessionWithProvider[] }>());
+
+  const getProjectSessions = useCallback((project: Project) => {
+    const orderOverlay = optimisticOrderByProjectId.get(project.projectId);
+    if (!orderOverlay) {
+      return getAllSessions(project);
+    }
+
+    const cached = orderOverlayCacheRef.current.get(project);
+    if (cached && cached.version === orderOverlayVersionRef.current) {
+      return cached.sessions;
+    }
+
+    const overlaid: Project = {
+      ...project,
+      sessions: (project.sessions ?? []).map((session) => {
+        const order = orderOverlay.get(String(session.id));
+        return order === undefined ? session : { ...session, sessionOrder: order };
+      }),
+    };
+    const sessions = getAllSessions(overlaid);
+    orderOverlayCacheRef.current.set(project, {
+      version: orderOverlayVersionRef.current,
+      sessions,
+    });
+    return sessions;
+  }, [optimisticOrderByProjectId]);
 
   const loadMoreSessionsForProject = useCallback(async (projectId: string) => {
     if (!onLoadMoreSessions) {
@@ -1231,6 +1273,67 @@ export function useSidebarController({
   );
 
   /**
+   * Stores the order a project's session rows were dropped into.
+   *
+   * The overlay applies the new positions immediately — the rows must not wait
+   * for a round trip to land where they were dropped — and the refreshed
+   * project list, which carries the stored order, takes over afterwards. A
+   * failed write drops the overlay so the rows return to the truth, and says
+   * so; leaving them optimised would show an order the next page load
+   * contradicts.
+   */
+  const reorderSessions = useCallback(
+    async (projectId: string, sessionIds: string[]) => {
+      if (reorderInFlightRef.current.has(projectId)) {
+        return;
+      }
+      reorderInFlightRef.current.add(projectId);
+
+      const nextOrder = new Map(sessionIds.map((sessionId, index) => [sessionId, index]));
+      orderOverlayVersionRef.current += 1;
+      setOptimisticOrderByProjectId((previous) => {
+        const next = new Map(previous);
+        next.set(projectId, nextOrder);
+        return next;
+      });
+
+      try {
+        const response = await api.reorderProjectSessions(projectId, sessionIds);
+        if (!response.ok) {
+          throw new Error(`Failed to store the session order (${response.status})`);
+        }
+        // The refresh writes the same order from the server. Clearing before it
+        // lands would flash the old arrangement back for a frame.
+        await onRefresh();
+        orderOverlayVersionRef.current += 1;
+        setOptimisticOrderByProjectId((previous) => {
+          if (!previous.has(projectId)) {
+            return previous;
+          }
+          const next = new Map(previous);
+          next.delete(projectId);
+          return next;
+        });
+      } catch (error) {
+        console.error('[Sidebar] Error storing the session order:', error);
+        orderOverlayVersionRef.current += 1;
+        setOptimisticOrderByProjectId((previous) => {
+          if (!previous.has(projectId)) {
+            return previous;
+          }
+          const next = new Map(previous);
+          next.delete(projectId);
+          return next;
+        });
+        alert(t('messages.reorderSessionsError'));
+      } finally {
+        reorderInFlightRef.current.delete(projectId);
+      }
+    },
+    [onRefresh, t],
+  );
+
+  /**
    * Branches a session and opens the copy.
    *
    * The new row arrives over the websocket as a `session_upserted`, so nothing
@@ -1318,6 +1421,7 @@ export function useSidebarController({
     restoreArchivedSession,
     refreshProjects,
     updateSessionSummary,
+    reorderSessions,
     collapseSidebar,
     expandSidebar,
     setShowNewProject,
