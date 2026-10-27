@@ -1,0 +1,65 @@
+# systemd **user** unit —— CloudCLI UI（@yalehwang/cloudcli 1.39.0）常驻服务
+#
+# 为什么是 systemd 而不是 nohup/setsid：
+#   实测两次「后台起的服务被回收」都是 `closeReason=server-shutdown`（收到信号后优雅退出）。
+#   `setsid` 挡不住 —— 回收是按**进程树**走的，不是按进程组。user unit 由 user manager
+#   （PID 1 的兄弟，独立于任何 SSH 会话）持有，才真正在树外。本机 `Linger=yes`，
+#   所以登出后也不会被停。
+#
+# 三条要点：
+# 1. **不需要提权**：`systemctl --user …` 全程用户级。
+# 2. **模型凭据⛔不写在这里**：本 unit 刻意**不设任何 `ANTHROPIC_*`**。
+#    实测（干净环境 `claude -p` 有回答）凭据来自 `~/.claude/settings.json` 的 `env` 段 ——
+#    也就是这台机器 Claude Code 自己那一份配置。CloudCLI 是**寄生**在它上面的，
+#    没有独立的凭据库（库里的 `access_tokens` 是给 MCP/OAuth 外部客户端用的）。
+#    ⇒ 换网关改 `~/.claude/settings.json`，不用动这个 unit，也不用重启服务。
+# 3. **⛔ 不写 `MemoryMax=`**：会话进程已经被 systemd scope 隔离在自己 cgroup 里了，
+#    再给服务器本身套一个上限，会让它变成 OOM 时**先死的那一个**。
+#    下面用 `NODE_OPTIONS=--max-old-space-size` 做进程级上限（只有服务器自己能触发，
+#    触发了由 `Restart=` 拉回来），这与仓库自带单元 `scripts/systemd/claudecodeui-server.service`
+#    的取舍一致。
+#
+# PATH：**显式写死并保持最小**。仓库自带的单元刻意不写 PATH（靠 user manager 的），
+# 理由是「PATH 会把当时 shell 里的旧插件 bin 冻进服务」。但那个理由在这里不成立，
+# 且本机 user manager 的 PATH **不含 `/home/wenhao/.local/bin`**（`claude` 就在那），
+# 不写就会有解析不到 CLI 的风险。两害相权：写最小的这条，且只加一个目录。
+# `CLAUDE_CLI_PATH` 再钉一道，让 `claude` 一定解析到用户自己那个 2.1.285 原生二进制。
+#
+# 装 / 起 / 看：见本文件末尾的注释块。
+
+[Unit]
+Description=CloudCLI UI（Claude Code / Codex / Cursor 的 Web UI）
+# 崩了要能自己起来，但不要因为「目标一时不可用」就被永久放弃
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/home/wenhao/cloudcli-run
+
+# 直接跑 cli.js 的绝对路径，⛔ 不经 npx/npm：npx 每次都会去解析依赖图，
+# 而且它的暂存目录（~/.npm/_npx/<hash>）是 npm 认为**可清理**的。
+# 安装已挪到 /home/wenhao/cloudcli（稳定路径，不会被 npm 回收）。
+ExecStart=/usr/bin/node /home/wenhao/cloudcli/node_modules/@yalehwang/cloudcli/dist-server/server/modules/cli/cli.js start --port 3001
+
+# 绑具体网卡地址而不是 0.0.0.0：本机有 13 个 docker 网桥（172.17~172.29），
+# 绑 0.0.0.0 等于每个网桥、每个容器网络里都能打进来。绑 172.16.10.52 只暴露那一张网卡，
+# 手机/笔记本照样能开 http://172.16.10.52:3001。
+Environment=HOST=172.16.10.52
+Environment=SERVER_PORT=3001
+Environment=PATH=/home/wenhao/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=CLAUDE_CLI_PATH=/home/wenhao/.local/bin/claude
+Environment=NODE_OPTIONS=--max-old-space-size=2048
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 装：systemctl --user daemon-reload && systemctl --user enable --now cloudcli
+# 看：systemctl --user status cloudcli
+# 日志：journalctl --user -u cloudcli -f
+# 停：systemctl --user stop cloudcli        （Restart=on-failure，正常停不会被拉起来）
+# 注意：日志走 journal，⛔ 不再有 /tmp/ccui-run/server.log 那一份。

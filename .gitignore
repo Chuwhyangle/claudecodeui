@@ -231,3 +231,10 @@ voice-realtime.settings.json
 # and point REPLY_SUGGESTIONS_SETTINGS_PATH at it. The local copy must never be committed — it is a
 # deployment's tuning/credential reference, not the project's defaults.
 reply-suggestions.settings.json
+
+# …except this deployment's own copy under deploy/, which is TRACKED on purpose: it carries the
+# gateway URL, model and key-file *path* only — never the key itself.
+!deploy/config/reply-suggestions.settings.json
+
+# The bare API key the settings file points at. Never committed, in no directory.
+gateway.key
