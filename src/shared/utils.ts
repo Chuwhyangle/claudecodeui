@@ -224,6 +224,39 @@ export const getPageTitle = (
   return displayName ? `${displayName} - ${DEFAULT_PAGE_TITLE}` : DEFAULT_PAGE_TITLE;
 };
 
+/** Matches the awaiting-reply marker this module puts in the title, with or without a count. */
+const AWAITING_REPLY_TITLE_PATTERN = /\[待回复(?: \d+)?\] /;
+
+/** The `[Done]` marker `pageTitleNotification` owns; the awaiting marker is inserted after it so that helper's `startsWith` strip still works. Private to the title helpers. */
+const COMPLETION_TITLE_PREFIX = '[Done] ';
+
+/**
+ * Keeps a `[待回复 N]` marker in the browser tab title while the sidebar's
+ * awaiting-reply list is non-empty, and removes it once the list empties.
+ *
+ * Used by `useAwaitingReplySessions`, which is the only reader of that list and
+ * therefore the only place that knows the count. A marker rather than a one-shot
+ * flash: a wait stays until the user answers it, so the tab has to keep saying
+ * so — including on the Windows taskbar, where the title is all the user sees
+ * when the browser is behind another window.
+ */
+export const syncAwaitingReplyTitleIndicator = (count: number): void => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const base = document.title.replace(AWAITING_REPLY_TITLE_PATTERN, '');
+  if (count <= 0) {
+    document.title = base;
+    return;
+  }
+
+  const marker = `[待回复 ${count}] `;
+  document.title = base.startsWith(COMPLETION_TITLE_PREFIX)
+    ? `${COMPLETION_TITLE_PREFIX}${marker}${base.slice(COMPLETION_TITLE_PREFIX.length)}`
+    : `${marker}${base}`;
+};
+
 // ---------------------------
 
 //----------------- SESSION HOST HELD WORK ------------

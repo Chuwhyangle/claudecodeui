@@ -6,6 +6,7 @@ import React from 'react';
 import { I18nextProvider } from 'react-i18next';
 import { beforeEach, test, vi } from 'vitest';
 
+import type * as SharedUtilsModule from '@/shared/utils';
 import enSidebar from '@/modules/i18n/locales/en/sidebar.json';
 import AwaitingReplyView from '@/modules/sidebar/AwaitingReplyView';
 import { useAwaitingReplySessions } from '@/modules/sidebar/hooks/useAwaitingReplySessions';
@@ -43,11 +44,22 @@ const row = (
 });
 
 /**
+ * The chime the hook plays for a newly waiting session. Hoisted like `harness`
+ * because the module mock below runs before module-level constants exist; the
+ * rest of `@/shared/utils` stays real, since the view uses `cn` from it.
+ */
+const notifySound = vi.hoisted(() => vi.fn());
+
+vi.mock('@/shared/utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof SharedUtilsModule>();
+  return { ...actual, playNotificationSound: notifySound };
+});
+
+/**
  * The in-memory socket and the two REST calls, held in a hoisted bag because
  * `vi.mock`'s factory is evaluated before module-level constants exist.
  */
-const harness = vi.hoisted(() => {
-  const listeners = new Set<(event: Record<string, unknown>) => void>();
+const harness = vi.hoisted(() => {  const listeners = new Set<(event: Record<string, unknown>) => void>();
   return {
     subscribe: (listener: (event: Record<string, unknown>) => void) => {
       listeners.add(listener);
@@ -128,6 +140,10 @@ beforeEach(() => {
   harness.listCalls = 0;
   harness.readList = async () => listResponse([]);
   harness.dismiss = async () => ({ ok: true, status: 200, json: async () => ({ success: true }) });
+  notifySound.mockClear();
+  // The title helpers prepend to whatever is already there, so each case starts
+  // from the same baseline a fresh tab has.
+  document.title = 'CloudCLI UI';
 });
 
 // ---------------------------------------------------------------------------
@@ -194,6 +210,45 @@ test('a failed read surfaces a message without wiping the last list', async () =
 
   assert.equal(result.current.error, enSidebar.awaitingReply.loadError);
   assert.deepEqual(result.current.sessions.map((session) => session.sessionId), [SESSION_A]);
+});
+
+test('a list the page loads with is history, not news', async () => {
+  harness.readList = async () => listResponse([row(SESSION_A), row(SESSION_B)]);
+  const { result } = renderHookWithI18n();
+  await waitFor(() => assert.equal(result.current.sessions.length, 2));
+
+  assert.equal(notifySound.mock.calls.length, 0, 'opening a page must not chime for waits that predate it');
+  assert.equal(document.title, '[待回复 2] CloudCLI UI');
+});
+
+test('a newly pushed wait chimes once and keeps its count in the title', async () => {
+  const { result } = renderHookWithI18n();
+  await waitFor(() => assert.equal(result.current.isLoading, false));
+  assert.equal(document.title, 'CloudCLI UI');
+
+  act(() => {
+    harness.emit({ kind: 'awaiting_reply_changed', sessions: [row(SESSION_A)], timestamp: '2026-01-01T00:00:00.000Z' });
+  });
+
+  assert.equal(notifySound.mock.calls.length, 1);
+  assert.equal(document.title, '[待回复 1] CloudCLI UI');
+
+  // A second wait inside the throttle window: the row and the count still move,
+  // but a second chime on its heels would read as a fault.
+  act(() => {
+    harness.emit({ kind: 'awaiting_reply_changed', sessions: [row(SESSION_A), row(SESSION_B)], timestamp: '2026-01-01T00:00:00.000Z' });
+  });
+
+  assert.equal(result.current.count, 2);
+  assert.equal(notifySound.mock.calls.length, 1);
+  assert.equal(document.title, '[待回复 2] CloudCLI UI');
+
+  // Answering both takes the marker away with the list.
+  act(() => {
+    harness.emit({ kind: 'awaiting_reply_changed', sessions: [], timestamp: '2026-01-01T00:00:00.000Z' });
+  });
+
+  assert.equal(document.title, 'CloudCLI UI');
 });
 
 test('dismiss removes the row before the server answers, and leaves it gone on success', async () => {

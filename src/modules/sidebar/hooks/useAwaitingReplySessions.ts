@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
+import { playNotificationSound, syncAwaitingReplyTitleIndicator } from '@/shared/utils';
 import type {
   AwaitingReplyChangedEvent,
   AwaitingReplyListItem,
@@ -25,6 +26,13 @@ type AwaitingReplyApiPayload = {
 /** The user-facing sentence for the last failed read, from the sidebar namespace. */
 const LOAD_ERROR_KEY = 'awaitingReply.loadError';
 const LOAD_ERROR_FALLBACK = 'Could not load the list.';
+
+/**
+ * The shortest gap between two awaiting-reply chimes. One run routinely reports a
+ * permission request and then its completion seconds apart, and two chimes back
+ * to back sound like a fault rather than a second event.
+ */
+const AWAITING_REPLY_CHIME_THROTTLE_MS = 3000;
 
 /**
  * The sidebar's awaiting-reply list, read once per page and shared by the header
@@ -71,6 +79,44 @@ export function useAwaitingReplySessions(): AwaitingReplyListState {
   // started before the snapshot cannot overwrite the fresher list with an older
   // one.
   const readSeqRef = useRef(0);
+  // The session ids the page has already shown. `null` until the first list lands,
+  // because the list a page loads with is history rather than news: a tab opened
+  // while three sessions wait must not chime for all three.
+  const knownWaitsRef = useRef<Set<string> | null>(null);
+  // When the last chime played, read synchronously so two frames arriving in the
+  // same tick cannot both pass the throttle.
+  const lastChimeAtRef = useRef(0);
+
+  /**
+   * Chimes and marks the tab title for waits that were not in the previous list.
+   *
+   * Called after every write to the list, from both the REST read and the pushed
+   * snapshot, and it must run before React renders the new list: the comparison
+   * is against the ids captured here, not against state that may not have
+   * flushed yet.
+   */
+  const announceNewWaits = useCallback((list: AwaitingReplyListItem[]) => {
+    const ids = new Set(list.map((session) => session.sessionId));
+    const previous = knownWaitsRef.current;
+    knownWaitsRef.current = ids;
+
+    syncAwaitingReplyTitleIndicator(list.length);
+
+    if (previous === null) {
+      return;
+    }
+
+    if (!list.some((session) => !previous.has(session.sessionId))) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastChimeAtRef.current < AWAITING_REPLY_CHIME_THROTTLE_MS) {
+      return;
+    }
+    lastChimeAtRef.current = now;
+    void playNotificationSound();
+  }, []);
 
   const reload = useCallback(async () => {
     const seq = ++readSeqRef.current;
@@ -87,7 +133,9 @@ export function useAwaitingReplySessions(): AwaitingReplyListState {
         return;
       }
 
-      setSessions(Array.isArray(payload.data?.sessions) ? payload.data.sessions : []);
+      const nextSessions = Array.isArray(payload.data?.sessions) ? payload.data.sessions : [];
+      setSessions(nextSessions);
+      announceNewWaits(nextSessions);
       setError(null);
     } catch (readError: unknown) {
       if (seq !== readSeqRef.current) {
@@ -103,7 +151,7 @@ export function useAwaitingReplySessions(): AwaitingReplyListState {
         setIsLoading(false);
       }
     }
-  }, [t]);
+  }, [announceNewWaits, t]);
 
   const dismiss = useCallback(async (sessionId: string) => {
     const previous = sessionsRef.current;
@@ -118,6 +166,7 @@ export function useAwaitingReplySessions(): AwaitingReplyListState {
     // Optimistic removal: the row has to leave on the click, not on the round
     // trip, or the control reads as unresponsive.
     setSessions((current) => current.filter((session) => session.sessionId !== sessionId));
+    syncAwaitingReplyTitleIndicator(previous.length - 1);
 
     try {
       const response = await api.dismissAwaitingReply(sessionId);
@@ -136,6 +185,7 @@ export function useAwaitingReplySessions(): AwaitingReplyListState {
         restored.splice(Math.min(index, restored.length), 0, removed);
         return restored;
       });
+      syncAwaitingReplyTitleIndicator(previous.length);
       // The server's refusal is shown rather than swallowed, the way the Running
       // view reports a refused host close: a row that silently came back would
       // leave the user clicking a button that appears broken.
@@ -161,9 +211,10 @@ export function useAwaitingReplySessions(): AwaitingReplyListState {
 
     readSeqRef.current += 1;
     setSessions(snapshot.sessions);
+    announceNewWaits(snapshot.sessions);
     setError(null);
     setIsLoading(false);
-  }), [subscribe]);
+  }), [announceNewWaits, subscribe]);
 
   // The fallback for a page left open: a tab that was hidden through a whole
   // turn heard the frame on a socket that may already have been replaced, so
