@@ -39,6 +39,13 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       },
     },
     {
+      // The fjbigmodel gateway's fast tier. Listed explicitly (rather than left to
+      // `default`) so the picker shows the model the deployment actually runs.
+      value: 'deepseek-v4-flash-anthropic[1M]',
+      label: 'DeepSeek V4 Flash (fj)',
+      description: 'DeepSeek V4 Flash through the fjbigmodel gateway, 1M context.',
+    },
+    {
       value: 'best',
       label: 'Best available',
       description: 'Use Fable 5 when available, otherwise the latest Opus model.',
@@ -156,7 +163,7 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       },
     },
   ],
-  DEFAULT: 'default',
+  DEFAULT: 'deepseek-v4-flash-anthropic[1M]',
 };
 
 export const findClaudeModelOption = (model: string | undefined | null): ProviderModelOption | null => {
