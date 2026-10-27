@@ -442,8 +442,13 @@ export function useChatRealtimeHandlers({
           return;
         }
 
-        // Sidebar/global events — owned by useProjectsState.
+        // Sidebar/global events — owned by useProjectsState and the sidebar's
+        // awaiting-reply hook. Listed explicitly rather than left to the default
+        // branch: everything below treats an unknown frame as a provider
+        // message, and a snapshot appended as a chat row would show up in the
+        // transcript as a message nobody sent.
         case 'session_upserted':
+        case 'awaiting_reply_changed':
         case 'loading_progress':
           return;
 

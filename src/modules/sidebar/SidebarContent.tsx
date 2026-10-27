@@ -3,12 +3,13 @@ import { Archive, Folder, MessageSquare, RotateCcw, Search, Trash2 } from 'lucid
 import type { TFunction } from 'i18next';
 
 import { LLMProviderLogo, ScrollArea } from '@/shared/ui';
-import type { ArchivedProjectListItem, ArchivedSessionListItem, ConversationSearchResults, Project, RecentConversationListItem, ReleaseInfo, SearchProgress, SidebarProjectListProps, SidebarSearchMode } from '@/shared/types';
+import type { ArchivedProjectListItem, ArchivedSessionListItem, AwaitingReplyListState, ConversationSearchResults, Project, RecentConversationListItem, ReleaseInfo, SearchProgress, SidebarProjectListProps, SidebarSearchMode } from '@/shared/types';
 import { formatCompactAge, getAllSessions } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import { useSidebarResize } from '@/modules/sidebar/hooks/useSidebarResize';
 import SidebarFooter from '@/modules/sidebar/SidebarFooter';
 import SidebarHeader from '@/modules/sidebar/SidebarHeader';
 import SidebarResizeHandle from '@/modules/sidebar/SidebarResizeHandle';
+import AwaitingReplyView from '@/modules/sidebar/AwaitingReplyView';
 import RunningView from '@/modules/sidebar/RunningView';
 import SidebarProjectList from '@/modules/sidebar/SidebarProjectList';
 import SidebarRecentConversations from '@/modules/sidebar/SidebarRecentConversations';
@@ -98,6 +99,8 @@ type SidebarContentProps = {
   isLoading: boolean;
   projects: Project[];
   runningSessionsCount: number;
+  /** The awaiting-reply list, read once by the controller and shared by the badge and the view. */
+  awaitingReply: AwaitingReplyListState;
   archivedProjects: ArchivedProjectListItem[];
   archivedSessions: ArchivedSessionListItem[];
   archivedSessionsCount: number;
@@ -149,6 +152,7 @@ export default function SidebarContent({
   isLoading,
   projects,
   runningSessionsCount,
+  awaitingReply,
   archivedProjects,
   archivedSessions,
   archivedSessionsCount,
@@ -224,6 +228,7 @@ export default function SidebarContent({
         isLoading={isLoading}
         projectsCount={projects.length}
         runningSessionsCount={runningSessionsCount}
+        awaitingReplyCount={awaitingReply.count}
         archivedSessionsCount={archivedSessionsCount}
         isArchivedSessionsLoading={isArchivedSessionsLoading}
         searchFilter={searchFilter}
@@ -440,6 +445,15 @@ export default function SidebarContent({
           />
         ) : searchMode === 'running' ? (
           <RunningView projects={projects} searchQuery={searchFilter} t={t} />
+        ) : searchMode === 'awaiting-reply' ? (
+          <AwaitingReplyView
+            sessions={awaitingReply.sessions}
+            isLoading={awaitingReply.isLoading}
+            error={awaitingReply.error}
+            searchQuery={searchFilter}
+            onDismiss={(sessionId) => void awaitingReply.dismiss(sessionId)}
+            t={t}
+          />
         ) : searchMode === 'archived' ? (
           isArchivedSessionsLoading ? (
             <div className="space-y-2 px-2 py-1" aria-live="polite" aria-busy="true">

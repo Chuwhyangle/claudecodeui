@@ -605,6 +605,14 @@ export const api = {
   sessionDetails: (sessionId: string) =>
     get(`/api/providers/sessions/${encodeURIComponent(sessionId)}`),
   runningSessions: () => get('/api/providers/sessions/running'),
+  // Sessions that have stopped and are waiting on the user: a finished turn, a
+  // failed turn, or an unanswered tool approval. Whole-list read because the
+  // list spans projects and must be complete.
+  awaitingReplySessions: () => get('/api/providers/sessions/awaiting-reply'),
+  // Takes one session off that list without replying to it. The other two ways
+  // off are automatic (replying, answering the approval).
+  dismissAwaitingReply: (sessionId: string) =>
+    del(`/api/providers/sessions/${encodeURIComponent(sessionId)}/awaiting-reply`),
   recentConversations: ({ limit = 40, offset = 0 }: { limit?: number; offset?: number } = {}) =>
     get(`/api/providers/sessions/recent${query({ limit, offset })}`),
   providerSessionId: (sessionId: string) =>

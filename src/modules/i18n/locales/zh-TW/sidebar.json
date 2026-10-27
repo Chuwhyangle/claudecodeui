@@ -137,6 +137,23 @@
     "emptyDescription": "供應商處理時，進行中的工作會顯示在這裡。",
     "noMatchingSessions": "沒有符合此搜尋的工作階段。"
   },
+  "awaitingReply": {
+    "title": "待回覆",
+    "tooltip": "等待你回覆的工作階段",
+    "badgeLabel": "{{n}} 個工作階段等待你的回覆",
+    "searchPlaceholder": "搜尋等待你回覆的工作階段...",
+    "emptyTitle": "沒有待回覆的工作階段",
+    "emptyDescription": "工作階段完成一輪、執行失敗或等待工具核准後會出現在這裡，直到你回覆。",
+    "dismiss": "移除",
+    "dismissLabel": "將 {{title}} 從待回覆中移除",
+    "reasonCompleted": "已完成",
+    "reasonFailed": "已失敗",
+    "reasonPermission": "等待核准",
+    "waitingFor": "已等待 {{age}}",
+    "loadError": "無法載入清單。",
+    "retry": "重試",
+    "noMatchingSessions": "沒有符合此搜尋的工作階段。"
+  },
   "search": {
     "modeProjects": "專案",
     "modeConversations": "對話",

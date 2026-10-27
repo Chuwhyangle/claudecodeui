@@ -1,6 +1,6 @@
 import { getConnection } from '@/modules/database/core/index.js';
 import { projectsDb } from '@/modules/database/repositories/projects.db.js';
-import type { HostMode, SessionLaunchSelection } from '@/shared/types.js';
+import type { AwaitingReplyReason, HostMode, SessionLaunchSelection } from '@/shared/types.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 
 /**
@@ -101,6 +101,16 @@ type SessionRow = {
    * valid — but a row read out of the database always carries the column.
    */
   session_order?: number | null;
+  /**
+   * When this session started waiting on the user, as an ISO-8601 instant, or
+   * NULL when nothing is waiting. See the `awaiting_reply_at` column comment.
+   *
+   * Optional in the type the way `transcript_name` is — a hand-built row stays
+   * valid — but a row read out of the database always carries the column.
+   */
+  awaiting_reply_at?: string | null;
+  /** Why the session is waiting; NULL exactly when `awaiting_reply_at` is. */
+  awaiting_reply_reason?: AwaitingReplyReason | null;
   isArchived: number;
   created_at: string;
   updated_at: string;
@@ -226,7 +236,9 @@ function sessionRowColumns(prefix = ''): string {
   ${displayNameSourceSql(prefix)} AS name_source,
   ${prefix}transcript_name, ${prefix}transcript_name_source,
   ${prefix}model, ${prefix}effort, ${prefix}permission_mode, ${prefix}lifecycle_mode,
-  ${prefix}forked_from_session_id, ${prefix}session_order, ${prefix}isArchived, ${prefix}created_at, ${prefix}updated_at`;
+  ${prefix}forked_from_session_id, ${prefix}session_order,
+  ${prefix}awaiting_reply_at, ${prefix}awaiting_reply_reason,
+  ${prefix}isArchived, ${prefix}created_at, ${prefix}updated_at`;
 }
 
 const SESSION_ROW_COLUMNS = sessionRowColumns();
@@ -241,7 +253,7 @@ const SESSION_ROW_COLUMNS_QUALIFIED = sessionRowColumns('sessions.');
  * override, freezing the other row's reading into `custom_name`.
  */
 const SESSION_ROW_RAW_COLUMNS =
-  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, name_source, transcript_name, transcript_name_source, model, effort, permission_mode, lifecycle_mode, forked_from_session_id, session_order, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, name_source, transcript_name, transcript_name_source, model, effort, permission_mode, lifecycle_mode, forked_from_session_id, session_order, awaiting_reply_at, awaiting_reply_reason, isArchived, created_at, updated_at';
 
 /**
  * Whether `name` is one of the addresses this app assigned to a session.
@@ -984,6 +996,81 @@ export const sessionsDb = {
         update.run(index, sessionId);
       });
     })();
+  },
+
+  /**
+   * Records that one session is now waiting on the user.
+   *
+   * The timestamp is the instant the wait *began*: a second reason arriving
+   * while the session is already waiting (a turn completes while a permission
+   * prompt is still outstanding, background work reports in after its turn)
+   * updates the reason but keeps the original instant, so the list's "waiting
+   * for 5 minutes" stays true rather than restarting on every event. A row that
+   * was not waiting starts at `now`.
+   *
+   * Returns whether the stored reading changed, which is what makes the caller's
+   * broadcast a report of a change rather than a heartbeat: a repeat with the
+   * same reason writes nothing and answers false.
+   *
+   * Archived rows are left alone — the list never shows them, so marking one
+   * would only leave a stale value behind if it were ever restored.
+   */
+  markSessionAwaitingReply(sessionId: string, reason: AwaitingReplyReason): boolean {
+    const db = getConnection();
+    const result = db
+      .prepare(
+        `UPDATE sessions
+            SET awaiting_reply_at = COALESCE(awaiting_reply_at, @at),
+                awaiting_reply_reason = @reason
+          WHERE session_id = @sessionId
+            AND isArchived = 0
+            AND (awaiting_reply_at IS NULL OR awaiting_reply_reason IS NOT @reason)`
+      )
+      .run({ sessionId, reason, at: new Date().toISOString() });
+    return Number(result.changes) > 0;
+  },
+
+  /**
+   * Records that one session is no longer waiting on the user.
+   *
+   * Called for the three ways a wait ends: the user sent the next message (the
+   * turn started), a queued permission prompt was answered, or the user removed
+   * the row from the list by hand. `awaiting_reply_at IS NOT NULL` in the
+   * predicate makes the return value mean "a wait ended", so a caller that
+   * clears a session which was not waiting broadcasts nothing.
+   */
+  clearSessionAwaitingReply(sessionId: string): boolean {
+    const db = getConnection();
+    const result = db
+      .prepare(
+        `UPDATE sessions
+            SET awaiting_reply_at = NULL,
+                awaiting_reply_reason = NULL
+          WHERE session_id = ? AND awaiting_reply_at IS NOT NULL`
+      )
+      .run(sessionId);
+    return Number(result.changes) > 0;
+  },
+
+  /**
+   * Every non-archived session currently waiting on the user, oldest wait first.
+   *
+   * Ordered by the stored instant rather than recency: the list is a queue of
+   * things to answer, and the one that has been sitting longest is the one most
+   * likely to have been forgotten. Every value in the column is written by this
+   * repository in the same ISO-8601 shape, so the string ordering is the
+   * chronological one.
+   */
+  getAwaitingReplySessions(): SessionRow[] {
+    const db = getConnection();
+    return db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+           FROM sessions
+          WHERE awaiting_reply_at IS NOT NULL AND isArchived = 0
+          ORDER BY awaiting_reply_at ASC, session_id ASC`
+      )
+      .all() as SessionRow[];
   },
 
   /**

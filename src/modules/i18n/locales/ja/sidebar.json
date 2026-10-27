@@ -163,6 +163,23 @@
     "emptyDescription": "プロバイダーが処理している間、進行中の作業がここに表示されます。",
     "noMatchingSessions": "この検索に一致するセッションはありません。"
   },
+  "awaitingReply": {
+    "title": "返信待ち",
+    "tooltip": "あなたの返信を待っているセッション",
+    "badgeLabel": "{{n}} 件のセッションが返信を待っています",
+    "searchPlaceholder": "返信を待っているセッションを検索...",
+    "emptyTitle": "返信待ちのセッションはありません",
+    "emptyDescription": "ターンが終了したセッション、失敗したセッション、ツールの承認待ちのセッションが、返信するまでここに表示されます。",
+    "dismiss": "削除",
+    "dismissLabel": "{{title}} を返信待ちから削除",
+    "reasonCompleted": "終了",
+    "reasonFailed": "失敗",
+    "reasonPermission": "承認待ち",
+    "waitingFor": "{{age}} 待機中",
+    "loadError": "リストを読み込めませんでした。",
+    "retry": "再試行",
+    "noMatchingSessions": "この検索に一致するセッションはありません。"
+  },
   "search": {
     "runningPlaceholder": "実行中のセッションを検索...",
     "runningTooltip": "実行中のセッション",

@@ -23,6 +23,7 @@ const baseProps = () => ({
   isLoading: false,
   projectsCount: 3,
   runningSessionsCount: 1,
+  awaitingReplyCount: 0,
   archivedSessionsCount: 0,
   isArchivedSessionsLoading: false,
   searchFilter: '',

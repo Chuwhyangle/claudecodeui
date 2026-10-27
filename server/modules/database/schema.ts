@@ -208,6 +208,19 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- session created after the user arranged the list appears at the top
     -- instead of being buried at the bottom.
     session_order INTEGER,
+    -- The instant this session started waiting on the user — its turn ended, it
+    -- failed, or it is parked on a permission prompt — or NULL when nothing is
+    -- waiting. This is the app's own "needs a reply" list: an ISO-8601 timestamp
+    -- rather than a boolean because the list is ordered oldest-waiting first and
+    -- the sidebar says how long a session has been waiting. Cleared when the
+    -- session's next turn starts, when a queued permission is answered, or when
+    -- the user removes the row from the list by hand.
+    awaiting_reply_at TEXT,
+    -- Why the session is waiting: 'completed' (the turn finished), 'failed' (it
+    -- ended on an error) or 'permission' (a tool approval is outstanding). Kept
+    -- beside the timestamp so the list can say which, and overwritten on each
+    -- new reason while the timestamp keeps the instant the wait began.
+    awaiting_reply_reason TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

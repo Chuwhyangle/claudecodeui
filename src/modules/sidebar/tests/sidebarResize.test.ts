@@ -123,6 +123,15 @@ const sidebarProps = (isMobile: boolean): React.ComponentProps<typeof SidebarCon
   isLoading: false,
   projects: [],
   runningSessionsCount: 0,
+  awaitingReply: {
+    sessions: [],
+    count: 0,
+    isLoading: false,
+    error: null,
+    dismiss: async () => {},
+    reload: async () => {},
+  },
+
   archivedProjects: [],
   archivedSessions: [],
   archivedSessionsCount: 0,

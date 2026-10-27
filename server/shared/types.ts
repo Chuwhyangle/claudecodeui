@@ -689,6 +689,45 @@ export type SessionUpsertedEvent = {
 };
 
 /**
+ * One row of the sidebar's "awaiting reply" list, as the server sends it.
+ *
+ * Flat rather than a session row because the list spans projects: a reader has
+ * to be able to draw "project · session · why · since when" from this object
+ * alone, without joining it against the project list, which may not have loaded
+ * the session's page at all.
+ */
+export type AwaitingReplyListItem = {
+  sessionId: string;
+  provider: LLMProvider;
+  /** The owning project's database id, or null for a session whose path has none. */
+  projectId: string | null;
+  projectPath: string | null;
+  /** The project's display name; never empty (falls back to the path's basename). */
+  projectDisplayName: string;
+  /** The session's display name; never empty (falls back to its id). */
+  sessionTitle: string;
+  /** ISO-8601 instant the wait began. */
+  awaitingSince: string;
+  reason: AwaitingReplyReason;
+};
+
+/**
+ * The `awaiting_reply_changed` sidebar delta, built only by
+ * `modules/websocket/services/awaiting-reply-broadcast.service.ts`.
+ *
+ * Carries the whole list rather than one row's delta. The list is short by
+ * construction — it holds only sessions waiting on a person — and a full
+ * snapshot removes every incremental-merge bug class: a client that missed a
+ * frame is corrected by the next one, and a row removed by another browser
+ * (answered, dismissed) cannot linger because it is absent from the snapshot.
+ */
+export type AwaitingReplyChangedEvent = {
+  kind: 'awaiting_reply_changed';
+  sessions: AwaitingReplyListItem[];
+  timestamp: string;
+};
+
+/**
  * The `hosts_changed` invalidation frame, built only by
  * `modules/websocket/services/hosts-changed-broadcast.service.ts`.
  *
@@ -2658,6 +2697,19 @@ export type ResolvedLaunchSpec = {
   contextWindow: number;
   warnings: string[];
 };
+
+// ---------------------------
+//----------------- SESSION AWAITING REPLY ------------
+/**
+ * Why a session is on the sidebar's "awaiting reply" list.
+ *
+ * The three answers are the three ways a session comes to rest with the user as
+ * the next actor: `completed` its turn finished normally, `failed` the turn
+ * ended on an error, `permission` a tool approval is outstanding while the turn
+ * is still open. A turn the user stopped themselves is deliberately not one of
+ * them — the user was present when it ended, so there is nothing to come back to.
+ */
+export type AwaitingReplyReason = 'completed' | 'failed' | 'permission';
 
 // ---------------------------
 //----------------- SESSION HOST LIFECYCLE TYPES ------------

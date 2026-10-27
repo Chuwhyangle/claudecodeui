@@ -138,6 +138,23 @@
     "emptyDescription": "Le travail actif apparaîtra ici pendant qu'un fournisseur le traite.",
     "noMatchingSessions": "Aucune session ne correspond à cette recherche."
   },
+  "awaitingReply": {
+    "title": "En attente de réponse",
+    "tooltip": "Sessions en attente de votre réponse",
+    "badgeLabel": "{{n}} sessions en attente de votre réponse",
+    "searchPlaceholder": "Rechercher les sessions qui vous attendent...",
+    "emptyTitle": "Rien en attente de votre réponse",
+    "emptyDescription": "Les sessions qui terminent un tour, échouent ou attendent l'approbation d'un outil apparaissent ici jusqu'à ce que vous répondiez.",
+    "dismiss": "Retirer",
+    "dismissLabel": "Retirer {{title}} des sessions en attente de réponse",
+    "reasonCompleted": "Terminée",
+    "reasonFailed": "Échec",
+    "reasonPermission": "En attente d'approbation",
+    "waitingFor": "en attente depuis {{age}}",
+    "loadError": "Impossible de charger la liste.",
+    "retry": "Réessayer",
+    "noMatchingSessions": "Aucune session ne correspond à cette recherche."
+  },
   "search": {
     "modeProjects": "Projets",
     "modeConversations": "Conversations",

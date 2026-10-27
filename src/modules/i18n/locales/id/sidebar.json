@@ -138,6 +138,23 @@
     "emptyDescription": "Pekerjaan aktif akan muncul di sini saat penyedia memprosesnya.",
     "noMatchingSessions": "Tidak ada sesi yang cocok dengan pencarian ini."
   },
+  "awaitingReply": {
+    "title": "Menunggu balasan",
+    "tooltip": "Sesi yang menunggu balasan Anda",
+    "badgeLabel": "{{n}} sesi menunggu balasan Anda",
+    "searchPlaceholder": "Cari sesi yang menunggu Anda...",
+    "emptyTitle": "Tidak ada yang menunggu balasan Anda",
+    "emptyDescription": "Sesi yang menyelesaikan satu putaran, gagal, atau menunggu persetujuan alat akan muncul di sini sampai Anda membalas.",
+    "dismiss": "Hapus",
+    "dismissLabel": "Hapus {{title}} dari daftar menunggu balasan",
+    "reasonCompleted": "Selesai",
+    "reasonFailed": "Gagal",
+    "reasonPermission": "Menunggu persetujuan",
+    "waitingFor": "menunggu {{age}}",
+    "loadError": "Tidak dapat memuat daftar.",
+    "retry": "Coba lagi",
+    "noMatchingSessions": "Tidak ada sesi yang cocok dengan pencarian ini."
+  },
   "search": {
     "modeProjects": "Proyek",
     "modeConversations": "Percakapan",

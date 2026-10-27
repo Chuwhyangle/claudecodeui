@@ -138,6 +138,23 @@
     "emptyDescription": "Etkin çalışma, sağlayıcı işlerken burada görünür.",
     "noMatchingSessions": "Bu aramayla eşleşen oturum yok."
   },
+  "awaitingReply": {
+    "title": "Yanıt bekleniyor",
+    "tooltip": "Yanıtınızı bekleyen oturumlar",
+    "badgeLabel": "{{n}} oturum yanıtınızı bekliyor",
+    "searchPlaceholder": "Sizi bekleyen oturumları arayın...",
+    "emptyTitle": "Yanıtınızı bekleyen bir şey yok",
+    "emptyDescription": "Bir turu tamamlayan, başarısız olan veya araç onayı bekleyen oturumlar, siz yanıtlayana kadar burada görünür.",
+    "dismiss": "Kaldır",
+    "dismissLabel": "{{title}} oturumunu yanıt bekleyenlerden kaldır",
+    "reasonCompleted": "Tamamlandı",
+    "reasonFailed": "Başarısız",
+    "reasonPermission": "Onay bekliyor",
+    "waitingFor": "{{age}} süredir bekliyor",
+    "loadError": "Liste yüklenemedi.",
+    "retry": "Yeniden dene",
+    "noMatchingSessions": "Bu aramayla eşleşen oturum yok."
+  },
   "search": {
     "modeProjects": "Projeler",
     "modeConversations": "Konuşmalar",

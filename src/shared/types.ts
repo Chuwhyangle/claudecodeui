@@ -3289,8 +3289,68 @@ export type SidebarProjectListProps = SessionRowActions & {
 /** The ordering applied to the project list, either alphabetically by name or by most recent activity, persisted alongside the user's appearance settings. */
 export type ProjectSortOrder = 'name' | 'date';
 
-/** Which list the sidebar is currently showing: projects, conversation search results, running sessions or archived items. */
-export type SidebarSearchMode = 'projects' | 'conversations' | 'running' | 'archived';
+/** Which list the sidebar is currently showing: projects, conversation search results, running sessions, the sessions waiting on the user, or archived items. */
+export type SidebarSearchMode = 'projects' | 'conversations' | 'running' | 'awaiting-reply' | 'archived';
+
+/** Why a session is waiting on the user. Mirrors the server's stored reason. */
+export type AwaitingReplyReason = 'completed' | 'failed' | 'permission';
+
+/**
+ * One row of the sidebar's awaiting-reply list.
+ *
+ * Flat rather than a `ProjectSession` because the list spans projects and holds
+ * sessions whose page the sidebar may never have loaded: a row has to be
+ * drawable from this object alone. The server assembles it, and the same shape
+ * arrives over the websocket as a whole-list snapshot.
+ */
+export type AwaitingReplyListItem = {
+  sessionId: string;
+  provider: LLMProvider;
+  /** The owning project's database id, or null when its path has no project row. */
+  projectId: string | null;
+  projectPath: string | null;
+  /** The project's display name; never empty. */
+  projectDisplayName: string;
+  /** The session's display name; never empty (falls back to its id). */
+  sessionTitle: string;
+  /** ISO-8601 instant the wait began. */
+  awaitingSince: string;
+  reason: AwaitingReplyReason;
+};
+
+/**
+ * The `awaiting_reply_changed` server frame: the whole list, not one row's delta.
+ *
+ * A snapshot because the list is short and a client that missed a frame is
+ * corrected by the next one — which also means a row removed in another browser
+ * cannot linger here.
+ */
+export type AwaitingReplyChangedEvent = {
+  kind: 'awaiting_reply_changed';
+  sessions: AwaitingReplyListItem[];
+  timestamp: string;
+};
+
+/**
+ * What the awaiting-reply list hook reads, as the sidebar controller hands it to
+ * the header badge and the list view.
+ *
+ * Passed down rather than read twice: the badge and the view must agree, and a
+ * second hook instance would own a second websocket subscription over the same
+ * list.
+ */
+export type AwaitingReplyListState = {
+  sessions: AwaitingReplyListItem[];
+  /** `sessions.length`, for the header badge. */
+  count: number;
+  isLoading: boolean;
+  /** A user-facing message when the last read failed, else null. */
+  error: string | null;
+  /** Takes one session off the list; restores the row if the server refuses. */
+  dismiss: (sessionId: string) => Promise<void>;
+  /** Re-reads the whole list from the server. */
+  reload: () => Promise<void>;
+};
 
 /** A Project narrowed to the archived state so archived entries can be listed and restored without being mistaken for active projects. */
 export type ArchivedProjectListItem = Project & { isArchived: true };

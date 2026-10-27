@@ -878,6 +878,26 @@ const addSessionOrderColumn = (db: Database): void => {
 };
 
 /**
+ * Adds the two columns behind the sidebar's "awaiting reply" list: when a
+ * session started waiting on the user, and why.
+ *
+ * Both are nullable and default to NULL, which is the truthful value for every
+ * existing row — no session was listable before the feature existed — and what
+ * makes the column safe to read unconditionally: a NULL is simply "not waiting".
+ *
+ * Added after every sessions-table rebuild for the same reason as the columns
+ * above: their copies use an explicit column list, so a column added earlier
+ * would be dropped again.
+ */
+const addSessionAwaitingReplyColumns = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'awaiting_reply_at', 'TEXT');
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'awaiting_reply_reason', 'TEXT');
+};
+
+/**
  * Drops the two structures the removed launch-profile feature left in the
  * database: the `launch_profiles` table and the `sessions.launch_profile_id`
  * column.
@@ -1130,6 +1150,8 @@ export const runMigrations = (db: Database) => {
     addSessionPinnedColumn(db);
     // The column that replaced the pin; same placement rule.
     addSessionOrderColumn(db);
+    // The sidebar's awaiting-reply pair; same placement rule.
+    addSessionAwaitingReplyColumns(db);
     ensureProjectsForSessionPaths(db);
     db.exec(SCHEDULED_MESSAGES_TABLE_SCHEMA_SQL);
     // OAuth storage (mcp-gateway-SPEC stage 5, AC-258). Order matters: the

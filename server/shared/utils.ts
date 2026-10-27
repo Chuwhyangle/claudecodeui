@@ -1901,3 +1901,33 @@ export function installVoiceRuntimeConfigReader(reader: (() => VoiceRuntimeConfi
 export function readInstalledVoiceRuntimeConfig(): VoiceRuntimeConfigReading | null {
   return installedVoiceRuntimeConfigReader === null ? null : installedVoiceRuntimeConfigReader();
 }
+
+// ---------------------------
+//----------------- PROJECT DISPLAY NAME UTILITIES ------------
+/**
+ * Resolves the label a project is shown under in lists that are not the
+ * project sidebar itself — the awaiting-reply list, the archive listing.
+ *
+ * The user's custom name wins; otherwise the path's basename is the project's
+ * own name, and a session with no stored path at all (a row whose project was
+ * removed) is still drawn under a stable label rather than an empty cell.
+ *
+ * Use this rather than `path.basename` at a call site: the two places that
+ * render a project from a session row must agree on the fallback, and this is
+ * where that agreement is written down.
+ */
+export function resolveProjectDisplayName(
+  projectPath: string | null,
+  customProjectName: string | null | undefined,
+): string {
+  const trimmedCustomName = typeof customProjectName === 'string' ? customProjectName.trim() : '';
+  if (trimmedCustomName.length > 0) {
+    return trimmedCustomName;
+  }
+
+  if (!projectPath) {
+    return 'Unknown Project';
+  }
+
+  return path.basename(projectPath) || projectPath;
+}

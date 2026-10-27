@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import fsp from 'node:fs/promises';
-import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { compileStoredSessionFilter } from '@/modules/projects/index.js';
@@ -21,7 +20,7 @@ import type {
   NormalizedMessage,
   SessionLaunchSelection,
 } from '@/shared/types.js';
-import { AppError, sliceAroundIndex, sliceTailPage } from '@/shared/utils.js';
+import { AppError, resolveProjectDisplayName, sliceAroundIndex, sliceTailPage } from '@/shared/utils.js';
 
 type CreateAppSessionResult = {
   sessionId: string;
@@ -314,25 +313,9 @@ async function writeRenameToProviderTranscript(
 
 /**
  * Archive rows need a stable project label even when the owning project is not
- * part of the active sidebar payload. This lightweight resolver keeps the
- * archive API self-contained while still matching the project's stored display
- * name when one exists.
+ * part of the active sidebar payload. The resolver itself lives in the shared
+ * utilities because the awaiting-reply list needs the same answer.
  */
-function resolveProjectDisplayName(
-  projectPath: string | null,
-  customProjectName: string | null | undefined,
-): string {
-  const trimmedCustomName = typeof customProjectName === 'string' ? customProjectName.trim() : '';
-  if (trimmedCustomName.length > 0) {
-    return trimmedCustomName;
-  }
-
-  if (!projectPath) {
-    return 'Unknown Project';
-  }
-
-  return path.basename(projectPath) || projectPath;
-}
 
 /**
  * Application service for provider-backed session message operations.

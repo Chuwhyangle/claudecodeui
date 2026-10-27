@@ -138,6 +138,23 @@
     "emptyDescription": "Aktive Arbeit erscheint hier, während ein Anbieter verarbeitet.",
     "noMatchingSessions": "Keine Sitzungen entsprechen dieser Suche."
   },
+  "awaitingReply": {
+    "title": "Antwort ausstehend",
+    "tooltip": "Sitzungen, die auf deine Antwort warten",
+    "badgeLabel": "{{n}} Sitzungen warten auf deine Antwort",
+    "searchPlaceholder": "Sitzungen durchsuchen, die auf dich warten...",
+    "emptyTitle": "Nichts wartet auf deine Antwort",
+    "emptyDescription": "Sitzungen, die eine Runde beenden, fehlschlagen oder auf eine Tool-Genehmigung warten, erscheinen hier, bis du antwortest.",
+    "dismiss": "Entfernen",
+    "dismissLabel": "{{title}} aus „Antwort ausstehend“ entfernen",
+    "reasonCompleted": "Abgeschlossen",
+    "reasonFailed": "Fehlgeschlagen",
+    "reasonPermission": "Wartet auf Genehmigung",
+    "waitingFor": "wartet seit {{age}}",
+    "loadError": "Die Liste konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "noMatchingSessions": "Keine Sitzungen entsprechen dieser Suche."
+  },
   "search": {
     "modeProjects": "Projekte",
     "modeConversations": "Unterhaltungen",

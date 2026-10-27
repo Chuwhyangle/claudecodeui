@@ -138,6 +138,23 @@
     "emptyDescription": "공급자가 처리하는 동안 진행 중인 작업이 여기에 표시됩니다.",
     "noMatchingSessions": "이 검색과 일치하는 세션이 없습니다."
   },
+  "awaitingReply": {
+    "title": "답변 대기",
+    "tooltip": "답변을 기다리는 세션",
+    "badgeLabel": "{{n}}개 세션이 답변을 기다리고 있습니다",
+    "searchPlaceholder": "답변을 기다리는 세션 검색...",
+    "emptyTitle": "답변을 기다리는 세션이 없습니다",
+    "emptyDescription": "턴이 끝났거나, 실패했거나, 도구 승인을 기다리는 세션이 답변할 때까지 여기에 표시됩니다.",
+    "dismiss": "제거",
+    "dismissLabel": "{{title}}을(를) 답변 대기에서 제거",
+    "reasonCompleted": "완료됨",
+    "reasonFailed": "실패함",
+    "reasonPermission": "승인 대기 중",
+    "waitingFor": "{{age}} 대기 중",
+    "loadError": "목록을 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "noMatchingSessions": "이 검색과 일치하는 세션이 없습니다."
+  },
   "search": {
     "modeProjects": "프로젝트",
     "modeConversations": "대화",

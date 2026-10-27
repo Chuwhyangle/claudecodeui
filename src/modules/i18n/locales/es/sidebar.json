@@ -138,6 +138,23 @@
     "emptyDescription": "El trabajo activo aparecerá aquí mientras un proveedor lo procesa.",
     "noMatchingSessions": "Ninguna sesión coincide con esta búsqueda."
   },
+  "awaitingReply": {
+    "title": "Pendiente de respuesta",
+    "tooltip": "Sesiones que esperan tu respuesta",
+    "badgeLabel": "{{n}} sesiones esperan tu respuesta",
+    "searchPlaceholder": "Buscar sesiones que esperan tu respuesta...",
+    "emptyTitle": "Nada pendiente de tu respuesta",
+    "emptyDescription": "Las sesiones que terminan un turno, fallan o esperan la aprobación de una herramienta aparecen aquí hasta que respondas.",
+    "dismiss": "Quitar",
+    "dismissLabel": "Quitar {{title}} de pendientes de respuesta",
+    "reasonCompleted": "Finalizada",
+    "reasonFailed": "Fallida",
+    "reasonPermission": "Esperando aprobación",
+    "waitingFor": "esperando {{age}}",
+    "loadError": "No se pudo cargar la lista.",
+    "retry": "Reintentar",
+    "noMatchingSessions": "Ninguna sesión coincide con esta búsqueda."
+  },
   "search": {
     "modeProjects": "Proyectos",
     "modeConversations": "Conversaciones",

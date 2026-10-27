@@ -116,6 +116,7 @@ function Sidebar({
     searchProgress,
     clearConversationResults,
     runningSessionsCount,
+    awaitingReply,
     deletingProjects,
     pendingDeletion,
     showVersionModal,
@@ -306,6 +307,7 @@ function Sidebar({
             projects={projects}
             onGoHome={onGoHome}
             runningSessionsCount={runningSessionsCount}
+            awaitingReply={awaitingReply}
             archivedProjects={archivedProjects}
             archivedSessions={archivedSessions}
             archivedSessionsCount={archivedSessionsCount}

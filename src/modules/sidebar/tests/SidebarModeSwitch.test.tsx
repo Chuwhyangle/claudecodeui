@@ -86,6 +86,7 @@ const headerProps = (selectedProjectId: string | null, t: TFunction) => ({
   isLoading: false,
   projectsCount: 3,
   runningSessionsCount: 0,
+  awaitingReplyCount: 0,
   archivedSessionsCount: 0,
   isArchivedSessionsLoading: false,
   searchFilter: '',

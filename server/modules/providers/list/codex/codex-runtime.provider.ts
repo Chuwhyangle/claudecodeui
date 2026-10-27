@@ -22,6 +22,7 @@ import {
   createNormalizedMessage,
 } from '@/shared/index.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
+import { sessionAwaitingReplyService } from '@/modules/providers/services/session-awaiting-reply.service.js';
 import type { AnyRecord, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/index.js';
 
 type ActiveCodexSession = {
@@ -528,7 +529,23 @@ async function queryCodex(
           sessionName: sessionSummary,
           stopReason: 'completed'
         });
+        // The turn is over and the user is the next actor: the sidebar's
+        // awaiting-reply list says so, for codex exactly as for claude.
+        sessionAwaitingReplyService.markSessionAwaitingReply(
+          sessionId || capturedSessionId || null,
+          'completed',
+        );
+      } else {
+        // A turn that ended on `turn.failed` is stopped just the same; the
+        // reason is what makes the row say "failed" rather than "finished".
+        sessionAwaitingReplyService.markSessionAwaitingReply(
+          sessionId || capturedSessionId || null,
+          'failed',
+        );
       }
+    } else {
+      // Aborted by the user: nothing is waiting on them.
+      sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId || capturedSessionId || null);
     }
 
   } catch (error) {
@@ -565,6 +582,12 @@ async function queryCodex(
           error
         });
       }
+      // Reached from the throw as well as from `turn.failed`: whatever made the
+      // run stop, the user is the next actor.
+      sessionAwaitingReplyService.markSessionAwaitingReply(
+        sessionId || capturedSessionId || null,
+        'failed',
+      );
     }
 
   } finally {

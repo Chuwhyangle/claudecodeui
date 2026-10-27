@@ -4,20 +4,26 @@ import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { generateDisplayName } from '@/modules/projects/index.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import { installSessionBroadcastPort } from '@/shared/ports/session-broadcast.port.js';
-import type { SessionUpsertedEvent } from '@/shared/types.js';
+import type { AwaitingReplyChangedEvent, AwaitingReplyListItem, SessionUpsertedEvent } from '@/shared/types.js';
 
 /**
- * The single producer of the `session_upserted` delta.
+ * The single producer of the two sidebar session broadcasts: the
+ * `session_upserted` delta and the `awaiting_reply_changed` snapshot.
  *
- * The event carries everything a sidebar needs to upsert a session in place
- * (its summary plus the owning project's metadata), so clients never refetch
- * the whole project list because one transcript changed on disk.
+ * The upsert event carries everything a sidebar needs to upsert a session in
+ * place (its summary plus the owning project's metadata), so clients never
+ * refetch the whole project list because one transcript changed on disk.
  *
  * It used to be built in two places — the on-disk sessions watcher and the
  * chat run registry — and only the registry's copy set `providerSessionId`.
  * That field is how the client notices a row it is showing has been merged
  * into its canonical app-session row, so a merge announced by any other path
  * left a stale duplicate in the sidebar. One builder, one shape.
+ *
+ * The awaiting-reply snapshot lives here because it is the same audience and
+ * the same client set: one file owns "how the sidebar hears about session
+ * state", rather than a second broadcaster that would have to discover the
+ * same OPEN-connection rule again.
  */
 async function buildSessionUpsertedEvent(
   sessionIdOrProviderSessionId: string,
@@ -108,6 +114,24 @@ export async function broadcastSessionUpsertedBatch(
 /** @internal Exported for the broadcast tests, which assert the payload shape directly. */
 export { buildSessionUpsertedEvent };
 
+/**
+ * Announces the sidebar's whole awaiting-reply list.
+ *
+ * The snapshot is handed in already assembled: its rows live in the providers
+ * service that owns the sessions table and the project naming rules, and
+ * rebuilding them here would be a second implementation of both. Every OPEN
+ * connection receives it — the same set, and the same rule, as the upsert
+ * delta above.
+ */
+export function broadcastAwaitingReplyChanged(sessions: AwaitingReplyListItem[]): void {
+  const event: AwaitingReplyChangedEvent = {
+    kind: 'awaiting_reply_changed',
+    sessions,
+    timestamp: new Date().toISOString(),
+  };
+  sendToConnectedClients([JSON.stringify(event)]);
+}
+
 // Install the real broadcaster into the shared port at the bottom of this
 // module's body, next to the `connectedClients` set it writes to — the same
 // pattern `websocket-state.service.ts` (connected-clients) and
@@ -116,4 +140,8 @@ export { buildSessionUpsertedEvent };
 // criterion) that loaded only the websocket barrel still announce upserts to
 // the providers services, which now read the port instead of importing this
 // module.
-installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch });
+installSessionBroadcastPort({
+  broadcastSessionUpserted,
+  broadcastSessionUpsertedBatch,
+  broadcastAwaitingReplyChanged,
+});

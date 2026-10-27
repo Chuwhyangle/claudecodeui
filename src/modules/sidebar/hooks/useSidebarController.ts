@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { api } from '@/shared/api';
 import { useBusySessionIdSet } from '@/shared/context/SessionProtectionContext';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
+import { useAwaitingReplySessions } from '@/modules/sidebar/hooks/useAwaitingReplySessions';
 import { subscribeToUserPreferences } from '@/shared/userSettings';
 import { getSessionTitle } from '@/shared/utils';
 import { usePaletteOps } from '@/modules/command-palette';
@@ -187,6 +188,12 @@ export function useSidebarController({
   // reading, so a badge, a view and a dock cannot describe one turn differently.
   const busySessionIds = useBusySessionIdSet();
   const runningSessionsCount = useMemo(() => busySessionIds.size, [busySessionIds]);
+
+  // The awaiting-reply list, read once here and handed down to both the header
+  // badge and the view. One instance because the badge and the list must agree,
+  // and because the hook owns the websocket subscription for the pushed
+  // snapshots — a second instance would subscribe twice to the same list.
+  const awaitingReply = useAwaitingReplySessions();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1386,6 +1393,7 @@ export function useSidebarController({
     showVersionModal,
     filteredProjects,
     runningSessionsCount,
+    awaitingReply,
     archivedProjects: filteredArchivedProjects,
     archivedSessions: filteredArchivedSessions,
     archivedSessionsCount: archivedProjects.length + archivedSessions.length,

@@ -118,6 +118,7 @@ import {
   resolveClaudeSessionTitle,
 } from '@/modules/providers/list/claude/claude-runtime.provider.js';
 import { resolveModelContextWindowRow } from '@/modules/providers/services/model-launch-spec.service.js';
+import { sessionAwaitingReplyService } from '@/modules/providers/services/session-awaiting-reply.service.js';
 import type { SessionHostManager } from '@/modules/session-hosts/index.js';
 import type { IProviderHostDriver, IProviderHostDriverSink } from '@/shared/interfaces.js';
 import type {
@@ -5538,13 +5539,23 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     providerSessionId: string | null,
   ): void {
     const sessionName = round.turn.options?.sessionSummary;
+    const appSessionId = round.appSessionId || providerSessionId;
     this.notifyRunStopped({
       userId: round.writer.userId ?? null,
       provider: 'claude',
-      sessionId: round.appSessionId || providerSessionId,
+      sessionId: appSessionId,
       sessionName: typeof sessionName === 'string' ? sessionName : null,
       stopReason,
     });
+    // The sidebar's awaiting-reply row follows the same boundary. Done here
+    // rather than at `closeRun` so every path that reports a round ending — the
+    // normal close and the exit paths that fail a round — keeps the list and the
+    // notification answering the same question.
+    if (stopReason === 'aborted') {
+      sessionAwaitingReplyService.clearSessionAwaitingReply(appSessionId);
+    } else {
+      sessionAwaitingReplyService.markSessionAwaitingReply(appSessionId, 'completed');
+    }
   }
 
   /**

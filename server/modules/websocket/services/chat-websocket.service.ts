@@ -9,6 +9,7 @@ import {
   providerModelsService,
   readSessionForegroundToolUseId,
   readSessionTasks,
+  sessionAwaitingReplyService,
   sessionsService,
 } from '@/modules/providers/index.js';
 import type {
@@ -899,6 +900,13 @@ export async function dispatchRun(
     onRefuse?.({ code: 'RUN_IN_PROGRESS', message });
     return { started: false, error: 'A run is already in progress for this session.' };
   }
+
+  // The session has a turn again, so whatever it was waiting on has been
+  // answered — this is the moment the awaiting-reply row goes away. Placed
+  // after the `!run` refusal above and before the provider is entered: a
+  // refused send changed nothing, and a send that reached a provider is the
+  // user's reply whether or not the turn later fails.
+  sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId);
 
   const rawClientOptions = (data.options ?? {}) as AnyRecord;
   const clientOptions = (dependencies.dropClientEnv ?? withoutClientEnv)(rawClientOptions);

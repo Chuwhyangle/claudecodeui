@@ -40,7 +40,7 @@ import {
     sweepOrphanClaudeSessionScopes,
     uiLastOpenedSessionService,
 } from '@/modules/providers/index.js';
-import { activityStore, BOOT_ID, broadcastHostsChanged, broadcastSessionUpserted, broadcastSessionUpsertedBatch, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
+import { activityStore, BOOT_ID, broadcastAwaitingReplyChanged, broadcastHostsChanged, broadcastSessionUpserted, broadcastSessionUpsertedBatch, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import { createResidentRestoreService, createSessionHostsRouter, sessionHostManager } from '@/modules/session-hosts/index.js';
 
 import { getConnectableHost } from '../shared/networkHosts.js';
@@ -197,7 +197,7 @@ import { configureWebPush } from './modules/notifications/index.js';
 // next to the composition root it belongs to.
 installProviderRegistryPort(providerRegistry);
 installChatRunRegistryPort(chatRunRegistry);
-installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch });
+installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch, broadcastAwaitingReplyChanged });
 installConnectedClientsPort({ count: () => connectedClients.size });
 installVoiceRulesPort({ isSessionActive: isVoiceSessionActive, rulesFor });
 installVoiceRuntimeConfigReader(() => {

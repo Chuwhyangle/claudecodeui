@@ -141,6 +141,23 @@
     "emptyDescription": "提供商处理时，进行中的工作会显示在这里。",
     "noMatchingSessions": "没有符合此搜索的会话。"
   },
+  "awaitingReply": {
+    "title": "待回复",
+    "tooltip": "等待你回复的会话",
+    "badgeLabel": "{{n}} 个会话等待你的回复",
+    "searchPlaceholder": "搜索等待你回复的会话...",
+    "emptyTitle": "没有待回复的会话",
+    "emptyDescription": "会话跑完一轮、运行失败或等待工具批准后会出现在这里，直到你回复。",
+    "dismiss": "移除",
+    "dismissLabel": "将 {{title}} 从待回复中移除",
+    "reasonCompleted": "已完成",
+    "reasonFailed": "已失败",
+    "reasonPermission": "等待批准",
+    "waitingFor": "已等待 {{age}}",
+    "loadError": "无法加载列表。",
+    "retry": "重试",
+    "noMatchingSessions": "没有符合此搜索的会话。"
+  },
   "search": {
     "modeProjects": "项目",
     "modeConversations": "对话",

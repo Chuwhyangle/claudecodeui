@@ -41,6 +41,7 @@ import { resolveModelContextWindowRow, resolveModelLaunchSpec } from '@/modules/
 import { resolveContextWindow } from '@/modules/providers/services/launch-spec.service.js';
 import { createClaudeSessionScopeSpawn } from '@/modules/providers/services/claude-session-scope.service.js';
 import { createClaudeTurnTracker } from '@/modules/providers/services/claude-turn-phase.service.js';
+import { sessionAwaitingReplyService } from '@/modules/providers/services/session-awaiting-reply.service.js';
 import {
   createClaudeTaskReducer,
   earnsTaskTerminalRow,
@@ -568,6 +569,12 @@ export async function requestClientToolDecision({
     requiresUserAction: true,
     dedupeKey: `claude:permission:${sessionId || 'none'}:${requestId}`
   } as unknown as Parameters<typeof createNotificationEvent>[0]));
+  // Parked on a prompt is the third way a session waits on the user, and the
+  // only one where the turn is still open: the wait ends when the prompt is
+  // answered, which the `finally` below clears in every outcome (decision,
+  // timeout, cancel). Marked after the notification so the two cannot disagree
+  // about whether the request was ever shown.
+  sessionAwaitingReplyService.markSessionAwaitingReply(sessionId, 'permission');
 
   let decision: AnyRecord | null = null;
   try {
@@ -590,9 +597,13 @@ export async function requestClientToolDecision({
   } finally {
     // The wait is over the moment it settles, times out or aborts — the phase
     // must leave `awaitingPermission` in every one of those cases, or the
-    // session would read as still parked on a prompt nobody is waiting on.
+    // session would read as still parked on a prompt nobody is waiting on. The
+    // awaiting-reply row follows the same rule: answering the prompt means the
+    // turn is moving again, and a turn that then fails or finishes re-marks the
+    // row with its own reason.
     if (sessionId) {
       turnTracker.observePermission(sessionId, { kind: 'permission_resolved', requestId });
+      sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId);
     }
   }
   if (!decision) {
@@ -2125,6 +2136,15 @@ async function queryClaudeSDK(
             sessionName: sessionSummary,
             stopReason: 'completed'
           });
+          // The turn is over and the next actor is the user: put the session on
+          // the sidebar's awaiting-reply list. A run is marked here rather than
+          // only at the terminal `complete` because a resident run keeps its
+          // process open and the user should see the row as soon as the answer
+          // is finished, not when the process is released.
+          sessionAwaitingReplyService.markSessionAwaitingReply(
+            sessionId || capturedSessionId || null,
+            'completed',
+          );
         } else if (heldForBackgroundWork && !abortPending) {
           // A result after the turn already reported complete means the work we
           // held the process open for has finished and pushed a follow-up turn.
@@ -2181,6 +2201,18 @@ async function queryClaudeSDK(
         sessionName: sessionSummary,
         stopReason: wasAborted ? 'aborted' : 'completed'
       });
+      // A run the user stopped themselves leaves nothing waiting: the user was
+      // present when it ended, and an earlier permission mark on the same run
+      // has to go with it. A run that ended normally is the ordinary case the
+      // awaiting-reply list exists for.
+      if (wasAborted) {
+        sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId || capturedSessionId || null);
+      } else {
+        sessionAwaitingReplyService.markSessionAwaitingReply(
+          sessionId || capturedSessionId || null,
+          'completed',
+        );
+      }
     }
     // Complete
 
@@ -2202,7 +2234,9 @@ async function queryClaudeSDK(
     const wasAborted = sessionKey() ? runtimeState.consumeSessionAborted(sessionKey()) : false;
     if (wasAborted) {
       // The abort already produced the terminal complete; a generator throw
-      // caused by interrupt() is expected noise, not a user-facing error.
+      // caused by interrupt() is expected noise, not a user-facing error. The
+      // user stopped it, so nothing is left waiting on them.
+      sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId || capturedSessionId || null);
       return;
     }
 
@@ -2226,6 +2260,13 @@ async function queryClaudeSDK(
       sessionName: sessionSummary,
       error
     });
+    // A turn that ended on an error is just as stopped as one that finished:
+    // the user is the next actor, and the reason is what tells the list to say
+    // so rather than "finished".
+    sessionAwaitingReplyService.markSessionAwaitingReply(
+      sessionId || capturedSessionId || null,
+      'failed',
+    );
   } finally {
     // Always close stdin — otherwise an aborted or failed run leaves the CLI
     // process (and its MCP servers) alive until the server exits.

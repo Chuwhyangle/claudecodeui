@@ -74,7 +74,7 @@ export { createChatControlService } from './services/chat-control.service.js';
 // Consumed by the providers module's sessions watcher, which announces the
 // sessions it (re)indexed from disk through the same builder the chat gateway
 // uses, so both paths put the identical delta on the wire.
-export { broadcastSessionUpserted, broadcastSessionUpsertedBatch } from './services/session-upsert-broadcast.service.js';
+export { broadcastAwaitingReplyChanged, broadcastSessionUpserted, broadcastSessionUpsertedBatch } from './services/session-upsert-broadcast.service.js';
 // The `hosts_changed` invalidation producer. Consumed by `server/index.ts`,
 // which forwards the session-host manager's `onChange` revisions to it — the
 // manager cannot import this module back (the providers module and this module's

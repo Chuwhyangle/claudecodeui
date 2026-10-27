@@ -1,4 +1,4 @@
-import { Activity, Archive, Folder, FolderPlus, LayoutGrid, MessageSquare, Plus, RefreshCw, Search, Settings, X, PanelLeftClose } from 'lucide-react';
+import { Activity, Archive, Folder, FolderPlus, Inbox, LayoutGrid, MessageSquare, Plus, RefreshCw, Search, Settings, X, PanelLeftClose } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button, Input, Tooltip } from '@/shared/ui';
@@ -17,6 +17,8 @@ type SidebarHeaderProps = {
   isLoading: boolean;
   projectsCount: number;
   runningSessionsCount: number;
+  /** Sessions that have stopped and are waiting on the user; drawn on the inbox badge. */
+  awaitingReplyCount: number;
   archivedSessionsCount: number;
   isArchivedSessionsLoading: boolean;
   searchFilter: string;
@@ -63,6 +65,7 @@ export default function SidebarHeader({
   isLoading,
   projectsCount,
   runningSessionsCount,
+  awaitingReplyCount,
   archivedSessionsCount,
   isArchivedSessionsLoading,
   searchFilter,
@@ -79,14 +82,16 @@ export default function SidebarHeader({
   onGoHome,
   t,
 }: SidebarHeaderProps) {
-  const showSearchTools = (projectsCount > 0 || runningSessionsCount > 0 || archivedSessionsCount > 0 || isArchivedSessionsLoading) && !isLoading;
+  const showSearchTools = (projectsCount > 0 || runningSessionsCount > 0 || awaitingReplyCount > 0 || archivedSessionsCount > 0 || isArchivedSessionsLoading) && !isLoading;
   const searchPlaceholder = searchMode === 'conversations'
     ? t('search.conversationsPlaceholder')
     : searchMode === 'archived'
       ? t('search.archivedPlaceholder', 'Search archived sessions...')
       : searchMode === 'running'
         ? t('search.runningPlaceholder', 'Search running sessions...')
-        : t('projects.searchPlaceholder');
+        : searchMode === 'awaiting-reply'
+          ? t('awaitingReply.searchPlaceholder', 'Search sessions waiting for you...')
+          : t('projects.searchPlaceholder');
   const runningBadgeText = runningSessionsCount > 99 ? '99+' : String(runningSessionsCount);
   // The badge draws a number and nothing else, so its accessible name has to
   // carry the unit: read aloud on its own, "3" is not a sentence. Interpolated
@@ -97,6 +102,11 @@ export default function SidebarHeader({
   const runningBadgeLabel = t('running.badgeLabel', {
     n: runningSessionsCount,
     defaultValue: '{{n}} running sessions',
+  });
+  const awaitingBadgeText = awaitingReplyCount > 99 ? '99+' : String(awaitingReplyCount);
+  const awaitingBadgeLabel = t('awaitingReply.badgeLabel', {
+    n: awaitingReplyCount,
+    defaultValue: '{{n}} sessions awaiting your reply',
   });
 
   return (
@@ -238,6 +248,35 @@ export default function SidebarHeader({
                       </span>
                     )}
                   </span>
+                </button>
+              </Tooltip>
+              <Tooltip content={t('awaitingReply.tooltip', 'Awaiting reply')} position="top">
+                <button
+                  onClick={() => onSearchModeChange('awaiting-reply')}
+                  aria-pressed={searchMode === 'awaiting-reply'}
+                  aria-label={t('awaitingReply.tooltip', 'Awaiting reply')}
+                  title={t('awaitingReply.tooltip', 'Awaiting reply')}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-normal transition-all",
+                    searchMode === 'awaiting-reply'
+                      ? "bg-background shadow-sm text-foreground ring-1 ring-amber-500/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span className="relative flex h-3 w-3 items-center justify-center">
+                    <Inbox className={cn("h-3 w-3", awaitingReplyCount > 0 && "text-amber-500")} />
+                    {awaitingReplyCount > 0 && (
+                      <span
+                        data-awaiting-reply-badge="true"
+                        role="status"
+                        aria-label={awaitingBadgeLabel}
+                        className="absolute -right-2.5 -top-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[8px] font-semibold leading-none text-white shadow-sm ring-1 ring-background"
+                      >
+                        {awaitingBadgeText}
+                      </span>
+                    )}
+                  </span>
+                  <span className="sr-only">{t('awaitingReply.title', 'Awaiting reply')}</span>
                 </button>
               </Tooltip>
               <Tooltip content={t('search.archiveOnlyTooltip', 'Archive only')} position="top">
@@ -424,6 +463,35 @@ export default function SidebarHeader({
                     )}
                   </span>
                   <span className="sr-only">{t('search.modeRunning', 'Running')}</span>
+                </button>
+              </Tooltip>
+              <Tooltip content={t('awaitingReply.tooltip', 'Awaiting reply')} position="top">
+                <button
+                  onClick={() => onSearchModeChange('awaiting-reply')}
+                  aria-pressed={searchMode === 'awaiting-reply'}
+                  aria-label={t('awaitingReply.tooltip', 'Awaiting reply')}
+                  title={t('awaitingReply.tooltip', 'Awaiting reply')}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-normal transition-all",
+                    searchMode === 'awaiting-reply'
+                      ? "bg-background shadow-sm text-foreground ring-1 ring-amber-500/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span className="relative flex h-3 w-3 items-center justify-center">
+                    <Inbox className={cn("h-3 w-3", awaitingReplyCount > 0 && "text-amber-500")} />
+                    {awaitingReplyCount > 0 && (
+                      <span
+                        data-awaiting-reply-badge="true"
+                        role="status"
+                        aria-label={awaitingBadgeLabel}
+                        className="absolute -right-2.5 -top-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[8px] font-semibold leading-none text-white shadow-sm ring-1 ring-background"
+                      >
+                        {awaitingBadgeText}
+                      </span>
+                    )}
+                  </span>
+                  <span className="sr-only">{t('awaitingReply.title', 'Awaiting reply')}</span>
                 </button>
               </Tooltip>
               <Tooltip content={t('search.archiveOnlyTooltip', 'Archive only')} position="top">

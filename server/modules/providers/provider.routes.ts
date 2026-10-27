@@ -6,6 +6,7 @@ import { providerMcpService } from '@/modules/providers/services/mcp.service.js'
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { providerTokenUsageService } from '@/modules/providers/services/provider-token-usage.service.js';
 import { providerSkillsService } from '@/modules/providers/services/skills.service.js';
+import { sessionAwaitingReplyService } from '@/modules/providers/services/session-awaiting-reply.service.js';
 import { sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
 import { uiLastOpenedSessionService } from '@/modules/providers/services/ui-last-opened-session.service.js';
@@ -961,6 +962,44 @@ router.get(
   asyncHandler(async (_req: Request, res: Response) => {
     const sessions = sessionsService.listArchivedSessions();
     res.json(createApiSuccessResponse({ sessions }));
+  }),
+);
+
+/**
+ * The sidebar's awaiting-reply list: sessions that have stopped and are waiting
+ * on the user to say something (a finished turn, a failed turn, an unanswered
+ * tool approval).
+ *
+ * A whole-list read rather than a per-session flag because the list spans
+ * projects and must be complete — a session on a page the sidebar has not
+ * loaded yet is exactly the one a person is most likely to have forgotten.
+ */
+router.get(
+  '/sessions/awaiting-reply',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const sessions = sessionAwaitingReplyService.listAwaitingReplySessions();
+    res.json(createApiSuccessResponse({ sessions }));
+  }),
+);
+
+/**
+ * Removes one session from the awaiting-reply list by hand.
+ *
+ * The other two ways off the list are automatic (replying, or answering the
+ * pending approval). This one exists because reading a session and deciding it
+ * needs nothing back is a real answer too, and without it the row would stay
+ * until the user typed something they did not want to say.
+ *
+ * Answers `removed: false` — not a 404 — when the session was not waiting: a
+ * second tab dismissing the same row has already achieved what this call asks
+ * for, and the caller's own list is about to agree with it.
+ */
+router.delete(
+  '/sessions/:sessionId/awaiting-reply',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    const removed = sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId);
+    res.json(createApiSuccessResponse({ sessionId, removed }));
   }),
 );
 
