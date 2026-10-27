@@ -163,7 +163,7 @@ import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSess
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, noticeDismissalsDb, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
-import { configureWebPush } from './modules/notifications/index.js';
+import { configureWebPush, isDesktopAlertEnabled } from './modules/notifications/index.js';
 
 // --------------------------- composition-root port wiring ---------------------------
 //
@@ -2532,6 +2532,15 @@ async function startServer() {
 
         // Configure Web Push (VAPID keys)
         configureWebPush();
+
+        // Say which off-browser alert channel is wired. This deployment serves
+        // plain HTTP, where the browser itself cannot notify once the page is
+        // closed, so an unconfigured external command is a real (if common)
+        // reason for waiting sessions to go unnoticed; the startup log should
+        // not leave that to be inferred.
+        if (!isDesktopAlertEnabled()) {
+            console.log(`${terminalTextStyles.info('[INFO]')} Awaiting-reply desktop alerts are off (CLOUDCLI_DESKTOP_NOTIFY_CMD is unset)`);
+        }
 
         // Check if running in production mode (dist folder exists)
         const distIndexPath = path.join(APP_ROOT, 'dist', 'index.html');
