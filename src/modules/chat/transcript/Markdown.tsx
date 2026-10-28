@@ -47,6 +47,22 @@ const lineFromRef = (value: string): number | null => {
 // Strip a trailing `:line` / `:line:col` suffix (e.g. `src/foo.ts:130`).
 const stripLineSuffix = (value: string): string => value.replace(/:\d+(?::\d+)?$/, '');
 
+// The markdown parser percent-encodes every non-ASCII byte in a link
+// destination, so a Codex-style absolute reference to a Chinese path arrives as
+// `/home/u/docs/%E5%BC%80%E5%8F%91…/x.md`. The file API opens an on-disk path,
+// so it has to be decoded back; a destination whose escapes are malformed is
+// kept verbatim (the file route then answers an honest 404).
+const decodeFileHref = (value: string): string => {
+  if (!value.includes('%')) {
+    return value;
+  }
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
 // A usable file path contains a separator or a filename with an extension.
 const looksLikeFilePath = (value?: string): value is string => {
   if (!value) {
@@ -306,12 +322,17 @@ function MarkdownBodyRenderer({ children, breaks = false, replyItems }: Omit<Mar
         // Prefer the href when it is a real path; otherwise fall back to the
         // link text, since models often emit `[src/foo.ts]()` with an empty href.
         const linkText = childrenToText(linkChildren);
-        const fileRef = looksLikeFilePath(href) ? href : looksLikeFilePath(linkText) ? linkText : undefined;
+        const decodedHref = decodeFileHref(href ?? '');
+        const fileRef = looksLikeFilePath(decodedHref)
+          ? decodedHref
+          : looksLikeFilePath(linkText)
+            ? linkText
+            : undefined;
 
         if (fileRef && !isExternalHref(href)) {
           return (
             <a
-              href={href || fileRef}
+              href={decodedHref || fileRef}
               className="cursor-pointer text-blue-600 hover:underline dark:text-blue-400"
               onClick={(event) => {
                 event.preventDefault();

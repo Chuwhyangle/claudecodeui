@@ -47,3 +47,26 @@ test('a plain file reference opens with no line', () => {
   clickReference('See [src/foo.ts](src/foo.ts).', 'src/foo.ts');
   assert.deepEqual(openFileInEditor.mock.calls[0], ['src/foo.ts', null]);
 });
+
+test('a non-ASCII reference opens the decoded on-disk path', () => {
+  // Codex writes absolute references, and a Chinese path in an href comes back
+  // out of the markdown parser percent-encoded. Handing that to the file API
+  // asks for a literal `%E5%BC%80` directory and answers 404.
+  clickReference('See [问题背景](</home/u/docs/开发需求/背景.md>).', '问题背景');
+  assert.deepEqual(openFileInEditor.mock.calls[0], ['/home/u/docs/开发需求/背景.md', null]);
+});
+
+test('a non-ASCII reference keeps its line suffix once decoded', () => {
+  // The exact shape Codex emits: an angle-bracketed absolute destination with a
+  // Chinese path and `:line` at the end.
+  clickReference(
+    'See [MakeUpdateArgs.java:71](</home/u/docs/开发需求/造卡/scripts/MakeUpdateArgs.java:71>).',
+    'MakeUpdateArgs.java:71',
+  );
+  assert.deepEqual(openFileInEditor.mock.calls[0], ['/home/u/docs/开发需求/造卡/scripts/MakeUpdateArgs.java', 71]);
+});
+
+test('a non-ASCII directory reference opens the decoded directory', () => {
+  clickReference('See [开发需求/](</home/u/docs/开发需求/>).', '开发需求/');
+  assert.deepEqual(openDirectory.mock.calls[0], ['/home/u/docs/开发需求/']);
+});
