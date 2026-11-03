@@ -350,6 +350,11 @@ Custom commands can be created in:
     const hasTokenBreakdown = computedUsed > 0;
     const used = Math.max(reportedUsed, computedUsed);
 
+    // The composer's turn reading rides along when the caller sent it, so the
+    // modal can show the same figures the chip does instead of re-deriving
+    // them from a context-window number that describes one request.
+    const turn = (tokenUsage as Record<string, unknown>).turn;
+
     return {
       type: "builtin",
       action: "cost",
@@ -357,6 +362,7 @@ Custom commands can be created in:
         tokenUsage: {
           used,
           total,
+          ...(turn && typeof turn === "object" ? { turn } : {}),
         },
         ...(hasTokenBreakdown
           ? {

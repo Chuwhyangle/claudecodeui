@@ -386,6 +386,9 @@
     "dismiss": "Dismiss failure notice"
   },
   "misc": {
+    "turnSpeed": "{{value}} t/s",
+    "turnCacheHit": "cache {{percent}}%",
+    "turnSummaryTitle": "This turn · {{tokens}} tokens · {{speed}} · {{time}} · {{cost}}",
     "copyToClipboard": "Copy to clipboard",
     "copyCommand": "Copy command",
     "runningTask": "Running task",

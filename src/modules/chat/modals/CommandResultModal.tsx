@@ -461,6 +461,42 @@ function CostContent({ data }: { data: CostCommandData }) {
       : []),
   ];
 
+  // Everything since the last human prompt, when the caller passed it. Shown
+  // as its own group so the session-wide block above keeps its meaning.
+  const turn = data.tokenUsage?.turn;
+  const hasTurn = turn != null
+    && (Number(turn.used ?? 0) > 0 || Number(turn.elapsedMs ?? 0) > 0);
+  const formatTurnDuration = (milliseconds: number) => {
+    const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m${String(seconds % 60).padStart(2, '0')}s`;
+  };
+  const turnRows = hasTurn
+    ? [
+        { label: 'This turn — tokens', value: formatNumber(Number(turn?.used ?? 0)), icon: Activity },
+        { label: 'This turn — output', value: formatNumber(Number(turn?.outputTokens ?? 0)), icon: Coins },
+        {
+          label: 'This turn — cache hit',
+          value: `${(Number(turn?.cacheHitRate ?? 0) * 100).toFixed(1)}%`,
+          icon: Gauge,
+        },
+        {
+          label: 'This turn — duration',
+          value: formatTurnDuration(Number(turn?.elapsedMs ?? 0)),
+          icon: Timer,
+        },
+        { label: 'This turn — speed', value: `${Math.round(Number(turn?.tps ?? 0))} t/s`, icon: Timer },
+        {
+          label: 'This turn — cost',
+          value: `$${Number(turn?.costUsd ?? 0).toFixed(4)}`,
+          icon: Coins,
+        },
+      ]
+    : [];
+
   return (
     <div className="space-y-4">
       <div className="overflow-hidden rounded-2xl border border-border/70 bg-background/75">
@@ -483,6 +519,29 @@ function CostContent({ data }: { data: CostCommandData }) {
           );
         })}
       </div>
+
+      {turnRows.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-border/70 bg-background/75">
+          {turnRows.map((row) => {
+            const Icon = row.icon;
+
+            return (
+              <div
+                key={row.label}
+                className="flex items-center justify-between gap-4 border-b border-border/60 px-4 py-3 last:border-b-0"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="truncate text-sm font-medium text-foreground">{row.label}</span>
+                </div>
+                <span className="shrink-0 font-mono text-sm font-semibold text-foreground">{row.value}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
         <div className="grid gap-3 sm:grid-cols-2">

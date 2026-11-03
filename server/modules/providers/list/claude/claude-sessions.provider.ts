@@ -98,6 +98,8 @@ type ClaudeHistoryResult =
     messages?: AnyRecord[];
     total?: number;
     hasMore?: boolean;
+    /** `api-request` rows for token timing; not conversation content. */
+    requestRows?: AnyRecord[];
   };
 
 type ClaudeHistoryMessagesResult =
@@ -108,6 +110,8 @@ type ClaudeHistoryMessagesResult =
     hasMore: boolean;
     offset?: number;
     limit?: number | null;
+    /** `api-request` rows for token timing; not conversation content. */
+    requestRows?: AnyRecord[];
   };
 
 type ClaudeSubagentTranscript = {
@@ -403,6 +407,12 @@ type ClaudeTranscriptResume = {
   offset: number;
   /** Rows parsed for `[0, offset)`, in file order. */
   rows: AnyRecord[];
+  /**
+   * `api-request` capture rows dropped from `rows` by the message filter, kept
+   * so token-usage timing still has a request start to join `requestRef`
+   * against. Absent on a resume written before this field existed.
+   */
+  requestRows?: AnyRecord[];
   /** Bytes of the boundary window those `rows` were validated against. */
   windowBytes: number;
   /** Digest of the boundary window, to detect a rewrite under an append. */
@@ -495,7 +505,13 @@ async function readTranscriptRowsFrom(
   providerSessionId: string,
   priorRows: AnyRecord[],
   fromOffset: number,
-): Promise<{ rows: AnyRecord[]; offset: number; trailingRows: AnyRecord[] }> {
+  priorRequestRows: AnyRecord[] = [],
+): Promise<{
+  rows: AnyRecord[];
+  requestRows: AnyRecord[];
+  offset: number;
+  trailingRows: AnyRecord[];
+}> {
   const handle = await fsp.open(jsonlPath, 'r');
   let tail: Buffer;
   try {
@@ -511,12 +527,18 @@ async function readTranscriptRowsFrom(
   transcriptParseBytes += tail.length;
 
   const rows = priorRows.slice();
+  const requestRows = priorRequestRows.slice();
   const lastNewline = tail.lastIndexOf(0x0a);
   if (lastNewline !== -1) {
     for (const line of tail.subarray(0, lastNewline).toString('utf8').split('\n')) {
       const entry = parseTranscriptLine(line, providerSessionId);
       if (entry) {
         rows.push(entry);
+        continue;
+      }
+      const requestRow = parseRequestCaptureRow(line, providerSessionId);
+      if (requestRow) {
+        requestRows.push(requestRow);
       }
     }
   }
@@ -531,7 +553,30 @@ async function readTranscriptRowsFrom(
   }
 
   const offset = lastNewline === -1 ? fromOffset : fromOffset + lastNewline + 1;
-  return { rows, offset, trailingRows };
+  return { rows, requestRows, offset, trailingRows };
+}
+
+/**
+ * The `api-request` capture row a message read drops, reduced to what token
+ * timing needs: the request id its responses point at with `requestRef`, and
+ * the moment the request started. Returns null for every other dropped row.
+ */
+function parseRequestCaptureRow(line: string, providerSessionId: string): AnyRecord | null {
+  if (!line.includes('"api-request"')) {
+    return null;
+  }
+  try {
+    const entry = JSON.parse(line) as AnyRecord;
+    if (entry.type !== 'api-request' || entry.sessionId !== providerSessionId) {
+      return null;
+    }
+    return typeof entry.id === 'string'
+      ? { id: entry.id, timestamp: entry.timestamp }
+      : null;
+  } catch {
+    // A request row can be half-written while the CLI streams into the file.
+    return null;
+  }
 }
 
 /**
@@ -547,7 +592,7 @@ async function resumeClaudeTranscript(
   jsonlPath: string,
   providerSessionId: string,
   previous: { resume: unknown; size: number; mtimeMs: number },
-): Promise<{ rows: AnyRecord[]; resume: ClaudeTranscriptResume } | null> {
+): Promise<{ rows: AnyRecord[]; requestRows: AnyRecord[]; resume: ClaudeTranscriptResume } | null> {
   const prior = previous.resume as ClaudeTranscriptResume;
   if (prior.transcriptPath !== jsonlPath) {
     return null;
@@ -568,14 +613,22 @@ async function resumeClaudeTranscript(
     return null;
   }
 
-  const tail = await readTranscriptRowsFrom(jsonlPath, providerSessionId, prior.rows, prior.offset);
+  const tail = await readTranscriptRowsFrom(
+    jsonlPath,
+    providerSessionId,
+    prior.rows,
+    prior.offset,
+    prior.requestRows ?? [],
+  );
   const next = await readPrefixChecksum(jsonlPath, tail.offset);
   return {
     rows: [...tail.rows, ...tail.trailingRows],
+    requestRows: tail.requestRows,
     resume: {
       transcriptPath: jsonlPath,
       offset: tail.offset,
       rows: tail.rows,
+      requestRows: tail.requestRows,
       windowBytes: next.windowBytes,
       prefixChecksum: next.checksum,
     },
@@ -594,7 +647,7 @@ async function readClaudeTranscriptRows(
   sessionId: string,
   jsonlPath: string,
   providerSessionId: string,
-): Promise<{ rows: AnyRecord[]; resume: ClaudeTranscriptResume }> {
+): Promise<{ rows: AnyRecord[]; requestRows: AnyRecord[]; resume: ClaudeTranscriptResume }> {
   transcriptParseBytes = 0;
   const context = takeHistoryLoadContext(sessionId);
 
@@ -612,13 +665,18 @@ async function readClaudeTranscriptRows(
     transcriptPath: jsonlPath,
     offset: full.offset,
     rows: full.rows,
+    requestRows: full.requestRows,
     windowBytes: boundary.windowBytes,
     prefixChecksum: boundary.checksum,
   };
   if (context) {
     context.producedResume = resume;
   }
-  return { rows: [...full.rows, ...full.trailingRows], resume };
+  return {
+    rows: [...full.rows, ...full.trailingRows],
+    requestRows: full.requestRows,
+    resume,
+  };
 }
 
 /** True for a row the user typed, as opposed to a tool result or an injected note. */
@@ -888,7 +946,16 @@ async function getSessionMessages(
     const total = sortedMessages.length;
 
     if (limit === null) {
-      return sortedMessages;
+      // The object form (rather than a bare array) is what carries requestRows
+      // back to fetchHistory, which needs them for this turn's token timing.
+      return {
+        messages: sortedMessages,
+        total,
+        hasMore: false,
+        offset,
+        limit,
+        requestRows: transcript.requestRows,
+      };
     }
 
     const startIndex = Math.max(0, total - offset - limit);
@@ -902,6 +969,7 @@ async function getSessionMessages(
       hasMore,
       offset,
       limit,
+      requestRows: transcript.requestRows,
     };
   } catch (error) {
     console.error(`Error reading messages for session ${sessionId}:`, error);
@@ -1696,6 +1764,7 @@ export class ClaudeSessionsProvider implements IProviderSessions {
     }
 
     const rawMessages = Array.isArray(result) ? result : (result.messages || []);
+    const requestRows = Array.isArray(result) ? undefined : result.requestRows;
 
     const toolResultMap = new Map<string, ClaudeToolResult>();
     for (const raw of rawMessages) {
@@ -1771,7 +1840,12 @@ export class ClaudeSessionsProvider implements IProviderSessions {
       // Carried on every page, like the Codex and OpenCode readers do, so the
       // composer's counter tracks the conversation instead of being frozen at
       // whatever it was when the session was opened.
-      tokenUsage: summarizeClaudeTokenUsage(rawMessages),
+      tokenUsage: summarizeClaudeTokenUsage(
+        rawMessages,
+        undefined,
+        undefined,
+        requestRows,
+      ),
     };
   }
 }

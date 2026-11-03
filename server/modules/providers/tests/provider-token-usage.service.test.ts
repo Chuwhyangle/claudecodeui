@@ -424,3 +424,64 @@ test('Codex token usage falls back to the whole file when the tail has no token_
     await rm(tempDirectory, { recursive: true, force: true });
   }
 });
+
+test('the Claude summarizer measures the current turn from its prompt, not the whole transcript', () => {
+  // The composer shows this beside the context counter. Only the requests after
+  // the last human prompt belong to the turn, and `tps` needs the api-request
+  // start to divide by — the assistant row alone is the moment the reply ended.
+  const entries = [
+    { type: 'user', message: { content: 'first question' }, timestamp: '2026-01-01T00:00:00.000Z' },
+    { type: 'assistant', requestRef: 'req-old', message: { usage: { input_tokens: 5000, output_tokens: 100 } }, timestamp: '2026-01-01T00:00:05.000Z' },
+    { type: 'user', message: { content: 'second question' }, timestamp: '2026-01-01T00:01:00.000Z' },
+    { type: 'assistant', requestRef: 'req-new', message: { usage: { input_tokens: 10, cache_read_input_tokens: 990, output_tokens: 200 } }, timestamp: '2026-01-01T00:01:03.000Z' },
+  ];
+  const requestRows = [
+    { id: 'req-old', timestamp: '2026-01-01T00:00:01.000Z' },
+    { id: 'req-new', timestamp: '2026-01-01T00:01:01.000Z' },
+  ];
+
+  const usage = summarizeClaudeTokenUsage(entries, '200000', undefined, requestRows);
+
+  assert.ok(usage.turn);
+  assert.equal(usage.turn.used, 1200);
+  assert.equal(usage.turn.inputTokens, 10);
+  assert.equal(usage.turn.outputTokens, 200);
+  assert.equal(usage.turn.cacheReadTokens, 990);
+  assert.equal(usage.turn.cacheHitRate, 0.99);
+  assert.equal(usage.turn.elapsedMs, 3000);
+  assert.equal(usage.turn.apiMs, 2000);
+  assert.equal(usage.turn.tps, 100);
+  assert.equal(usage.turn.calls, 1);
+  // (10×0.90 + 200×3.60 + 990×0.018) / 1e6
+  assert.equal(usage.turn.costUsd, 0.00074682);
+});
+
+test('the Claude summarizer reports no turn when the transcript carries no request timing', () => {
+  const entries = [
+    { type: 'user', message: { content: 'a question' }, timestamp: '2026-01-01T00:00:00.000Z' },
+    { type: 'assistant', requestRef: 'req-1', message: { usage: { input_tokens: 1, output_tokens: 2 } }, timestamp: '2026-01-01T00:00:02.000Z' },
+  ];
+
+  const usage = summarizeClaudeTokenUsage(entries, '200000');
+
+  assert.equal(usage.turn, undefined);
+});
+
+test('a streamed reply counts once, timed to its last row', () => {
+  // One request writes a row per content block; summing them would multiply
+  // the turn's tokens by the number of blocks.
+  const entries = [
+    { type: 'user', message: { content: 'streamed' }, timestamp: '2026-01-01T00:00:00.000Z' },
+    { type: 'assistant', requestRef: 'req-1', message: { usage: { input_tokens: 0, output_tokens: 50 } }, timestamp: '2026-01-01T00:00:01.000Z' },
+    { type: 'assistant', requestRef: 'req-1', message: { usage: { input_tokens: 0, output_tokens: 50 } }, timestamp: '2026-01-01T00:00:03.000Z' },
+  ];
+  const requestRows = [{ id: 'req-1', timestamp: '2026-01-01T00:00:01.000Z' }];
+
+  const usage = summarizeClaudeTokenUsage(entries, '200000', undefined, requestRows);
+
+  assert.ok(usage.turn);
+  assert.equal(usage.turn.outputTokens, 50);
+  assert.equal(usage.turn.calls, 1);
+  assert.equal(usage.turn.apiMs, 2000);
+  assert.equal(usage.turn.tps, 25);
+});

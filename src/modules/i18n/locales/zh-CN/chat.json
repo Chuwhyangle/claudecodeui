@@ -444,5 +444,10 @@
     "alwaysAccept": "总是接受",
     "alwaysReject": "总是拒绝"
   },
-  "messageNotFound": "没有找到这条消息。"
+  "messageNotFound": "没有找到这条消息。",
+  "misc": {
+    "turnSpeed": "{{value}} t/s",
+    "turnCacheHit": "缓存 {{percent}}%",
+    "turnSummaryTitle": "本轮 · {{tokens}} tokens · {{speed}} · {{time}} · {{cost}}"
+  }
 }

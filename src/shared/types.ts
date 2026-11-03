@@ -2246,6 +2246,20 @@ export type CostCommandData = {
   tokenUsage?: {
     used?: number;
     total?: number;
+    /** The current turn's spend, as the composer's chip received it. */
+    turn?: {
+      used?: number;
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheCreationTokens?: number;
+      cacheHitRate?: number;
+      elapsedMs?: number;
+      apiMs?: number;
+      tps?: number;
+      costUsd?: number;
+      calls?: number;
+    };
   };
   tokenBreakdown?: {
     input?: number;

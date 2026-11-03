@@ -33,6 +33,35 @@ type ProviderTokenUsageServiceDependencies = {
   isProviderSessionSuperseded: (providerSessionId: string, provider: string) => boolean;
 };
 
+/**
+ * One turn's spend, measured from the last human prompt to its final response.
+ *
+ * The composer renders this beside the context-window counter: `tps` answers
+ * "how fast did the model actually write", `elapsedMs` "how long did I wait",
+ * and `costUsd` "what did this turn cost" — none of which the context-window
+ * reading can answer, because it describes one request rather than a turn.
+ */
+type TurnTokenUsage = {
+  /** Prompt + output tokens this turn billed, cache reads included. */
+  used: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  /** Share of this turn's prompt tokens served from cache, 0..1. */
+  cacheHitRate: number;
+  /** Wall-clock milliseconds from the prompt to the turn's last response row. */
+  elapsedMs: number;
+  /** Sum of every request's API latency; the denominator of `tps`. */
+  apiMs: number;
+  /** End-to-end output tokens per second across the turn. */
+  tps: number;
+  /** Estimated USD at the configured gateway rates. */
+  costUsd: number;
+  /** API requests the turn made. */
+  calls: number;
+};
+
 type TokenUsageResult = {
   used: number;
   total?: number;
@@ -47,7 +76,199 @@ type TokenUsageResult = {
   };
   unsupported?: boolean;
   message?: string;
+  /** The current turn's spend; absent when the transcript carries no request timing. */
+  turn?: TurnTokenUsage;
 };
+
+/** USD per million tokens at this deployment's gateway (fjbigmodel / LiteLLM). */
+const DEFAULT_TOKEN_PRICING = {
+  input: 0.9,
+  output: 3.6,
+  cacheRead: 0.018,
+  cacheWrite: 0,
+} as const;
+
+type TokenPricing = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+};
+
+/**
+ * Rates for the configured model, overridable per deployment with
+ * `CLOUDCLI_TOKEN_PRICING` (JSON with input/output/cacheRead/cacheWrite).
+ * A gateway that renames models keeps this file generic; the environment
+ * variable is the only place a new rate needs to land.
+ */
+function readTokenPricing(): TokenPricing {
+  const raw = process.env.CLOUDCLI_TOKEN_PRICING;
+  if (!raw) {
+    return { ...DEFAULT_TOKEN_PRICING };
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<TokenPricing>;
+    return {
+      input: readUsageNumber(parsed.input ?? DEFAULT_TOKEN_PRICING.input),
+      output: readUsageNumber(parsed.output ?? DEFAULT_TOKEN_PRICING.output),
+      cacheRead: readUsageNumber(parsed.cacheRead ?? DEFAULT_TOKEN_PRICING.cacheRead),
+      cacheWrite: readUsageNumber(parsed.cacheWrite ?? DEFAULT_TOKEN_PRICING.cacheWrite),
+    };
+  } catch {
+    return { ...DEFAULT_TOKEN_PRICING };
+  }
+}
+
+/** ISO timestamp → epoch milliseconds, or null when the row carries none. */
+function readTimeMs(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Whether a user row is the human's own prompt. Mirrors the history reader's
+ * `isUserPromptRow` but also rejects the CLI's injected `<local-command…>` and
+ * `<command-…>` rows, which are user rows with no turn of their own — treating
+ * one as a turn start would report the previous turn's spend against it.
+ */
+function isHumanPromptRow(row: AnyRecord): boolean {
+  if (row.type !== 'user' || row.isMeta === true || row.isCompactSummary === true) {
+    return false;
+  }
+  const content = row.message?.content;
+  if (Array.isArray(content)) {
+    return content.some((part: AnyRecord) => part?.type === 'text' || part?.type === 'image');
+  }
+  if (typeof content !== 'string') {
+    return false;
+  }
+  const text = content.trim();
+  if (!text) {
+    return false;
+  }
+  return !/^<(?:local-command-|command-name>|command-message>|command-args>|system-reminder>|user-prompt-submit-hook>)/.test(text);
+}
+
+/**
+ * Measures the current turn from rows already parsed by the history reader.
+ *
+ * `requestRows` carries the `api-request` capture rows, which the reader drops
+ * from the message stream but which hold each request's start timestamp. The
+ * assistant row's `requestRef` joins the two; without it a turn can only be
+ * timed end-to-end, where tool calls dominate and `tps` describes nothing.
+ * Returns undefined when the transcript has no request timing to join against.
+ */
+function summarizeClaudeTurnUsage(
+  entries: AnyRecord[],
+  requestRows: AnyRecord[] | undefined,
+  pricing: TokenPricing,
+): TurnTokenUsage | undefined {
+  if (!requestRows || requestRows.length === 0) {
+    return undefined;
+  }
+
+  const requestStarts = new Map<string, number>();
+  for (const row of requestRows) {
+    if (typeof row.id !== 'string') {
+      continue;
+    }
+    const at = readTimeMs(row.timestamp);
+    if (at !== null) {
+      requestStarts.set(row.id, at);
+    }
+  }
+
+  let turnStartMs: number | null = null;
+  const answers = new Map<string, { at: number; usage: AnyRecord }>();
+  for (const entry of entries) {
+    if (entry?.type === 'user' && isHumanPromptRow(entry)) {
+      const at = readTimeMs(entry.timestamp);
+      if (at !== null) {
+        turnStartMs = at;
+      }
+      continue;
+    }
+    if (entry?.type !== 'assistant' || entry.isSidechain === true) {
+      continue;
+    }
+    const usage = entry.message?.usage as AnyRecord | undefined;
+    const ref = entry.requestRef;
+    if (!usage || typeof ref !== 'string') {
+      continue;
+    }
+    const at = readTimeMs(entry.timestamp);
+    if (at === null) {
+      continue;
+    }
+    const previous = answers.get(ref);
+    // A streamed reply writes one row per content block; the last row is the
+    // one that finished, and its usage is the whole request's.
+    if (!previous || at >= previous.at) {
+      answers.set(ref, { at, usage });
+    }
+  }
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheCreationTokens = 0;
+  let apiMs = 0;
+  let lastAt: number | null = null;
+  let calls = 0;
+
+  for (const [ref, answer] of answers) {
+    if (turnStartMs !== null && answer.at < turnStartMs) {
+      continue;
+    }
+    inputTokens += readUsageNumber(answer.usage.input_tokens ?? answer.usage.inputTokens);
+    outputTokens += readUsageNumber(answer.usage.output_tokens ?? answer.usage.outputTokens);
+    cacheReadTokens += readUsageNumber(
+      answer.usage.cache_read_input_tokens ?? answer.usage.cacheReadInputTokens ?? answer.usage.cacheReadTokens,
+    );
+    cacheCreationTokens += readUsageNumber(
+      answer.usage.cache_creation_input_tokens
+        ?? answer.usage.cacheCreationInputTokens
+        ?? answer.usage.cacheCreationTokens,
+    );
+    const startedAt = requestStarts.get(ref);
+    if (startedAt !== undefined && answer.at >= startedAt) {
+      apiMs += answer.at - startedAt;
+    }
+    lastAt = lastAt === null ? answer.at : Math.max(lastAt, answer.at);
+    calls += 1;
+  }
+
+  if (calls === 0) {
+    return undefined;
+  }
+
+  const promptTokens = inputTokens + cacheReadTokens + cacheCreationTokens;
+  const used = promptTokens + outputTokens;
+  const elapsedMs = turnStartMs !== null && lastAt !== null
+    ? Math.max(0, lastAt - turnStartMs)
+    : 0;
+
+  return {
+    used,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    cacheHitRate: promptTokens > 0 ? cacheReadTokens / promptTokens : 0,
+    elapsedMs,
+    apiMs,
+    tps: apiMs > 0 ? (outputTokens * 1000) / apiMs : 0,
+    costUsd:
+      (inputTokens * pricing.input
+        + outputTokens * pricing.output
+        + cacheReadTokens * pricing.cacheRead
+        + cacheCreationTokens * pricing.cacheWrite) / 1_000_000,
+    calls,
+  };
+}
 
 type OpenCodeTokenRow = {
   inputTokens: number | null;
@@ -214,6 +435,7 @@ export function summarizeClaudeTokenUsage(
   entries: AnyRecord[],
   configuredContextWindow: string | undefined = process.env.CONTEXT_WINDOW,
   modelContextWindow?: number | string | null,
+  requestRows?: AnyRecord[],
 ): TokenUsageResult {
   let inputTokens = 0;
   let outputTokens = 0;
@@ -264,7 +486,7 @@ export function summarizeClaudeTokenUsage(
   const contextWindow = resolveContextWindow(modelContextWindow, configuredContextWindow);
   const cacheTokens = cacheReadTokens + cacheCreationTokens;
 
-  return {
+  const usage: TokenUsageResult = {
     used: inputTokens + outputTokens,
     total: contextWindow,
     inputTokens,
@@ -274,6 +496,13 @@ export function summarizeClaudeTokenUsage(
     cacheTokens,
     breakdown: { input: inputTokens, output: outputTokens },
   };
+  // Only present when the caller supplied request timing; a transcript read
+  // without it keeps the shape every existing consumer already asserted.
+  const turn = summarizeClaudeTurnUsage(entries, requestRows, readTokenPricing());
+  if (turn) {
+    usage.turn = turn;
+  }
+  return usage;
 }
 
 function parseClaudeUsageEntries(fileContent: string): AnyRecord[] {
