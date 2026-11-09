@@ -6,9 +6,9 @@ import test from 'node:test';
 
 import { closeConnection, getConnection } from '@/modules/database/core/index.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
-import { sessionDraftsDb } from '@/modules/database/repositories/session-drafts.db.js';
-import { userPreferencesDb } from '@/modules/database/repositories/user-preferences.db.js';
-import { voiceSettingsDb } from '@/modules/database/repositories/voice-settings.db.js';
+import { sessionDraftsDb } from '@/modules/database/repositories/sessions/session-drafts.db.js';
+import { userPreferencesDb } from '@/modules/database/repositories/auth/user-preferences.db.js';
+import { voiceSettingsDb } from '@/modules/database/repositories/providers/voice-settings.db.js';
 import type { VoiceSettings } from '@/shared/types.js';
 
 /**

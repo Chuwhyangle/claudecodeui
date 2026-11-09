@@ -102,6 +102,18 @@ const GATE_DIRECTORY_PIN: readonly string[] = [
   'modules/database',
   'modules/database/core',
   'modules/database/repositories',
+  // NINTH RECORDED CHANGE (2026-11-09,
+  // gap-routine-architecture-analysis-server-database-repositories-god-package):
+  // the 27 flat repository files were split by domain into these five
+  // subpackages behind the existing modules/database barrel. Added here and to
+  // cloudpit-goal-exit-gate.baseline.json together, exactly as the
+  // recorded-change contract requires; the directory graph stays acyclic and the
+  // AC-394 G1 cycle is unchanged.
+  'modules/database/repositories/auth',
+  'modules/database/repositories/notifications',
+  'modules/database/repositories/observation',
+  'modules/database/repositories/providers',
+  'modules/database/repositories/sessions',
   'modules/debug-agent',
   'modules/file-tree',
   'modules/git',

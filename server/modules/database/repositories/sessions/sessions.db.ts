@@ -1,9 +1,9 @@
 import { getConnection } from '@/modules/database/core/index.js';
-import { projectsDb } from '@/modules/database/repositories/projects.db.js';
+import { projectsDb } from '@/modules/database/repositories/sessions/projects.db.js';
 import {
   providerSessionBindingDb,
   type ProviderSessionBindingOutcome,
-} from '@/modules/database/repositories/session-binding.db.js';
+} from '@/modules/database/repositories/sessions/session-binding.db.js';
 import type { HostMode, SessionLaunchSelection } from '@/shared/types.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 

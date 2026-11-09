@@ -280,6 +280,20 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/database',
   'modules/database/core',
   'modules/database/repositories',
+  // NINETEENTH RECORDED CHANGE (2026-11-09,
+  // gap-routine-architecture-analysis-server-database-repositories-god-package):
+  // the god-package finding's fix split the 27 flat repository files into five
+  // domain subpackages. They are registered rather than left to the new-directory
+  // leaf rule because the `modules/database` barrel legitimately imports each of
+  // them while none imports another subpackage or the root back (edges run
+  // database -> subpackage, and every subpackage only points at
+  // `modules/database/core`, `server/shared/**` and node builtins); the direction
+  // is one-way, so no SCC is added. `directoryManifest` and `nodeCount` rise 90 -> 95.
+  'modules/database/repositories/auth',
+  'modules/database/repositories/notifications',
+  'modules/database/repositories/observation',
+  'modules/database/repositories/providers',
+  'modules/database/repositories/sessions',
   'modules/debug-agent',
   'modules/file-tree',
   'modules/git',
