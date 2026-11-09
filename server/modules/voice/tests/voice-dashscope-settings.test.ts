@@ -100,7 +100,7 @@ export const SHIPPING_SERVICE_MODULE = path.join(SERVER_DIR, 'modules/voice/voic
 /** The directory the module lives in — the one a sibling criterion writes its temp copies into. */
 const VOICE_MODULE_DIR = path.dirname(SHIPPING_SERVICE_MODULE);
 const SHIPPING_ROUTES_MODULE = path.join(SERVER_DIR, 'modules/voice/voice.routes.ts');
-const VOICE_SETTINGS_DB_MODULE = path.join(SERVER_DIR, 'modules/database/repositories/voice-settings.db.ts');
+const VOICE_SETTINGS_DB_MODULE = path.join(SERVER_DIR, 'modules/database/repositories/providers/voice-settings.db.ts');
 const DB_CONNECTION_MODULE = path.join(SERVER_DIR, 'modules/database/core/index.ts');
 const DB_INIT_MODULE = path.join(SERVER_DIR, 'modules/database/init-db.ts');
 const REGISTRY_MODULE = path.join(REPO_ROOT, 'shared/asr/asrRegistry.ts');

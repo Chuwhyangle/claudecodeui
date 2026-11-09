@@ -6,8 +6,8 @@ import test from 'node:test';
 
 import { closeConnection, getConnection } from '@/modules/database/core/index.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
-import { projectsDb } from '@/modules/database/repositories/projects.db.js';
-import { sessionsDb } from '@/modules/database/repositories/sessions.db.js';
+import { projectsDb } from '@/modules/database/repositories/sessions/projects.db.js';
+import { sessionsDb } from '@/modules/database/repositories/sessions/sessions.db.js';
 
 async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promise<void> {
   const previousDatabasePath = process.env.DATABASE_PATH;

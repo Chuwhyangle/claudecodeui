@@ -2,7 +2,7 @@ import {
   providerSessionBindingDb,
   type ProviderSessionBindingOutcome,
   type ProviderSessionBindingRecovery,
-} from '@/modules/database/repositories/session-binding.db.js';
+} from '@/modules/database/repositories/sessions/session-binding.db.js';
 
 /**
  * The one place a run's provider-session observation becomes a stored binding.

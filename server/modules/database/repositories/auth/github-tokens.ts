@@ -6,7 +6,7 @@
  */
 
 import { getConnection } from '@/modules/database/core/index.js';
-import { credentialsDb } from '@/modules/database/repositories/credentials.js';
+import { credentialsDb } from '@/modules/database/repositories/auth/credentials.js';
 import type {
   CredentialPublicRow,
   CreateCredentialResult,
