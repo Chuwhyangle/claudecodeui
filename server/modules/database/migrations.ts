@@ -2,7 +2,7 @@ import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
 
 import { Database } from 'better-sqlite3';
 
-import { isSelfAssignedSessionName, stripSelfAssignedSuffix } from '@/modules/database/repositories/sessions.db.js';
+import { isSelfAssignedSessionName, stripSelfAssignedSuffix } from '@/modules/database/repositories/sessions/sessions.db.js';
 import {
   ACCESS_TOKENS_TABLE_SCHEMA_SQL,
   APP_CONFIG_TABLE_SCHEMA_SQL,

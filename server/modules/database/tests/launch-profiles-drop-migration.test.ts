@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { closeConnection, getConnection } from '@/modules/database/core/index.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
-import { sessionsDb } from '@/modules/database/repositories/sessions.db.js';
+import { sessionsDb } from '@/modules/database/repositories/sessions/sessions.db.js';
 
 /**
  * The DDL the removed launch-profile feature created, verbatim.
