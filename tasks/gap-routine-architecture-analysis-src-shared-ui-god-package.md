@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-src-shared-ui-god-package
 title: "architecture-analysis: Fresh archguard 2026-11-09 (scope src 93e0a992):
   shared/ui = 24 files / 43 entities, fanIn 6 / fanOut 87 — over minFiles 20;
   the package is nominally UI prim"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed

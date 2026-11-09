@@ -18,7 +18,7 @@ import ModelEnvEditor, {
   toEditorRows,
   toRequestRows,
   type ModelEnvEditorRow,
-} from '@/shared/ui/ModelEnvEditor';
+} from '@/modules/model-library/ModelEnvEditor';
 import { PROVIDER_DESCRIPTORS } from '@/shared/constants';
 import type {
   CodexModelProvider,
@@ -115,8 +115,8 @@ type ModelLibraryPanelProps = {
  * model catalog and add, edit (including env config) or remove custom models.
  *
  * It is dialog body rather than a dialog — it opens no overlay of its own, and
- * each consumer supplies the Dialog around it. That is why it sits in modals/
- * with no Dialog in the file.
+ * each consumer supplies the Dialog around it. That is why this module owns no
+ * Dialog wrapper and the panel stays a plain composition of shared primitives.
  */
 export default function ModelLibraryPanel({
   initialProvider,

@@ -7,7 +7,7 @@ import { beforeEach, test, vi } from 'vitest';
 import type { UseCodexProvidersResult } from '@/modules/settings/hooks/useCodexProviders';
 import CodexProvidersContent from '@/modules/settings/tabs/agents-settings/sections/content/CodexProvidersContent';
 import type { CodexProviderDraft } from '@/modules/settings/utils/codexProvidersController';
-import ModelLibraryPanel from '@/shared/ui/ModelLibraryPanel';
+import { ModelLibraryPanel } from '@/modules/model-library';
 import type {
   AgentProvider,
   CodexModelProvider,

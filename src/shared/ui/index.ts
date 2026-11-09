@@ -15,20 +15,27 @@
  * inline tool-permission request — with chat vocabulary in their prop names and
  * no plausible second consumer. Alert went with Confirmation, which was its only
  * importer and the reason it existed.
+ *
+ * ModelLibraryPanel and ModelEnvEditor moved next, to `src/modules/model-library`:
+ * a feature consumed through its own barrel by chat, chat-support and settings is
+ * a module, not a primitive. The provider/brand marks live in the `logos/`
+ * sub-package below so this package stays the generic control primitives; the
+ * marks are provider-identity data and are re-exported here so existing consumers
+ * keep one import site.
  */
 
 export { ActionMenu } from '@/shared/ui/ActionMenu';
 export { Badge } from '@/shared/ui/Badge';
-export { BrandMark } from '@/shared/ui/BrandMark';
+export { BrandMark } from '@/shared/ui/logos/BrandMark';
 export { Button, buttonVariants } from '@/shared/ui/Button';
 export { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/shared/ui/Card';
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/shared/ui/Collapsible';
 export { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/shared/ui/Command';
 export { DarkModeToggle } from '@/shared/ui/DarkModeToggle';
 export { Dialog, DialogTrigger, DialogContent, DialogTitle } from '@/shared/ui/Dialog';
-export { DiscordIcon } from '@/shared/ui/DiscordIcon';
+export { DiscordIcon } from '@/shared/ui/logos/DiscordIcon';
 export { Input } from '@/shared/ui/Input';
-export { LLMProviderLogo } from '@/shared/ui/LLMProviderLogo';
+export { LLMProviderLogo } from '@/shared/ui/logos/LLMProviderLogo';
 export { PillBar, Pill } from '@/shared/ui/PillBar';
 export { ScrollArea } from '@/shared/ui/ScrollArea';
 export { Shimmer } from '@/shared/ui/Shimmer';

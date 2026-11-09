@@ -1,6 +1,6 @@
 import type { LLMProvider } from '@/shared/types';
-import ClaudeLogo from '@/shared/ui/ClaudeLogo';
-import { resolveProviderLogo } from '@/shared/ui/providerLogos';
+import ClaudeLogo from '@/shared/ui/logos/ClaudeLogo';
+import { resolveProviderLogo } from '@/shared/ui/logos/providerLogos';
 
 type LLMProviderLogoProps = {
   provider?: LLMProvider | string | null;
