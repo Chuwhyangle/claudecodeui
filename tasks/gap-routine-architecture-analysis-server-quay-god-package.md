@@ -64,6 +64,17 @@ Split quay.service.ts by concern into quay/{read,mutation,fleet} subpackages beh
 - 5 个新目录按 recorded-change 同时写入 AC-394 的 `MANIFEST_PIN` + baseline JSON 与 AC-455 的 `GATE_DIRECTORY_PIN` + baseline JSON（nodeCount 90 -> 100，含同批 develop 的 database 拆包并集）。
 - architecture-ratchet：移除 `quay.service.ts` 的 2,993 行 oversize 条目（下降），并把三个随文件搬家的读数 re-key 到新路径（值不变）。
 
+### 复验（2026-11-09 第二轮，merge develop 5a6a2db09 后）
+
+上一轮 exited-not-landed 的唯一原因是 `architecture-ratchet.baseline.json` 的 merge 冲突，不是实现缺陷。本轮在 worktree `/data/home/yale/work/claudecodeui-worktrees/gap-routine-architecture-analysis-server-quay-god-package` 内解决冲突并复验：
+
+- 冲突解法：note 取 develop 追加段 + 本任务 RECORDED CHANGE 段（两侧并集）；entries 按改动整侧取——保留本任务的 quay 删除/re-key，保留 develop 侧删除的 `src/shared/ui/ModelLibraryPanel.tsx`，并丢弃上一轮误复活且文件已不存在的旧键 `server/modules/database/repositories/sessions.db.ts:1479`；`measuredAt`=2026-11-09。
+- `npm run typecheck`（root + server + scripts）绿（31s）。
+- 三个架构判据文件 21/21 绿：architecture-ratchet、server-import-cycle-budget、cloudpit-goal-exit-gate；目录 manifest nodeCount=100，cycleGroups 仍是 G1(3)，newSCC=0。
+- quay 模块测试 227 项：226 pass / 0 fail / 1 skip。
+- fresh archguard analyze（server scope，work-dir `/tmp/ag-quay-split-2`）：entities=1430 relations=7613；`modules/quay` files=10 entities=12，子包最大 read=12 files（<20）；`query --cycles` = `[]`。
+- anti-drift touches check：56 个实际改动文件全部落在已声明 Touches 内（exit 0）。
+
 ### ADR-007 暗轴记录
 - L_G archguard: cycles=0 entities=1430 relations=7613
 - L_G directory-graph: newSCC=0 existingGroups=G1(3)
@@ -134,13 +145,3 @@ Split quay.service.ts by concern into quay/{read,mutation,fleet} subpackages beh
 - `server/shared/tests/server-import-cycle-budget.baseline.json`
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-server-quay-god-package.md`
-
-## Blocker
-
-**2026-11-09T13:11:53.841Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/architecture-ratchet.baseline.json
-CONFLICT (content): Merge conflict in server/shared/tests/architecture-ratchet.baseline.json
-Automatic merge failed; fix conflicts and then commit the result.
-- run_id：wk-prod-anchor
-- session_id：20442c61-feb6-4450-ade1-2d72e193a5c9
