@@ -5,7 +5,7 @@ import ModelsContent from '@/modules/settings/tabs/agents-settings/sections/cont
 import CodexProviderImport from '@/modules/settings/tabs/agents-settings/sections/content/CodexProviderImport';
 import CodexProviderAdvanced from '@/modules/settings/tabs/agents-settings/sections/content/CodexProviderAdvanced';
 import { useCodexProviders } from '@/modules/settings/hooks/useCodexProviders';
-import type { CodexProviderBindRequest } from '@/shared/ui/ModelLibraryPanel';
+import type { CodexProviderBindRequest } from '@/modules/model-library';
 import { Button, Input } from '@/shared/ui';
 import type { AgentProvider } from '@/shared/types';
 

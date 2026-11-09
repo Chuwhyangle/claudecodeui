@@ -278,9 +278,9 @@ export const PROVIDER_PERMISSION_PREFERENCE_KEYS: Record<LLMProvider, UserPrefer
  *
  * The provider's mark is the one field that does not live here: it is a React
  * component, and keeping the components in the UI package is what stops this
- * root module from importing `src/shared/ui`. `src/shared/ui/providerLogos.ts`
- * holds the matching `PROVIDER_LOGOS` table, keyed by the same `LLMProvider`
- * ids; a new provider adds one row in each table.
+ * root module from importing `src/shared/ui`. The `src/shared/ui/logos/`
+ * sub-package holds the matching `PROVIDER_LOGOS` table, keyed by the same
+ * `LLMProvider` ids; a new provider adds one row in each table.
  *
  * The table is keyed by `LLMProvider` on purpose: the union is the closed set
  * of selectable providers, and an id outside it (the debug agent's runtime id)

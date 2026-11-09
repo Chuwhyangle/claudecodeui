@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ModelLibraryPanel, {
-  type CodexProviderBindRequest,
-} from '@/shared/ui/ModelLibraryPanel';
+import { ModelLibraryPanel, type CodexProviderBindRequest } from '@/modules/model-library';
 import { api } from '@/shared/api';
 import type {
   AgentProvider,

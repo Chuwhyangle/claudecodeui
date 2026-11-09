@@ -22,7 +22,7 @@ import {
   LLMProviderLogo,
 } from "@/shared/ui";
 import { ModelGroupList, ResidentToggle, type ModelGroup } from '@/modules/chat-support';
-import ModelLibraryPanel from "@/shared/ui/ModelLibraryPanel";
+import { ModelLibraryPanel } from "@/modules/model-library";
 import { writeSelectedProvider } from '@/shared/settings/selectedProvider';
 import {
   modelOptionDisplayName,

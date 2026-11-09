@@ -1,10 +1,10 @@
 import type { ComponentType } from 'react';
 
 import type { LLMProvider } from '@/shared/types';
-import ClaudeLogo from '@/shared/ui/ClaudeLogo';
-import CodexLogo from '@/shared/ui/CodexLogo';
-import CursorLogo from '@/shared/ui/CursorLogo';
-import OpenCodeLogo from '@/shared/ui/OpenCodeLogo';
+import ClaudeLogo from '@/shared/ui/logos/ClaudeLogo';
+import CodexLogo from '@/shared/ui/logos/CodexLogo';
+import CursorLogo from '@/shared/ui/logos/CursorLogo';
+import OpenCodeLogo from '@/shared/ui/logos/OpenCodeLogo';
 
 /**
  * The mark each selectable provider renders, keyed by `LLMProvider`.
