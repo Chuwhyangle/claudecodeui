@@ -134,3 +134,13 @@ Split quay.service.ts by concern into quay/{read,mutation,fleet} subpackages beh
 - `server/shared/tests/server-import-cycle-budget.baseline.json`
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-server-quay-god-package.md`
+
+## Blocker
+
+**2026-11-09T13:11:53.841Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/architecture-ratchet.baseline.json
+CONFLICT (content): Merge conflict in server/shared/tests/architecture-ratchet.baseline.json
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：20442c61-feb6-4450-ade1-2d72e193a5c9
