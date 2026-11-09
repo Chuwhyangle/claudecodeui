@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-server-quay-god-package
 title: "architecture-analysis: Fresh archguard 2026-11-09 (scope server
   bcc56acf): modules/quay = 24 files / 43 entities, fanIn 14 / fanOut 200 —
   tooManyFiles (24>=20) plus highFanIn/highF"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
