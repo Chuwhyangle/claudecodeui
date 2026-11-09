@@ -5,7 +5,7 @@ import test from 'node:test';
 import {
   createQuayEntrypointResolver,
   type QuayEntrypointFileSystem,
-} from '../quay-entrypoint-resolver.js';
+} from '../read/quay-entrypoint-resolver.js';
 
 /**
  * The resolver's criteria. Every file read goes through the injected seam below, so the cases

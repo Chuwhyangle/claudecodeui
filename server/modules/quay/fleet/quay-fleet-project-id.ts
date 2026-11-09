@@ -5,13 +5,13 @@ import {
   QUAY_FLEET_TIMEOUT_MS,
   type QuayFleetCommandResult,
   type QuayFleetExec,
-} from './quay-fleet-cli.js';
+} from '../cli/quay-fleet-cli.js';
 import {
   createQuayFleetCliReader,
   locateQuayFleetCli,
   type QuayFleetCliReading,
   type QuayFleetCliState,
-} from './quay-fleet-locator.js';
+} from '../cli/quay-fleet-locator.js';
 
 /**
  * The Cloudpit project id → quay-fleet registry id mapping.

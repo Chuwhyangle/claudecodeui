@@ -1,9 +1,7 @@
+import type { QuayCommandRunner } from '../read/quay-command-port.js';
+import type { QuayTaskIndexReading, QuayTaskStatusRow } from '../read/quay-snapshot-types.js';
+
 import type { QuayCapabilityReader } from './quay-capabilities.js';
-import type {
-  QuayCommandRunner,
-  QuayTaskIndexReading,
-  QuayTaskStatusRow,
-} from './quay.service.js';
 
 /**
  * Pure readers for the `quay task log --json` carrier plus the event service's type-only

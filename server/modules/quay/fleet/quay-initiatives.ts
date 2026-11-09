@@ -7,8 +7,8 @@ import {
   parseFleetJsonObject,
   type QuayFleetCommandResult,
   type QuayFleetExec,
-} from './quay-fleet-cli.js';
-import { locateQuayFleetCli } from './quay-fleet-locator.js';
+} from '../cli/quay-fleet-cli.js';
+import { locateQuayFleetCli } from '../cli/quay-fleet-locator.js';
 
 /**
  * THE INITIATIVE VIEW AND THE DECISION QUEUE, server half (M6).

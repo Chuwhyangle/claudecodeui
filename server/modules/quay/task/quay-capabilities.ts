@@ -1,4 +1,4 @@
-import type { QuayCommandRunner } from './quay.service.js';
+import type { QuayCommandRunner } from '../read/quay-command-port.js';
 
 /**
  * The three-state answer for one quay verb.

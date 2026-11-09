@@ -10,7 +10,7 @@ import {
   QUAY_FLEET_HANDSHAKE_TTL_MS,
   type QuayFleetCliCommandResult,
   type QuayFleetCliExec,
-} from '../quay-fleet-locator.js';
+} from '../cli/quay-fleet-locator.js';
 
 /**
  * The single fleet-CLI locator and its contract handshake.

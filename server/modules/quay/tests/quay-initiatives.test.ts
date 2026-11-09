@@ -21,8 +21,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import type { QuayFleetCommandResult, QuayFleetExec } from '../quay-fleet-cli.js';
-import { createQuayInitiatives } from '../quay-initiatives.js';
+import type { QuayFleetCommandResult, QuayFleetExec } from '../cli/quay-fleet-cli.js';
+import { createQuayInitiatives } from '../fleet/quay-initiatives.js';
 
 const FIRST_SEEN = '2026-10-24T08:00:00.000Z';
 const DECIDED_AT = '2026-10-24T09:30:00.000Z';

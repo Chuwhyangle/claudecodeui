@@ -10,7 +10,7 @@ import {
   readQuaySuiteAndFanIn,
   type QuaySuiteFanInReading,
   type QuayVerbResult,
-} from '../quay-suite-fanin-reader.js';
+} from '../read/quay-suite-fanin-reader.js';
 
 /**
  * The fixtures are the REAL output of quay 0.24.0's two read verbs, captured on this

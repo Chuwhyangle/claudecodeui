@@ -27,7 +27,7 @@ import {
   QUAY_FLEET_MAX_OUTPUT_BYTES,
   QUAY_FLEET_TIMEOUT_MS,
   type QuayFleetExecOptions,
-} from '../quay-fleet-cli.js';
+} from '../cli/quay-fleet-cli.js';
 
 /** The options every direct binding call gets; `maxBuffer` only bounds a runaway child. */
 function execOptions(timeout = 5_000): QuayFleetExecOptions {

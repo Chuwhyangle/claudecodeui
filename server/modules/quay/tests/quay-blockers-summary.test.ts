@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { summarizeBlockers } from '../quay-blockers-summary.js';
+import { summarizeBlockers } from '../read/quay-blockers-summary.js';
 
 /**
  * The task-library fixture the criterion drives the summarizer with.

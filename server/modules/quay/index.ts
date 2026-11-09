@@ -25,19 +25,19 @@ export {
 } from './quay.module.js';
 // The fleet binary locator: the composition root (`server/index.ts`) injects this ONE lookup
 // (QUAY_FLEET_BIN → PATH → ~/.quay-fleet/bin) into the liaison module rather than letting it
-// grow a second order; the five in-module consumers (registry, project-id, initiatives,
-// uri-resolve, service) keep reaching the deep path, which stays module-private. Exported here
-// because cross-module access goes through the module's index, never an internal file.
-export { locateQuayFleetCli } from './quay-fleet-locator.js';
+// grow a second order; the in-module consumers live in `cli/`, and every other subpackage
+// reaches them through that subpackage's own files. Exported here because cross-module access
+// goes through the module's index, never an internal file.
+export { locateQuayFleetCli } from './cli/index.js';
 // createQuayFleetRunner: the "resolve the binary → fixed miss reading → execute" seam. The
 // cockpit's fleet card provider lives in a leaf module and cannot import this module, so the
 // composition root (`server/cockpit-fleet-wiring.ts`) binds the real runner there.
-export { createQuayFleetRunner } from './quay-fleet-cli.js';
+export { createQuayFleetRunner } from './cli/index.js';
 export type {
   QuayFleetCommandResult,
   QuayFleetRunner,
   QuayFleetRunnerOptions,
-} from './quay-fleet-cli.js';
+} from './cli/index.js';
 // createQuayInitiatives: the composition seam the initiative/decision-queue criterion drives
 // with an injected exec, and the factory a test uses to read a temp fleet home without a CLI.
 export {
@@ -49,7 +49,7 @@ export {
   initiativeUri,
   questionFromAttention,
   resolveFleetHome,
-} from './quay-initiatives.js';
+} from './fleet/index.js';
 export type {
   InitiativeAuditDecision,
   InitiativeCharterReading,
@@ -65,21 +65,23 @@ export type {
   InitiativeReadingDocument,
   InitiativeReadingUnavailable,
   QuayInitiativesService,
-} from './quay-initiatives.js';
+} from './fleet/index.js';
 export type {
   QuayFleetInterfaceSessionReading,
   QuayFleetInterfaceSessionWrite,
   QuayFleetRegistryService,
-} from './quay-fleet-registry.js';
+} from './fleet/index.js';
 // createQuayService: the factory the composition root (`quay.module.ts`) calls,
 // re-exported so a criterion can compose the REAL service with injected adapters
 // rather than reimplementing its index, its budget or its rate limit.
+export { createQuayService } from './service/index.js';
 export {
   createQuayFleetLivenessReader,
-  createQuayService,
-  isReadOnlyQuayCommand,
   QUAY_FLEET_LIVENESS_DEFAULT_STALE_AFTER_SEC,
   QUAY_FLEET_LIVENESS_TIMEOUT_MS,
+} from './fleet/index.js';
+export {
+  isReadOnlyQuayCommand,
   QUAY_FLEET_SUMMARY_MAX_CONCURRENT_PROJECTS,
   QUAY_FLEET_SUMMARY_TTL_MS,
   QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS,
@@ -87,7 +89,7 @@ export {
   QUAY_TASK_INDEX_MIN_INTERVAL_MS,
   QUAY_TASK_INDEX_TITLE_LIMIT,
   QUAY_TASK_INDEX_TTL_MS,
-} from './quay.service.js';
+} from './read/index.js';
 // createSessionMentionsService: the session → mentions reader (the prose's task/goal ids,
 // joined against the store). Re-exported so a criterion can drive it with stubs.
 export {
@@ -105,12 +107,53 @@ export type {
   SessionMentionTaskReading,
 } from './session-mentions.service.js';
 export type {
-  QuayCommandResult,
-  QuayCommandRunner,
+  QuayAdrCounts,
+  QuayBlockerSummary,
+  QuayConfigIssueCounts,
   QuayDriverState,
   QuayDriverSummary,
-  // Consumed by `server/modules/observation/project-truth.ts`: the project tile's 活性 layer
-  // reads the fleet's per-project driver state through this one normalized contract.
+  QuayFanInAttemptSummary,
+  QuayFanInSummary,
+  QuayGanttInterval,
+  QuayGanttLanes,
+  QuayGanttUnavailableReason,
+  QuayGoalBreakdown,
+  QuayGoalCounts,
+  QuayInFlightPhase,
+  QuayInFlightTask,
+  QuayListItem,
+  QuayLoopDrain,
+  QuayLoopKernel,
+  QuayLoopOrphan,
+  QuayLoopPointer,
+  QuayLoopStatus,
+  QuayLoopVersionRelation,
+  QuaySnapshot,
+  QuaySuiteState,
+  QuayTaskCounts,
+  QuayTestRoundSummary,
+  QuayTestsSummary,
+} from '@/shared/types.js';
+export type {
+  QuayCommandFailureKind,
+  QuayCommandResult,
+  QuayCommandRunner,
+  QuayContextEventsStatus,
+  QuayFileReader,
+  /** Consumed by the sidebar's project-row task badges: one quay project's fleet entry. */
+  QuayFleetProjectSummary,
+  /** Consumed by `GET /api/quay/fleet-summary`: the eager cross-project reading. */
+  QuayFleetSummary,
+  /** Consumed by the sidebar's project-row task badges: the five counts it renders. */
+  QuayFleetTaskCounts,
+  QuayLanesReading,
+  QuayProjectStatus,
+  QuayPulseSummary,
+  QuayTaskIndexReading,
+  QuayTaskIndexState,
+  QuayTaskStatusRow,
+} from './read/index.js';
+export type {
   QuayFleetLivenessCommandResult,
   QuayFleetLivenessExec,
   QuayFleetLivenessReader,
@@ -118,22 +161,4 @@ export type {
   QuayFleetLivenessReading,
   QuayFleetLivenessState,
   QuayFleetProjectLiveness,
-  /** Consumed by the sidebar's project-row task badges: one quay project's fleet entry. */
-  QuayFleetProjectSummary,
-  /** Consumed by `GET /api/quay/fleet-summary`: the eager cross-project reading. */
-  QuayFleetSummary,
-  /** Consumed by the sidebar's project-row task badges: the five counts it renders. */
-  QuayFleetTaskCounts,
-  /** Consumed by the MCP gateway's `quay_snapshot` tool: one task the worker driver reports in flight. */
-  QuayInFlightTask,
-  /** Consumed by the Quay tab's overall running-status band: kernel/pointer/drain/orphan readings. */
-  QuayLoopStatus,
-  QuayProjectStatus,
-  QuaySnapshot,
-  /** Consumed by the title bar's always-on mini gantt: the lanes-only reading. */
-  QuayLanesReading,
-  /** Consumed by the MCP gateway's `changes` tool: one project's full-coverage status index, read without loading. */
-  QuayTaskIndexReading,
-  QuayTaskIndexState,
-  QuayTaskStatusRow,
-} from './quay.service.js';
+} from './fleet/index.js';

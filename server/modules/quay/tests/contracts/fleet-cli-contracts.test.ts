@@ -35,7 +35,7 @@ import {
   createQuayFleetCliReader,
   locateQuayFleetCli,
   QUAY_FLEET_SUPPORTED_CONTRACTS,
-} from '../../quay-fleet-locator.js';
+} from '../../cli/quay-fleet-locator.js';
 
 import {
   FLEET_CLI_CONTRACTS,

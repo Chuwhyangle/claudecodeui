@@ -9,7 +9,7 @@ import test from 'node:test';
 import express from 'express';
 
 import { createQuayRouter } from '../quay.routes.js';
-import type { QuayFleetProjectIdResolver } from '../quay-fleet-project-id.js';
+import type { QuayFleetProjectIdResolver } from '../fleet/quay-fleet-project-id.js';
 import {
   createQuayFleetCliWallReader,
   createQuayUriResolver,
@@ -19,8 +19,8 @@ import {
   type QuayFleetSummaryReading,
   type QuayFleetWallReader,
   type QuayUriSnapshotTasks,
-} from '../quay-uri-resolve.js';
-import { createQuayService } from '../quay.service.js';
+} from '../read/quay-uri-resolve.js';
+import { createQuayService } from '../service/index.js';
 
 /**
  * The wall's dereference contract (quay-wall-uri-dereference-with-snapshot-fallback), now with

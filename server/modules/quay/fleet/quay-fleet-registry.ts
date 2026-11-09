@@ -4,8 +4,8 @@ import {
   parseFleetJsonObject,
   type QuayFleetCommandResult,
   type QuayFleetExec,
-} from './quay-fleet-cli.js';
-import { locateQuayFleetCli } from './quay-fleet-locator.js';
+} from '../cli/quay-fleet-cli.js';
+import { locateQuayFleetCli } from '../cli/quay-fleet-locator.js';
 
 /**
  * The fleet registry's per-project 「对人接口会话」, as the cockpit reads and writes it.

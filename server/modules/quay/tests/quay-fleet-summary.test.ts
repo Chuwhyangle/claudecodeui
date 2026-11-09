@@ -7,12 +7,12 @@ import test from 'node:test';
 import express from 'express';
 
 import { createQuayRouter } from '../quay.routes.js';
+import { createQuayService } from '../service/index.js';
 import {
-  createQuayService,
   QUAY_FLEET_SUMMARY_MAX_CONCURRENT_PROJECTS,
   QUAY_FLEET_SUMMARY_TTL_MS,
   type QuayCommandResult,
-} from '../quay.service.js';
+} from '../read/index.js';
 
 /**
  * The fleet summary's contract, TTL and fan-out ceiling.

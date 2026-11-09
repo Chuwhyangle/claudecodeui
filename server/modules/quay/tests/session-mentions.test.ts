@@ -11,9 +11,10 @@ import {
 } from '@/modules/providers/index.js';
 
 import { createQuayRouter } from '../quay.routes.js';
-import { createQuayService, type QuayCommandRunner, type QuayTaskStatusRow } from '../quay.service.js';
-import { createQuayTaskEvents } from '../quay-task-events.service.js';
-import type { QuayTaskEventsTimers } from '../quay-task-log-parse.js';
+import { createQuayService } from '../service/index.js';
+import type { QuayCommandRunner, QuayTaskStatusRow } from '../read/index.js';
+import { createQuayTaskEvents } from '../task/quay-task-events.service.js';
+import type { QuayTaskEventsTimers } from '../task/quay-task-log-parse.js';
 import {
   createSessionMentionsService,
   type SessionMentionsDependencies,

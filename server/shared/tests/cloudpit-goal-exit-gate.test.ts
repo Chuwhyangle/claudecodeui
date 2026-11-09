@@ -159,7 +159,19 @@ const GATE_DIRECTORY_PIN: readonly string[] = [
   'modules/providers/shared/base',
   'modules/providers/shared/mcp',
   'modules/providers/shared/skills',
+  // NINTH RECORDED CHANGE (2026-11-09,
+  // gap-routine-architecture-analysis-server-quay-god-package): the quay god-package was
+  // split by concern into five subpackages (cli / fleet / read / service / task), each
+  // behind an index.ts barrel; the package root keeps the module wiring, the routes, the
+  // process adapter, the capability/dispatch readers and the counter-voice + session
+  // readers. Added here and to the JSON together, exactly as the recorded-change contract
+  // requires.
   'modules/quay',
+  'modules/quay/cli',
+  'modules/quay/fleet',
+  'modules/quay/read',
+  'modules/quay/service',
+  'modules/quay/task',
   'modules/reply-suggestions',
   'modules/resident-ledger',
   'modules/scheduled-messages',

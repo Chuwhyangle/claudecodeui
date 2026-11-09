@@ -1,8 +1,6 @@
-import type {
-  QuayCommandRunner,
-  QuayTaskIndexReading,
-  QuayTaskStatusRow,
-} from './quay.service.js';
+import type { QuayCommandRunner } from '../read/quay-command-port.js';
+import type { QuayTaskIndexReading, QuayTaskStatusRow } from '../read/quay-snapshot-types.js';
+
 import {
   readTaskLogPage,
   transitionOrder,

@@ -8,12 +8,12 @@ import {
   type QuayEntrypointFileSystem,
   type QuayEntrypointResolution,
   type QuayEntrypointResolver,
-} from './quay-entrypoint-resolver.js';
+} from './read/quay-entrypoint-resolver.js';
 import type {
   QuayCommandFailureKind,
   QuayCommandResult,
   QuayCommandRunner,
-} from './quay.service.js';
+} from './read/quay-command-port.js';
 
 /**
  * Default per-command subprocess bound. quay's read commands are JSON printers,

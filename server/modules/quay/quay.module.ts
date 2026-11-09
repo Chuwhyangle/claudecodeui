@@ -9,10 +9,10 @@ import { readInitiativeAuditRatio } from '@/shared/ports/initiative-audit-ratio.
 import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
-import { createQuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
-import { createQuayFleetRegistry } from './quay-fleet-registry.js';
-import { DEFAULT_INITIATIVE_AUDIT_RATIO, createQuayInitiatives } from './quay-initiatives.js';
-import { createQuayCapabilities, type QuayEntrypointIdentity } from './quay-capabilities.js';
+import { createQuayFleetProjectIdResolver } from './fleet/quay-fleet-project-id.js';
+import { createQuayFleetRegistry } from './fleet/quay-fleet-registry.js';
+import { DEFAULT_INITIATIVE_AUDIT_RATIO, createQuayInitiatives } from './fleet/quay-initiatives.js';
+import { createQuayCapabilities, type QuayEntrypointIdentity } from './task/quay-capabilities.js';
 import { createQuayDispatchCarrier } from './quay-dispatch-carrier.js';
 import {
   QUAY_COMMAND_TIMEOUT_MS,
@@ -20,9 +20,10 @@ import {
   createQuayProcessRunner,
   createSystemQuayEntrypointResolver,
 } from './quay-process.js';
-import { createQuayTaskEvents } from './quay-task-events.service.js';
+import { createQuayTaskEvents } from './task/quay-task-events.service.js';
 import { createQuayRouter } from './quay.routes.js';
-import { createQuayService, type QuayFileReader } from './quay.service.js';
+import { createQuayService } from './service/index.js';
+import type { QuayFileReader } from './read/index.js';
 import {
   createSessionMentionsService,
   type SessionMentionsGoalRow,

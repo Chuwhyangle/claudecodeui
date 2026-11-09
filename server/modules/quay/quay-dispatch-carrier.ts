@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type { QuayFileReader } from './quay.service.js';
+import type { QuayFileReader } from './read/quay-command-port.js';
 
 /**
  * The largest `worker-dispatch.json` this reader will evaluate. The carrier is the worker

@@ -20,21 +20,21 @@ import {
   type QuayCapabilities,
   type QuayCapabilityReader,
   type QuayEntrypointIdentity,
-} from '../quay-capabilities.js';
+} from '../task/quay-capabilities.js';
 import { createQuayDispatchCarrier } from '../quay-dispatch-carrier.js';
-import { createQuayTaskEvents, type QuayTaskEventsService } from '../quay-task-events.service.js';
-import { readTaskLogPage, type QuayTaskEventsTimers } from '../quay-task-log-parse.js';
+import { createQuayTaskEvents, type QuayTaskEventsService } from '../task/quay-task-events.service.js';
+import { readTaskLogPage, type QuayTaskEventsTimers } from '../task/quay-task-log-parse.js';
+import { createQuayService } from '../service/index.js';
 import {
   QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS,
   QUAY_TASK_INDEX_MIN_INTERVAL_MS,
   QUAY_TASK_INDEX_TTL_MS,
-  createQuayService,
   isReadOnlyQuayCommand,
   type QuayCommandResult,
   type QuayFileReader,
   type QuayTaskIndexReading,
   type QuayTaskStatusRow,
-} from '../quay.service.js';
+} from '../read/index.js';
 
 const PROJECT_PATH = path.join(path.sep, 'workspace', 'project-1');
 const PROJECT_PATH_2 = path.join(path.sep, 'workspace', 'project-2');

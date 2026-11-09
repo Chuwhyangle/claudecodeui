@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 
 import type { QuayTaskCounts } from '@/shared/types.js';
 
-import { locateQuayFleetCli } from './quay-fleet-locator.js';
+import { locateQuayFleetCli } from '../cli/quay-fleet-locator.js';
 
 /**
  * Dereferencing for the wall's `quay://` address space.
@@ -239,7 +239,7 @@ export type QuayFleetWallReader = {
  * Re-exported from the shared locator so this module's public surface (and its criterion) keep
  * naming the same constant; the ACTUAL lookup lives in `quay-fleet-locator.ts` only.
  */
-export { QUAY_FLEET_BIN_ENV } from './quay-fleet-locator.js';
+export { QUAY_FLEET_BIN_ENV } from '../cli/quay-fleet-locator.js';
 
 /**
  * One call to the fleet CLI, normalized so the reader never sees child-process internals.

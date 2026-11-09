@@ -27,17 +27,17 @@ import { readCockpitEnabled } from '@/shared/ports/cockpit-enabled.port.js';
 import { asyncHandler } from '@/shared/utils.js';
 
 import { createCounterVoice, type CounterVoiceService } from './counter-voice.js';
-import type { QuayFleetRegistryService } from './quay-fleet-registry.js';
-import { createQuayInitiatives } from './quay-initiatives.js';
+import type { QuayFleetRegistryService } from './fleet/quay-fleet-registry.js';
+import { createQuayInitiatives } from './fleet/quay-initiatives.js';
 import type {
   InitiativeDecisionInput,
   InitiativeDecisionOption,
   QuayInitiativesService,
-} from './quay-initiatives.js';
-import type { QuayUriErrorCode } from './quay-uri-resolve.js';
+} from './fleet/quay-initiatives.js';
+import type { QuayUriErrorCode } from './read/quay-uri-resolve.js';
 import type { SessionMentionsService } from './session-mentions.service.js';
 import type { SessionTaskChainService } from './session-task-chain.service.js';
-import type { createQuayService } from './quay.service.js';
+import type { createQuayService } from './service/index.js';
 
 /** The browser's last-opened session, as the server's pointer store answers it. */
 export type QuayLastOpenedSession = { sessionId: string; openedAt: number };

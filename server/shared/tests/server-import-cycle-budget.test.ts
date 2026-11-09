@@ -354,7 +354,20 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/providers/shared/base',
   'modules/providers/shared/mcp',
   'modules/providers/shared/skills',
+  // NINETEENTH RECORDED CHANGE (2026-11-09,
+  // gap-routine-architecture-analysis-server-quay-god-package): the quay god-package
+  // finding's fix split `modules/quay` by concern into these five subpackages. They are
+  // registered rather than left to the new-directory leaf rule because the package root
+  // legitimately imports them while none of them imports the root back: edges run
+  // root -> {cli, fleet, read, service, task}, read/fleet/task -> cli, and service -> the
+  // other four. The direction is one-way, so no SCC is added. `directoryManifest` and
+  // `nodeCount` rise by five.
   'modules/quay',
+  'modules/quay/cli',
+  'modules/quay/fleet',
+  'modules/quay/read',
+  'modules/quay/service',
+  'modules/quay/task',
   'modules/reply-suggestions',
   'modules/resident-ledger',
   'modules/scheduled-messages',

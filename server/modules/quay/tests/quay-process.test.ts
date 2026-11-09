@@ -5,7 +5,7 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 
 import { createQuayProcessRunner, createSystemQuayEntrypointResolver, type QuayExecFile } from '../quay-process.js';
-import type { QuayEntrypointResolution } from '../quay-entrypoint-resolver.js';
+import type { QuayEntrypointResolution } from '../read/quay-entrypoint-resolver.js';
 
 /**
  * The failure this guards, measured against the real Quay panel (2026-10-04):

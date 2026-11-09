@@ -8,8 +8,8 @@ import {
   createQuayFleetProjectIdResolver,
   QUAY_FLEET_PROJECT_ID_TTL_MS,
   type QuayFleetProjectIdDependencies,
-} from '../quay-fleet-project-id.js';
-import { createQuayService } from '../quay.service.js';
+} from '../fleet/quay-fleet-project-id.js';
+import { createQuayService } from '../service/index.js';
 
 /**
  * The Cloudpit project id → quay-fleet registry id join (quay-fleet-project-id).

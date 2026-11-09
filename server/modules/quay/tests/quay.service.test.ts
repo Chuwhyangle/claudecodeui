@@ -6,15 +6,15 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 
+import { createQuayService } from '../service/index.js';
 import {
-  createQuayService,
   isReadOnlyQuayCommand,
   normalizeGanttWindowHours,
   readGanttLanes,
   type QuayCommandResult,
   type QuayCommandRunner,
   type QuayFileReader,
-} from '../quay.service.js';
+} from '../read/index.js';
 import { QUAY_COMMAND_TIMEOUT_MS, QUAY_DRIVER_STATUS_TIMEOUT_MS } from '../quay-process.js';
 
 type ServiceDependencies = Parameters<typeof createQuayService>[0];
