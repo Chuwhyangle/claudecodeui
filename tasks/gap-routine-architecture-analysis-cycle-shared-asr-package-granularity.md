@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-cycle-shared-asr-package-granularity
 title: "architecture-analysis: archguard package-granularity reading on the
   fresh 2026-11-10 tree: one non-trivial SCC of size 7 (asr + six asr/list/*
   adapter directories, 13 unique edges)"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
