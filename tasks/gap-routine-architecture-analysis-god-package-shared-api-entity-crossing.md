@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-shared-api-entity-crossing
 title: "architecture-analysis: archguard scope src: shared/api is now 10 files /
   51 entities (fanIn 67, fanOut 77, reasons
   highFanIn/highFanOut/tooManyEntities), crossing minEntities=50 fr"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
