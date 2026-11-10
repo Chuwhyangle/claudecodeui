@@ -23,10 +23,12 @@
  * `voice-error-classification.false-forms.test.ts`).
  *
  * THE IMPORT SHAPE IS LOAD-BEARING. The adapter value-imports `baseMimeType`/`declaredAcceptsMime`/
- * `classifyUpstreamFailure` from `shared/asr/asrContract.ts` (re-exported by the registry), so the
- * registry and its adapters no longer form a value-edge cycle — this task's split removed it. The
- * contract is still imported before the adapter, so the shared instance is fully evaluated before
- * any mutated copy is opened, and the adapter is entered with `await import(...)` — the shape
+ * `classifyUpstreamFailure` from `shared/asr/contract/asrContract.ts` (re-exported by the registry),
+ * so the registry and its adapters no longer form a value-edge cycle — the first split removed the
+ * file-level one, and the contract now sits in its own leaf directory so ArchGuard's directory
+ * granularity sees the same one-way edge. The contract is still imported before the adapter, so the
+ * shared instance is fully evaluated before any mutated copy is opened, and the adapter is entered
+ * with `await import(...)` — the shape
  * `voice-provider-dispatch.test.ts` records.
  *
  * WHAT THIS FILE DOES NOT DO, AND WHERE THAT HALF LIVES. AC7 asks for the exit code of a list of
@@ -64,7 +66,7 @@ const SERVER_DIR = path.resolve(HERE, '../../..');
 const REPO_ROOT = path.resolve(SERVER_DIR, '..');
 
 /** The contract: the one home of the vocabulary and of the classifier (re-exported by the registry). */
-export const SHIPPING_CONTRACT_MODULE = path.join(REPO_ROOT, 'shared/asr/asrContract.ts');
+export const SHIPPING_CONTRACT_MODULE = path.join(REPO_ROOT, 'shared/asr/contract/asrContract.ts');
 /** The shipped service: the one home of the code→HTTP table. */
 export const SHIPPING_SERVICE_MODULE = path.join(SERVER_DIR, 'modules/voice/voice.service.ts');
 

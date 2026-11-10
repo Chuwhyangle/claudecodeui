@@ -40,14 +40,14 @@ const SHIPPING_FILES = [
   'vitest.config.ts',
   '.oxlintrc.json',
   'package.json',
-  'shared/asr/transcriptionWire.ts',
+  'shared/asr/contract/transcriptionWire.ts',
   // The two files that carry the endpoint literal WITHOUT shaping a request or parsing a
   // response: the contract names it in the comment explaining the multipart shape (it moved there
   // when this task split the contract out of the registry), and the offline invariant board
   // records the URL its fixture resolves to. They are in the fixture because the probe used to
   // report them as second implementations; the case at the bottom of this file is the one that
   // holds the distinction in place.
-  'shared/asr/asrContract.ts',
+  'shared/asr/contract/asrContract.ts',
   'shared/asr/asrRegistry.ts',
   'shared/asr/asrInvariants.ts',
   'src/shared/api/index.ts',
@@ -56,9 +56,9 @@ const SHIPPING_FILES = [
   'experiments/voice-asr-cli/transcribe.ts',
 ];
 
-const IMPLEMENTATION_FILE = 'shared/asr/transcriptionWire.ts';
+const IMPLEMENTATION_FILE = 'shared/asr/contract/transcriptionWire.ts';
 /** A file in the fixture that mentions the endpoint and implements nothing. */
-const MENTION_FILE = 'shared/asr/asrContract.ts';
+const MENTION_FILE = 'shared/asr/contract/asrContract.ts';
 
 function buildFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'asr-wire-probe-'));
@@ -144,19 +144,19 @@ test('AC3: a copy written on each side makes the consumers resolve to different 
   patchFixtureFile(
     root,
     'src/shared/api/index.ts',
-    '@shared/asr/transcriptionWire',
+    '@shared/asr/contract/transcriptionWire',
     '@shared/asr/transcriptionWireFrontend',
   );
   patchFixtureFile(
     root,
     'src/modules/chat-voice/hooks/useVoiceInput.ts',
-    '@shared/asr/transcriptionWire',
+    '@shared/asr/contract/transcriptionWire',
     '@shared/asr/transcriptionWireFrontend',
   );
   patchFixtureFile(
     root,
     'server/modules/voice/voice.service.ts',
-    '../../../shared/asr/transcriptionWire.js',
+    '../../../shared/asr/contract/transcriptionWire.js',
     '../../../shared/asr/transcriptionWireServer.js',
   );
 
@@ -275,7 +275,7 @@ test('AC8: a landing that is not covered by npm run lint is reported, not merely
 
   const before = runProbe(root, ['--landing']);
   assert.equal(before.status, 0, `--landing must pass on the fixture:\n${before.stdout}`);
-  assert.match(before.stdout, /^landing=shared\/asr$/m);
+  assert.match(before.stdout, /^landing=shared\/asr\/contract$/m);
   assert.match(before.stdout, /^lint-covers-landing=yes/m);
 
   // The fake form: drop the landing directory from the lint path list. The tree is then only

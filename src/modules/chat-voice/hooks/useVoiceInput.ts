@@ -72,7 +72,7 @@ import type { VoiceVadMode } from '@/shared/voice/voiceDebug';
 import { trimDecisionFor, trimSilenceEdges } from '@/shared/voice/voiceTrim';
 // The recogniser's answer is read by the same module that built the request — the
 // repository-root shared tree the server and the CLI compile.
-import { parseTranscriptionResponse } from '@shared/asr/transcriptionWire';
+import { parseTranscriptionResponse } from '@shared/asr/contract/transcriptionWire';
 
 /**
  * Continuous voice capture: one press, one stream, and as many uploads as the speech needs.

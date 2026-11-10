@@ -40,7 +40,7 @@ import {
   type WasmEnginePort,
   type WasmEngineRequest,
 } from '@shared/asr/list/sensevoice-wasm/sensevoice-wasm.asr-provider';
-import { parseTranscriptionResponse } from '@shared/asr/transcriptionWire';
+import { parseTranscriptionResponse } from '@shared/asr/contract/transcriptionWire';
 import {
   CLIENT_ASR_FALLBACK_EVENT,
   VOICE_CLIENT_MODEL_BYTES,

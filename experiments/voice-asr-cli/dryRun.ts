@@ -22,12 +22,12 @@
 
 import { createHash } from 'node:crypto';
 
-import { createTranscriptionRequest } from '../../shared/asr/transcriptionWire.js';
+import { createTranscriptionRequest } from '../../shared/asr/contract/transcriptionWire.js';
 import type {
   TranscriptionRequest,
   TranscriptionTarget,
   TranscriptionUpload,
-} from '../../shared/asr/transcriptionWire.js';
+} from '../../shared/asr/contract/transcriptionWire.js';
 
 /**
  * fetch, at the width this CLI uses it: one URL and the init the adapter built.

@@ -57,7 +57,7 @@ import {
   fetchWithTransportRetry,
   parseTranscriptionResponse,
   type TranscriptionEnvelope,
-} from '@shared/asr/transcriptionWire';
+} from '@shared/asr/contract/transcriptionWire';
 import {
   STYLE_TRANSFORMATIONS,
   baseMimeType,

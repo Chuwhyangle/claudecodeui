@@ -53,7 +53,7 @@
  *     and a reading taken on one build can be told apart from a reading taken on another.
  */
 
-import { measureRequestBytes } from '../../transcriptionWire.js';
+import { measureRequestBytes } from '../../contract/transcriptionWire.js';
 import {
   declaredAcceptsMime,
   honoredHints,
@@ -66,7 +66,7 @@ import {
   type AsrRuntimeStatus,
   type AsrToken,
   type AsrTransformation,
-} from '../../asrContract.js';
+} from '../../contract/asrContract.js';
 
 /** The id this provider is registered under. */
 export const id: string = 'sensevoice-wasm';

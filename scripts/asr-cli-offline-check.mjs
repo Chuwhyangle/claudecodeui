@@ -54,7 +54,7 @@ const PROBE_ROOT = dirname(HERE);
 const CLI_REL = join('experiments', 'voice-asr-cli', 'transcribe.ts');
 const RECORDING_REL = join('experiments', 'voice-asr-cli', 'fixtures', 'recorded-transcriptions.json');
 const DOUBLE_REL = join('scripts', '__fixtures__', 'no-network-fetch.mjs');
-const ADAPTER_REL = join('shared', 'asr', 'transcriptionWire.ts');
+const ADAPTER_REL = join('shared', 'asr', 'contract', 'transcriptionWire.ts');
 
 /** The criterion's own credential. It is a constant of this file's making and reaches the CLI only
  *  through a variable this file names, so nothing ambient can stand in for it. */

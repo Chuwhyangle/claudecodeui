@@ -44,7 +44,7 @@
  *     `scripts/sensevoice/manifest.json` is the frozen record the build id is checked against.
  */
 
-import { measureRequestBytes } from '../../transcriptionWire.js';
+import { measureRequestBytes } from '../../contract/transcriptionWire.js';
 import {
   declaredAcceptsMime,
   honoredHints,
@@ -57,7 +57,7 @@ import {
   type AsrRuntimeStatus,
   type AsrToken,
   type AsrTransformation,
-} from '../../asrContract.js';
+} from '../../contract/asrContract.js';
 
 /** The id this provider is registered under. */
 export const id: string = 'sensevoice-local';

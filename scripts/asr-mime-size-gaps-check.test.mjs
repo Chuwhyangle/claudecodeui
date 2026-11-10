@@ -37,7 +37,7 @@ import { buildFixture } from './asr-mime-size-gaps-check.mjs';
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROBE = path.join(SCRIPT_DIR, 'asr-mime-size-gaps-check.mjs');
 
-const CONTRACT_MODULE = 'shared/asr/asrContract.ts';
+const CONTRACT_MODULE = 'shared/asr/contract/asrContract.ts';
 const SERVICE_MODULE = 'server/modules/voice/voice.service.ts';
 const CLIENT_API_MODULE = 'src/shared/api/index.ts';
 

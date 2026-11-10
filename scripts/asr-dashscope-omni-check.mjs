@@ -681,7 +681,7 @@ async function loadShippingAdapter(root) {
  * @returns {string|null}
  */
 function findModuleBySource(root, marker) {
-  for (const relativePath of listFiles(root, 'shared/asr/*.ts')) {
+  for (const relativePath of listFiles(root, 'shared/asr/**/*.ts')) {
     let source;
     try {
       source = readFileSync(path.join(root, relativePath), 'utf8');

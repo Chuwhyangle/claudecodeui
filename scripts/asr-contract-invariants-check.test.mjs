@@ -51,7 +51,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CHECKER = join(REPO_ROOT, 'scripts', 'asr-contract-invariants-check.mjs');
 const ADAPTER_RELATIVE = join('shared', 'asr', 'list', 'multimodal', 'multimodal.asr-provider.ts');
 const REGISTRY_RELATIVE = join('shared', 'asr', 'asrRegistry.ts');
-const CONTRACT_RELATIVE = join('shared', 'asr', 'asrContract.ts');
+const CONTRACT_RELATIVE = join('shared', 'asr', 'contract', 'asrContract.ts');
 
 const ALL_GROUPS = ['request-construction', 'error-mapping', 'size-layering', 'redaction', 'mime-gate'];
 

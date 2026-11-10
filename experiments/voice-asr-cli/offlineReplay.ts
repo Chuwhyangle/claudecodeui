@@ -30,13 +30,13 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import { createTranscriptionRequest, parseTranscriptionResponse } from '../../shared/asr/transcriptionWire.js';
+import { createTranscriptionRequest, parseTranscriptionResponse } from '../../shared/asr/contract/transcriptionWire.js';
 import type {
   TranscriptionRequest,
   TranscriptionTarget,
   TranscriptionTolerance,
   TranscriptionUpload,
-} from '../../shared/asr/transcriptionWire.js';
+} from '../../shared/asr/contract/transcriptionWire.js';
 import type { FetchLike } from './dryRun.js';
 
 /**

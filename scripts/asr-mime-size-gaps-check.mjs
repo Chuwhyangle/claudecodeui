@@ -71,7 +71,7 @@ const REGISTRY_MODULE = LANDING_MODULE;
  * re-export, so the source reading has to look where the function lives rather than where the
  * runtime entry point is.
  */
-const CONTRACT_MODULE = `${LANDING}/asrContract.ts`;
+const CONTRACT_MODULE = `${LANDING}/contract/asrContract.ts`;
 const SERVICE_MODULE = 'server/modules/voice/voice.service.ts';
 const ROUTES_MODULE = 'server/modules/voice/voice.routes.ts';
 const MODULE_MODULE = 'server/modules/voice/voice.module.ts';

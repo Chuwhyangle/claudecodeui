@@ -39,7 +39,7 @@ import {
   id as shippedId,
   transcribe,
 } from '@shared/asr/list/openai-compatible/openai-compatible.asr-provider';
-import { transcriptionEndpoint } from '@shared/asr/transcriptionWire';
+import { transcriptionEndpoint } from '@shared/asr/contract/transcriptionWire';
 import { trimDecisionFor } from '@/shared/voice/voiceTrim';
 
 /**

@@ -33,8 +33,8 @@ import {
   readTranscriptText,
   transcribe,
 } from '@shared/asr/list/multimodal/multimodal.asr-provider';
-import { honoredHints } from '@shared/asr/asrContract';
-import { base64Length } from '@shared/asr/transcriptionWire';
+import { honoredHints } from '@shared/asr/contract/asrContract';
+import { base64Length } from '@shared/asr/contract/transcriptionWire';
 
 const ENVELOPE = JSON.stringify({
   candidates: [{ content: { parts: [{ text: 'hello ' }, { text: 'world' }] } }],

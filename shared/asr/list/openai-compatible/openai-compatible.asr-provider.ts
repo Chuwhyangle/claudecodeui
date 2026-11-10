@@ -10,7 +10,7 @@
  * provider the app uses but the address book does not list answers no question about itself.
  *
  * IT IS THE SHIPPED WIRE, NOT A SECOND IMPLEMENTATION OF IT. `transcribe` composes the two halves
- * of `../../transcriptionWire.js` (`createTranscriptionRequest`, `parseTranscriptionResponse`) and
+ * of `../../contract/transcriptionWire.js` (`createTranscriptionRequest`, `parseTranscriptionResponse`) and
  * nothing else: the request construction and the answer parsing stay in the one module that
  * already owned them, so registering this adapter cannot make the app send something different
  * from what it sent yesterday. The guards below (container, budget) run BEFORE the wire is
@@ -23,7 +23,7 @@
  * signal) arrives through `AsrInvocation`.
  */
 
-import { measureRequestBytes } from '../../transcriptionWire.js';
+import { measureRequestBytes } from '../../contract/transcriptionWire.js';
 import {
   classifyUpstreamFailure,
   declaredAcceptsMime,
@@ -33,12 +33,12 @@ import {
   type AsrInvocation,
   type AsrRequest,
   type AsrResult,
-} from '../../asrContract.js';
+} from '../../contract/asrContract.js';
 import {
   createTranscriptionRequest,
   fetchWithTransportRetry,
   parseTranscriptionResponse,
-} from '../../transcriptionWire.js';
+} from '../../contract/transcriptionWire.js';
 
 /** The id this provider is registered under — the id the shipped path has always been spoken of by. */
 export const id: string = 'openai-compatible';

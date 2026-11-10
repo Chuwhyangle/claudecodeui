@@ -45,7 +45,7 @@ import type { AsrAdapter, AsrCapabilities, AsrErrorCode, AsrFailure, AsrHints, A
 // this path names below. A TYPE import deliberately: what the wire implements — the request it
 // builds, the answer it parses — is reached through the adapter now, so the only thing left for
 // this module to name from that file is the reading it asks the adapter for.
-import type { TranscriptionTolerance } from '../../../shared/asr/transcriptionWire.js';
+import type { TranscriptionTolerance } from '../../../shared/asr/contract/transcriptionWire.js';
 // The recording seam, as a TYPE only: this module never decides a mode and never builds a row. It is
 // handed a port and either has one or does not, which is what keeps the environment, the row's shape
 // and the audio write out of the transcription path itself. `VoiceCaptureRawReturn` is here because

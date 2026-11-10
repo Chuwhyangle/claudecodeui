@@ -55,10 +55,10 @@ const PROBE = path.join(SCRIPT_DIR, 'asr-dashscope-omni-check.mjs');
 const SHIPPING_FILES = [
   'package.json',
   'tsconfig.json',
-  'shared/asr/asrContract.ts',
+  'shared/asr/contract/asrContract.ts',
   'shared/asr/asrRegistry.ts',
   'shared/asr/asrInvariants.ts',
-  'shared/asr/transcriptionWire.ts',
+  'shared/asr/contract/transcriptionWire.ts',
   'shared/asr/list/multimodal/multimodal.asr-provider.ts',
   'shared/asr/list/openai-compatible/openai-compatible.asr-provider.ts',
   'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts',
@@ -76,7 +76,7 @@ const SHIPPING_FILES = [
 /** The module under test: every mutation below but one is applied to this file. */
 const ADAPTER = 'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts';
 /** The contract leaf the wire member and the degradation field live on. */
-const CONTRACT = 'shared/asr/asrContract.ts';
+const CONTRACT = 'shared/asr/contract/asrContract.ts';
 /** The contract board, whose rows the probe measures the shipping adapter against. */
 const BOARD = 'shared/asr/asrInvariants.ts';
 
@@ -273,7 +273,7 @@ test('AC6: returning the raw content as the text is caught by the degradation gr
 test('AC8: filing an unenabled model as a refused credential is caught', (t) => {
   // THE MUTATION MOVED WITH THE IMPLEMENTATION. The mapping this case falsifies used to be a
   // status-only function in the ADAPTER; it is now `classifyUpstreamFailure` in the contract leaf
-  // (`shared/asr/asrContract.ts`, re-exported by the registry), so the mutation is the one rule
+  // (`shared/asr/contract/asrContract.ts`, re-exported by the registry), so the mutation is the one rule
   // that tells the two 403s apart — the code string the body names. Applied to the adapter the
   // anchor no longer exists, and a case whose anchor had drifted is a case that would fail for a
   // reason unrelated to its claim.

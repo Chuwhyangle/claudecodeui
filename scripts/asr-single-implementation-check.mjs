@@ -122,19 +122,27 @@ const RESPONSE_MARKERS = [
  * Where the implementation may live, and the configuration each landing needs to be reachable
  * from both sides. Read at run time so the report names the real registration line — "the
  * alias is registered somewhere" is exactly the claim that has to be checked against a file.
+ *
+ * `shared/asr/contract` is the leaf directory the wire moved into when the contract split out of
+ * the registry's directory (the split that made ArchGuard's directory-granularity reading
+ * acyclic). It is a landing INSIDE the shared tree, so it needs exactly the same four
+ * registrations and is lint-covered by the same `shared/` path entry.
  */
+const SHARED_TREE_REGISTRATIONS = [
+  { file: 'tsconfig.json', match: /"@shared\/\*"/, why: 'typecheck must resolve the alias' },
+  { file: 'vite.config.js', match: /'@shared'/, why: 'the bundle must resolve the alias' },
+  // Not covered by the line above: vitest prefers vitest.config.ts and inherits nothing from
+  // vite.config.js, so without this one every unit test whose graph reaches the shared tree
+  // fails to transform rather than failing an assertion.
+  { file: 'vitest.config.ts', match: /'@shared'/, why: 'the unit-test transform must resolve the alias' },
+  { file: '.oxlintrc.json', match: /"shared\/\*\*\/\*\.ts"/, why: 'the tree must be inside boundaries/include' },
+  { file: '.oxlintrc.json', match: /"repo-shared"/, why: 'an import of it must not be an unknown boundary element' },
+];
+
 /** @type {Record<string, Registration[]>} */
 const LANDING_REGISTRATIONS = {
-  'shared/asr': [
-    { file: 'tsconfig.json', match: /"@shared\/\*"/, why: 'typecheck must resolve the alias' },
-    { file: 'vite.config.js', match: /'@shared'/, why: 'the bundle must resolve the alias' },
-    // Not covered by the line above: vitest prefers vitest.config.ts and inherits nothing from
-    // vite.config.js, so without this one every unit test whose graph reaches the shared tree
-    // fails to transform rather than failing an assertion.
-    { file: 'vitest.config.ts', match: /'@shared'/, why: 'the unit-test transform must resolve the alias' },
-    { file: '.oxlintrc.json', match: /"shared\/\*\*\/\*\.ts"/, why: 'the tree must be inside boundaries/include' },
-    { file: '.oxlintrc.json', match: /"repo-shared"/, why: 'an import of it must not be an unknown boundary element' },
-  ],
+  'shared/asr': SHARED_TREE_REGISTRATIONS,
+  'shared/asr/contract': SHARED_TREE_REGISTRATIONS,
   'src/shared/asr': [
     { file: 'tsconfig.json', match: /"@\/\*"/, why: 'typecheck must resolve the @/ alias' },
     { file: 'vite.config.js', match: /'@'/, why: 'the bundle must resolve the @/ alias' },

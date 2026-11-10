@@ -3,12 +3,17 @@
  *
  * THE CONTRACT IS NOT HERE ANY MORE. The types every adapter satisfies, the error vocabulary and
  * the guards (`baseMimeType`, `declaredAcceptsMime`, `classifyUpstreamFailure`) live in
- * `./asrContract.ts`, a leaf that imports no adapter. They are re-exported below so every existing
- * consumer keeps its import specifier; the re-export is one-way, which is what makes this file's
- * dependency on the adapters acyclic at file level.
+ * `./contract/asrContract.ts`, a leaf directory that imports no adapter. They are re-exported below
+ * so every consumer keeps its import specifier; the re-export is one-way, which is what makes this
+ * file's dependency on the adapters acyclic.
+ *
+ * THE LEAF IS A SEPARATE PACKAGE-SIZED DIRECTORY, NOT A SIBLING FILE. ArchGuard reads dependencies
+ * at directory granularity, so a contract that every adapter imports while sharing this directory
+ * put adapters and registry in one seven-node SCC. Moving the contract files under `contract/`
+ * gives the dependency a direction: `asr → {contract, list/*}` and `list/* → contract`.
  *
  * TWO COMPILER CONFIGURATIONS COMPILE THIS FILE (root and `server/tsconfig.json`), because both
- * ends of the seam read it. See `./asrContract.ts` for what that constraint allows.
+ * ends of the seam read it. See `./contract/asrContract.ts` for what that constraint allows.
  *
  * UNKNOWN IDS ARE FAIL-CLOSED. The id is stored in user-level configuration, so a typo or a
  * version skew makes an unregistered id a reachable state. `resolve` throws rather than falling
@@ -55,9 +60,9 @@ import {
   transcribe as sensevoiceWasmTranscribe,
 } from './list/sensevoice-wasm/sensevoice-wasm.asr-provider.js';
 
-import type { AsrAdapter, AsrCapabilities, AsrProviderId } from './asrContract.js';
+import type { AsrAdapter, AsrCapabilities, AsrProviderId } from './contract/asrContract.js';
 
-export * from './asrContract.js';
+export * from './contract/asrContract.js';
 
 /**
  * The id of the recogniser that runs inside the user's own browser (`locality: 'local-client'`).

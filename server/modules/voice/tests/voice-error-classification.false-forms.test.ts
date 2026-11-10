@@ -48,7 +48,7 @@
  *   · `tmp/` is gitignored, so the copies cannot appear in anyone's `git status --porcelain` snapshot
  *     either — including the three sibling criteria whose leftovers readings walk that output.
  * A copy in `tmp/` is one level deeper than the module it copies, so its `'./…'` imports are re-rooted
- * to `'../../shared/asr/…'` (`copyText` below) and each arm asserts that the re-rooting is the copy's
+ * to `'../../shared/asr/contract/…'` (`copyText` below) and each arm asserts that the re-rooting is the copy's
  * ONLY difference from the shipping text (`shippingOf`): a red is about the mutation, not the copy.
  *
  * WHY AC7'S EXIT CODES AND AC8'S COMPILER RUN ARE HERE. AC7 asks for the exit code of thirteen
@@ -120,8 +120,8 @@ import {
 } from './voice-error-classification.test.js';
 import type { CriterionOverrides } from './voice-error-classification.test.js';
 
-/** The repository root: the contract sits at `shared/asr/`, so its directory is two levels down. */
-const WORKTREE_ROOT = path.resolve(path.dirname(SHIPPING_CONTRACT_MODULE), '../..');
+/** The repository root: the contract sits at `shared/asr/contract/`, so its directory is three levels down. */
+const WORKTREE_ROOT = path.resolve(path.dirname(SHIPPING_CONTRACT_MODULE), '../../..');
 
 /** The prefix every temp copy in this repository carries, so "left behind" is a pattern, not a guess. */
 const TEMP_PREFIX = '__criterion-falsify-';
@@ -194,10 +194,10 @@ type CopyShape = {
   shippingOf: (copy: string) => string;
 };
 
-/** The contract copy: imported as a module, so its imports are re-rooted to the repository root. */
+/** The contract copy: imported as a module, so its imports are re-rooted to the contract directory. */
 const RE_ROOTED: CopyShape = {
-  copyOf: (shipping) => shipping.replaceAll("from './", "from '../../shared/asr/"),
-  shippingOf: (copy) => copy.replaceAll("'../../shared/asr/", "'./"),
+  copyOf: (shipping) => shipping.replaceAll("from './", "from '../../shared/asr/contract/"),
+  shippingOf: (copy) => copy.replaceAll("'../../shared/asr/contract/", "'./"),
 };
 
 /**

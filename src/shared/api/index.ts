@@ -15,11 +15,11 @@ export {
 } from '@/shared/api/requests';
 export type { ApiRequestOptions } from '@/shared/api/requests';
 // The direct path's request construction lives in the repository-root shared tree, the same
-// module the server and the CLI compile — see shared/asr/transcriptionWire.ts.
+// module the server and the CLI compile — see shared/asr/contract/transcriptionWire.ts.
 import {
   createTranscriptionRequest,
   parseTranscriptionResponse as readTranscriptionResponse,
-} from '@shared/asr/transcriptionWire';
+} from '@shared/asr/contract/transcriptionWire';
 // The provider address book, the same table the server's health reading republishes. The
 // browser asks it whether an id exists rather than keeping its own list of the ids it knows.
 import type { AsrCapabilities, AsrErrorCode, PauseCuesDeclaration } from '@shared/asr/asrRegistry';
@@ -596,7 +596,7 @@ export async function captureRawVoice(
  * it, not here.
  *
  * The parse itself is not written here. It is one of the two branches of the one
- * implementation of this wire protocol (`shared/asr/transcriptionWire.ts`), named at this call
+ * implementation of this wire protocol (`shared/asr/contract/transcriptionWire.ts`), named at this call
  * site rather than restated: this symbol is the frontend's address for it, kept because the
  * reader above drives it by name, and delegating because a copy here is the second
  * implementation that module exists to prevent.

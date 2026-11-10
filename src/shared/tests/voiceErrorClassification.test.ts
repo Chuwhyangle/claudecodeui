@@ -5,7 +5,7 @@
  * WHY THIS IS ITS OWN FILE. An adapter has two callers — the browser addressing a recogniser
  * itself, and the server proxying it — and each caller had (or could grow) its own opinion about
  * what a `403` or a `429` means. The vocabulary, the code-string table and the classifier are one
- * implementation in `shared/asr/asrContract.ts` (re-exported by `asrRegistry.ts`), and each half is pinned elsewhere; what nothing
+ * implementation in `shared/asr/contract/asrContract.ts` (re-exported by `asrRegistry.ts`), and each half is pinned elsewhere; what nothing
  * pinned is the JOIN: that the code the shipped direct path hands the composer and the code the
  * shipped adapter returns for the same `(status, body)` pair are the same string. This file drives
  * one fixture table through three shipped seams and compares them row by row.
@@ -45,9 +45,9 @@ import { expect, test, vi } from 'vitest';
 import { listProviders, resolve, tryResolve, type AsrErrorCode, type AsrInvocation, type AsrRequest } from '@shared/asr/asrRegistry';
 // Type-only NAMESPACE imports, for the `importOriginal<typeof …>()` generics below: an inline
 // `import('...')` type annotation is forbidden by this repository's lint rule.
-import type * as AsrContractModule from '@shared/asr/asrContract';
+import type * as AsrContractModule from '@shared/asr/contract/asrContract';
 import type * as AsrRegistryModule from '@shared/asr/asrRegistry';
-import type * as TranscriptionWireModule from '@shared/asr/transcriptionWire';
+import type * as TranscriptionWireModule from '@shared/asr/contract/transcriptionWire';
 import { setVoiceProviderProfile, transcribeVoice } from '@/shared/api';
 import { resetVoiceConfig, whenVoiceConfigReady } from '@/shared/api/voiceConfig';
 
@@ -78,12 +78,12 @@ vi.mock('@shared/asr/asrRegistry', async (importOriginal) => {
 });
 
 // The adapters live under the repository-root `shared/` tree and reach the CONTRACT by a RELATIVE
-// `.js` specifier (`../../asrContract.js`); the registry re-exports it for alias-side consumers.
+// `.js` specifier (`../../contract/asrContract.js`); the registry re-exports it for alias-side consumers.
 // The suite's resolver keys the relative spelling apart from the `@shared` alias above, so the
 // contract needs both spellings registered: the lever has to reach the binding the adapters
 // actually close over, or "the adapters follow the shared classifier" would be asserted against a
 // module nothing replaced and read green whatever they did.
-vi.mock('../../../shared/asr/asrContract.js', async (importOriginal) => {
+vi.mock('../../../shared/asr/contract/asrContract.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AsrContractModule>();
   return {
     ...actual,
@@ -94,7 +94,7 @@ vi.mock('../../../shared/asr/asrContract.js', async (importOriginal) => {
   };
 });
 
-vi.mock('@shared/asr/asrContract', async (importOriginal) => {
+vi.mock('@shared/asr/contract/asrContract', async (importOriginal) => {
   const actual = await importOriginal<typeof AsrContractModule>();
   return {
     ...actual,
@@ -105,7 +105,7 @@ vi.mock('@shared/asr/asrContract', async (importOriginal) => {
   };
 });
 
-vi.mock('@shared/asr/transcriptionWire', async (importOriginal) => {
+vi.mock('@shared/asr/contract/transcriptionWire', async (importOriginal) => {
   const actual = await importOriginal<typeof TranscriptionWireModule>();
   return {
     ...actual,
@@ -288,7 +288,7 @@ const ADAPTERS = ['openai-compatible', 'dashscope-omni'] as const;
  * graph pulls in are bound to the ORIGINAL registry — the mock reaches the test and the direct path
  * (both import the registry by the aliased specifier) but not the adapter objects the original
  * graph already built. Dropping the module registry and importing the adapter module again puts it
- * in the MOCKED graph, where its `../../asrContract.js` import resolves to the mock. Same shipped
+ * in the MOCKED graph, where its `../../contract/asrContract.js` import resolves to the mock. Same shipped
  * source file, one dependency replaced — still an in-memory stand-in: no temporary file, no child
  * process, nothing left on disk.
  */
@@ -658,7 +658,7 @@ test('AC3: same status, different code — and the controls that must NOT differ
 
 test('AC4: one definition point, and the client reads it from there', () => {
   const paths = [
-    'shared/asr/asrContract.ts',
+    'shared/asr/contract/asrContract.ts',
     'shared/asr/asrRegistry.ts',
     'shared/asr/list/openai-compatible/openai-compatible.asr-provider.ts',
     'shared/asr/list/multimodal/multimodal.asr-provider.ts',
@@ -679,7 +679,7 @@ test('AC4: one definition point, and the client reads it from there', () => {
     /^\s*(?:const|function)\s+\w*(?:CODE_RULES|CODE_TABLE|codeForStatus|errorCodeForStatus|classifyUpstreamFailure)\b/m;
   const clientSharedImport = /import\s*\{[^}]*\bclassifyUpstreamFailure\b[^}]*\}\s*from\s*'@shared\/asr\/[^']+'/;
 
-  const contract = sources.get('shared/asr/asrContract.ts') ?? '';
+  const contract = sources.get('shared/asr/contract/asrContract.ts') ?? '';
   const api = sources.get('src/shared/api/index.ts') ?? '';
   const classifiers = [...sources.values()].reduce((total, source) => total + count(source, classifierDef), 0);
   const tables = [...sources.values()].reduce((total, source) => total + count(source, tableDef), 0);

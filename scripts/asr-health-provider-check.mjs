@@ -56,7 +56,7 @@ const FRONTEND_LANDING_MODULE = 'src/shared/asr/asrRegistry.ts';
 const SERVICE_MODULE = 'server/modules/voice/voice.service.ts';
 const TYPES_MODULE = 'server/shared/types.ts';
 const SERVER_TSCONFIG = 'server/tsconfig.json';
-const TRANSCRIPTION_WIRE_MODULE = 'shared/asr/transcriptionWire.ts';
+const TRANSCRIPTION_WIRE_MODULE = 'shared/asr/contract/transcriptionWire.ts';
 const MULTIMODAL_MODULE = 'shared/asr/list/multimodal/multimodal.asr-provider.ts';
 const OPENAI_COMPATIBLE_MODULE = 'shared/asr/list/openai-compatible/openai-compatible.asr-provider.ts';
 /**

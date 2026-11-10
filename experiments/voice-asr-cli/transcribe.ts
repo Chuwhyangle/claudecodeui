@@ -7,7 +7,7 @@
  * existed, "prove the shipping implementation is correct against a new recognition service" had no
  * object to call: the only thing that spoke the wire protocol lived inline in a React hook and a
  * server method, so any experiment would have had to re-implement it and would then have been
- * measuring the re-implementation. This file therefore imports shared/asr/transcriptionWire.ts
+ * measuring the re-implementation. This file therefore imports shared/asr/contract/transcriptionWire.ts
  * rather than repeating any of it, and every mode below hands the request building and the response
  * parsing to that module.
  *
@@ -41,8 +41,8 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, extname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { createTranscriptionRequest, parseTranscriptionResponse } from '../../shared/asr/transcriptionWire.js';
-import type { TranscriptionTarget, TranscriptionUpload, TranscriptionTolerance } from '../../shared/asr/transcriptionWire.js';
+import { createTranscriptionRequest, parseTranscriptionResponse } from '../../shared/asr/contract/transcriptionWire.js';
+import type { TranscriptionTarget, TranscriptionUpload, TranscriptionTolerance } from '../../shared/asr/contract/transcriptionWire.js';
 import { runDryRun, sha256Hex } from './dryRun.js';
 import type { FetchLike } from './dryRun.js';
 import { loadRecording, runOfflineReplay, runRecord } from './offlineReplay.js';
@@ -65,7 +65,7 @@ const USAGE_NOTES = [
   '  --fetch-impl   module whose default export replaces fetch (the criterion injects a double here)',
   '  --explain-sites  print the absolute path and symbol of every module the modes drive, then exit',
   '',
-  'The request is built and the answer is read by shared/asr/transcriptionWire.ts — the same',
+  'The request is built and the answer is read by shared/asr/contract/transcriptionWire.ts — the same',
   'module the browser and the server compile, so a reading taken here is a reading of the',
   'shipping implementation rather than of a copy of it.',
 ].join('\n');
@@ -83,7 +83,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 /** The relative specifier this file imports the wire implementation through. */
-const ADAPTER_SPECIFIER = '../../shared/asr/transcriptionWire.js';
+const ADAPTER_SPECIFIER = '../../shared/asr/contract/transcriptionWire.js';
 
 /** The symbols the modes below drive out of the shipping tree. */
 const DRIVEN_SYMBOLS = ['createTranscriptionRequest', 'parseTranscriptionResponse'];

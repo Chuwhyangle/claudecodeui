@@ -55,9 +55,9 @@ const PROBE = path.join(SCRIPT_DIR, 'asr-second-adapter-check.mjs');
 const SHIPPING_FILES = [
   'package.json',
   'tsconfig.json',
-  'shared/asr/asrContract.ts',
+  'shared/asr/contract/asrContract.ts',
   'shared/asr/asrRegistry.ts',
-  'shared/asr/transcriptionWire.ts',
+  'shared/asr/contract/transcriptionWire.ts',
   'shared/asr/list/multimodal/multimodal.asr-provider.ts',
   'shared/asr/list/openai-compatible/openai-compatible.asr-provider.ts',
   // THE THIRD SHAPE'S MODULE IS PART OF THE FIXTURE, not an optional extra. The registry ships the

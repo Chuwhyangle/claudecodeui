@@ -36,13 +36,13 @@ import type {
   AsrRequest,
   AsrResult,
   AsrWire,
-} from '../../asrContract.js';
+} from '../../contract/asrContract.js';
 import {
   baseMimeType,
   classifyUpstreamFailure,
   declaredAcceptsMime,
-} from '../../asrContract.js';
-import { base64Encode, base64Length, fetchWithTransportRetry, utf8ByteLength } from '../../transcriptionWire.js';
+} from '../../contract/asrContract.js';
+import { base64Encode, base64Length, fetchWithTransportRetry, utf8ByteLength } from '../../contract/transcriptionWire.js';
 import {
   audioFormatFor,
   chatAudioDataUri,
