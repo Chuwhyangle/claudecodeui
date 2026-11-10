@@ -14,6 +14,16 @@ export {
   voiceRealtimeSocketUrl,
 } from '@/shared/api/requests';
 export type { ApiRequestOptions } from '@/shared/api/requests';
+// The pure voice-edit label rule lives in `src/shared/voice` now: it has no imports and no
+// transport concern, so keeping it here made the API barrel carry a voice-domain module for no
+// reason and pushed the package past the god-package entity budget. Re-exported under its
+// original names so a caller that reaches it through this barrel keeps compiling, while call
+// sites import the leaf directly (`@/shared/voice/labels/voiceEditLabels`).
+// The extra `labels/` level is deliberate: `shared/api` importing the `shared/voice` node itself
+// would close an api → voice → settings → api directory cycle (voiceDebug/voiceShortcuts read
+// settings, userSettings reads this barrel). A zero-import leaf subpackage keeps the real file
+// graph acyclic and the frontend directory-cycle ratchet pinned.
+export * from '@/shared/voice/labels/voiceEditLabels';
 // The direct path's request construction lives in the repository-root shared tree, the same
 // module the server and the CLI compile — see shared/asr/transcriptionWire.ts.
 import {

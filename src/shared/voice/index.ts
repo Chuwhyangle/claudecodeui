@@ -8,6 +8,7 @@
  */
 export * from '@/shared/voice/audioDecode';
 export * from '@/shared/voice/voiceDebug';
+export * from '@/shared/voice/labels/voiceEditLabels';
 export * from '@/shared/voice/voiceEndpoint';
 export * from '@/shared/voice/voiceRuntimeConfig';
 export * from '@/shared/voice/voiceShortcuts';

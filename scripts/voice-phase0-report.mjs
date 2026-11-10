@@ -19,7 +19,7 @@
  * leave. A readout that quoted a transcript would leak exactly the content D1 promised stays local.
  *
  * THE CALIBRE IS BORROWED, NOT INVENTED. The identifier rule is `isIdentifierShaped`'s (a port of
- * `src/shared/api/voiceEditLabels.ts`, itself a port of `experiments/voice-index-loop/sim/extract.py`'s
+ * `src/shared/voice/labels/voiceEditLabels.ts`, itself a port of `experiments/voice-index-loop/sim/extract.py`'s
  * `is_id`); the token character intervals and the maximal-run definition of a confidence mark are
  * `shared/asr/confidenceFlags.ts`'s (a port of the offline experiment's `tokSpans`/flag sweep); the
  * AUROC is `experiments/voice-index-loop/sim/sv-eval2.mjs`'s rank-sum, re-derived for the same
@@ -116,7 +116,7 @@ const FILE_NAME = (value) => path.basename(value);
 /**
  * Whether a token has the shape of an identifier rather than of an ordinary word.
  *
- * A port of `isIdentifierShaped` in `src/shared/api/voiceEditLabels.ts`, which is itself a port of
+ * A port of `isIdentifierShaped` in `src/shared/voice/labels/voiceEditLabels.ts`, which is itself a port of
  * `is_id` in `experiments/voice-index-loop/sim/extract.py`: at least two characters, neither a path
  * (contains `/`) nor a file name (ends in a `.ext`), and carrying a camel/Pascal boundary, a `-`/`_`,
  * a digit, or an all-caps run. Kept character-for-character so a segment this reader calls

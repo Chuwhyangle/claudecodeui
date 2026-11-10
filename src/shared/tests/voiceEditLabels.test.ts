@@ -16,7 +16,7 @@
  * every label about that token wrong in a way nothing else would notice.
  *
  * THE NEGATIVE CONTROL IS EXECUTED, NOT DESCRIBED. Section 4 builds a variant of
- * `src/shared/api/voiceEditLabels.ts` with the correction/rewrite boundary turned off — the budget
+ * `src/shared/voice/labels/voiceEditLabels.ts` with the correction/rewrite boundary turned off — the budget
  * constants set to infinity, which is the "一律当纠正" reading — imports it, and shows that case ⑥
  * loses its `rewrite` on it. The unmutated module is named as the other arm, so the control cannot
  * pass by the case being red for some unrelated reason.
@@ -33,7 +33,7 @@ import {
   labelsFor,
   type VoiceEditLabel,
   type VoiceSourceSegment,
-} from '@/shared/api/voiceEditLabels';
+} from '@/shared/voice/labels/voiceEditLabels';
 
 /** One committed segment, as the fixture's listen would have produced it. */
 const segment = (index: number, text: string): VoiceSourceSegment => ({ index, text });
@@ -207,7 +207,7 @@ const REWRITE_SEGMENTS: VoiceSourceSegment[] = [segment(0, 'please restart the s
 const REWRITE_FINAL = 'totally different words entirely';
 
 /** The source of the module under test, resolved from the suite's own root. */
-const MODULE_PATH = path.resolve(process.cwd(), 'src/shared/api/voiceEditLabels.ts');
+const MODULE_PATH = path.resolve(process.cwd(), 'src/shared/voice/labels/voiceEditLabels.ts');
 
 /**
  * The variant file, written BESIDE the module and deleted in the `finally` below.

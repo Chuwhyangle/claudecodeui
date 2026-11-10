@@ -3,7 +3,7 @@
  *
  * Composed with `apiCore` into the single `api` object in `client.ts`.
  */
-import type { VoiceEditLabel } from '@/shared/api/voiceEditLabels';
+import type { VoiceEditLabel } from '@/shared/voice/labels/voiceEditLabels';
 import type { VoiceConfig } from '@/shared/api/voiceConfigType';
 import type {
   ReplySuggestionsEventInput,
