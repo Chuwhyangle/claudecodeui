@@ -42,7 +42,7 @@ import {
   isVoiceRawCaptureEnabled,
   readVoiceConfig,
 } from '@/shared/api/voiceConfig';
-import { labelsFor, type VoiceSourceSegment } from '@/shared/api/voiceEditLabels';
+import { labelsFor, type VoiceSourceSegment } from '@/shared/voice/labels/voiceEditLabels';
 import { identifierFidelity } from '@/shared/identifierFidelity';
 import { repairIdentifiers } from '@/shared/identifierRepair';
 import { StreamingVad, type VadEvent } from '@/shared/voice/voiceEndpoint';

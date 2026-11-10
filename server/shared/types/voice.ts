@@ -341,7 +341,7 @@ export type VoiceService = {
  *
  * DECLARED HERE RATHER THAN ALONGSIDE THE STORE because it is the request body's shape as much as
  * the record's: the route parses a client's array into exactly this, and the store writes exactly
- * this back out. The producing module is `src/shared/api/voiceEditLabels.ts`, whose `VoiceEditLabel` is
+ * this back out. The producing module is `src/shared/voice/labels/voiceEditLabels.ts`, whose `VoiceEditLabel` is
  * this type plus the closed `op` vocabulary; the backend keeps `op` a string deliberately, because a
  * store that re-judged the client's correction/rewrite call would be a second authority on a
  * decision made where the segment text and the box were both in hand.
