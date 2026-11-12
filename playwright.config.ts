@@ -19,6 +19,7 @@ import {
   runDeadlineFrom,
   stallConfigEvaluation,
   timerDelay,
+  webServerTimeoutFor,
 } from './scripts/e2e-run-ceilings.mjs';
 import {
   ASSEMBLY_TEMP_ROOT_ENV,
@@ -1109,14 +1110,22 @@ const WATCHDOG_PROBE_MS = 2_000;
  * cushion against the quiet number. `35_000` gives the boot ~12x its quiet cost and ~1.9x the worst boot
  * measured at the DoD's lane floor.
  *
- * `WEB_SERVER_TIMEOUT_MS` (35s) stays below the boot ceiling for every selection: `BOOT_CEILING_MS` is 40s on
- * the default (55s run) selection — the original 5s gap, unchanged — and up to 120s when a declared budget
- * raises the run ceiling. Because `bootCeilingFor` only ever returns ≥ `40_000`, this ordering cannot invert:
- * a boot that still cannot answer is reported by *this* bound — Playwright's own line, naming the wait —
- * rather than by the watchdog, which ends the run without it. Both entries share it because Playwright waits
- * on both, and a pair that expired at different moments would only move which entry a red names.
+ * `WEB_SERVER_TIMEOUT_MS` now FOLLOWS the declared run budget instead of being fixed at 35s. It is derived
+ * as `webServerTimeoutFor(RUN_CEILING_MS)` = `BOOT_CEILING_MS - BOOT_CEILING_RUN_MARGIN_MS`: `35_000` for
+ * the default (55s run) selection — `BOOT_CEILING_MS` is 40s there, the original 5s gap, unchanged bytes —
+ * and `115_000` for every selection whose declared budget raises the boot ceiling to its 120s cap
+ * (`240_000`, `535_000`, `1_200_000`). Leaving it at a fixed 35s made it the chain's *earliest* wall: two
+ * goal-gate runs at tree `9595c8d5f839ff94821c8bb21f23859d5c45d5e5` (2026-11-12) died on
+ * `Timed out waiting 35000ms from config.webServer.` before a single case, while their watchdogs recorded
+ * `fired: false` — the boot window had already been scaled, this bound had not.
+ *
+ * The 5s margin is preserved, so this bound stays strictly below the boot ceiling for every selection and
+ * this ordering cannot invert: a boot that still cannot answer is reported by *this* bound — Playwright's
+ * own line, naming the wait — rather than by the watchdog, which ends the run without it. Both entries
+ * share it because Playwright waits on both, and a pair that expired at different moments would only move
+ * which entry a red names.
  */
-const WEB_SERVER_TIMEOUT_MS = 35_000;
+const WEB_SERVER_TIMEOUT_MS = webServerTimeoutFor(RUN_CEILING_MS);
 
 /**
  * Asks one of the run's ports a single HTTP request, with a deadline, and reports which of three states it is
@@ -4051,7 +4060,8 @@ export default defineConfig({
   // kills it at 60s, and a run killed from outside reports nothing about why. A server that is spawned but
   // never answers therefore has to be given up on here, where the failure is still this run's to explain.
   // Each entry's `timeout:` is `WEB_SERVER_TIMEOUT_MS`, whose own doc comment carries the arithmetic that
-  // keeps it strictly under `BOOT_CEILING_MS` below.
+  // keeps it strictly under `BOOT_CEILING_MS` below. For the default (55s) selection both stay under the
+  // 60s a one-file criterion may take; a selection that declares a larger budget scales both with it.
   webServer: [
     {
       // `node_modules/.bin` rather than `npx`: npx is a Node program that resolves the binary and *then*

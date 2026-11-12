@@ -104,6 +104,32 @@ export function bootCeilingFor(runCeilingMs) {
 }
 
 /**
+ * The `webServer[].timeout` each entry gets for a run whose selected specs declare `runCeilingMs` in total.
+ *
+ * WHY IT FOLLOWS THE BOOT CEILING. Playwright waits this long after spawning a webServer for its url to
+ * answer, and names the wait in its own failure line (`Error: Timed out waiting <n>ms from
+ * config.webServer.`). It is the run's *earliest* wall: it is reached before any spec body executes, so
+ * when it is fixed at 35s it stays the first thing a loaded host crosses even after `bootCeilingFor`
+ * grew the watchdog's boot window with the declared budget. Gate events at tree
+ * `9595c8d5f839ff94821c8bb21f23859d5c45d5e5` (2026-11-12T10:13:54.356Z goal-sweep, 10:17:52.010Z
+ * goal-cli) both died on exactly that line while their own watchdogs recorded `fired: false` and a
+ * config evaluation of 23.4s / 149.6s — the 535s selection still waited 35s.
+ *
+ * RULE. `bootCeilingFor(runCeilingMs) - BOOT_CEILING_RUN_MARGIN_MS`: the shipped 55s selection keeps
+ * `35_000` byte-for-byte (40s boot ceiling − 5s), and every selection that declares more than the
+ * single-spec default gets `115_000` (the 120s boot cap − 5s). Keeping the same 5s margin means this
+ * bound is still strictly below the boot ceiling for every selection, so a boot that truly cannot answer
+ * is still reported by Playwright's own line rather than by the watchdog, which would end the run without
+ * naming the wait.
+ *
+ * @param {number} runCeilingMs
+ * @returns {number}
+ */
+export function webServerTimeoutFor(runCeilingMs) {
+  return bootCeilingFor(runCeilingMs) - BOOT_CEILING_RUN_MARGIN_MS;
+}
+
+/**
  * Reads the control-arm stall from an environment bag, clamped to `[0, CONFIG_EVAL_STALL_MAX_MS]`.
  *
  * An unset, empty or non-numeric value reads 0 — the shipped behaviour — rather than throwing: a

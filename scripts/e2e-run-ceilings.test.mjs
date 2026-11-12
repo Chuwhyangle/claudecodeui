@@ -37,6 +37,7 @@ import {
   runDeadlineFrom,
   stallConfigEvaluation,
   timerDelay,
+  webServerTimeoutFor,
 } from './e2e-run-ceilings.mjs';
 
 test('the boot deadline is anchored at the end of config evaluation, not at the run start', () => {
@@ -142,4 +143,32 @@ test('every boot ceiling stays 5s inside its run ceiling', () => {
     );
   }
   assert.equal(BOOT_CEILING_RUN_MARGIN_MS, 5_000);
+});
+
+test('the webServer wait keeps the shipped 35s for the default selection', () => {
+  // The one-file gate invocation must not move: 40s boot ceiling minus the original 5s gap is 35s,
+  // byte-for-byte. This is the first wall a gate run hits, so a silent change here reds a criterion
+  // before any case rather than in one.
+  assert.equal(webServerTimeoutFor(SINGLE_SPEC_CEILING_MS), 35_000);
+  assert.equal(webServerTimeoutFor(55_000), 35_000);
+});
+
+test('the webServer wait scales with a declared run budget', () => {
+  // The defect this exists to control: a 240s / 535s / 1_200_000 selection kept a 35s wait while its
+  // boot ceiling had already grown to 120s. The wait now follows the ceiling at the same 5s margin.
+  assert.equal(webServerTimeoutFor(240_000), 115_000);
+  assert.equal(webServerTimeoutFor(535_000), 115_000);
+  assert.equal(webServerTimeoutFor(1_200_000), 115_000);
+});
+
+test('every webServer wait is the boot ceiling minus the run margin', () => {
+  // One invariant rather than four numbers: the wait can never overtake the boot ceiling (which would let
+  // Playwright's own line disappear behind the watchdog) and never falls below the shipped 35s.
+  for (const runCeilingMs of [55_000, 240_000, 535_000, 1_200_000]) {
+    const wait = webServerTimeoutFor(runCeilingMs);
+    const ceiling = bootCeilingFor(runCeilingMs);
+    assert.equal(wait, ceiling - BOOT_CEILING_RUN_MARGIN_MS);
+    assert.ok(wait < ceiling, `webServer wait ${wait}ms must stay inside the ${ceiling}ms boot ceiling`);
+    assert.ok(wait >= 35_000, `webServer wait ${wait}ms must never shrink below the shipped 35_000ms`);
+  }
 });
