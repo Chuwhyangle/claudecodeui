@@ -20,6 +20,10 @@
 # files the tree collected then: the same 507 `find server -name '*.test.ts' -o -name '*.test.js' |
 # grep -v node_modules | sort` collects on this tree — 0 missing, 0 extra, 0 duplicates.
 #
+# APPENDED AFTER ROUND 1924: server/modules/providers/tests/codex-app-server-process.test.ts
+# (gap-ac447, measured 2026-11-13 one file at a time: 906-1036ms over three runs, 953ms used; the
+# file is new, so no green ledger round contains it yet).
+#
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=rows.find(r=>r.round===1924&&r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
 #
@@ -320,6 +324,7 @@
 980	server/modules/browser-use/tests/browser-use.service.test.ts
 974	server/modules/providers/tests/claude-activity-lease-parity.test.ts
 973	server/modules/websocket/tests/ui-client-registry.test.ts
+953	server/modules/providers/tests/codex-app-server-process.test.ts
 952	server/modules/providers/tests/claude-activity-task-reducer.test.ts
 949	server/modules/context-events/tests/session-run-events.test.ts
 949	server/modules/voice-realtime/tests/voice-realtime-fake-vad-upstream.test.ts

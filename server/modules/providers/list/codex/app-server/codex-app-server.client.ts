@@ -1,10 +1,10 @@
-import { spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import readline from 'node:readline';
 
 import { AppError, readObjectRecord, readOptionalString } from '@/shared/utils.js';
 import type { CodexAppServerLaunch } from '@/modules/providers/list/codex/app-server/codex-app-server.connection.js';
+import { startCodexAppServerProcess } from '@/modules/providers/list/codex/app-server/codex-app-server-process.js';
 
 /**
  * Minimal JSON-RPC client for `codex app-server`.
@@ -204,15 +204,18 @@ async function withAppServer<T>(
   options: { timeoutMs?: number; launch?: CodexAppServerLaunch } = {},
 ): Promise<T> {
   const launcher = resolveCodexLauncher();
-  const child = spawn(
-    process.execPath,
-    [launcher, 'app-server', ...(options.launch?.args ?? [])],
+  // The app-server owns descendants (plugin-sync git, and whatever else the
+  // binary starts), so it runs as its own process group and the finally below
+  // stops the whole group instead of only the direct child.
+  const codexProcess = startCodexAppServerProcess(
+    launcher,
+    ['app-server', ...(options.launch?.args ?? [])],
     {
       env: { ...process.env, ...(options.launch?.env ?? {}) },
-      stdio: ['pipe', 'pipe', 'pipe'],
       ...(options.launch?.cwd ? { cwd: options.launch.cwd } : {}),
     },
   );
+  const child = codexProcess.child;
 
   // The server logs sandbox and skill warnings to stderr on every start. They
   // are not failures and drowning the app log in them helps nobody, so stderr
@@ -335,7 +338,17 @@ async function withAppServer<T>(
       clearTimeout(deadlineTimer);
     }
     reader.close();
-    child.kill();
+    // Await the group stop: the caller's next step may remove this child's
+    // `CODEX_HOME`, and a descendant still writing there turns that removal
+    // into ENOTEMPTY. `groupEmpty === false` is only a diagnostic — the
+    // exchange above already succeeded or failed on its own terms.
+    const stopped = await codexProcess.stop();
+    if (!stopped.groupEmpty) {
+      console.warn(
+        `[CodexAppServer] process group ${codexProcess.pid ?? 'unknown'} still had members after stop `
+        + `(escalated=${stopped.escalated}, groupStop=${stopped.groupStop}).`,
+      );
+    }
   }
 }
 

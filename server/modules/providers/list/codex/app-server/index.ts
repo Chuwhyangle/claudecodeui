@@ -17,6 +17,13 @@ export type {
   CodexThreadReading,
 } from './codex-app-server.client.js';
 
+export { startCodexAppServerProcess } from './codex-app-server-process.js';
+export type {
+  CodexAppServerProcess,
+  CodexAppServerProcessOptions,
+  CodexAppServerStopResult,
+} from './codex-app-server-process.js';
+
 export {
   CodexAppServerConnection,
   CODEX_APP_SERVER_LAUNCHER_ENV,
