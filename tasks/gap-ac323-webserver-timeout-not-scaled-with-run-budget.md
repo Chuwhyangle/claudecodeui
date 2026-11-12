@@ -3,7 +3,7 @@ id: gap-ac323-webserver-timeout-not-scaled-with-run-budget
 title: AC-323 判据命令 1 连续两次死在 webServer 固定 35s 墙：WEB_SERVER_TIMEOUT_MS 不随已声明 run
   budget 放大（boot ceiling 已放大到 120s）⇒ 改为同预算派生、默认仍 35s；AC 记录 timeoutMs 抬到 run
   ceiling 535s 之上
-status: todo
+status: ready
 labels:
   - gap
   - defect
