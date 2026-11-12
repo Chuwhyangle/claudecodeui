@@ -1,7 +1,7 @@
 ---
 id: gap-ac447-codex-app-server-child-bounded-stop
 title: AC-447 判据：Codex app-server 子进程组有界停止，消除 CODEX_HOME 拆除竞态
-status: ready
+status: done
 labels:
   - gap
   - defect
