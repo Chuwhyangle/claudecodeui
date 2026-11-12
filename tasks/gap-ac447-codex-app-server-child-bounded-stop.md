@@ -35,12 +35,12 @@ goal_ac: AC-447
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/session-edit-continuity.test.ts` exit 0；连续 10 次全部 exit 0；再 4 份并发 × 3 轮（12 次）全部 exit 0；任一输出不得含 `ENOTEMPTY`。贴命令、逐次 rc、load1 与单次耗时。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/codex-app-server-process.test.ts` exit 0，且含四条可区分臂：(a) 组内孙进程随 `stop()` 一起消失，返回瞬间逐个断言 `/proc/<pid>` 不存在；(b) 忽略 SIGTERM 的子进程在有界期限内被升级 SIGKILL，结果为 `escalated===true` 且进程已消失；(c) 负向对照：同一夹具改用裸 `child.kill()`（旧行为）后孙进程仍存活，随后再用组 `stop()` 清理；(d) 产品臂：临时 `CODEX_HOME` 上调用 `codexAppServer.listModels()` 返回后，`/proc/<pid>/environ` 中含该 `CODEX_HOME=` 的进程数为 0，且对该 home 的一次 `rm(recursive)` 成功、无重试。
-- [ ] 负向控制（源码级）：临时把 client 的 `finally` 还原成旧的 fire-and-forget，重跑 AC-2(d) 与 AC-1 判据并记录红读数；随后逐字节还原并复绿。两次读数都贴。
-- [ ] 相关单文件有界回归逐条执行并贴 pass/fail：`codex-app-server-protocol.test.ts`、`codex-message-editing.test.ts`、`session-edit-real-cli.test.ts`、`codex-session-fork.test.ts`、`codex-host-driver-persistent.test.ts`、`chat-edit-preparation.test.ts`、`chat-edit-send.test.ts`（后两者用本仓既有路径；存在即跑，命令写全）。
-- [ ] `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` 6/6、`server/shared/tests/server-import-cycle-budget.test.ts` 12/12、`server/shared/tests/quay-test-script.test.ts` 全绿；新增测试文件已按实测更新 `scripts/suite-duration-baseline.tsv` 与两条 unknown pin。
-- [ ] `npm run typecheck`、`npm run lint`、`npm run build` 均 exit 0（贴尾部输出）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/session-edit-continuity.test.ts` exit 0；连续 10 次全部 exit 0；再 4 份并发 × 3 轮（12 次）全部 exit 0；任一输出不得含 `ENOTEMPTY`。贴命令、逐次 rc、load1 与单次耗时。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/codex-app-server-process.test.ts` exit 0，且含四条可区分臂：(a) 组内孙进程随 `stop()` 一起消失，返回瞬间逐个断言 `/proc/<pid>` 不存在；(b) 忽略 SIGTERM 的子进程在有界期限内被升级 SIGKILL，结果为 `escalated===true` 且进程已消失；(c) 负向对照：同一夹具改用裸 `child.kill()`（旧行为）后孙进程仍存活，随后再用组 `stop()` 清理；(d) 产品臂：临时 `CODEX_HOME` 上调用 `codexAppServer.listModels()` 返回后，`/proc/<pid>/environ` 中含该 `CODEX_HOME=` 的进程数为 0，且对该 home 的一次 `rm(recursive)` 成功、无重试。
+- [x] 负向控制（源码级）：临时把 client 的 `finally` 还原成旧的 fire-and-forget，重跑 AC-2(d) 与 AC-1 判据并记录红读数；随后逐字节还原并复绿。两次读数都贴。
+- [x] 相关单文件有界回归逐条执行并贴 pass/fail：`codex-app-server-protocol.test.ts`、`codex-message-editing.test.ts`、`session-edit-real-cli.test.ts`、`codex-session-fork.test.ts`、`codex-host-driver-persistent.test.ts`、`chat-edit-preparation.test.ts`、`chat-edit-send.test.ts`（后两者用本仓既有路径；存在即跑，命令写全）。
+- [x] `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` 6/6、`server/shared/tests/server-import-cycle-budget.test.ts` 12/12、`server/shared/tests/quay-test-script.test.ts` 全绿；新增测试文件已按实测更新 `scripts/suite-duration-baseline.tsv` 与两条 unknown pin。
+- [x] `npm run typecheck`、`npm run lint`、`npm run build` 均 exit 0（贴尾部输出）。
 
 ## DoD
 
@@ -50,6 +50,7 @@ goal_ac: AC-447
 
 - server/modules/providers/list/codex/app-server/codex-app-server-process.ts
 - server/modules/providers/list/codex/app-server/codex-app-server.client.ts
+- server/modules/providers/list/codex/app-server/index.ts
 - server/modules/providers/tests/codex-app-server-process.test.ts
 - server/modules/websocket/tests/session-edit-continuity.test.ts
 - server/modules/providers/tests/codex-message-editing.test.ts
@@ -61,3 +62,50 @@ goal_ac: AC-447
 ## 约束
 
 遵守 AGENTS.md 与 `.agents/skills/backend-module-standards/SKILL.md`：工厂 + 注入、状态封装在生命周期 owner 内、无模块级可变状态、跨模块只走 barrel、单文件约 260 行上限（新文件保持小）。只在会话内跑单文件或有界 runner，不跑全量 suite（fan-in 承担）。不新增 provider id 分支，不动 `providers/list/` 之外的边界。不得用 `rm` 重试、skip 或用例删除掩盖竞态；只改测试不改生产进程生命周期视为未完成。不重启共享实例、不修改活会话 transcript 或线上库。
+
+## Evidence
+
+分层：合成探针 / 真实打包 CLI / 真实 criterion。全部在 worktree `/data/home/yale/work/claudecodeui-worktrees/gap-ac447-codex-app-server-child-bounded-stop` 执行；`git merge develop` 后 develop 未前进（Already up to date，f1370afda）；宿主 128 核，load1 18.6–21.9。
+
+**实现落点。** 新增 `codex-app-server-process.ts`（161 行）：`startCodexAppServerProcess(launcher, args, {env,cwd,graceMs,killMs})` 以 `detached:true` 起组；`stop()` = 组 SIGTERM → `process.kill(-pid,0)` 有界轮询（10ms 一步、deadline 封顶）→ 未清空升级组 SIGKILL → 再轮询；幂等（`stopped ??=` 共享同一 promise）；非 POSIX 平台退回 `child.kill()` 并置 `groupStop:false`；状态全在闭包，无模块级可变绑定。`codex-app-server.client.ts` 的 spawn 改经工厂（保留 `process.execPath + [launcher,'app-server',...]` 与 env/cwd 语义），`finally` 改为 `reader.close(); await codexProcess.stop()`，组未清空只记一条 console.warn 诊断、不改写 run 结果。`app-server/index.ts` 只新增工厂与类型的 barrel 导出。`codex-app-server.connection.ts` 的同步 `terminate()` 未改 —— 长驻 host close 不在本判据路径，同类残留、后续候选，不声称已修。
+
+**AC-1（真实 criterion，负载读数）。** 命令 `npx tsx --tsconfig server/tsconfig.json --test server/modules/websocket/tests/session-edit-continuity.test.ts`。
+- 连续 10 次全部 rc=0，单次 4246/4057/4183/5258/4511/4202/4134/4807/4889/4459 ms，load1 18.75–21.60；每次输出 ENOTEMPTY 计数 0。
+- 再 4 份并发 × 3 轮：12/12 rc=0；r1 5343/5386/5390/5391 ms，r2 5422/5355/5466/5416 ms，r3 5393/5422/5348/5305 ms；轮内 load1 18.61/19.52/19.64，结束 20.23；ENOTEMPTY 计数 0。
+- 合计 22/22 exit 0，无 ENOTEMPTY。
+
+**AC-2（合成探针 + 真打包 CLI）。** 命令 `npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/codex-app-server-process.test.ts` → tests 4 / pass 4 / fail 0，rc=0，910ms。
+- (a) rc 绿：`groupStop=true, escalated=false, groupEmpty=true`；`stop()` 返回后 leader 与孙进程的 `/proc/<pid>` 均不存在。
+- (b) graceMs=150：忽略 SIGTERM 的 leader 在 184ms 内被升级 SIGKILL，`escalated=true, groupEmpty=true`，`/proc/<pid>` 不存在。
+- (c) 负向对照成立：同一夹具走裸 `child.kill()` 并等 leader 退出后，孙进程 `/proc/<pid>` 仍存在；随后组 `stop()` 把它清零。
+- (d) 产品臂：临时 `CODEX_HOME`（先 mkdir，CLI 拒绝不存在的 home）上 `codexAppServer.listModels()` 返回非 null（309ms），返回后 `/proc/*/environ` 中含 `CODEX_HOME=<home>` 的进程数为 0；对该 home 的一次 `rm(recursive, force)` 成功且无重试。
+
+**AC-3（源码级负向控制）。** 临时把 client 的 `finally` 逐字还原成旧的 fire-and-forget（`reader.close(); child.kill();`）后：
+- AC-2(d) rc=1，fail=1，红读数：`AssertionError: no process may keep CODEX_HOME bound after model/list returns (leftovers: 1879221,1879229,1879240)` —— 旧行为真的留下 3 个仍绑定该 CODEX_HOME 的进程，证明该臂有区分力。
+- AC-1 判据：本机 load1 18.6–21.0 下顺序 1 次 + 并发 8/4 次共 17 次全部 rc=0、ENOTEMPTY 计数 0 —— 旧行为在本机未复现该负载竞态；立案轮的历史红读数取自 `.quay/gate-events.jsonl`：同树 `treeSha=71db8ef0…` 于 2026-11-12 21:01:05 与 21:08:44 fail，报 `ENOTEMPTY … rmdir /tmp/session-edit-continuity-<id>/.codex`。此处如实记录「未复现」，不以一次空闲绿冒充。
+- 随后 `git checkout -- server/modules/.../codex-app-server.client.ts` 逐字节还原（`git diff HEAD -- <file>` 为空），复绿：(d) 4/4 rc=0（309ms），AC-1 rc=0 7/7。
+
+**AC-4（相关单文件有界回归，逐条，命令均为 `npx tsx --tsconfig server/tsconfig.json --test <file>`）。**
+- server/modules/providers/tests/codex-app-server-protocol.test.ts rc=0 pass=9 fail=0
+- server/modules/providers/tests/codex-message-editing.test.ts rc=0 pass=9 fail=0
+- server/modules/providers/tests/session-edit-real-cli.test.ts rc=0 pass=2 fail=0
+- server/modules/providers/tests/codex-session-fork.test.ts rc=0 pass=3 fail=0
+- server/modules/providers/tests/codex-host-driver-persistent.test.ts rc=0 pass=14 fail=0
+- server/modules/websocket/tests/chat-edit-preparation.test.ts rc=0 pass=26 fail=0
+- server/modules/websocket/tests/chat-edit-send.test.ts rc=0 pass=13 fail=0
+
+**AC-5（有界静态门 + 基线）。** 每条 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test <file>`，在基线改动后复跑：
+- server/shared/tests/architecture-ratchet.test.ts 6/6 rc=0
+- server/shared/tests/server-import-cycle-budget.test.ts 12/12 rc=0
+- server/shared/tests/quay-test-script.test.ts 14/14 rc=0
+- `scripts/suite-duration-baseline.tsv` 新增 `953<TAB>server/modules/providers/tests/codex-app-server-process.test.ts`（三次实测 1036.325/906.981/952.668 ms，取 953），并在表头 DATA SOURCE 下加 APPENDED 说明（该文件新、尚无含它的绿 ledger 轮）。
+- 两条 "unknown pin" 现状核实：`quay-test-script.test.ts` 的两处 `unknown=` 分别是 `${rest.length}`（按当次 collected 现算，第 188 行附近）与固定 4 文件夹具的 `known=1 unknown=3`（第 276 行附近），都不随新收集文件变化 ⇒ 无需改数字；该文件 14/14 绿即为读数。未引入 literal 计数的 pin。
+
+**AC-6（静态门）。**
+- `npm run typecheck` rc=0（tsconfig.json / server/tsconfig.json / scripts/tsconfig.json 三条 tsc 全过）
+- `npm run lint` rc=0（只有仓库既有 warning，本任务文件无告警）
+- `npm run build` rc=0（`write-build-info: wrote dist-server.next/build-info.json`，`node scripts/promote-dist-server.mjs` 完成）
+
+**残留下限 / 浏览器。** 本任务不改渲染、历史读取或 wire；AC-447 的浏览器与场景证据仍以 `gap-session-edit-continuity-e2e` 的 sealed 证据为准，本轮不重发、不冒充新的浏览器达成。
+
+- 该轴仍暗,理由:本任务只在既有 app-server 子包内新增一个进程所有者文件与一个判据文件、未移动模块边界或依赖图，未产出 ArchGuard 的 L_D/L_G 量化读数；模块环读数由 server-import-cycle-budget.test.ts 12/12 绿承担。
