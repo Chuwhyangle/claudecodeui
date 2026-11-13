@@ -4,7 +4,7 @@ title: AC-323 判据红在宿主 XFS 用户配额耗尽（EDQUOT −122，余量
   是未收尾运行留下的 trace 残留，选择器只读 statfs（仍报 1739 GiB）看不见配额 ⇒ 运行中途写 trace 失败、以「End of
   central directory record signature not found」冒名成 PC
   用例红；把余量读数换成配额余量、按收尾状态分流回收，并把判据三条命令复跑为绿
-status: todo
+status: ready
 labels:
   - gap
   - defect
