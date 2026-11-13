@@ -39,6 +39,16 @@ const ARCHITECTURE_SOURCES = [
   // The manual re-analysis confirmation/running/failure dialog: its chrome is
   // part of the same tab surface, so a missing translation must be red here too.
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'ArchitectureRefreshDialog.tsx'),
+  // The residual-oversize split moved the panel's chrome into leaf modules;
+  // their `t('architecture.…')` calls stay under the same completeness reading.
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelShell.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelToolbar.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelGroups.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelFilters.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelReadout.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelCanvas.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelMobileChrome.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'useArchitecturePanelActions.ts'),
 ];
 const TABS_SOURCE = resolve(REPO_ROOT, 'src', 'modules', 'project-workspace', 'WorkspaceTabs.tsx');
 
