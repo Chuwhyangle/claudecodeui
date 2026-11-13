@@ -111,7 +111,7 @@ $ grep -nE '35_000|40_000' e2e/voice-trim.spec.ts                        # 0 hit
 
 ### AC3 判据语义未弱化
 
-`git diff develop -- e2e/voice-trim.spec.ts` 的删除行仅为 6 行注释/timerout 行（旧 `test.setTimeout(40_000);`、旧 `test.setTimeout(35_000);` 及各自注释），新增行为常量声明与其注释、两处 `test.setTimeout(CRITERION_WALL_MS);` 及注释。新增行匹配 `retries|repeat-each|test\.skip|test\.only|page\.route\(` 的条数 = **0**。
+`git diff develop -- e2e/voice-trim.spec.ts` 的删除行仅为 7 行（5 行注释 + 2 行 `test.setTimeout`：旧 `test.setTimeout(40_000);`、旧 `test.setTimeout(35_000);`），新增行为常量声明与其注释、两处 `test.setTimeout(CRITERION_WALL_MS);` 及注释。新增行匹配 `retries|repeat-each|test\.skip|test\.only|page\.route\(` 的条数 = **0**。
 
 原行逐字仍在（`grep -cF` 均为 1）：`expect(upload.subarray(0, 4).toString('ascii')).toBe('RIFF')`、`expect(uploadSec).toBeLessThanOrEqual(FIXTURE_SEC + CAPTURE_TOLERANCE_SEC)`、`.toBeGreaterThan(fidelityBefore)`、`await expect(uploadEntry()).toHaveCount(0)`、`await expect(uploadInput()).toHaveCount(0)`、`expect(requests.length).toBe(requestsBefore + 1)`。说明：`await expect.poll(() => fidelityMessages` 在既有源码中跨行书写为 `await expect` + 换行 `.poll(() => fidelityMessages, {`（spec:758-759），diff 未触及该区域（`git diff` 无任何 `fidelityMessages` 行）。
 
