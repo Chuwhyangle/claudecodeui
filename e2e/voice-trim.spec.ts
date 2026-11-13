@@ -56,6 +56,19 @@ const CAPTURE_MS = Math.round(FIXTURE_SEC * 1000);
 const CAPTURE_TOLERANCE_SEC = 0.3;
 
 /**
+ * The criterion's own wall, shared by its `beforeAll` and its case so the two cannot drift apart.
+ *
+ * The file budget is `SPEC_BUDGET_MS['voice-trim.spec.ts']` = 240 s in `playwright.config.ts`, and the goal
+ * gate that runs this criterion allows 260 s — the wall has to sit below both, and above the criterion's
+ * own waits, or it kills the measurement instead of reading it. Those waits add up to 15 s (composer) + 10 s
+ * (entry) + 15 s (recogniser) + 10 s (transcript) = 50 s on a single leg, so the previous 35 s was below the
+ * sum and reported `Test timeout of 35000ms exceeded` before a single assertion could speak. A healthy
+ * whole-file run is 16–18 s; `hook + case = 2 × 100 s = 200 s < 240 s`, so even a bad run gets to print its
+ * own diagnostics rather than being killed from outside with nothing to say.
+ */
+const CRITERION_WALL_MS = 100_000;
+
+/**
  * What the recogniser stand-in answers, one entry per upload.
  *
  * Leg-specific on purpose: each leg then has to end up holding *its own* sentence. A single utterance for both
@@ -582,10 +595,11 @@ test.describe('the voice path end to end', () => {
   };
 
   test.beforeAll(async ({ browser }) => {
-    // Onboarding plus the first project load outlasts the default per-test budget, but only as far as the
-    // criterion's own ceiling allows: a hook that runs longer than that is killed from outside and reports
-    // nothing, so the budget stops short of it and lets the failure above be the thing that is read.
-    test.setTimeout(40_000);
+    // Onboarding plus the first project load outlasts the default per-test budget. The ceiling is the
+    // criterion's own named wall, deliberately below the 240 s file budget and the 260 s gate: a hook that
+    // runs past an outer wall is killed from outside and reports nothing, so this one leaves room to fail
+    // above it and be read.
+    test.setTimeout(CRITERION_WALL_MS);
 
     recognizer = await startRecognizer();
     recognizerUrl = `http://127.0.0.1:${(recognizer.address() as AddressInfo).port}`;
@@ -709,9 +723,10 @@ test.describe('the voice path end to end', () => {
    * avoided rather than a thing it intended.
    */
   test('AC-120 an uploaded audio file travels the same transcription chain', async () => {
-    // Same budget as the microphone's criteria and for the same reason: the goal gate kills the command at
-    // 60s, and a run killed from outside says nothing about what it was doing.
-    test.setTimeout(35_000);
+    // Same wall as the hook and for the same reason: it sits below the 240 s file budget and the 260 s gate,
+    // and above the leg's own 50 s of waits, so a slow run fails inside the criterion and says what it was
+    // doing instead of being killed from outside with nothing to read.
+    test.setTimeout(CRITERION_WALL_MS);
 
     // The fixture, read as audio. A file the browser cannot decode is not a failure it reports, so a
     // criterion that only looked at the composer could go green on a chain that never read the file.
