@@ -58,6 +58,19 @@
  *                               `shared/mcp-contract`, `modules/database/core` and
  *                               `modules/architecture`)
  *
+ * Readings re-measured on this tree (2026-11-13, after
+ * `gap-routine-architecture-analysis-providers-g1-cycle-barrel-hub`):
+ *
+ *   files=666 staticEdges=2730 dynamicEdges=4 sccs=[]
+ *   unresolved internal = 17
+ *   non-literal dynamic specifiers = 2
+ *   node count = 99 (manifest 100: the committed set is a superset — the reading is
+ *                    asserted against it, never the other way round)
+ *
+ * The `sccs=[]` is the load-bearing change: the tree now holds NO non-trivial
+ * directory SCC at all, because the three-member G1 was the last one. See the
+ * CYCLE_GROUPS comment for the two edits that removed its closing edges.
+ *
  * THE TWO READINGS NOW AGREE member-for-member (see the `(b)` case). Until
  * `gap-voice-provider-cycle-port-break`, the static-only reading yielded a SEVEN-member
  * component while the static+literal-dynamic reading yielded EIGHT: the extra member,
@@ -140,13 +153,25 @@ const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.j
  * now has no edge back — the group is a sink of the component, not a member.
  * Same sanctioned shrink direction, recorded here and in the committed baseline
  * JSON.
+ * G1 WAS LOWERED FROM THREE MEMBERS TO NONE on 2026-11-13 by
+ * `gap-routine-architecture-analysis-providers-g1-cycle-barrel-hub`. The fresh
+ * archguard reading named the three-member
+ * `modules/providers` ↔ `modules/providers/list/claude` ↔
+ * `modules/providers/services` SCC as a barrel re-export hub. Measuring the
+ * actual edges showed the barrel was not what closed it: the loop was carried by
+ * (a) the seven `services/*.service.ts` files importing the parent's
+ * `provider.registry.ts` and (b) two `list/claude` files importing
+ * `services/session-ai-title.service.ts`. The first is exactly the
+ * `shared/ports/provider-registry.port.ts` seam the port's own doc describes —
+ * only `provider-runtime.service.ts` had been converted; the remaining seven now
+ * read the port too. The second was a Claude-specific reader (it answers null for
+ * `row.provider !== 'claude'`) living in the generic services directory; it moved
+ * into the package that owns Claude's transcript format. Both edits only remove
+ * edges — no member is added, no group is merged — so G1 is lowered to the empty
+ * group here and in the committed baseline JSON.
  */
 const CYCLE_GROUPS: readonly string[][] = [
-  [
-    'modules/providers',
-    'modules/providers/list/claude',
-    'modules/providers/services',
-  ],
+  [],
   [],
   [],
 ];
@@ -664,7 +689,10 @@ test('(a)(h) the scanner walks the real server tree, prints its summary line, an
   const elapsedMs = Date.now() - STARTED_AT;
   console.log(`[ac394] duration_ms=${scanMs} elapsed_ms=${elapsedMs}`);
 
-  assert.match(line, /^files=\d+ staticEdges=\d+ dynamicEdges=\d+ sccs=\[\d+(,\d+)*\]$/, 'the summary line must keep its shape');
+  // The list may be EMPTY: the ratchet only shrinks, so reaching zero non-trivial
+  // SCCs is the legal fixed point, not a malformed reading (`sccs=[]`). The shape
+  // still has to be the printed summary line — digits when there is at least one.
+  assert.match(line, /^files=\d+ staticEdges=\d+ dynamicEdges=\d+ sccs=\[(?:\d+(?:,\d+)*)?\]$/, 'the summary line must keep its shape');
   assert.ok(graph.files > 0, 'the walk must have read files');
   assert.ok(scanMs < 30_000, `(h) the scan took ${scanMs}ms, over the 30s ceiling`);
   assert.ok(elapsedMs < 30_000, `(h) the run reached this assertion at ${elapsedMs}ms, over the 30s ceiling`);

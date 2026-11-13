@@ -1,4 +1,4 @@
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import type { LLMProvider, McpScope, ProviderMcpServer, UpsertProviderMcpServerInput } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
 
@@ -11,7 +11,7 @@ export const providerMcpService = {
     providerName: string,
     options?: { workspacePath?: string },
   ): Promise<Record<McpScope, ProviderMcpServer[]>> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.mcp.listServers(options);
   },
 
@@ -23,7 +23,7 @@ export const providerMcpService = {
     scope: McpScope,
     options?: { workspacePath?: string },
   ): Promise<ProviderMcpServer[]> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.mcp.listServersForScope(scope, options);
   },
 
@@ -34,7 +34,7 @@ export const providerMcpService = {
     providerName: string,
     input: UpsertProviderMcpServerInput,
   ): Promise<ProviderMcpServer> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.mcp.upsertServer(input);
   },
 
@@ -45,7 +45,7 @@ export const providerMcpService = {
     providerName: string,
     input: { name: string; scope?: McpScope; workspacePath?: string },
   ): Promise<{ removed: boolean; provider: LLMProvider; name: string; scope: McpScope }> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.mcp.removeServer(input);
   },
 
@@ -64,7 +64,7 @@ export const providerMcpService = {
 
     const scope = input.scope ?? 'project';
     const results: Array<{ provider: LLMProvider; created: boolean; error?: string }> = [];
-    const providers = providerRegistry.listProviders();
+    const providers = readProviderRegistryPort().listProviders();
     for (const provider of providers) {
       try {
         await provider.mcp.upsertServer({ ...input, scope });
@@ -90,7 +90,7 @@ export const providerMcpService = {
     input: { name: string; scope?: McpScope; workspacePath?: string },
   ): Promise<Array<{ provider: LLMProvider; removed: boolean; error?: string }>> {
     const results: Array<{ provider: LLMProvider; removed: boolean; error?: string }> = [];
-    const providers = providerRegistry.listProviders();
+    const providers = readProviderRegistryPort().listProviders();
     for (const provider of providers) {
       try {
         const result = await provider.mcp.removeServer(input);

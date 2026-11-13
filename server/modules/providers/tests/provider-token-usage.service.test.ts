@@ -6,6 +6,9 @@ import test from 'node:test';
 
 import Database from 'better-sqlite3';
 
+// The service reads the registry through the shared port; evaluating the registry
+// module is what installs that port (it is no longer a static dependency of the service).
+import '@/modules/providers/provider.registry.js';
 import {
   createProviderTokenUsageService,
   summarizeClaudeTokenUsage,

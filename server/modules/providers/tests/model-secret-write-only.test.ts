@@ -9,6 +9,9 @@ import test from 'node:test';
 import express, { type NextFunction, type Request, type Response } from 'express';
 
 import { closeConnection, initializeDatabase } from '@/modules/database/index.js';
+// The routes resolve providers through the shared registry port; booting the router
+// outside the composition root needs the registry module (which installs the port).
+import '@/modules/providers/provider.registry.js';
 import providerRouter from '@/modules/providers/provider.routes.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { AppError } from '@/shared/utils.js';

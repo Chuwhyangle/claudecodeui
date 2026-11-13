@@ -2,7 +2,7 @@ import path from 'node:path';
 import { access } from 'node:fs/promises';
 
 import { scanStateDb, sessionsDb } from '@/modules/database/index.js';
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import type { LLMProvider } from '@/shared/types.js';
 
 type SessionSynchronizeResult = {
@@ -88,7 +88,7 @@ async function runSessionSynchronization(): Promise<SessionSynchronizeResult> {
   const failures: string[] = [];
 
   const results = await Promise.allSettled(
-    providerRegistry.listProviders().map(async (provider) => ({
+    readProviderRegistryPort().listProviders().map(async (provider) => ({
       provider: provider.id,
       processed: await provider.sessionSynchronizer.synchronize(lastScanAt ?? undefined),
     }))
@@ -159,7 +159,7 @@ export const sessionSynchronizerService = {
     provider: LLMProvider,
     filePath: string
   ): Promise<{ provider: LLMProvider; indexed: boolean; sessionId: string | null }> {
-    const resolvedProvider = providerRegistry.resolveProvider(provider);
+    const resolvedProvider = readProviderRegistryPort().resolveProvider(provider);
     const sessionId = await resolvedProvider.sessionSynchronizer.synchronizeFile(filePath);
     return {
       provider,

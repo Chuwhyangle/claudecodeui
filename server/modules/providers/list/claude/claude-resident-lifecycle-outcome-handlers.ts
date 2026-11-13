@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { reconcileSessionHeldWork } from '@/modules/providers/list/claude/claude-runtime.provider.js';
-import { readTranscriptAiTitle } from '@/modules/providers/services/session-ai-title.service.js';
+import { readTranscriptAiTitle } from '@/modules/providers/list/claude/session-ai-title.service.js';
 import {
   ledgerClosedTurns,
   ledgerDeliveries,

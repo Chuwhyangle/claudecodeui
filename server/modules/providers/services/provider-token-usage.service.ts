@@ -7,7 +7,7 @@ import {
   ClaudeTokenUsageProvider,
   summarizeClaudeTokenUsage,
 } from '@/modules/providers/list/claude/claude-token-usage.provider.js';
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import { resolveModelContextWindowRow } from '@/modules/providers/services/runtime/model-launch-spec.service.js';
 import { readTextFileTail } from '@/shared/fs-bytes.js';
 import type {
@@ -105,7 +105,7 @@ export function createProviderTokenUsageService(
         };
       }
 
-      const reader = providerRegistry.resolveProvider(session.provider).tokenUsage
+      const reader = readProviderRegistryPort().resolveProvider(session.provider).tokenUsage
         ?? defaultTokenUsageReader;
       return reader.readSessionUsage(session, dependencies);
     },

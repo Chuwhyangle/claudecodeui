@@ -1,4 +1,4 @@
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import type { LLMProvider, ProviderAuthStatus } from '@/shared/types.js';
 
 export const providerAuthService = {
@@ -6,7 +6,7 @@ export const providerAuthService = {
    * Resolves a provider and returns its installation/authentication status.
    */
   async getProviderAuthStatus(providerName: string): Promise<ProviderAuthStatus> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.auth.getStatus();
   },
 

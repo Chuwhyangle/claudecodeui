@@ -18,6 +18,9 @@ process.env.USERPROFILE = fixtureHome;
 const { sessionSynchronizerService } = await import(
   '@/modules/providers/services/session-synchronizer.service.js'
 );
+// The service reads the registry through the shared port; evaluating the registry
+// module is what installs that port (it is no longer a static dependency of the service).
+await import('@/modules/providers/provider.registry.js');
 
 process.on('exit', () => {
   if (previousHome === undefined) {

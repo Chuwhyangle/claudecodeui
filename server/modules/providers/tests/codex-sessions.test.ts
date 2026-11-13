@@ -14,6 +14,9 @@ import { CodexHostDriver } from '@/modules/providers/list/codex/host/codex-host-
 import { CodexSessionSynchronizer } from '@/modules/providers/list/codex/sessions/codex-session-synchronizer.provider.js';
 import { CodexSessionsProvider, parseCodexExecScript, readCodexMemoryCitations } from '@/modules/providers/list/codex/sessions/codex-sessions.provider.js';
 import { createProviderTokenUsageService } from '@/modules/providers/services/provider-token-usage.service.js';
+// The token-usage service reads the registry through the shared port; evaluating the
+// registry module is what installs that port.
+import '@/modules/providers/provider.registry.js';
 import type { IProviderHostDriverSink } from '@/shared/interfaces.js';
 import type {
   ProcessHost,

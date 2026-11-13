@@ -1,7 +1,7 @@
 import { providerModelsDb, sessionsDb } from '@/modules/database/index.js';
 import { isAllowedLaunchEnvKey } from '@/modules/providers/services/runtime/launch-spec.service.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type {
   CustomProviderModelInput,
@@ -320,7 +320,11 @@ const isUniqueConstraintError = (error: unknown): boolean => (
  * Tests inject a small custom-model store through the same boundary.
  */
 export const createProviderModelsService = (dependencies: ProviderModelsServiceDependencies = {}) => {
-  const resolveProvider = dependencies.resolveProvider ?? providerRegistry.resolveProvider;
+  // Read the registry lazily: the shared port is installed by `provider.registry.ts`
+  // at module-evaluation time, which may run after this module when a criterion
+  // imports the service directly. Capturing it here would freeze an uninstalled port.
+  const resolveProvider = (provider: LLMProvider) =>
+    (dependencies.resolveProvider ?? readProviderRegistryPort().resolveProvider)(provider);
   const catalog = dependencies.catalog ?? providerModelsDb;
   const sessions = dependencies.sessions ?? sessionsDb;
   // Read lazily: the registry port is installed by the settings module at boot, which may

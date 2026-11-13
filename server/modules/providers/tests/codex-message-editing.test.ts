@@ -7,6 +7,9 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
+// The services this file drives read the registry through the shared port; evaluating
+// the registry module is what installs that port.
+import '@/modules/providers/provider.registry.js';
 import { codexAppServer } from '@/modules/providers/list/codex/app-server/codex-app-server.client.js';
 import { CodexSessionSynchronizer } from '@/modules/providers/list/codex/sessions/codex-session-synchronizer.provider.js';
 import { CodexSessionsProvider } from '@/modules/providers/list/codex/sessions/codex-sessions.provider.js';
