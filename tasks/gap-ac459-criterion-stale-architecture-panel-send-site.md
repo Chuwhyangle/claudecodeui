@@ -2,7 +2,7 @@
 id: gap-ac459-criterion-stale-architecture-panel-send-site
 title: AC-459 判据仍钉 ArchitecturePanel.tsx 的 send 落点：residual-oversize 拆分后调用已移入
   useArchitecturePanelActions，改钉组合链与唯一调用点
-status: todo
+status: ready
 labels:
   - gap
   - defect
