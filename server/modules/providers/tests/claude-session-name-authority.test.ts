@@ -17,6 +17,9 @@ import {
   stripSelfAssignedSuffix,
 } from '@/modules/database/index.js';
 import type { SessionNameSource } from '@/modules/database/index.js';
+// The service reads the registry through the shared port; evaluating the registry
+// module is what installs that port (it is no longer a static dependency of the service).
+import '@/modules/providers/provider.registry.js';
 import { readCliSessionRegistration } from '@/modules/providers/list/claude/claude-host-driver.provider.js';
 import { ClaudeSessionSynchronizer } from '@/modules/providers/list/claude/claude-session-synchronizer.provider.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';

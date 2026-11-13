@@ -1,4 +1,4 @@
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import type {
   ProviderSkill,
   ProviderSkillCreateInput,
@@ -14,7 +14,7 @@ export const providerSkillsService = {
     providerName: string,
     options?: ProviderSkillListOptions,
   ): Promise<ProviderSkill[]> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.skills.listSkills(options);
   },
 
@@ -25,7 +25,7 @@ export const providerSkillsService = {
     providerName: string,
     input: ProviderSkillCreateInput,
   ): Promise<ProviderSkill[]> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.skills.addSkills(input);
   },
 
@@ -33,7 +33,7 @@ export const providerSkillsService = {
     providerName: string,
     input: ProviderSkillRemoveInput,
   ): Promise<{ removed: boolean; provider: string; directoryName: string }> {
-    const provider = providerRegistry.resolveProvider(providerName);
+    const provider = readProviderRegistryPort().resolveProvider(providerName);
     return provider.skills.removeSkill(input);
   },
 };

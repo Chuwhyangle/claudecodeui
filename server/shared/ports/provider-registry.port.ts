@@ -13,15 +13,18 @@
  * rather than a static import.
  *
  * `provider.registry.ts` installs itself at the bottom of its own module body
- * (`installProviderRegistryPort(providerRegistry)`), which keeps every existing
- * import path working (the barrel, a direct service import, a criterion) while
- * removing the `services -> parent` edge from the static graph. `server/index.ts`
- * also names the installation explicitly in the composition root, so the wiring
- * is readable where the process is assembled.
+ * (`installProviderRegistryPort(providerRegistry)`), and `server/index.ts` names
+ * the installation explicitly in the composition root, so the wiring is readable
+ * where the process is assembled. A criterion or test that boots one of these
+ * services WITHOUT importing the barrel or the registry (the composition root is
+ * not in the loop there) must import `provider.registry.ts` itself — that module
+ * body is the installation.
  *
- * Consumers: `modules/providers/services/provider-runtime.service.ts` (its
- * default dependencies) and the composition root. This file imports only shared
- * vocabulary and therefore adds no edge in either direction.
+ * Consumers: every service under `modules/providers/services/` that resolves a
+ * provider by id (`provider-runtime`, `provider-models`, `provider-auth`,
+ * `provider-token-usage`, `sessions`, `session-synchronizer`, `skills`, `mcp`),
+ * and the composition root. This file imports only shared vocabulary and
+ * therefore adds no edge in either direction.
  */
 import type { IProvider } from '@/shared/interfaces.js';
 

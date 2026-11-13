@@ -5,7 +5,7 @@ import path from 'node:path';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { compileStoredSessionFilter } from '@/modules/projects/index.js';
 import { quayService } from '@/modules/quay/index.js';
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
 import { sessionHistoryCache } from '@/modules/providers/services/sessions/session-history-cache.service.js';
 import { sessionHostManager } from '@/modules/session-hosts/index.js';
@@ -283,7 +283,7 @@ async function writeRenameToProviderTranscript(
   },
   title: string,
 ): Promise<RenameWriteback> {
-  const rename = providerRegistry.resolveProvider(session.provider).rename;
+  const rename = readProviderRegistryPort().resolveProvider(session.provider).rename;
   if (!rename) {
     return { outcome: 'skipped', reason: 'no-writable-title' };
   }
@@ -393,7 +393,7 @@ export const sessionsService = {
    * Lists provider ids that can load session history and normalize live messages.
    */
   listProviderIds(): LLMProvider[] {
-    return providerRegistry.listProviders().map((provider) => provider.id);
+    return readProviderRegistryPort().listProviders().map((provider) => provider.id);
   },
 
   /**
@@ -470,7 +470,7 @@ export const sessionsService = {
     raw: unknown,
     sessionId: string | null,
   ): NormalizedMessage[] {
-    return providerRegistry.resolveProvider(providerName).sessions.normalizeMessage(raw, sessionId);
+    return readProviderRegistryPort().resolveProvider(providerName).sessions.normalizeMessage(raw, sessionId);
   },
 
   /**
@@ -564,7 +564,7 @@ export const sessionsService = {
     }
 
     const provider = source.provider as LLMProvider;
-    const fork = providerRegistry.resolveProvider(provider).fork;
+    const fork = readProviderRegistryPort().resolveProvider(provider).fork;
     if (!fork) {
       throw new AppError(`Sessions cannot be forked for provider "${provider}".`, {
         code: 'FORK_NOT_SUPPORTED',
@@ -699,7 +699,7 @@ export const sessionsService = {
       });
     }
 
-    const sessions = providerRegistry.resolveProvider(session.provider as LLMProvider).sessions;
+    const sessions = readProviderRegistryPort().resolveProvider(session.provider as LLMProvider).sessions;
     if (!sessions.resolveEditAnchor) {
       return null;
     }
@@ -725,7 +725,7 @@ export const sessionsService = {
       });
     }
 
-    return Boolean(providerRegistry.resolveProvider(session.provider as LLMProvider).sessions.rewindSession);
+    return Boolean(readProviderRegistryPort().resolveProvider(session.provider as LLMProvider).sessions.rewindSession);
   },
 
   /**
@@ -742,7 +742,7 @@ export const sessionsService = {
       });
     }
 
-    const sessions = providerRegistry.resolveProvider(session.provider as LLMProvider).sessions;
+    const sessions = readProviderRegistryPort().resolveProvider(session.provider as LLMProvider).sessions;
     await sessions.rewindSession?.(sessionId, keepThroughId);
   },
 
@@ -772,7 +772,7 @@ export const sessionsService = {
     }
 
     const provider = session.provider as LLMProvider;
-    const providerSessions = providerRegistry.resolveProvider(provider).sessions;
+    const providerSessions = readProviderRegistryPort().resolveProvider(provider).sessions;
     const providerSessionId = session.provider_session_id;
     const projectPath = session.project_path ?? '';
     const requestedLimit = options.limit ?? null;
@@ -878,7 +878,7 @@ export const sessionsService = {
     }
 
     const provider = session.provider as LLMProvider;
-    const providerSessions = providerRegistry.resolveProvider(provider).sessions;
+    const providerSessions = readProviderRegistryPort().resolveProvider(provider).sessions;
     const providerSessionId = session.provider_session_id;
     const projectPath = session.project_path ?? '';
 
@@ -965,7 +965,7 @@ export const sessionsService = {
     }
 
     const provider = session.provider as LLMProvider;
-    const providerSessions = providerRegistry.resolveProvider(provider).sessions;
+    const providerSessions = readProviderRegistryPort().resolveProvider(provider).sessions;
     const providerSessionId = session.provider_session_id;
     const projectPath = session.project_path ?? '';
 

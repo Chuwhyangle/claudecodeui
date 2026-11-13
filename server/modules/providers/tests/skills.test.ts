@@ -4,6 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+// The service reads the registry through the shared port; evaluating the registry
+// module is what installs that port (it is no longer a static dependency of the service).
+import '@/modules/providers/provider.registry.js';
 import { providerSkillsService } from '@/modules/providers/services/skills.service.js';
 
 const patchHomeDir = (nextHomeDir: string) => {
