@@ -75,6 +75,13 @@ Route the providers -> services and providers -> list/claude re-exports through 
 
 **测试的显式化**：直接 import 被转换的服务或 `provider.routes`（不经过 barrel / 组装根）的测试，现在显式 `import '@/modules/providers/provider.registry.js'` 来安装 port —— 这正是它们此前经由服务的静态 import 隐式拿到的依赖，port 文件头也补了这条说明。
 
+**续做（2026-11-13，suite-red 复核）**：
+
+- 上一轮 fan-in 的唯一新增红是 `server/modules/voice/tests/voice-provider-cycle.test.ts`：它的“非真空”守卫断言“树上仍至少有一个非平凡 SCC（剩下的 provider 环）”。本任务恰好删掉了最后一个环（`sccs=[]`），所以该守卫的前提被本任务合法推翻 —— 这是真实的任务引入红，不是环境噪声。
+- 处置：把该守卫从“必须有剩余环”改为锚在读法本身 —— 仍断言 `graph.files > 0` 且新增 `graph.dirEdges.length > 0`（死走法两者皆 0，仍会误绿），判别力由保留的 false-form 夹具用例证明（同一扫描器在夹具上仍能报出 `[modules/providers, modules/voice]`）。文件头注释同步说明七成员余环已在本任务后不再存在。
+- 实跑：`node --import tsx --test server/modules/voice/tests/voice-provider-cycle.test.ts` → 2/2 pass，打印 `[voice-cycle] files=666 staticEdges=2730 dynamicEdges=4 sccs=[]`、`voiceInAnyScc=false`、`fixture SCCs=[["modules/providers","modules/voice"]]`。
+- 同轮另外两条红（`src/modules/architecture/tests/plantUmlText.test.ts`、`src/shared/asr/tests/asrContractInvariants.test.ts`，均为 STACK_TRACE_ERROR）不在本任务本次 diff 的 added 集合里，属 develop 基线红（driver 的 baseline A/B 只把 voice 一条列为 added）。
+
 ## AC
 
 - [x] `.quay/routine-findings.jsonl` 中 finding `providers-g1-cycle-barrel-hub`（routine `architecture-analysis`，runId `architecture-analysis-1794573630786`）所描述的问题被复核并处置
@@ -112,6 +119,7 @@ Route the providers -> services and providers -> list/claude re-exports through 
 - `server/modules/providers/tests/sessions-details.test.ts`
 - `server/modules/providers/tests/sessions.service.test.ts`
 - `server/modules/providers/tests/skills.test.ts`
+- `server/modules/voice/tests/voice-provider-cycle.test.ts`
 - `server/shared/ports/provider-registry.port.ts`
 - `server/shared/tests/architecture-ratchet.baseline.json`
 - `server/shared/tests/server-import-cycle-budget.baseline.json`
@@ -125,3 +133,4 @@ Route the providers -> services and providers -> list/claude re-exports through 
 - 未落地原因：step=suite: not ok - server/modules/voice/tests/voice-provider-cycle.test.ts:   AssertionError [ERR_ASSERTION]: the tree must still contain at least one non-trivial SCC (the remaining provider cycle) — otherwise this criterion is green because the scanner found no cycles at all [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/modules/voice/tests/voice-provider-cycle.test.ts,server/modules/voice/tests/voice-provider-cycle.test.ts changed=-]
 - run_id：wk-prod-anchor
 - session_id：f6704685-ff25-408c-a293-801ff7999d2b
+- 状态：已复核并修复（见上「续做」），本 blocker 记录保留为历史。
