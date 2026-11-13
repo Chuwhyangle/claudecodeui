@@ -3573,21 +3573,30 @@ test('the renderer is reached through a dynamic import, never the first-screen c
     resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'PlantUmlGraph.tsx'),
     'utf8',
   );
+  // The lazy renderer import lives in the drawing hook after the residual
+  // oversize split; the criterion reads BOTH files so it still lands on the one
+  // place the first-screen chunk could be broken from.
+  const drawingSource = readFileSync(
+    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'usePlantUmlDrawing.ts'),
+    'utf8',
+  );
   const bridgeSource = readFileSync(
     resolve(process.cwd(), 'src', 'modules', 'architecture', 'layout', 'archguardToPlantUml.ts'),
     'utf8',
   );
 
   assert.match(
-    graphSource,
+    drawingSource,
     /await import\(['"]@yalehwang\/plantuml-js\/elk['"]\)/,
     'the ELK renderer must be loaded with a dynamic import',
   );
-  assert.ok(
-    !graphSource.includes("from '@yalehwang/plantuml-js/elk'")
-      && !graphSource.includes("from '@yalehwang/plantuml-js'"),
-    'a static renderer import would pull elkjs into the first-screen chunk',
-  );
+  for (const [name, source] of [['PlantUmlGraph.tsx', graphSource], ['usePlantUmlDrawing.ts', drawingSource]] as const) {
+    assert.ok(
+      !source.includes("from '@yalehwang/plantuml-js/elk'")
+        && !source.includes("from '@yalehwang/plantuml-js'"),
+      `a static renderer import in ${name} would pull elkjs into the first-screen chunk`,
+    );
+  }
   // The bridge may only touch the package's zero-dependency archguard entry;
   // the bare package and the ELK entry both carry the renderer.
   assert.match(

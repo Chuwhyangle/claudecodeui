@@ -516,8 +516,10 @@ test('the dock opening freezes aspect re-layout, and the toggle itself is not a 
 });
 
 test('the layout engine is constructed in exactly one factory, through the public option', () => {
+  // The engine is built where the drawing happens: the drawing hook after the
+  // residual oversize split (`PlantUmlGraph.tsx` holds no layout code).
   const graphSource = readFileSync(
-    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'PlantUmlGraph.tsx'),
+    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'usePlantUmlDrawing.ts'),
     'utf8',
   );
   const engineSource = readFileSync(
