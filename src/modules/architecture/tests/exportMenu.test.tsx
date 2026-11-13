@@ -679,9 +679,10 @@ test('the filename and download mechanics exist once in the architecture module'
   assert.deepEqual(withDefinition('function downloadTextFile'), ['exportArtifacts.ts']);
   assert.deepEqual(withDefinition('function downloadBlob'), ['exportArtifacts.ts']);
 
-  // The panel still builds the artifact name it hands to the export owner; the
-  // text page builds and downloads its own document.
-  for (const consumer of ['ArchitecturePanel.tsx', 'ArchitectureTextPanel.tsx']) {
+  // The panel still builds the artifact name it hands to the export owner (the
+  // panel's export actions live in `useArchitecturePanelActions.ts` after the
+  // residual-oversize split); the text page builds and downloads its own document.
+  for (const consumer of ['useArchitecturePanelActions.ts', 'ArchitectureTextPanel.tsx']) {
     const source = readFileSync(join(moduleDir, consumer), 'utf8');
     assert.match(
       source,

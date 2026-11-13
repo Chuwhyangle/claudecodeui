@@ -20,7 +20,6 @@
  */
 import type { Clock } from '@/shared/types';
 import { createExternalStore, defaultClock } from '@/shared/utils';
-
 import {
   createCurationStore,
   curationStorageKey,

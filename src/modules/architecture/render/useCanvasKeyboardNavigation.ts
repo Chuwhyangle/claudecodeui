@@ -13,46 +13,14 @@ import { useEffect, type RefObject } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { TFunction } from 'i18next';
 
-import type {
-  ArchitectureRendererGraph,
-  ArchitectureRendererNode,
-} from '@/modules/architecture/dom/rendererContract';
+import type { ArchitectureRendererGraph, ArchitectureRendererNode } from '@/modules/architecture/dom/rendererContract';
 import type { GraphGestureController } from '@/modules/architecture/dom/graphGestureController';
 import type { GraphSelectionController, GraphSelectionSnapshot } from '@/modules/architecture/dom/graphSelectionController';
-import {
-  moveEntityFocus,
-  PACKAGE_NAV_PREFIX,
-  type EntityNavigationDirection,
-  type EntityNavigationItem,
-} from '@/modules/architecture/dom/entityNavigation';
-import {
-  clearNavigationFocus,
-  collectNavigationItems,
-  farthestNavigationStart,
-  normalizedPackageId,
-  packageIdOfNodeId,
-  keyboardA11yDefect,
-  navigationDomId,
-  navigationElementOf,
-  paintNavigationFocus,
-  pickNavigationStart,
-  type NavigationPoint,
-} from '@/modules/architecture/render/plantUmlNavigation';
-import { nodeElement } from '@/modules/architecture/layout/graphDom';
-import {
-  centeredScrollForDrawingRect,
-  clampZoomScale,
-  MIN_ZOOM_SCALE,
-  readSvgNaturalSize,
-  ZOOM_STEP,
-  centerElementInContainer,
-} from '@/modules/architecture/layout/svgViewport';
-import { GROUP_PREFIX, KEYBOARD_PAN_STEP } from '@/modules/architecture/dom/graphConstants';
-import {
-  announceSelection,
-  highlightRelations,
-  selectionOf,
-} from '@/modules/architecture/layout/graphDom';
+import { moveEntityFocus, PACKAGE_NAV_PREFIX, type EntityNavigationDirection, type EntityNavigationItem } from '@/modules/architecture/dom/entityNavigation';
+import { clearNavigationFocus, collectNavigationItems, farthestNavigationStart, normalizedPackageId, packageIdOfNodeId, keyboardA11yDefect, navigationElementOf, paintNavigationFocus, pickNavigationStart, type NavigationPoint } from '@/modules/architecture/render/plantUmlNavigation';
+import { announceSelection, highlightRelations, selectionOf } from '@/modules/architecture/layout/graphDom';
+import { ZOOM_STEP, centerElementInContainer } from '@/modules/architecture/layout/svgViewport';
+import { KEYBOARD_PAN_STEP } from '@/modules/architecture/dom/graphConstants';
 
 /** Every reading the keyboard navigation closes over. */
 export type CanvasKeyboardNavigationArgs = {
@@ -106,9 +74,6 @@ export function useCanvasKeyboardNavigation(
     zoomByStep,
     zoomToScale,
     fitDiagram,
-    onNodeClick,
-    onToggleNodeClick,
-    onEscapeSelection,
     onUndo,
     onPinNode,
     onUnpinNode,

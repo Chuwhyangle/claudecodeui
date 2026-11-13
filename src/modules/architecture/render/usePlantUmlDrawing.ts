@@ -143,7 +143,6 @@ export function usePlantUmlDrawing(args: PlantUmlDrawingArgs): void {
     setLayoutMs,
     setCollapsedNotice,
     setView,
-    applySemanticLayout,
   } = args;
 
   useEffect(() => {

@@ -12,10 +12,11 @@ import { CanvasHeaderSlotContext, CompactToolbarSlotContext } from '@/modules/ar
 import { ArchitectureEmptyState } from '@/modules/architecture/render/ArchitectureEmptyState';
 import { ArchitectureSelectionTray } from '@/modules/architecture/render/ArchitectureSelectionTray';
 import { nodeIdShapeOf } from '@/modules/architecture/render/architecturePanelShared';
+import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';
 
 /** The ready arm of the panel model. */
-type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }>;
+type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }> & ArchitecturePanelActions;
 
 /** One canvas region, drawn from the panel model. */
 export function ArchitecturePanelCanvas({

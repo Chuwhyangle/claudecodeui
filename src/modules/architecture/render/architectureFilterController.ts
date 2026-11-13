@@ -17,7 +17,6 @@
  */
 import type { Clock } from '@/shared/types';
 import { createExternalStore, defaultClock } from '@/shared/utils';
-
 import {
   filtersEqual,
   type ArchitectureElementRelationFilter,

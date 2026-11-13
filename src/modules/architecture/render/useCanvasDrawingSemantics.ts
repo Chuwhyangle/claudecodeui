@@ -16,24 +16,11 @@ import type { GraphGestureController } from '@/modules/architecture/dom/graphGes
 import type { GraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
 import type { GraphLayoutPipeline, GraphLayoutCommit, GraphLayoutSnapshot } from '@/modules/architecture/layout/graphLayoutPipeline';
 import type { GraphZoom } from '@/modules/architecture/layout/graphViewportController';
-import type {
-  PlantUmlApplyView,
-  PlantUmlToPlantUml,
-  SemanticCapture,
-} from '@/modules/architecture/layout/graphDom';
+import type { SemanticCapture } from '@/modules/architecture/layout/graphDom';
 import type { SemanticZoomLayout } from '@/modules/architecture/layout/semanticZoomLayout';
 import { forcedFitCssFactor } from '@/modules/architecture/render/plantUmlControlArm';
 import { applyDiffStyles, pinFocusMarker } from '@/modules/architecture/render/plantUmlNavigation';
-import {
-  addNodeHitTargets,
-  defaultViewOf,
-  drawSemanticLayout,
-  drawStickyLabels,
-  highlightSelection,
-  markDrawingUnselectable,
-  nodeElement,
-  positionOverviewHint,
-} from '@/modules/architecture/layout/graphDom';
+import { addNodeHitTargets, defaultViewOf, drawSemanticLayout, drawStickyLabels, highlightSelection, markDrawingUnselectable, nodeElement, positionOverviewHint } from '@/modules/architecture/layout/graphDom';
 import { applyZoomScale } from '@/modules/architecture/layout/svgViewport';
 
 /** Every reading the semantic write path closes over. */
@@ -72,7 +59,6 @@ export type CanvasDrawingSemantics = {
 export function useCanvasDrawingSemantics(args: CanvasDrawingSemanticsArgs): CanvasDrawingSemantics {
   const {
     hostRef,
-    view,
     idShape,
     focusNodeId,
     setView,

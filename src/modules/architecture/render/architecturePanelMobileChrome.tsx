@@ -7,10 +7,11 @@
  */
 import { ArchitectureSelectionTray } from '@/modules/architecture/render/ArchitectureSelectionTray';
 import { nodeIdShapeOf } from '@/modules/architecture/render/architecturePanelShared';
+import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';
 
 /** The ready arm of the panel model. */
-type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }>;
+type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }> & ArchitecturePanelActions;
 
 /** Build the compact-tier chrome fragments from the panel model. */
 export function panelMobileChromeFragments(panel: ReadyScope): {
@@ -40,7 +41,6 @@ export function panelMobileChromeFragments(panel: ReadyScope): {
     readoutOpen,
     readoutSummary,
     removeSelected,
-    selection,
     selections,
     shortTouch,
     t,

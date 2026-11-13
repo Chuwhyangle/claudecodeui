@@ -1,153 +1,52 @@
-import {
-  type ComponentType,
-  type KeyboardEvent as ReactKeyboardEvent,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
-import { ArrowLeft, ExternalLink, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
+import { type ComponentType, type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/render/PlantUmlGraph';
-import { ArchitectureCurationManager, type ArchitectureCurationPage } from '@/modules/architecture/render/ArchitectureCurationManager';
-import { ArchitectureDock } from '@/modules/architecture/render/ArchitectureDock';
-import { ArchitectureInspector } from '@/modules/architecture/render/ArchitectureInspector';
-import { ArchitectureRefreshDialog } from '@/modules/architecture/render/ArchitectureRefreshDialog';
-import {
-  type ArchitectureCurationHiddenEdge,
-  type ArchitectureCurationItem,
-  type CurationActionResult,
-} from '@/modules/architecture/dom/curationStore';
+import { type ArchitectureCurationPage } from '@/modules/architecture/render/ArchitectureCurationManager';
+
+
+
+import { type ArchitectureCurationHiddenEdge, type ArchitectureCurationItem, type CurationActionResult } from '@/modules/architecture/dom/curationStore';
 import { createArchitectureCurationController } from '@/modules/architecture/render/architectureCurationController';
 import { createArchitectureFilterController } from '@/modules/architecture/render/architectureFilterController';
-import {
-  createArchitectureSearchController,
-  type ArchitectureSearchCommit,
-} from '@/modules/architecture/render/architectureSearchController';
+import { createArchitectureSearchController } from '@/modules/architecture/render/architectureSearchController';
 import { resolveCurationItems, useProjectSearch } from '@/modules/architecture/hooks/useProjectSearch';
-import { ArchitectureSheet } from '@/modules/architecture/render/ArchitectureSheet';
-import {
-  ArchitectureSelectionTray,
-  buildSelectionMessage,
-} from '@/modules/architecture/render/ArchitectureSelectionTray';
-import { ArchitectureTextPanel } from '@/modules/architecture/render/ArchitectureTextPanel';
-import {
-  nodeFileOf,
-  seedMarkerMode,
-  type ArchitectureDiagramView,
-} from '@/modules/architecture/layout/archguardToPlantUml';
-import {
-  ARCHITECTURE_DETAIL_TIERS,
-  ARCHITECTURE_SCOPE_MAX,
-  ARCHITECTURE_SCOPE_MIN,
-  rankArchitectureDetail,
-  type ArchitectureDetailTier,
-} from '@/modules/architecture/dom/detailRanking';
-import { buildFullPlantUmlDocument } from '@/modules/architecture/layout/plantUmlText';
-import {
-  activeFilterCount,
-  applyFilter,
-  ARCHITECTURE_ELEMENT_KINDS,
-  ARCHITECTURE_RELATION_PRESETS,
-  hiddenTotal,
-  keptMentionedCount,
-  relationsForPreset,
-  resetFilter,
-  showAllFilter,
-  type ArchitectureElementRelationFilter,
-  type ArchitectureRelationPreset,
-} from '@/modules/architecture/dom/elementRelationFilter';
-import {
-  architectureExportFilename,
-  serializeSvgForExport,
-} from '@/modules/architecture/render/exportArtifacts';
+
+
+
+import { nodeFileOf, type ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
+import { rankArchitectureDetail, type ArchitectureDetailTier } from '@/modules/architecture/dom/detailRanking';
+
+import { applyFilter, ARCHITECTURE_ELEMENT_KINDS, hiddenTotal, relationsForPreset, type ArchitectureElementRelationFilter, type ArchitectureRelationPreset } from '@/modules/architecture/dom/elementRelationFilter';
+
 import { createArchitectureFitExportController } from '@/modules/architecture/render/architectureFitExportController';
 import { BOTTOM_SLOT_INFO_INSET_PX, overlayLayoutDefect } from '@/modules/architecture/dom/bottomSlotLayout';
-import {
-  CanvasHeaderSlotContext,
-  CompactToolbarSlotContext,
-  shortTouchDockForm,
-  TOUCH_CONTROL_GAP_PX,
-  TOUCH_TARGET_STYLE,
-  useTouchLayout,
-} from '@/modules/architecture/hooks/useTouchLayout';
+import { shortTouchDockForm, TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/dom/layoutBudget';
 import { buildReadout, drawnKindCounts } from '@/modules/architecture/dom/readoutNumbers';
-import {
-  HOVER_HINT_MARGIN_PX,
-  type ArchitectureHintRect,
-} from '@/modules/architecture/dom/hoverHintPlacement';
-import type {
-  ArchitectureDetailReading,
-  ArchitectureDiffHighlight,
-  ArchitectureEntityKind,
-  ArchitectureNodeIdShape,
-  ArchitectureRendererEdge,
-  ArchitectureRendererGraph,
-  ArchitectureRendererHover,
-  ArchitectureRendererNode,
-  ArchitectureRendererProps,
-} from '@/modules/architecture/dom/rendererContract';
-import { readSvgNaturalSize } from '@/modules/architecture/layout/svgViewport';
-import {
-  createSelectionState,
-  reduceSelection,
-  resolveDraftScope,
-  selectionInScope,
-  selectionsInScope,
-  type ArchitectureSelection,
-  type ArchitectureSelectionScope,
-} from '@/modules/architecture/dom/selectionModel';
-import {
-  formatRefreshElapsed,
-  useArchitectureRefresh,
-} from '@/modules/architecture/render/useArchitectureRefresh';
+import { type ArchitectureHintRect } from '@/modules/architecture/dom/hoverHintPlacement';
+import type { ArchitectureDetailReading, ArchitectureDiffHighlight, ArchitectureRendererEdge, ArchitectureRendererGraph, ArchitectureRendererHover, ArchitectureRendererNode, ArchitectureRendererProps } from '@/modules/architecture/dom/rendererContract';
+
+import { createSelectionState, reduceSelection, selectionInScope, selectionsInScope, type ArchitectureSelection, type ArchitectureSelectionScope } from '@/modules/architecture/dom/selectionModel';
+import { useArchitectureRefresh } from '@/modules/architecture/render/useArchitectureRefresh';
 import { useArchitectureGraph } from '@/modules/architecture/dom/useArchitectureGraph';
 import { useArchitectureFullscreen } from '@/modules/architecture/render/useArchitectureFullscreen';
-import {
-  buildArchitectureStandaloneHref,
-  parseArchitectureDeepLink,
-  type ArchitectureDeepLinkState,
-} from '@/modules/architecture/render/architectureDeepLink';
-import { sendArchitectureChatMessage } from '@/modules/architecture/render/architectureChatBridge';
-import { readDraftText, writeDraftText } from '@/shared/api/chatDrafts';
-import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
-import { ArchitectureEmptyState } from '@/modules/architecture/render/ArchitectureEmptyState';
-import { ArchitectureExportMenu } from '@/modules/architecture/render/ArchitectureExportMenu';
-import { Tooltip } from '@/shared/ui';
-import { CurationToast } from '@/modules/architecture/render/CurationToast';
-import { LegendSwatch } from '@/modules/architecture/render/LegendSwatch';
+import { parseArchitectureDeepLink, type ArchitectureDeepLinkState } from '@/modules/architecture/render/architectureDeepLink';
+
+
+
+
+
+
+
+
 import { useDismissiblePopover } from '@/modules/architecture/render/useDismissiblePopover';
-import {
-  addHidden,
-  EMPTY_HIDDEN,
-  truncationReading,
-  type ArchitectureGranularity,
-} from '@/modules/architecture/layout/panelFilters';
-import {
-  BROWSER_CURATION_STORAGE,
-  BROWSER_PANEL_STORAGE,
-  readStoredTouchHintDismissed,
-  writeStoredTouchHintDismissed,
-} from '@/modules/architecture/layout/panelPersistence';
+import { addHidden, EMPTY_HIDDEN, truncationReading, type ArchitectureGranularity } from '@/modules/architecture/layout/panelFilters';
+import { BROWSER_CURATION_STORAGE, BROWSER_PANEL_STORAGE, readStoredTouchHintDismissed, writeStoredTouchHintDismissed } from '@/modules/architecture/layout/panelPersistence';
 import { createArchitectureChromeController } from '@/modules/architecture/render/architectureChromeController';
 import { ArchitecturePanelShell } from '@/modules/architecture/render/architecturePanelShell';
-import { useArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
-import {
-  diffHighlightCounts,
-  EMPTY_VIEW_UNRESOLVED_LIMIT,
-  MENTIONED_HINT_ID,
-  nodeIdShapeOf,
-  parseDeepLinkDiffHighlight,
-  parseDiffPair,
-  readReadoutExpandedInSession,
-  READOUT_EXPANDED_SESSION_KEY,
-} from '@/modules/architecture/render/architecturePanelShared';
+import { EMPTY_VIEW_UNRESOLVED_LIMIT, nodeIdShapeOf, parseDeepLinkDiffHighlight, readReadoutExpandedInSession, READOUT_EXPANDED_SESSION_KEY } from '@/modules/architecture/render/architecturePanelShared';
 
 
 
@@ -1554,42 +1453,7 @@ function useArchitecturePanelModel({
           ? `${selection.from} → ${selection.to}`
           : null;
 
-  // Compose-to-chat, remove-selected and every export path live in the
-  // action hook; it binds the same owners the panel wires above.
-  const {
-    composeSelectionText,
-    putSelectionInChat,
-    putNodeInChat,
-    removeSelected,
-    exportPlantUml,
-    copyPlantUml,
-    exportSvg,
-    exportPng,
-    exportMermaid,
-    exportStatusText,
-    canComposeSelection,
-  } = useArchitecturePanelActions({
-    projectName,
-    diagramView,
-    dispatchSelection,
-    drawnGraph,
-    exportStatus,
-    fitExport,
-    granularity,
-    hideRelation,
-    i18n,
-    mmd,
-    onOpenChat,
-    projectId,
-    provenance,
-    removeNode,
-    search,
-    selections,
-    sessionId,
-    showCurationToast,
-    standalone,
-    t,
-  });
+
 
   const truncation = truncationReading(result, granularity);
   // How many nodes the server's node budget left out of this subgraph. The
@@ -1749,6 +1613,10 @@ const textFilterSummary = t('architecture.text.filterSummary', {
   // is exported below for the modules to narrow).
   return {
     branch: 'ready' as const,
+    mmd,
+    exportStatus,
+    showCurationToast,
+    dispatchSelection,
     Renderer,
     filter,
     scope,
@@ -1759,7 +1627,6 @@ const textFilterSummary = t('architecture.text.filterSummary', {
     alternateGranularity,
     alternateTotal,
     budgetOmitted,
-    canComposeSelection,
     canCurate,
     canCurateEntities,
     canvasHeaderHost,
@@ -1777,10 +1644,8 @@ const textFilterSummary = t('architecture.text.filterSummary', {
     compactHeaderButtonClass,
     compactTargetStyle,
     compactToolbar,
-    composeSelectionText,
     copyFallbackText,
     copyFallbackTextareaRef,
-    copyPlantUml,
     curation,
     curationCanUndo,
     curationManagerButtonRef,
@@ -1791,7 +1656,6 @@ const textFilterSummary = t('architecture.text.filterSummary', {
     detailReading,
     diagramView,
     dismissTouchHint,
-    dispatchSelection,
     displayNeighbourhood,
     dockLayoutLocked,
     dockOpen,
@@ -1804,11 +1668,6 @@ const textFilterSummary = t('architecture.text.filterSummary', {
     drawnPlantUml,
     emptyViewMessage,
     escapeSelection,
-    exportMermaid,
-    exportPlantUml,
-    exportPng,
-    exportStatusText,
-    exportSvg,
     fillsViewport,
     filterButtonRef,
     filterMenuOpen,
@@ -1853,8 +1712,6 @@ const textFilterSummary = t('architecture.text.filterSummary', {
     projectName,
     projectSearch,
     provenance,
-    putNodeInChat,
-    putSelectionInChat,
     readout,
     readoutOpen,
     readoutRowRef,
@@ -1869,7 +1726,6 @@ const textFilterSummary = t('architecture.text.filterSummary', {
     relationTypeLabel,
     reload,
     removeNode,
-    removeSelected,
     resolvedDiffHighlight,
     restoreEdge,
     restoreGroup,

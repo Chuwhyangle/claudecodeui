@@ -23,7 +23,6 @@
  */
 import type { Clock } from '@/shared/types';
 import { createExternalStore, defaultClock } from '@/shared/utils';
-
 import type { ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
 import {
   downloadBlob,

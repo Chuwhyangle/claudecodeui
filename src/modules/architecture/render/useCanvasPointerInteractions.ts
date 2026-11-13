@@ -72,12 +72,6 @@ export function useCanvasPointerInteractions(
     zoomToPackage,
     gestureController,
     selectionController,
-    onNodeClick,
-    onEdgeClick,
-    onNodeHover,
-    onSelectionClear,
-    onToggleNodeClick,
-    onToggleEdgeClick,
   } = args;
   const revealSelectedRef = useRef<(() => void) | null>(null);
 

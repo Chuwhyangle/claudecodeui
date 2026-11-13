@@ -8,15 +8,16 @@
  * the panel used to build inline, with every closed-over reading coming from the
  * panel model (`scope`) instead of a component-local closure.
  */
+import { ExternalLink, Maximize2, Minimize2 } from 'lucide-react';
 import { ArchitectureExportMenu } from '@/modules/architecture/render/ArchitectureExportMenu';
 import { buildArchitectureStandaloneHref } from '@/modules/architecture/render/architectureDeepLink';
 import type { ArchitectureDeepLinkState } from '@/modules/architecture/render/architectureDeepLink';
 import { Tooltip } from '@/shared/ui';
-import { ExternalLink, Maximize2, Minimize2 } from 'lucide-react';
+import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';
 
 /** The ready arm of the panel model: every field these fragments read. */
-type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }>;
+type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }> & ArchitecturePanelActions;
 
 /** Build the toolbar fragments from the panel model. */
 export function panelToolbarFragments(panel: ReadyScope): {
@@ -50,9 +51,7 @@ export function panelToolbarFragments(panel: ReadyScope): {
     fullscreenButtonRef,
     granularity,
     headerButtonClass,
-    hiddenReading,
     legendButtonRef,
-    relationPresetLabel,
     scope,
     detail,
     selection,
@@ -60,8 +59,6 @@ export function panelToolbarFragments(panel: ReadyScope): {
     sheetOpen,
     sheetTriggerRef,
     t,
-    textViewLabel,
-    textFilterSummary,
   } = panel;
 
 const exportMenu = (

@@ -7,12 +7,13 @@
  */
 import { ARCHITECTURE_DETAIL_TIERS, ARCHITECTURE_SCOPE_MAX, ARCHITECTURE_SCOPE_MIN, rankArchitectureDetail } from '@/modules/architecture/dom/detailRanking';
 import type { ArchitectureDetailTier } from '@/modules/architecture/dom/detailRanking';
-import { ARCHITECTURE_ELEMENT_KINDS } from '@/modules/architecture/dom/elementRelationFilter';
+
 import { TOUCH_CONTROL_GAP_PX } from '@/modules/architecture/hooks/useTouchLayout';
+import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';
 
 /** The ready arm of the panel model: every field these fragments read. */
-type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }>;
+type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }> & ArchitecturePanelActions;
 
 /** Build the groups fragments from the panel model. */
 export function panelGroupFragments(panel: ReadyScope): {
@@ -22,7 +23,6 @@ export function panelGroupFragments(panel: ReadyScope): {
 } {
   const {
     changeDetail,
-    changeFilter,
     changeGranularity,
     changeScope,
     coarsePointer,
@@ -33,9 +33,7 @@ export function panelGroupFragments(panel: ReadyScope): {
     displayNeighbourhood,
     granularity,
     headerButtonClass,
-    hiddenReading,
     scope,
-    stats,
     t,
   } = panel;
 

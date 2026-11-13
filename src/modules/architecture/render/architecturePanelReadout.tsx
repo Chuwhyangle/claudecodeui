@@ -5,17 +5,18 @@
  * Extracted from `ArchitecturePanel.tsx` unchanged (residual-oversize split,
  * `gap-routine-architecture-analysis-architecture-panel-plantuml-residual-oversize`).
  */
+import { RefreshCw } from 'lucide-react';
 import { ARCHITECTURE_DETAIL_TIERS, ARCHITECTURE_SCOPE_MIN } from '@/modules/architecture/dom/detailRanking';
 import { ARCHITECTURE_ELEMENT_KINDS, hiddenTotal, resetFilter, showAllFilter } from '@/modules/architecture/dom/elementRelationFilter';
-import { drawnKindCounts } from '@/modules/architecture/dom/readoutNumbers';
+
 import { diffHighlightCounts } from '@/modules/architecture/render/architecturePanelShared';
 import { formatRefreshElapsed } from '@/modules/architecture/render/useArchitectureRefresh';
 import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
-import { RefreshCw } from 'lucide-react';
+import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';
 
 /** The ready arm of the panel model: every field these fragments read. */
-type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }>;
+type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }> & ArchitecturePanelActions;
 
 /** Build the readout fragments from the panel model. */
 export function panelReadoutFragments(panel: ReadyScope): {
@@ -57,7 +58,6 @@ export function panelReadoutFragments(panel: ReadyScope): {
     truncation,
     unresolvedOpen,
     readoutSummary,
-    collapseShellSidebar,
   } = panel;
 
 const unresolvedNames = [...stats.unresolved.files, ...stats.unresolved.identifiers];

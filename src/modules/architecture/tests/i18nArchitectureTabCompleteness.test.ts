@@ -42,6 +42,7 @@ const ARCHITECTURE_SOURCES = [
   // The residual-oversize split moved the panel's chrome into leaf modules;
   // their `t('architecture.…')` calls stay under the same completeness reading.
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelShell.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelReadyView.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelToolbar.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelGroups.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'architecturePanelFilters.tsx'),

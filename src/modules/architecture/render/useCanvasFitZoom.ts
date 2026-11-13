@@ -15,14 +15,7 @@ import type { GraphLayoutPipeline } from '@/modules/architecture/layout/graphLay
 import type { GraphViewportController, GraphZoom, GraphViewportFitRequest } from '@/modules/architecture/layout/graphViewportController';
 import { solveFitArea, type FitOverlayRect } from '@/modules/architecture/layout/semanticZoomLayout';
 import type { SvgFitPlacement, SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
-import {
-  clampZoomScale,
-  fitAreaInsets,
-  measureHostSize,
-  measureViewportSize,
-  MIN_ZOOM_SCALE,
-  ZOOM_STEP,
-} from '@/modules/architecture/layout/svgViewport';
+import { clampZoomScale, fitAreaInsets, measureHostSize, measureViewportSize } from '@/modules/architecture/layout/svgViewport';
 import { measureLayoutAspect } from '@/modules/architecture/layout/graphDom';
 import { forcedFullscreenReservedMargins } from '@/modules/architecture/render/plantUmlControlArm';
 
@@ -59,7 +52,6 @@ export type CanvasFitZoom = {
 export function useCanvasFitZoom(args: CanvasFitZoomArgs): CanvasFitZoom {
   const {
     hostRef,
-    graph,
     fullscreen,
     zoom,
     fitRequest,

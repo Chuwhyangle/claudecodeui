@@ -1,145 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/dom/adaptiveGrouping';
 import { ArchitectureMinimap } from '@/modules/architecture/render/ArchitectureMinimap';
-import {
-  BOTTOM_SLOT_GAP_PX,
-  bottomCornerLayout,
-  overlayLayoutDefect,
-} from '@/modules/architecture/dom/bottomSlotLayout';
-import {
-  archguardToPlantUml,
-  DEFAULT_NEIGHBORHOOD_HOPS,
-  parserSafePlantUml,
-  type ArchitectureDiagramView,
-} from '@/modules/architecture/layout/archguardToPlantUml';
-import { standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantUmlText';
-import {
-  createLayoutEngine,
-  type ArchitectureLayoutEngineClass,
-} from '@/modules/architecture/layout/elkAspectEngine';
-import {
-  graphFingerprint,
-  type LayoutOrientation,
-} from '@/modules/architecture/dom/layoutOrientation';
-import {
-  solveFitArea,
-  semanticContentBounds,
-  type FitAreaRect,
-  type FitOverlayRect,
-  type SemanticZoomLayout,
-} from '@/modules/architecture/layout/semanticZoomLayout';
-import {
-  createGraphLayoutPipeline,
-  LAYOUT_STATUS_THRESHOLD_MS,
-  type GraphLayoutCommit,
-} from '@/modules/architecture/layout/graphLayoutPipeline';
-import { capDrawnMemberRows, drawnFitScaleOf } from '@/modules/architecture/layout/drawnFit';
-import {
-  SEMANTIC_MIN_FONT_MOBILE_PX,
-  SEMANTIC_MIN_FONT_PX,
-} from '@/modules/architecture/dom/semanticZoomPlan';
-import {
-  PORTRAIT_CONTROL_BAND_PX,
-  TOUCH_CONTROL_GAP_PX,
-  TOUCH_TARGET_STYLE,
-  useCanvasHeaderSlot,
-  useCompactToolbarSlot,
-  useTouchLayout,
-  ZOOM_CLUSTER_TARGET_STYLE,
-} from '@/modules/architecture/hooks/useTouchLayout';
-import { canvasIsTooWide } from '@/modules/architecture/layout/readableZoom';
-import type {
-  ArchitectureDiffHighlight,
-  ArchitectureRendererEdge,
-  ArchitectureRendererNode,
-  ArchitectureRendererProps,
-} from '@/modules/architecture/dom/rendererContract';
-import {
-  moveEntityFocus,
-  PACKAGE_NAV_PREFIX,
-  type EntityNavigationDirection,
-  type EntityNavigationItem,
-} from '@/modules/architecture/dom/entityNavigation';
+import { BOTTOM_SLOT_GAP_PX, bottomCornerLayout, overlayLayoutDefect } from '@/modules/architecture/dom/bottomSlotLayout';
+import { DEFAULT_NEIGHBORHOOD_HOPS, type ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
+
+
+
+import { solveFitArea, type FitAreaRect, type FitOverlayRect } from '@/modules/architecture/layout/semanticZoomLayout';
+import { createGraphLayoutPipeline } from '@/modules/architecture/layout/graphLayoutPipeline';
+import { capDrawnMemberRows } from '@/modules/architecture/layout/drawnFit';
+import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
+import { PORTRAIT_CONTROL_BAND_PX, TOUCH_CONTROL_GAP_PX, TOUCH_TARGET_STYLE, useCanvasHeaderSlot, useCompactToolbarSlot, useTouchLayout, ZOOM_CLUSTER_TARGET_STYLE } from '@/modules/architecture/hooks/useTouchLayout';
+
+import type { ArchitectureDiffHighlight, ArchitectureRendererEdge, ArchitectureRendererNode, ArchitectureRendererProps } from '@/modules/architecture/dom/rendererContract';
+
 import { createGraphGestureController } from '@/modules/architecture/dom/graphGestureController';
 import { createGraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
-import {
-  createGraphViewportController,
-  type GraphZoom,
-} from '@/modules/architecture/layout/graphViewportController';
-import {
-  selectionsIntersectingBox,
-  type ArchitectureSelection,
-} from '@/modules/architecture/dom/selectionModel';
-import {
-  centerElementInContainer,
-  centeredScrollForDrawingRect,
-  clampZoomScale,
-  createSvgDragPan,
-  createSvgTouchGestures,
-  createSvgViewport,
-  fitAreaInsets,
-  fitPlacementAvoidingCorners,
-  applyZoomScale,
-  measureHostSize,
-  measureViewportSize,
-  MIN_READABLE_ZOOM_SCALE,
-  MIN_ZOOM_SCALE,
-  readSvgNaturalSize,
-  ZOOM_STEP,
-  type SvgCornerRect,
-  type SvgFitPlacement,
-  type SvgViewportSize,
-} from '@/modules/architecture/layout/svgViewport';
-import {
-  ENTITY_HIGHLIGHT_EVENT,
-  GROUP_PREFIX,
-  KEYBOARD_PAN_STEP,
-  STUB_PREFIX,
-  TOOLBAR_BUTTON_CLASS,
-} from '@/modules/architecture/dom/graphConstants';
-import {
-  addNodeHitTargets,
-  annotateNodes,
-  addEdgeHitTargets,
-  announceSelection,
-  applySelectionStyles,
-  boxCandidates,
-  captureSemanticDrawing,
-  clearHighlight,
-  defaultViewOf,
-  drawSemanticLayout,
-  drawStickyLabels,
-  drawingKeyOf,
-  drawnPackageFrame,
-  edgeElement,
-  highlightEdge,
-  highlightRelations,
-  highlightSelection,
-  hideEdgeLabels,
-  isEntityGraph,
-  markDrawingUnselectable,
-  measureLayoutAspect,
-  nearestNodeHitId,
-  nodeElement,
-  positionOverviewHint,
-  relationsOf,
-  rendererOptionsFor,
-  restoreEntityIds,
-  reverseAliases,
-  selectionOf,
-  type PlantUmlApplyView,
-  type PlantUmlRenderDetailed,
-  type PlantUmlToPlantUml,
-  type SemanticCapture,
-} from '@/modules/architecture/layout/graphDom';
-import {
-  CANVAS_UNSELECTABLE_STYLE,
-  HIGHLIGHT_STYLE,
-} from '@/modules/architecture/dom/graphStyles';
+import { createGraphViewportController, type GraphZoom } from '@/modules/architecture/layout/graphViewportController';
+import { selectionsIntersectingBox, type ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
+import { centeredScrollForDrawingRect, clampZoomScale, fitPlacementAvoidingCorners, measureHostSize, measureViewportSize, MIN_READABLE_ZOOM_SCALE, MIN_ZOOM_SCALE, readSvgNaturalSize, ZOOM_STEP, type SvgCornerRect, type SvgFitPlacement, type SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
+import { ENTITY_HIGHLIGHT_EVENT, GROUP_PREFIX, STUB_PREFIX, TOOLBAR_BUTTON_CLASS } from '@/modules/architecture/dom/graphConstants';
+import { applySelectionStyles, boxCandidates, clearHighlight, defaultViewOf, drawnPackageFrame, highlightSelection, isEntityGraph, nearestNodeHitId, positionOverviewHint } from '@/modules/architecture/layout/graphDom';
+import { CANVAS_UNSELECTABLE_STYLE, HIGHLIGHT_STYLE } from '@/modules/architecture/dom/graphStyles';
 
 /**
  * The marker-anchor geometry lives in `graphDom.ts` with the rest of the
@@ -159,38 +45,13 @@ export type {
   KeyboardA11yDefect,
   NavigationPoint,
 } from '@/modules/architecture/render/plantUmlNavigation';
-import type { NavigationPoint } from '@/modules/architecture/render/plantUmlNavigation';
-import {
-  drawnMemberLimits,
-  forcedLayoutOrientation,
-  applyDiffStyles,
-  pinFocusMarker,
-  clearNavigationFocus,
-  paintNavigationFocus,
-  collectNavigationItems,
-  navigationElementOf,
-  keyboardA11yDefect,
-  pickNavigationStart,
-  renderWithMemberDetail,
-  farthestNavigationStart,
-  navigationDomId,
-  normalizedPackageId,
-  packageIdOfNodeId,
-  DIFF_HIGHLIGHT_STYLE,
-  afterPaint,
-  layoutSizeOf,
-} from '@/modules/architecture/render/plantUmlNavigation';
+
+import { clearNavigationFocus, navigationDomId, DIFF_HIGHLIGHT_STYLE } from '@/modules/architecture/render/plantUmlNavigation';
 import { usePlantUmlDrawing } from '@/modules/architecture/render/usePlantUmlDrawing';
 import { useCanvasPointerInteractions } from '@/modules/architecture/render/useCanvasPointerInteractions';
 import { useCanvasKeyboardNavigation } from '@/modules/architecture/render/useCanvasKeyboardNavigation';
 import { useCanvasFitZoom } from '@/modules/architecture/render/useCanvasFitZoom';
-import {
-  autoFitDisabled,
-  forcedDefaultFocus,
-  forcedFitCssFactor,
-  forcedFullscreenReservedMargins,
-  FULLSCREEN_FIT_ROUNDING_ALLOWANCE_PX,
-} from '@/modules/architecture/render/plantUmlControlArm';
+import { autoFitDisabled, forcedFullscreenReservedMargins, FULLSCREEN_FIT_ROUNDING_ALLOWANCE_PX } from '@/modules/architecture/render/plantUmlControlArm';
 import { useCanvasDrawingSemantics } from '@/modules/architecture/render/useCanvasDrawingSemantics';
 import { useCanvasSurfaceBindings } from '@/modules/architecture/render/useCanvasSurfaceBindings';
 
@@ -1069,7 +930,7 @@ export function PlantUmlGraph({
 
   // The auto-fit re-solve, the resize/overlay observers, the toolbar's zoom
   // commands and the explicit whole-graph fit live in the fit/zoom hook.
-  const { runAutoFit, zoomToScale, zoomByStep, fitDiagram } = useCanvasFitZoom({
+  const { zoomToScale, zoomByStep, fitDiagram } = useCanvasFitZoom({
     hostRef,
     graph,
     fullscreen,
@@ -1839,7 +1700,7 @@ export function PlantUmlGraph({
             rowGap: BOTTOM_SLOT_GAP_PX,
             columnGap: cornerLayout.direction === 'row' ? cornerLayout.gap : 0,
           }}
-          className="z-20 pointer-events-none"
+          className="pointer-events-none z-20"
         >
           <ArchitectureMinimap
             hostRef={hostRef}

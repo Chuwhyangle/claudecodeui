@@ -13,10 +13,11 @@ import { seedMarkerMode } from '@/modules/architecture/layout/archguardToPlantUm
 import { MENTIONED_HINT_ID } from '@/modules/architecture/render/architecturePanelShared';
 import { LegendSwatch } from '@/modules/architecture/render/LegendSwatch';
 import type { ArchitectureSearchCommit } from '@/modules/architecture/render/architectureSearchController';
+import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';
 
 /** The ready arm of the panel model: every field these fragments read. */
-type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }>;
+type ReadyScope = Extract<ArchitecturePanelScope, { branch: 'ready' }> & ArchitecturePanelActions;
 
 /** Build the filtersearch fragments from the panel model. */
 export function panelFilterFragments(panel: ReadyScope): {
@@ -593,7 +594,7 @@ const searchBox = (
                         <span className="flex min-w-0 flex-1 flex-col">
                           <span
                             data-architecture-search-project-name="true"
-                            className="font-medium break-words"
+                            className="break-words font-medium"
                           >
                             {hit.name}
                           </span>
