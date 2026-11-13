@@ -2,7 +2,7 @@
 id: gap-ac120-criterion-internal-walls-below-declared-budget
 title: AC-120 判据内墙 35s/40s 低于其 240s 文件预算且小于自身等待之和：配额 EDQUOT 中断时以 Test timeout
   吞掉四条断言 ⇒ 抬内墙、断言逐字不动（depends_on 在飞配额任务）
-status: todo
+status: ready
 labels:
   - gap
   - defect
