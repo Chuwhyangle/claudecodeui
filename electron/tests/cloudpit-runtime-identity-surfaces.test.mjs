@@ -197,6 +197,132 @@ function uniqueSorted(values) {
   return [...new Set(values)].sort();
 }
 
+// ── the standalone send chain ─────────────────────────────────────────────
+// The standalone architecture page reaches the bridge through four composition
+// rings. Pinning only the leaf that happens to hold the call is what let a
+// previous split move the call without moving the criterion; this reading walks
+// the whole chain and names the ring that broke.
+const ARCHITECTURE_SEND_CALL = 'sendArchitectureChatMessage(';
+const ARCHITECTURE_SEND_HOOK =
+  'src/modules/architecture/render/useArchitecturePanelActions.ts';
+/** The bridge defines the send function; it is a definition, not a caller. */
+const ARCHITECTURE_BRIDGE_FILE =
+  'src/modules/architecture/render/architectureChatBridge.ts';
+const ARCHITECTURE_SEND_CHAIN = Object.freeze([
+  ['src/modules/architecture/render/ArchitecturePanel.tsx', 'ArchitecturePanelShell'],
+  ['src/modules/architecture/render/architecturePanelShell.tsx', 'ArchitecturePanelReadyView'],
+  ['src/modules/architecture/render/architecturePanelReadyView.tsx', 'useArchitecturePanelActions'],
+  [ARCHITECTURE_SEND_HOOK, ARCHITECTURE_SEND_CALL],
+]);
+const ARCHITECTURE_PACKAGE_DIR = 'src/modules/architecture';
+
+/** Every text source file under the architecture package, `tests/` excluded. */
+function collectArchitectureSourceFiles(dir, files = []) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return files;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (SKIPPED_DIRECTORY_NAMES.has(entry.name) || entry.name === 'tests') continue;
+      collectArchitectureSourceFiles(path.join(dir, entry.name), files);
+    } else if (entry.isFile() && TEXT_EXTENSIONS.has(path.extname(entry.name))) {
+      files.push(path.join(dir, entry.name));
+    }
+  }
+  return files;
+}
+
+/**
+ * Read the standalone page's send chain under an injectable `root`.
+ *
+ * Returns the rings that are absent, the files that actually call the bridge
+ * (the bridge definition and `tests/` excluded), and whether the single call in
+ * the actions hook sits inside the `if (standalone)` branch.
+ *
+ * @returns {{ brokenLinks: string[], callerFiles: string[], callInsideStandaloneBranch: boolean }}
+ */
+function architectureSendChain(root) {
+  const links = ARCHITECTURE_SEND_CHAIN.map(([file, needle]) => {
+    const absolute = path.join(root, file);
+    const source = existsSync(absolute) ? readFileSync(absolute, 'utf8') : '';
+    return { file, needle, present: source.includes(needle), source };
+  });
+
+  const bridgeAbsolute = path.resolve(root, ARCHITECTURE_BRIDGE_FILE);
+  const callerFiles = collectArchitectureSourceFiles(path.join(root, ARCHITECTURE_PACKAGE_DIR))
+    .filter((file) => path.resolve(file) !== bridgeAbsolute)
+    .filter((file) => readFileSync(file, 'utf8').includes(ARCHITECTURE_SEND_CALL))
+    .map((file) => toRelative(root, file))
+    .sort();
+
+  const actionsSource = links[links.length - 1].source;
+  const branchIndex = actionsSource.indexOf('if (standalone)');
+  const callIndex = actionsSource.indexOf(ARCHITECTURE_SEND_CALL);
+
+  return {
+    brokenLinks: links.filter((link) => !link.present).map((link) => link.file),
+    callerFiles,
+    callInsideStandaloneBranch:
+      branchIndex !== -1 && callIndex !== -1 && branchIndex < callIndex,
+  };
+}
+
+/**
+ * The BroadcastChannel send half of AC-459, as assertions.
+ *
+ * Kept as a function so the negative arms can run the SAME criterion against a
+ * fixture and prove it reds, rather than merely describing a broken chain.
+ */
+function assertArchitectureSendChain(root) {
+  const chain = architectureSendChain(root);
+  assert.deepEqual(
+    chain.brokenLinks,
+    [],
+    `the standalone send chain is intact (broken links: ${chain.brokenLinks.join(', ') || 'none'})`,
+  );
+  assert.deepEqual(
+    chain.callerFiles,
+    [ARCHITECTURE_SEND_HOOK],
+    `exactly one file calls the bridge and it is ${ARCHITECTURE_SEND_HOOK}`,
+  );
+  assert.equal(
+    chain.callInsideStandaloneBranch,
+    true,
+    'the single call sits inside the `if (standalone)` branch',
+  );
+}
+
+/** A minimal stand-in for the whole chain, so a fixture can break one ring. */
+function writeArchitectureChainFixture(root, overrides = {}) {
+  const sources = {
+    'src/modules/architecture/render/ArchitecturePanel.tsx':
+      'export const ArchitecturePanel = () => <ArchitecturePanelShell />;\n',
+    'src/modules/architecture/render/architecturePanelShell.tsx':
+      'export const ArchitecturePanelShell = () => <ArchitecturePanelReadyView />;\n',
+    'src/modules/architecture/render/architecturePanelReadyView.tsx':
+      'export const ArchitecturePanelReadyView = () => useArchitecturePanelActions({});\n',
+    [ARCHITECTURE_SEND_HOOK]: [
+      "import { sendArchitectureChatMessage } from './architectureChatBridge';",
+      'export function useArchitecturePanelActions(args) {',
+      '  if (standalone) {',
+      '    return sendArchitectureChatMessage({ sessionId: null, text: "" });',
+      '  }',
+      '  return null;',
+      '}',
+      '',
+    ].join('\n'),
+    [ARCHITECTURE_BRIDGE_FILE]:
+      'export function sendArchitectureChatMessage(options) { return Promise.resolve(false); }\n',
+    ...overrides,
+  };
+  for (const [file, contents] of Object.entries(sources)) {
+    writeFixtureFile(root, file, contents);
+  }
+}
+
 // ── AC-459 expect: the live surface, and a non-vacuous positive arm ────────
 
 test('AC2: the live runtime identity surfaces are clean, and the scan is not vacuous', () => {
@@ -309,12 +435,11 @@ test('AC-459 expect: one BroadcastChannel name feeds both architecture surfaces'
   );
 
   // The two surfaces this channel joins: the standalone architecture page
-  // (sends) and the workspace tab hook (receives).
-  assert.match(
-    readRepoFile('src/modules/architecture/render/ArchitecturePanel.tsx'),
-    /sendArchitectureChatMessage/,
-    'the standalone architecture page sends over the bridge',
-  );
+  // (sends) and the workspace tab hook (receives). The send half is a chain —
+  // panel → shell → ready view → actions hook → bridge — read ring by ring, so
+  // a future split names the ring that moved instead of silently changing which
+  // leaf file holds the call.
+  assertArchitectureSendChain(REPO_ROOT);
   assert.match(
     readRepoFile('src/modules/architecture/index.ts'),
     /useArchitectureChatBridge/,
@@ -407,6 +532,55 @@ test('AC3: an injected pre-2.0 scenario global in a tmp fixture is reported agai
         violation.token === LEGACY_SCENARIO_GLOBAL,
     ),
     `expected a ${LEGACY_SCENARIO_GLOBAL} violation against src/semantic.js, got ${JSON.stringify(detail.violations)}`,
+  );
+});
+
+// ── AC-459 expect: a broken send chain turns the same criterion red ───────
+
+test('AC3: a tmp fixture whose actions hook drops the send call breaks the chain', (t) => {
+  const root = makeFixtureRoot(t);
+  writeArchitectureChainFixture(root, {
+    [ARCHITECTURE_SEND_HOOK]:
+      'export function useArchitecturePanelActions() { return null; }\n',
+  });
+
+  const chain = architectureSendChain(root);
+  assert.deepEqual(
+    chain.brokenLinks,
+    [ARCHITECTURE_SEND_HOOK],
+    `the reading names the broken ring: ${JSON.stringify(chain.brokenLinks)}`,
+  );
+  assert.deepEqual(chain.callerFiles, [], 'no file calls the bridge any more');
+  assert.throws(
+    () => assertArchitectureSendChain(root),
+    /the standalone send chain is intact/,
+    'the criterion reds when the hook no longer calls the bridge',
+  );
+});
+
+test('AC3: a tmp fixture with a second send caller breaks the chain', (t) => {
+  const root = makeFixtureRoot(t);
+  writeArchitectureChainFixture(root, {
+    'src/modules/architecture/render/architecturePanelCanvas.tsx': [
+      "import { sendArchitectureChatMessage } from './architectureChatBridge';",
+      "export const resend = () => sendArchitectureChatMessage({ sessionId: null, text: 'x' });",
+      '',
+    ].join('\n'),
+  });
+
+  const chain = architectureSendChain(root);
+  assert.deepEqual(
+    chain.callerFiles,
+    [
+      'src/modules/architecture/render/architecturePanelCanvas.tsx',
+      ARCHITECTURE_SEND_HOOK,
+    ],
+    'the reading reports both call sites',
+  );
+  assert.throws(
+    () => assertArchitectureSendChain(root),
+    /exactly one file calls the bridge/,
+    'the criterion reds when a second file calls the bridge',
   );
 });
 
