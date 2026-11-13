@@ -248,7 +248,7 @@ export function ArchitectureExportMenu({
         // wrapper's line box and push this button below the row's shared top.
         className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
           compact
-            ? 'px-3 py-2 text-left text-sm'
+            ? 'px-3 py-2 text-sm text-left'
             : overflow
               ? 'flex items-center px-2 py-[3px] text-sm leading-none'
               : 'px-2 py-0.5 text-xs'
