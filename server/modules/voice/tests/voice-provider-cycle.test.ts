@@ -9,8 +9,12 @@
  * exactly two edges: one out (`voice-lexicon.ts`'s literal dynamic `import()`
  * naming the provider barrel) and one in
  * (`websocket/services -> voice`, the send hook). The task replaced the out-edge
- * with a shared port, so the remaining seven directories still form a cycle and
- * `modules/voice` must no longer be in it.
+ * with a shared port, so `modules/voice` must no longer be in it.
+ *
+ * The seven-directory remainder this file originally also asserted no longer
+ * exists: `gap-routine-architecture-analysis-providers-g1-cycle-barrel-hub`
+ * removed the last non-trivial directory SCC (`sccs=[]` is now the tree's
+ * intended state), so the real-tree case no longer assumes any cycle is left.
  *
  * NOT A SECOND SCANNER. This file reuses AC-394's measuring core —
  * `collectServerSources`, `scanImportGraph` and `strongComponents` from
@@ -19,11 +23,11 @@
  * be free to disagree with the ratchet about what an edge is.
  *
  * Shaped so "green" cannot be vacuous: the real-tree case prints the summary
- * and every non-trivial component, asserts the tree still has at least one
- * non-trivial SCC (the seven-member remainder — a scanner that stopped finding
- * cycles would satisfy "voice is not in one" for the wrong reason), and the
- * synthetic case proves the SAME scanner really does put `modules/voice` into a
- * component when the offending import is present.
+ * and every non-trivial component, asserts the scanner actually read the tree
+ * (`files > 0`) and actually found directory edges (`dirEdges > 0`) — a scanner
+ * that stopped reading would satisfy "voice is not in one" for the wrong reason
+ * — and the synthetic case proves the SAME scanner really does put
+ * `modules/voice` into a component when the offending import is present.
  */
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -60,12 +64,16 @@ test('modules/voice is in no non-trivial directory SCC on the real server tree',
   const voiceInAnyScc = containing.length > 0;
   console.log(`voiceInAnyScc=${voiceInAnyScc}`);
 
-  // Non-vacuity: a dead walk finds no files and no cycles, and would pass the
-  // "voice is not in one" assertion without having read anything.
+  // Non-vacuity: a dead walk finds no files and no directory edges, and would pass
+  // the "voice is not in one" assertion without having read anything. (The previous
+  // guard here required the seven-member provider remainder to still exist; the G1
+  // barrel-hub task removed it, so the guard is re-anchored on the reading itself.
+  // The false-form case below is what proves this same scanner still reports an SCC
+  // when one is present.)
   assert.ok(graph.files > 0, 'the scanner must have read the server tree');
   assert.ok(
-    components.length > 0,
-    'the tree must still contain at least one non-trivial SCC (the remaining provider cycle) — otherwise this criterion is green because the scanner found no cycles at all',
+    graph.dirEdges.length > 0,
+    'the scanner must have found directory edges — a dead walk finds none and would satisfy "voice is not in one" for the wrong reason',
   );
 
   assert.deepEqual(
