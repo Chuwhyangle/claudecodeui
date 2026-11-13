@@ -261,6 +261,14 @@ type HomeFileStamp = { mtimeMs: number; size: number };
  * `state.json`, action/budget ledgers). It is written every tick and belongs to the service, not to
  * the operator; a contract run on 2026-11-06 caught `resident-readings.json` + `resident-state.json`
  * moving. It is exempt by prefix like the other service-owned trees.
+ *
+ * `attention.lock` is the write lock around `attention.json` (`src/attention.ts`'s
+ * `ATTENTION_LOCK_FILENAME`): every another-writer segment creates it with `wx` and unlinks it on
+ * release, so it exists only while a write is in flight. On 2026-11-13 the host's resident service
+ * re-created it roughly every 250ms during a backlog drain, and three isolated contract runs in a
+ * row redded the guard on it (the develop baseline had simply not crossed a write). It belongs to
+ * the exempt `attention.json` write path, exactly like `inbox.lock` belongs to the outbox, so it is
+ * exempt by name — being transient, its presence or mtime says nothing about the exercised verbs.
  */
 const RESIDENT_SERVICE_DIRECTORIES = [
   'acceptance-windows/',
@@ -272,6 +280,7 @@ const RESIDENT_SERVICE_DIRECTORIES = [
 ];
 const RESIDENT_SERVICE_FILES = new Set([
   'attention.json',
+  'attention.lock',
   'bridge-deliveries.v0.json',
   'decisions.jsonl',
   'events.jsonl',
@@ -785,6 +794,8 @@ if (binPath === null) {
 test('AC3 guard: the resident-service exemption set covers the service log, molten state and its own temp files', () => {
   // Named service-owned files, including the log the resident service appends to on its schedule.
   assert.equal(isResidentServiceFile('service.log.jsonl'), true, 'the service log must be exempt');
+  // The lock its attention write path creates and unlinks around every segment.
+  assert.equal(isResidentServiceFile('attention.lock'), true, 'the attention write lock must be exempt');
   assert.equal(
     isResidentServiceFile('molten/resident-state.json'),
     true,
