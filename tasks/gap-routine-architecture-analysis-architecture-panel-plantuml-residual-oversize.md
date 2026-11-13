@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-architecture-panel-plantuml-residual-overs
 title: 'architecture-analysis: The 2026-11-04 architecture split
   (gap-routine-architecture-analysis-god-package-src-architecture, status done)
   carried AC "both panel files <=2000 lines" bu'
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
