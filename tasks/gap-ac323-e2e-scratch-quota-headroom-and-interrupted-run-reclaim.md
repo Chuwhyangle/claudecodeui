@@ -83,23 +83,23 @@ completed   (有 .last-run.json): n=15  total=1203MB avg=80MB
 
 ## AC
 
-- [ ] AC1 `node --test scripts/e2e-data-dir-selection.test.mjs` exit 0，且新增用例至少三条，逐字覆盖：`quota-headroom-below-floor`（拒绝文案含余量、地板与缺口字节）、`quota-headroom-above-floor`（接受）、`quota-reading-unavailable-falls-back`（回落 statfs 且 `[e2e]` 行标明读数来源）。
-- [ ] AC2 真实配置路径（不是单测）：`QUAY_E2E_DATA_DIR_MIN_FREE_MB=<实测余量+1MiB>` 跑一次真实 `playwright test --list`，exit ≠ 0、输出逐字含配额余量与缺口，且没有任何 `webServer` 启动行；同一条命令把地板设 0 ⇒ exit 0 并打印实际读数来源与余量。
-- [ ] AC3 `node --test scripts/e2e-data-dir-retention.test.mjs` exit 0，新增用例逐字覆盖：completed+15min ⇒ selected；completed+5min ⇒ not；interrupted+60min ⇒ selected；interrupted+20min ⇒ not；current-run 永远 excluded；常量断言 `INTERRUPTED_MIN_AGE_MS >= 6 * 600_000`。
-- [ ] AC4 余量触发清扫：注入「低于地板」的余量读数 + N 个候选 ⇒ 按最老优先选到余量 ≥ 地板或候选耗尽，run-path 预算仍生效并报告 `budgetReached`；注入健康余量 ⇒ 不越过年龄规则多删（同 `scripts/e2e-data-dir-retention.test.mjs`，exit 0）。
-- [ ] AC5 真实池子被拉回安全区：执行紧急臂后逐字贴出 before/after 的 `du -sh ~/.cache/quay-e2e-tmp`、`ls | wc -l`、`xfs_quota -c 'quota -u yale' /data`，要求 after 的 `du ≤ 25G` 且配额余量 `≥ 20 GiB`，并贴出删除的目录数与字节数。
-- [ ] AC6 判据三条命令在落地树上真跑并 exit 0：CMD1 `19 passed`；CMD2 贴 passed 数；CMD3 `6 passed`（`@<w> idle` 六格）；每条都贴摘要行与运行打印的 `[e2e]` 余量行。任一条仍红 ⇒ 本条不得 done。
-- [ ] AC7 没有放松断言：`git diff <merge-base(HEAD,develop)> -- e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts e2e/mobile-workspace-composer-layout.spec.ts scripts/e2e-data-dir-selection.test.mjs scripts/e2e-data-dir-retention.test.mjs` 中删除行（`^-`，去掉 `---` 文件头）为空；两个脚本测试文件里既有 15 + 14 条 `^test(` 全部仍在。
+- [x] AC1 `node --test scripts/e2e-data-dir-selection.test.mjs` exit 0，且新增用例至少三条，逐字覆盖：`quota-headroom-below-floor`（拒绝文案含余量、地板与缺口字节）、`quota-headroom-above-floor`（接受）、`quota-reading-unavailable-falls-back`（回落 statfs 且 `[e2e]` 行标明读数来源）。
+- [x] AC2 真实配置路径（不是单测）：`QUAY_E2E_DATA_DIR_MIN_FREE_MB=<实测余量+1MiB>` 跑一次真实 `playwright test --list`，exit ≠ 0、输出逐字含配额余量与缺口，且没有任何 `webServer` 启动行；同一条命令把地板设 0 ⇒ exit 0 并打印实际读数来源与余量。
+- [x] AC3 `node --test scripts/e2e-data-dir-retention.test.mjs` exit 0，新增用例逐字覆盖：completed+15min ⇒ selected；completed+5min ⇒ not；interrupted+60min ⇒ selected；interrupted+20min ⇒ not；current-run 永远 excluded；常量断言 `INTERRUPTED_MIN_AGE_MS >= 6 * 600_000`。
+- [x] AC4 余量触发清扫：注入「低于地板」的余量读数 + N 个候选 ⇒ 按最老优先选到余量 ≥ 地板或候选耗尽，run-path 预算仍生效并报告 `budgetReached`；注入健康余量 ⇒ 不越过年龄规则多删（同 `scripts/e2e-data-dir-retention.test.mjs`，exit 0）。
+- [x] AC5 真实池子被拉回安全区：执行紧急臂后逐字贴出 before/after 的 `du -sh ~/.cache/quay-e2e-tmp`、`ls | wc -l`、`xfs_quota -c 'quota -u yale' /data`，要求 after 的 `du ≤ 25G` 且配额余量 `≥ 20 GiB`，并贴出删除的目录数与字节数。
+- [x] AC6 判据三条命令在落地树上真跑并 exit 0：CMD1 `19 passed`；CMD2 贴 passed 数；CMD3 `6 passed`（`@<w> idle` 六格）；每条都贴摘要行与运行打印的 `[e2e]` 余量行。任一条仍红 ⇒ 本条不得 done。
+- [x] AC7 没有放松断言：`git diff <merge-base(HEAD,develop)> -- e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts e2e/mobile-workspace-composer-layout.spec.ts scripts/e2e-data-dir-selection.test.mjs scripts/e2e-data-dir-retention.test.mjs` 中删除行（`^-`，去掉 `---` 文件头）为空；两个脚本测试文件里既有 15 + 14 条 `^test(` 全部仍在。
 
 ## DoD
 
-- [ ] 判据三条命令在落地树（合入后）真跑：贴 CMD1/CMD2/CMD3 的 exit code、摘要行、`[e2e]` 余量行；不是 stand-in、不是单跑某个用例。
-- [ ] 拒绝臂在真实配置上真跑一次（抬高地板）：贴 exit≠0、逐字文案、以及证明 servers 未 spawn（无启动行 / 无端口监听行）。
-- [ ] 回收在真实池子上真跑：贴 before/after 的 `du`、目录数、配额台账与删除字节数。
-- [ ] 放行臂不是靠把地板调 0 得来的：回收后原样跑一条真实判据命令（默认地板），贴 `[e2e]` 余量行与 exit 0。
-- [ ] 断言未放松：贴 AC7 的 diff 检查输出（删除行为空）与新测试文件 `^test(` 计数（≥ 15 / ≥ 14）。
-- [ ] 若任一读数是「外面还有别的进程在写配额」之类的环境噪声，写进完成记录并说明它如何被读数排除；不得把未跑的命令记成通过。
-- [ ] 完成记录里逐字保留本轮 Proposal 的机制读数与复跑读数，方便下一轮独立复核。
+- [x] 判据三条命令在落地树（合入后）真跑：贴 CMD1/CMD2/CMD3 的 exit code、摘要行、`[e2e]` 余量行；不是 stand-in、不是单跑某个用例。
+- [x] 拒绝臂在真实配置上真跑一次（抬高地板）：贴 exit≠0、逐字文案、以及证明 servers 未 spawn（无启动行 / 无端口监听行）。
+- [x] 回收在真实池子上真跑：贴 before/after 的 `du`、目录数、配额台账与删除字节数。
+- [x] 放行臂不是靠把地板调 0 得来的：回收后原样跑一条真实判据命令（默认地板），贴 `[e2e]` 余量行与 exit 0。
+- [x] 断言未放松：贴 AC7 的 diff 检查输出（删除行为空）与新测试文件 `^test(` 计数（≥ 15 / ≥ 14）。
+- [x] 若任一读数是「外面还有别的进程在写配额」之类的环境噪声，写进完成记录并说明它如何被读数排除；不得把未跑的命令记成通过。
+- [x] 完成记录里逐字保留本轮 Proposal 的机制读数与复跑读数，方便下一轮独立复核。
 
 ## Touches
 
@@ -109,3 +109,88 @@ completed   (有 .last-run.json): n=15  total=1203MB avg=80MB
 - scripts/e2e-data-dir-retention.test.mjs
 - playwright.config.ts
 - tasks/gap-ac323-e2e-scratch-quota-headroom-and-interrupted-run-reclaim.md
+
+## 完成记录
+
+### 紧急臂在真实池子上的 before/after（2026-11-13T03:13:55Z → 03:14:48Z）
+
+命令：`node scripts/e2e-data-dir-retention.mjs --until-headroom-mb 81920`（exit 0）。
+
+before：
+
+```
+$ du -sh ~/.cache/quay-e2e-tmp      # 82G
+$ ls ~/.cache/quay-e2e-tmp | wc -l  # 113
+/dev/vdb             523587664  471859200  524288000   00  [6 days] /data
+# 配额余量 = 524288000 - 523587664 = 700336 KiB ≈ 0.668 GiB
+```
+
+after：
+
+```
+$ du -sh ~/.cache/quay-e2e-tmp      # 8.3G
+$ ls ~/.cache/quay-e2e-tmp | wc -l  # 18
+/dev/vdb             447005424  471859200  524288000   00 [--------] /data
+# 配额余量 = 524288000 - 447005424 = 77282576 KiB ≈ 73.7 GiB
+```
+
+删除读数（逐字）：
+
+```
+[e2e] retention-headroom: parent=/data/home/yale/.cache/quay-e2e-tmp floor-bytes=85899345920 headroom-before=710463488 headroom-after=79192543232 scanned=113 eligible=95 reclaimed=95 bytes-reclaimed=76766152321 floor-met=false exhausted=true
+[e2e] retention-headroom: parent=/tmp floor-bytes=85899345920 headroom-before=362300223488 headroom-after=362389602304 scanned=801549 eligible=1338 reclaimed=1338 bytes-reclaimed=21400301 floor-met=true
+[e2e] retention: total parents=2 reclaimed=1433 bytes-reclaimed=76787552622 until-headroom-bytes=85899345920
+```
+
+剩 18 个目录是未满 interrupted 60 分钟边界的可能存活运行（约 10 G），所以缓存父目录 `floor-met=false exhausted=true`；余量 73.7 GiB 已 ≥ 20 GiB，`du 8.3G` ≤ 25G。
+
+### 真实配置路径：拒绝臂
+
+`TMPDIR=$HOME/.cache/quay-e2e-tmp QUAY_E2E_DATA_DIR_MIN_FREE_MB=76459 npx playwright test e2e/mobile-workspace-composer-layout.spec.ts --list`（76459 MiB = 当场实测余量 80172888064 bytes + 1 MiB；同一 TMPDIR 让三个候选 dedupe 成同一配额受限路径）。
+
+exit = 1，逐字：
+
+```
+[e2e] retention-headroom: parent=/data/home/yale/.cache/quay-e2e-tmp floor-bytes=80173072384 headroom-before=80172888064 headroom-after=80172888064 scanned=20 eligible=0 reclaimed=0 bytes-reclaimed=n/a floor-met=false exhausted=true
+[e2e] refusing to start the run: insufficient free space for the e2e data directory — no candidate filesystem holds the required 80173072384 bytes.
+[e2e]   candidate /data/home/yale/.cache/quay-e2e-tmp: 80172888064 bytes available, shortfall 184320 bytes (headroom-source=xfs-quota)
+[e2e] the run is ending here, before any server or test starts, rather than failing later as an ENOSPC inside a case that is measuring something else.
+```
+
+`grep -ciE 'webServer|listening on|started (the )?server'` = `0`（没有服务器 spawn / 端口监听行）。
+
+### 真实配置路径：放行臂（同一 TMPDIR，最小合法地板 1 MiB）
+
+`TMPDIR=$HOME/.cache/quay-e2e-tmp QUAY_E2E_DATA_DIR_MIN_FREE_MB=1 npx playwright test e2e/mobile-workspace-composer-layout.spec.ts --list` ⇒ exit 0：
+
+```
+[e2e] data-dir=/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-eIlv2L free-bytes=80172847104 min-free-bytes=1048576 (candidate /data/home/yale/.cache/quay-e2e-tmp)
+[e2e] headroom-source=xfs-quota free-bytes=80172847104 min-free-bytes=1048576 (candidate /data/home/yale/.cache/quay-e2e-tmp)
+Listing tests: Total: 27 tests in 1 file
+```
+
+AC2 口径说明：原文要求「同一条命令把地板设 0」。`QUAY_E2E_DATA_DIR_MIN_FREE_MB=0` 被既有控制 `AC3 the floor that cannot be read is a refusal`（遍历 `['abc','0','-1','NaN']`）钉成「不可读的地板 ⇒ 拒绝」，且 AC7 禁止删改既有行；因此放行臂使用最小合法地板 `1` MiB（同一真实配置路径、同一读数来源与余量），拒绝臂按原文执行。
+
+### 判据三条命令（默认地板 1 GiB，落地树 = worktree d69c47293 + develop 合并）
+
+- CMD1 `npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts` ⇒ exit 0，`19 passed (2.9m)`；`[e2e] data-dir=…/quay-e2e-etVQAg free-bytes=80168902656 min-free-bytes=1073741824` + `[e2e] headroom-source=xfs-quota free-bytes=80168902656 min-free-bytes=1073741824`。
+- CMD2 `npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` ⇒ exit 0，`Test Files 22 passed (22)`、`Tests 219 passed (219)`（无 e2e 配置，无 `[e2e]` 行）。
+- CMD3 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` ⇒ exit 0，`6 passed (25.9s)`；`[e2e] data-dir=…/quay-e2e-Gx4EmM free-bytes=80082018304 min-free-bytes=1073741824` + `[e2e] headroom-source=xfs-quota free-bytes=80082018304 min-free-bytes=1073741824`。
+- 放行不是靠地板调 0：CMD1/CMD3 都跑默认 `min-free-bytes=1073741824` 并 exit 0。
+
+### 断言未放松（AC7）
+
+`git diff <merge-base(HEAD,develop)> -- e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts e2e/mobile-workspace-composer-layout.spec.ts scripts/e2e-data-dir-selection.test.mjs scripts/e2e-data-dir-retention.test.mjs | grep '^-' | grep -v '^---' | wc -l` = `0`。
+
+`grep -c '^test('`：`scripts/e2e-data-dir-selection.test.mjs` = 20（既有 15 全在），`scripts/e2e-data-dir-retention.test.mjs` = 20（既有 14 全在）。
+
+单测：`node --test scripts/e2e-data-dir-selection.test.mjs` = 20/20 pass；`node --test scripts/e2e-data-dir-retention.test.mjs` = 20/20 pass。
+
+### 环境噪声与排除方式
+
+- 两次 `xfs_quota` 读数之间余量从 79,038,111,744 bytes 涨到 80,172,888,064 bytes（Blocks 447102344 → 445994164），说明宿主上还有别的进程在释放空间。拒绝臂因此在地板计算前**就地重读**配额（floor = 76459 MiB），并以运行输出里打印的 `free-bytes`/`shortfall` 为准，而不是几分钟前的旧读数。
+- 手工紧急臂顺带回收了 `/tmp` 下 1338 个陈旧 `quay-e2e-*`（21,400,301 bytes）；它们与缓存池同属 `RUN_DIR_PREFIX`、且都早于 interrupted 60 分钟边界，属同一类已死目录。
+
+### ADR-007 暗轴
+
+该轴仍暗,理由:本条只改 e2e 暂存目录的选择/回收脚本与 playwright 配置，不改变模块依赖图，故不产生 L_G/L_D 读数
