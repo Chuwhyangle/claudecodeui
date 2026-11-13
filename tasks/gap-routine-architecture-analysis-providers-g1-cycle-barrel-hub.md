@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-providers-g1-cycle-barrel-hub
 title: "architecture-analysis: Fresh archguard package-cycle reading (scope
   server, bcc56acf) finds exactly one directory SCC: modules/providers <->
   modules/providers/list/claude <-> modul"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
