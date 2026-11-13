@@ -60,7 +60,7 @@
  * the pool instead of merely failing to grow it.
  */
 
-import { readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 // No `node:os` import: the home and os-tmpdir defaults belong to `dataDirCandidates`, which already
 // resolves them itself (`scripts/e2e-data-dir-selection.mjs`). This module only forwards the caller's
 // override, so importing the same two functions here would be two names for nothing — which is
@@ -68,7 +68,7 @@ import { readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { basename, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DATA_DIR_ENV, dataDirCandidates } from './e2e-data-dir-selection.mjs';
+import { DATA_DIR_ENV, dataDirCandidates, readWritableHeadroom } from './e2e-data-dir-selection.mjs';
 
 /**
  * Raises or lowers the retention TTL, in hours.
@@ -92,6 +92,54 @@ export const RETENTION_TTL_HOURS_ENV = 'QUAY_E2E_DATA_DIR_RETENTION_TTL_HOURS';
  * *if nothing reclaims it*, which is a size the quota tolerates while the sweep catches up.
  */
 export const DEFAULT_RETENTION_TTL_HOURS = 6;
+
+/**
+ * How long a *finished* run directory is kept, in milliseconds.
+ *
+ * Fifteen minutes. A run that wrote `test-results/.last-run.json` is over in every sense Playwright
+ * has: the file is the runner's own record that it reached its end. Once nothing is using the
+ * directory, the only reason to keep it longer is to read a failure afterwards — and a failing run's
+ * directory is the one an operator wants, so the window is not zero.
+ */
+export const COMPLETED_MIN_AGE_MS = 15 * 60_000;
+
+/**
+ * How long a directory *without* `.last-run.json` is kept, in milliseconds.
+ *
+ * Sixty minutes. This is the class that actually filled the pool: a run killed before Playwright's
+ * `onEnd` (host reboot, driver kill, OOM) leaves its trace chunks behind and never writes the
+ * `.last-run.json` that the completed class has. Measured on this host on 2026-11-13: 104 such
+ * directories held 84.7 GB of an 82 GB pool, against 6 completed directories holding 0.4 GB.
+ *
+ * The number is not round: the largest criterion in `goals/` is `timeoutMs: 600000` (10 minutes),
+ * and this is six times that. No playwright invocation on this repository can still be inside its
+ * own gate at 60 minutes, so "no `.last-run.json` and older than an hour" is a dead run rather than a
+ * live one. The old 6 h TTL was six times *this* and was the size assumption that produced the
+ * backlog.
+ */
+export const INTERRUPTED_MIN_AGE_MS = 60 * 60_000;
+
+/**
+ * Per-class overrides, in minutes. Both are printed on the report line, like the legacy TTL.
+ *
+ * Separate variables rather than one because the two classes are different risks: shortening the
+ * completed window costs a post-mortem window, shortening the interrupted window can delete a run
+ * that is still working.
+ */
+export const COMPLETED_TTL_MINUTES_ENV = 'QUAY_E2E_DATA_DIR_COMPLETED_TTL_MINUTES';
+export const INTERRUPTED_TTL_MINUTES_ENV = 'QUAY_E2E_DATA_DIR_INTERRUPTED_TTL_MINUTES';
+
+/**
+ * Where Playwright leaves the marker that says a run reached its end.
+ *
+ * `test-results/<sandbox>/.last-run.json` is written by the runner when it finishes; an interrupted
+ * run has no such file. The path is relative to the run directory, and it is the *only* signal used
+ * to tell the two classes apart — mtime alone cannot, because both are just directories.
+ */
+export const LAST_RUN_RELATIVE_PATH = 'test-results/.last-run.json';
+
+/** Milliseconds in one minute, for the per-class environment overrides. */
+const MS_PER_MINUTE = 60_000;
 
 /**
  * The prefix a run directory carries.
@@ -130,6 +178,7 @@ const MS_PER_HOUR = 3_600_000;
  * @property {string} name The directory's own name under the parent, never a path.
  * @property {number} mtimeMs Its modification time, in epoch milliseconds.
  * @property {number} [uid] Its owner, when the reader could read one.
+ * @property {boolean} [completed] True when the run wrote its `.last-run.json`; false/absent means it was interrupted.
  */
 
 /**
@@ -149,14 +198,19 @@ const MS_PER_HOUR = 3_600_000;
  *
  * @typedef {object} RetentionReport
  * @property {string} parent The directory that was swept.
- * @property {number | null} ttlMs The TTL applied, or null when it could not be established.
+ * @property {number | null} ttlMs The legacy single TTL reading, or null when it could not be established.
+ * @property {number | null} completedTtlMs The TTL applied to finished run directories.
+ * @property {number | null} interruptedTtlMs The TTL applied to directories with no `.last-run.json`.
  * @property {boolean} dryRun True when nothing was removed.
  * @property {number} scanned Entries the parent held, before any filter.
  * @property {number} foreign Entries kept because they belong to another user.
+ * @property {number} completed Entries the reader classified as finished runs.
+ * @property {number} interrupted Entries the reader classified as interrupted runs.
  * @property {number} reclaimable Entries the decision selected.
  * @property {number} reclaimed Entries actually removed.
  * @property {number | null} bytesReclaimed Bytes removed, when a measurer was supplied.
  * @property {boolean} stoppedEarly True when the budget was crossed with entries still selected.
+ * @property {boolean} budgetReached The same reading under the name the quota arm reports.
  * @property {number} elapsedMs Wall-clock the sweep spent, as the injected clock saw it.
  * @property {string[]} reclaimedNames The names actually removed, in the order they were removed.
  * @property {string[]} errors One line per thing that could not be read or removed.
@@ -185,6 +239,70 @@ export const retentionTtlMsFromEnv = (env = process.env) => {
 };
 
 /**
+ * One per-class TTL from an environment value in minutes; `null` means the bound was unreadable.
+ *
+ * Same fail-closed side as the legacy hours reader: a present-but-unreadable override is not
+ * silently replaced by the default, because that would report a bound nobody asked for.
+ *
+ * @param {string | undefined} raw
+ * @param {number} fallbackMs
+ * @returns {number | null}
+ */
+const ttlMsFromMinutes = (raw, fallbackMs) => {
+  if (raw === undefined || raw.trim() === '') return fallbackMs;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * MS_PER_MINUTE);
+};
+
+/**
+ * The completed-run TTL for a sweep, in milliseconds.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {number | null}
+ */
+export const completedTtlMsFromEnv = (env = process.env) => ttlMsFromMinutes(env[COMPLETED_TTL_MINUTES_ENV], COMPLETED_MIN_AGE_MS);
+
+/**
+ * The interrupted-run TTL for a sweep, in milliseconds.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {number | null}
+ */
+export const interruptedTtlMsFromEnv = (env = process.env) => ttlMsFromMinutes(env[INTERRUPTED_TTL_MINUTES_ENV], INTERRUPTED_MIN_AGE_MS);
+
+/**
+ * The two per-class TTLs one sweep will apply, honouring every override in precedence order.
+ *
+ * Precedence: an explicit option, then the legacy `ttlMs` option (the existing run-path call site
+ * passes it and both classes must keep behaving as that caller asked), then the per-class
+ * environment variable, then the legacy hours variable, then the class default. Every branch that
+ * yields `null` means "the bound could not be established" and keeps entries, exactly as before.
+ *
+ * @param {{ ttlMs?: number | null, completedTtlMs?: number | null, interruptedTtlMs?: number | null }} options
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ completedTtlMs: number | null, interruptedTtlMs: number | null }}
+ */
+const resolveClassTtls = (options, env) => {
+  const legacyEnvRaw = env[RETENTION_TTL_HOURS_ENV];
+  const legacyEnv = legacyEnvRaw !== undefined && legacyEnvRaw.trim() !== ''
+    ? retentionTtlMsFromEnv(env)
+    : undefined;
+  /** @type {(explicit: number | null | undefined, envRaw: string | undefined, envReader: (env: Record<string, string | undefined>) => number | null, fallback: number) => number | null} */
+  const pick = (explicit, envRaw, envReader, fallback) => {
+    if (explicit !== undefined) return explicit;
+    if (options.ttlMs !== undefined) return options.ttlMs;
+    if (envRaw !== undefined && envRaw.trim() !== '') return envReader(env);
+    if (legacyEnv !== undefined) return legacyEnv;
+    return fallback;
+  };
+  return {
+    completedTtlMs: pick(options.completedTtlMs, env[COMPLETED_TTL_MINUTES_ENV], completedTtlMsFromEnv, COMPLETED_MIN_AGE_MS),
+    interruptedTtlMs: pick(options.interruptedTtlMs, env[INTERRUPTED_TTL_MINUTES_ENV], interruptedTtlMsFromEnv, INTERRUPTED_MIN_AGE_MS),
+  };
+};
+
+/**
  * Which of `entries` may be reclaimed — the whole decision, as a pure function.
  *
  * Four things keep an entry:
@@ -203,13 +321,23 @@ export const retentionTtlMsFromEnv = (env = process.env) => {
  * @param {{
  *   entries: RetentionEntry[],
  *   ttlMs: number | null,
+ *   completedTtlMs?: number | null,
+ *   interruptedTtlMs?: number | null,
  *   prefix?: string,
  *   exclude?: string[],
  *   now?: number,
  * }} options
  * @returns {RetentionSelection}
  */
-export const selectReclaimableDirs = ({ entries, ttlMs, prefix = RUN_DIR_PREFIX, exclude = [], now = Date.now() }) => {
+export const selectReclaimableDirs = ({
+  entries,
+  ttlMs,
+  completedTtlMs,
+  interruptedTtlMs,
+  prefix = RUN_DIR_PREFIX,
+  exclude = [],
+  now = Date.now(),
+}) => {
   /** @type {Set<string>} */
   const excluded = new Set();
   for (const value of exclude) {
@@ -217,19 +345,27 @@ export const selectReclaimableDirs = ({ entries, ttlMs, prefix = RUN_DIR_PREFIX,
     excluded.add(value.includes('/') ? basename(value) : value);
   }
 
-  // Narrowed inline rather than through the `bounded` boolean: TypeScript does not carry a narrowing
-  // through a derived boolean, and the subtraction below needs `ttlMs` to be a number.
-  const bounded = typeof ttlMs === 'number' && Number.isFinite(ttlMs) && ttlMs > 0;
-  const cutoff = bounded ? now - ttlMs : Number.POSITIVE_INFINITY;
+  // A per-class TTL when the caller supplied one, else the single TTL the older call sites pass.
+  // `null`/absent class TTLs deliberately fall back to `ttlMs`, so the existing controls (which know
+  // only one bound) keep their exact semantics.
+  const completedBound = completedTtlMs !== undefined ? completedTtlMs : ttlMs;
+  const interruptedBound = interruptedTtlMs !== undefined ? interruptedTtlMs : ttlMs;
+  /** @type {(value: number | null | undefined) => boolean} */
+  const bounded = (value) => typeof value === 'number' && Number.isFinite(value) && value > 0;
 
   /** @type {RetentionEntry[]} */
   const reclaimable = [];
   /** @type {RetentionEntry[]} */
   const kept = [];
   for (const entry of entries) {
-    if (!bounded) { kept.push(entry); continue; }
+    if (!bounded(completedBound) && !bounded(interruptedBound)) { kept.push(entry); continue; }
     if (typeof entry.name !== 'string' || !entry.name.startsWith(prefix)) { kept.push(entry); continue; }
     if (excluded.has(entry.name)) { kept.push(entry); continue; }
+    // The class is the whole point of the split: a finished run is safe to reclaim far sooner than
+    // one that was killed, because a killed run's directory may still belong to a live invocation.
+    const bound = entry.completed === true ? completedBound : interruptedBound;
+    if (!bounded(bound)) { kept.push(entry); continue; }
+    const cutoff = now - /** @type {number} */ (bound);
     if (entry.mtimeMs > cutoff) { kept.push(entry); continue; }
     reclaimable.push(entry);
   }
@@ -292,7 +428,10 @@ const readEntriesFrom = (parent) => {
     if (!dirent.isDirectory()) continue;
     try {
       const stats = statSync(join(parent, dirent.name));
-      entries.push({ name: dirent.name, mtimeMs: stats.mtimeMs, uid: stats.uid });
+      // The runner's own end-of-run marker, not a guess from mtime: a directory with it is finished
+      // and safe to reclaim on the short TTL; one without it may be a run that is still working.
+      const completed = existsSync(join(parent, dirent.name, LAST_RUN_RELATIVE_PATH));
+      entries.push({ name: dirent.name, mtimeMs: stats.mtimeMs, uid: stats.uid, completed });
     } catch {
       // Unreadable: not a candidate this sweep can reason about, and not a reason to stop.
     }
@@ -321,15 +460,19 @@ const errorMessage = (error) => (error instanceof Error ? error.message : String
 const describeRetention = (report) => [
   `[e2e] retention: parent=${report.parent}`,
   `ttl-ms=${report.ttlMs === null ? 'none' : String(report.ttlMs)}`,
+  `completed-ttl-ms=${report.completedTtlMs === null ? 'none' : String(report.completedTtlMs)}`,
+  `interrupted-ttl-ms=${report.interruptedTtlMs === null ? 'none' : String(report.interruptedTtlMs)}`,
   `scanned=${report.scanned}`,
   `reclaimable=${report.reclaimable}`,
   `reclaimed=${report.reclaimed}`,
   `bytes-reclaimed=${report.bytesReclaimed === null ? 'n/a' : String(report.bytesReclaimed)}`,
   `remaining=${report.reclaimable - report.reclaimed}`,
   `elapsed-ms=${report.elapsedMs}`,
+  `completed=${report.completed}`,
+  `interrupted=${report.interrupted}`,
   ...(report.foreign > 0 ? [`foreign-kept=${report.foreign}`] : []),
   ...(report.dryRun ? ['dry-run=true'] : []),
-  ...(report.stoppedEarly ? ['stopped-early=true'] : []),
+  ...(report.stoppedEarly ? ['stopped-early=true', 'budget-reached=true'] : []),
   ...(report.errors.length > 0 ? [`errors=${report.errors.length}`] : []),
 ].join(' ');
 
@@ -390,13 +533,18 @@ export const reclaimDataDirs = (options = {}) => {
   const report = {
     parent,
     ttlMs: null,
+    completedTtlMs: null,
+    interruptedTtlMs: null,
     dryRun,
     scanned: 0,
     foreign: 0,
+    completed: 0,
+    interrupted: 0,
     reclaimable: 0,
     reclaimed: 0,
     bytesReclaimed: measureBytes === undefined ? null : 0,
     stoppedEarly: false,
+    budgetReached: false,
     elapsedMs: 0,
     reclaimedNames: [],
     errors: [],
@@ -405,9 +553,13 @@ export const reclaimDataDirs = (options = {}) => {
 
   const startedAt = now();
   try {
+    const env = options.env ?? process.env;
     report.ttlMs = options.ttlMs !== undefined
       ? options.ttlMs
-      : retentionTtlMsFromEnv(options.env ?? process.env);
+      : retentionTtlMsFromEnv(env);
+    const classTtls = resolveClassTtls(options, env);
+    report.completedTtlMs = classTtls.completedTtlMs;
+    report.interruptedTtlMs = classTtls.interruptedTtlMs;
     const budgetMs = options.budgetMs ?? DEFAULT_RECLAIM_BUDGET_MS;
 
     /** @type {RetentionEntry[]} */
@@ -431,19 +583,27 @@ export const reclaimDataDirs = (options = {}) => {
     const owned = entries.filter((entry) => ownerUid === null || entry.uid === undefined || entry.uid === ownerUid);
     report.scanned = entries.length;
     report.foreign = entries.length - owned.length;
+    report.completed = owned.filter((entry) => entry.completed === true).length;
+    report.interrupted = owned.length - report.completed;
 
     const { reclaimable } = selectReclaimableDirs({
       entries: owned,
       ttlMs: report.ttlMs,
+      completedTtlMs: report.completedTtlMs,
+      interruptedTtlMs: report.interruptedTtlMs,
       prefix: options.prefix ?? RUN_DIR_PREFIX,
       exclude: options.exclude ?? [],
       now: now(),
     });
     report.reclaimable = reclaimable.length;
+    // Oldest first, so a sweep that cannot finish spends its budget on the bytes most likely to be
+    // dead. The listing order is whatever the filesystem hands back; it is not a policy.
+    reclaimable.sort((left, right) => left.mtimeMs - right.mtimeMs);
 
     for (const entry of reclaimable) {
       if (now() - startedAt > budgetMs) {
         report.stoppedEarly = true;
+        report.budgetReached = true;
         break;
       }
       const target = join(parent, entry.name);
@@ -479,6 +639,232 @@ export const reclaimDataDirs = (options = {}) => {
 };
 
 /**
+ * What one headroom-driven sweep did.
+ *
+ * @typedef {object} HeadroomReport
+ * @property {string} parent The directory that was swept.
+ * @property {number} floorBytes The headroom the sweep was trying to reach.
+ * @property {number | null} headroomBefore The reading at the start, or null when it was unavailable.
+ * @property {number | null} headroomAfter The last reading taken, or null when it was unavailable.
+ * @property {number} scanned Entries the parent held, before any filter.
+ * @property {number} eligible Entries the age rule selected, oldest first.
+ * @property {number} reclaimed Entries actually removed.
+ * @property {number | null} bytesReclaimed Bytes removed, when a measurer was supplied.
+ * @property {boolean} budgetReached True when the budget was crossed with eligible entries left.
+ * @property {boolean} exhausted True when every eligible entry was removed and the floor was still not met.
+ * @property {boolean} floorMet True when the headroom reading reached the floor (or was already there).
+ * @property {boolean} dryRun True when nothing was removed.
+ * @property {number} elapsedMs Wall-clock the sweep spent, as the injected clock saw it.
+ * @property {string[]} reclaimedNames The names actually removed, oldest first.
+ * @property {string[]} errors One line per thing that could not be read or removed.
+ * @property {string} summary The whole report as one `[e2e]` line.
+ */
+
+/**
+ * Reclaims age-eligible run directories oldest-first until the writable headroom reaches `floorBytes`.
+ *
+ * This is the arm the 2026-11-13 defect needed. The pool was 82 GB, 98.6% of it interrupted runs,
+ * while the free-space floor was satisfied by `statfs` on a quota-exhausted filesystem — so no
+ * existing sweep ever ran with a reason to continue past the first few directories, and the run that
+ * needed room started anyway. The decision now reads the *writable headroom* (the caller passes a
+ * reader; in the run path it is the selector's quota-first reading) and keeps going, oldest first,
+ * while that reading is below the floor.
+ *
+ * The age rule is never relaxed. An entry without `.last-run.json` younger than the interrupted TTL
+ * may be a run that is still working, and deleting it would be a worse defect than a full quota; the
+ * arm can therefore end `exhausted` with headroom still short, and the caller refuses the run at
+ * that point rather than guessing. The budget is the other bound: on the run path it is the same
+ * few-second slice every sweep gets, reported as `budgetReached` so the next run knows a backlog is
+ * still there. The manual entry passes `Infinity`.
+ *
+ * A healthy headroom does not stop the age sweep: age-eligible entries are removed either way (that
+ * is how the pool stops growing), but nothing outside the age rule is ever touched. That asymmetry
+ * is the whole "healthy reading ⇒ no extra deletion" control.
+ *
+ * @param {{
+ *   parent?: string,
+ *   floorBytes?: number,
+ *   env?: Record<string, string | undefined>,
+ *   ttlMs?: number | null,
+ *   completedTtlMs?: number | null,
+ *   interruptedTtlMs?: number | null,
+ *   headroomBytes?: () => number | null,
+ *   prefix?: string,
+ *   exclude?: string[],
+ *   budgetMs?: number,
+ *   dryRun?: boolean,
+ *   ownerUid?: number | null,
+ *   now?: () => number,
+ *   readEntries?: (parent: string) => RetentionEntry[],
+ *   remove?: (target: string) => void,
+ *   measureBytes?: (target: string) => number,
+ *   log?: (line: string) => void,
+ * }} [options]
+ * @returns {HeadroomReport}
+ */
+export const reclaimForHeadroom = (options = {}) => {
+  const parent = typeof options.parent === 'string' ? options.parent : '';
+  const floorBytes = typeof options.floorBytes === 'number' && Number.isFinite(options.floorBytes) && options.floorBytes > 0
+    ? options.floorBytes
+    : 0;
+  const log = options.log ?? (() => {});
+  const now = options.now ?? (() => Date.now());
+  const readEntries = options.readEntries ?? readEntriesFrom;
+  const remove = options.remove ?? ((target) => { rmSync(target, { recursive: true, force: true }); });
+  const measureBytes = options.measureBytes;
+  const dryRun = options.dryRun === true;
+  const budgetMs = options.budgetMs ?? DEFAULT_RECLAIM_BUDGET_MS;
+  /** A reader that throws or is absent is the same reading as one that answers null: unavailable. */
+  const readHeadroom = () => {
+    if (options.headroomBytes === undefined) return null;
+    try {
+      const value = options.headroomBytes();
+      return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  };
+
+  /** @type {number | null} */
+  let ownerUid;
+  if (options.ownerUid !== undefined) {
+    ownerUid = options.ownerUid;
+  } else {
+    ownerUid = typeof process.getuid === 'function' ? process.getuid() : null;
+  }
+
+  /** @type {HeadroomReport} */
+  const report = {
+    parent,
+    floorBytes,
+    headroomBefore: null,
+    headroomAfter: null,
+    scanned: 0,
+    eligible: 0,
+    reclaimed: 0,
+    bytesReclaimed: measureBytes === undefined ? null : 0,
+    budgetReached: false,
+    exhausted: false,
+    floorMet: false,
+    dryRun,
+    elapsedMs: 0,
+    reclaimedNames: [],
+    errors: [],
+    summary: '',
+  };
+
+  const startedAt = now();
+  try {
+    const env = options.env ?? process.env;
+    const classTtls = resolveClassTtls(options, env);
+
+    /** @type {RetentionEntry[]} */
+    let entries;
+    try {
+      entries = readEntries(parent);
+    } catch (error) {
+      const code = /** @type {{ code?: unknown }} */ (error)?.code;
+      if (code !== 'ENOENT') {
+        report.errors.push(`${parent}: could not be read (${errorMessage(error)}) — nothing is reclaimed here`);
+      }
+      report.elapsedMs = now() - startedAt;
+      report.summary = describeHeadroom(report);
+      log(report.summary);
+      return report;
+    }
+
+    const owned = entries.filter((entry) => ownerUid === null || entry.uid === undefined || entry.uid === ownerUid);
+    report.scanned = entries.length;
+    const { reclaimable } = selectReclaimableDirs({
+      entries: owned,
+      ttlMs: options.ttlMs === undefined ? null : options.ttlMs,
+      completedTtlMs: classTtls.completedTtlMs,
+      interruptedTtlMs: classTtls.interruptedTtlMs,
+      prefix: options.prefix ?? RUN_DIR_PREFIX,
+      exclude: options.exclude ?? [],
+      now: now(),
+    });
+    reclaimable.sort((left, right) => left.mtimeMs - right.mtimeMs);
+    report.eligible = reclaimable.length;
+    report.headroomBefore = readHeadroom();
+    // Only a *short* reading makes "stop once the floor is met" meaningful; a healthy one still gets
+    // the ordinary age sweep, which is what keeps the pool from growing.
+    const short = report.headroomBefore !== null
+      ? report.headroomBefore < floorBytes
+      : false;
+    report.floorMet = report.headroomBefore !== null && report.headroomBefore >= floorBytes;
+    report.headroomAfter = report.headroomBefore;
+
+    for (let index = 0; index < reclaimable.length; index += 1) {
+      const entry = reclaimable[index];
+      if (now() - startedAt > budgetMs) {
+        report.budgetReached = true;
+        break;
+      }
+      const target = join(parent, entry.name);
+      if (measureBytes !== undefined) {
+        try {
+          report.bytesReclaimed = (report.bytesReclaimed ?? 0) + measureBytes(target);
+        } catch {
+          // The byte count is a report; it is not the decision.
+        }
+      }
+      if (!dryRun) {
+        try {
+          remove(target);
+          report.reclaimed += 1;
+          report.reclaimedNames.push(entry.name);
+        } catch (error) {
+          report.errors.push(`${entry.name}: could not be removed (${errorMessage(error)}) — leaving it in place`);
+        }
+      }
+      report.headroomAfter = readHeadroom();
+      if (short && report.headroomAfter !== null && report.headroomAfter >= floorBytes) {
+        report.floorMet = true;
+        break;
+      }
+    }
+
+    // Exhausted means every eligible entry was offered and the floor is still not met — the only
+    // condition under which the caller may refuse for lack of room. A budget stop is not exhaustion.
+    report.exhausted = !report.floorMet
+      && !report.budgetReached
+      && report.reclaimed === reclaimable.length
+      && (report.headroomAfter === null || report.headroomAfter < floorBytes);
+  } catch (error) {
+    report.errors.push(`${parent}: the headroom sweep itself failed (${errorMessage(error)}) — nothing further was reclaimed`);
+  }
+
+  report.elapsedMs = now() - startedAt;
+  report.summary = describeHeadroom(report);
+  log(report.summary);
+  for (const error of report.errors) log(`[e2e] retention-headroom: ${error}`);
+  return report;
+};
+
+/**
+ * The whole headroom report as one `[e2e]` line.
+ *
+ * @param {HeadroomReport} report
+ * @returns {string}
+ */
+const describeHeadroom = (report) => [
+  `[e2e] retention-headroom: parent=${report.parent}`,
+  `floor-bytes=${report.floorBytes}`,
+  `headroom-before=${report.headroomBefore === null ? 'n/a' : String(report.headroomBefore)}`,
+  `headroom-after=${report.headroomAfter === null ? 'n/a' : String(report.headroomAfter)}`,
+  `scanned=${report.scanned}`,
+  `eligible=${report.eligible}`,
+  `reclaimed=${report.reclaimed}`,
+  `bytes-reclaimed=${report.bytesReclaimed === null ? 'n/a' : String(report.bytesReclaimed)}`,
+  `floor-met=${report.floorMet}`,
+  ...(report.budgetReached ? ['budget-reached=true'] : []),
+  ...(report.exhausted ? ['exhausted=true'] : []),
+  ...(report.dryRun ? ['dry-run=true'] : []),
+  ...(report.errors.length > 0 ? [`errors=${report.errors.length}`] : []),
+].join(' ');
+
+/**
  * The parent directories a sweep with no explicit target considers.
  *
  * The selector's own candidate list, unchanged and undeduplicated-once-more: those are exactly the
@@ -506,10 +892,16 @@ export const defaultRetentionParents = (options = {}) => {
 
 /** Usage line, printed by `--help` and by an argument this entry does not understand. */
 const USAGE = [
-  'usage: node scripts/e2e-data-dir-retention.mjs [--parent <dir>]... [--dry-run] [--budget-ms <n>] [--quiet]',
+  'usage: node scripts/e2e-data-dir-retention.mjs [--parent <dir>]... [--dry-run] [--budget-ms <n>]',
+  '       [--until-headroom-mb <n>] [--quiet]',
   '',
-  `Reclaims e2e run directories older than the TTL (default ${DEFAULT_RETENTION_TTL_HOURS}h, override with ${RETENTION_TTL_HOURS_ENV}).`,
+  `Reclaims e2e run directories past their class TTL (completed ${COMPLETED_MIN_AGE_MS / MS_PER_MINUTE}m,`
+    + ` interrupted ${INTERRUPTED_MIN_AGE_MS / MS_PER_MINUTE}m; override with ${COMPLETED_TTL_MINUTES_ENV} /`
+    + ` ${INTERRUPTED_TTL_MINUTES_ENV}, or all of them with ${RETENTION_TTL_HOURS_ENV}).`,
   'With no --parent, every existing data-directory candidate is swept.',
+  '--until-headroom-mb is the emergency arm: keep reclaiming age-eligible directories, oldest first,',
+  'until the writable headroom (xfs quota when readable, statfs otherwise) reaches that many MiB.',
+  'It is off by default, ignores --budget-ms unless one is given, and never relaxes the age rule.',
   'Exit status is always 0: housekeeping must not be able to fail a run.',
 ].join('\n');
 
@@ -533,9 +925,17 @@ export const runRetentionCli = (argv, options = {}) => {
   let dryRun = false;
   let quiet = false;
   let budgetMs = Number.POSITIVE_INFINITY;
+  /** @type {number | null} */
+  let untilHeadroomBytes = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === '--until-headroom-mb') {
+      const value = Number(argv[index + 1]);
+      if (Number.isFinite(value) && value > 0) untilHeadroomBytes = Math.round(value) * 1024 * 1024;
+      index += 1;
+      continue;
+    }
     if (arg === '--parent') {
       const value = argv[index + 1];
       if (typeof value === 'string' && value.trim() !== '') parents.push(resolvePath(value));
@@ -566,23 +966,39 @@ export const runRetentionCli = (argv, options = {}) => {
   let bytesReclaimed = 0;
   let swept = 0;
   for (const parent of targets) {
-    const report = reclaimDataDirs({
-      parent,
-      env,
-      exclude,
-      dryRun,
-      budgetMs,
-      // The manual entry pays for the byte reading the run path declines: it is the number an
-      // operator quotes after a drain, and it is the only place that number is worth a second walk.
-      measureBytes: dirSizeBytes,
-      log: quiet ? () => {} : log,
-    });
+    // The emergency arm replaces the ordinary sweep for this parent rather than running after it:
+    // one pass over the parent, oldest first, with the floor as the reason to continue. It applies
+    // the same age rule, so it can leave under-age directories behind and still report exhausted.
+    const report = untilHeadroomBytes !== null
+      ? reclaimForHeadroom({
+          parent,
+          env,
+          floorBytes: untilHeadroomBytes,
+          exclude,
+          dryRun,
+          budgetMs,
+          headroomBytes: () => readWritableHeadroom(parent).availableBytes,
+          measureBytes: dirSizeBytes,
+          log: quiet ? () => {} : log,
+        })
+      : reclaimDataDirs({
+          parent,
+          env,
+          exclude,
+          dryRun,
+          budgetMs,
+          // The manual entry pays for the byte reading the run path declines: it is the number an
+          // operator quotes after a drain, and it is the only place that number is worth a second walk.
+          measureBytes: dirSizeBytes,
+          log: quiet ? () => {} : log,
+        });
     swept += 1;
     reclaimed += report.reclaimed;
     bytesReclaimed += report.bytesReclaimed ?? 0;
   }
   log(
     `[e2e] retention: total parents=${swept} reclaimed=${reclaimed} bytes-reclaimed=${bytesReclaimed}`
+      + (untilHeadroomBytes !== null ? ` until-headroom-bytes=${untilHeadroomBytes}` : '')
       + (dryRun ? ' dry-run=true' : ''),
   );
   return 0;

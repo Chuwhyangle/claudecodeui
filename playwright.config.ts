@@ -7,9 +7,15 @@ import { execFileSync } from 'node:child_process';
 
 import { defineConfig } from '@playwright/test';
 
-import { fsAvailableBytes, resolveE2eDataDir } from './scripts/e2e-data-dir-selection.mjs';
+import {
+  DEFAULT_MIN_FREE_MB,
+  fsAvailableBytes,
+  minFreeBytesFromEnv,
+  readWritableHeadroom,
+  resolveE2eDataDir,
+} from './scripts/e2e-data-dir-selection.mjs';
 import { prepareServerBundle } from './scripts/e2e-server-bundle.mjs';
-import { reclaimDataDirs } from './scripts/e2e-data-dir-retention.mjs';
+import { reclaimDataDirs, reclaimForHeadroom } from './scripts/e2e-data-dir-retention.mjs';
 import { resolveClientRoot } from './scripts/e2e-client-root.mjs';
 import { webServerStderrLogs, withStderrLog } from './scripts/e2e-web-server-stderr.mjs';
 import {
@@ -84,7 +90,34 @@ if (!process.env.QUAY_E2E_RUN_STARTED_AT) {
 // a case that was measuring something else entirely. The selection reads each candidate's filesystem at the moment
 // it chooses, prints the three numbers it chose by, and refuses to start the run when nothing has room — see the
 // module for the readings that fix its shape.
-const dataDirSelection = resolveE2eDataDir();
+/**
+ * The writable-headroom floor for this run, in bytes, and the sweep the selector may run against a
+ * candidate that is below it.
+ *
+ * The defect this closes was measured on this host on 2026-11-13: the e2e scratch pool held 82 GB,
+ * 98.6% of it interrupted runs (no `test-results/.last-run.json`), while the XFS user quota had
+ * 0.49 GiB left and `statfs` still reported 1739 GiB. A 6-hour TTL over the old size estimate
+ * therefore neither drained the pool nor blocked the run, and the run wrote traces into an exhausted
+ * quota (`EDQUOT`, errno -122), which surfaced as a truncated-trace error inside the criterion's PC
+ * case. `scripts/e2e-data-dir-retention.mjs` now splits the TTL by whether the run finished (15 min)
+ * or was killed (60 min), and `reclaimForHeadroom` keeps reclaiming oldest-first while the writable
+ * headroom is below the floor. `npm run e2e:reclaim -- --until-headroom-mb <n>` is the same arm
+ * without the run-path budget.
+ *
+ * The sweep is handed to the selector rather than run blindly over every candidate: a candidate that
+ * already has room must not pay for a scan of a parent nothing will be written into, and the
+ * selector is the only place that knows a candidate is short. It is called before the refusal
+ * decision, so "sweep, re-read, then decide" is the order — not "refuse, and sweep some other time".
+ */
+const preRunFloorBytes = minFreeBytesFromEnv(process.env) ?? DEFAULT_MIN_FREE_MB * 1024 * 1024;
+const reclaimForRun = (parent: string) => reclaimForHeadroom({
+  parent,
+  floorBytes: preRunFloorBytes,
+  headroomBytes: () => readWritableHeadroom(parent).availableBytes,
+  log: (line) => console.log(line),
+});
+
+const dataDirSelection = resolveE2eDataDir({ reclaim: reclaimForRun });
 const dataDir = dataDirSelection.dataDir;
 /** True only in the process that created the directory: workers re-evaluate this file with it already set. */
 const isDataDirOwner = !dataDirSelection.explicit;
@@ -100,29 +133,18 @@ if (process.env.QUAY_E2E_DATA_DIR_OWNER === undefined) {
 }
 
 /**
- * Reclaims the run directories earlier runs left behind, before this run starts writing.
+ * The ordinary pre-run sweep of the parent this run will write into, when the selector did not
+ * already sweep it.
  *
- * Every run creates a directory under the parent the selector chose and nothing used to remove it, so
- * the parent grew at the run rate forever. Measured on this host on 2026-09-28: `~/.cache/quay-e2e-tmp`
- * held 1794 directories / 103 GB, all created within 24 hours — and the pool is a *user quota*, not a
- * filesystem size, so `df` still reported 3.3 TB free while writes failed with `EDQUOT` (`errno -122`).
- * The failures landed before any test started (Playwright's own transform-cache `open`, a `copyfile` of
- * the auth database, an `mkdtemp` of the next run's directory), which is what made a green criterion
- * report as red for reasons none of its own assertions could name.
- *
- * Only the owner sweeps: a worker re-evaluates this file long after the run is under way, and its
- * `dataDir` is the directory being protected, not one to reclaim against. The directory this run just
- * created is excluded, so the sweep can never remove the run it is part of — and it is passed as an
- * absolute path, which the module reduces to the name it compares against.
- *
- * The work is bounded (2 s by default) and never fatal: the module reports what it could not read or
- * remove instead of throwing, because a run that died of its own housekeeping would be the defect this
- * closes arriving from the other side. The bound drains the pool over runs rather than all at once: at
- * the ~89 ms measured for a 3371-file directory it reclaims ~20 directories per run, against the one
- * directory a run creates. `scripts/e2e-data-dir-retention.mjs` is the module; `npm run e2e:reclaim`
- * is the same sweep as a manual entry, unbounded and with the byte count reported.
+ * `resolveE2eDataDir` only sweeps a candidate it found short (that is the quota arm: the run cannot
+ * start without the room, so the sweep and the re-read happen before the refusal). A run that finds
+ * a candidate with room still has an age-shaped backlog to drain, exactly as before this change —
+ * otherwise the pool would simply grow until the quota was exhausted and every start would take the
+ * emergency path. The directory this run just created is excluded, so the sweep can never remove the
+ * run it is part of. Only the owner sweeps: a worker re-evaluates this file long after the run is
+ * under way.
  */
-if (isDataDirOwner) {
+if (isDataDirOwner && !dataDirSelection.reclaimed) {
   reclaimDataDirs({
     parent: path.dirname(dataDir),
     exclude: [dataDir],

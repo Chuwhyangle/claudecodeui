@@ -417,3 +417,173 @@ test('AC3 the real filesystem reader answers its filesystem’s bytes, and walks
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Appended by gap-ac323-e2e-scratch-quota-headroom-and-interrupted-run-reclaim. The import above is
+// untouched (its lines are pinned by the task's no-deleted-lines control); these names arrive in a
+// second statement so the quota-headroom controls can be added without editing a line.
+import {
+  HEADROOM_SOURCE_QUOTA,
+  HEADROOM_SOURCE_STATFS,
+  parseMountTable,
+  mountFor,
+  parseXfsQuotaHeadroom,
+  readWritableHeadroom,
+} from './e2e-data-dir-selection.mjs';
+
+test('AC1 quota-headroom-below-floor: the refusal names the headroom, the floor and the shortfall in bytes', () => {
+  // The real defect's shape: 0.49 GiB of quota headroom against a 1 GiB floor. `statfs` says 1739 GiB
+  // on the same filesystem, so a case that only ever moved a statfs number could not reach this.
+  const headroomBytes = 515852 * 1024;
+  const floorBytes = 1024 * MIB;
+  const message = refusalOf((fail) => {
+    resolveE2eDataDir({
+      env: { [MIN_FREE_MB_ENV]: '1024' },
+      home: '/home/someone',
+      osTmpdir: '/tmp',
+      read: () => ({ availableBytes: headroomBytes, source: HEADROOM_SOURCE_QUOTA }),
+      fail,
+    });
+  });
+  assert.match(message, /required 1073741824 bytes/, 'the floor is named in the header, in bytes');
+  assert.match(
+    message,
+    new RegExp(`candidate /home/someone/\\.cache/quay-e2e-tmp: ${headroomBytes} bytes available, shortfall ${floorBytes - headroomBytes} bytes`),
+    'the headroom and the gap are both named, with the arithmetic done',
+  );
+  assert.match(message, /headroom-source=xfs-quota/, 'the reading the refusal was made against is named');
+});
+
+test('AC1 quota-headroom-above-floor: a quota reading over the floor is accepted and its source is printed', () => {
+  const root = makeScratchRoot();
+  try {
+    /** @type {string[]} */
+    const lines = [];
+    const acceptedBytes = 2 * 1024 * MIB;
+    const resolved = resolveE2eDataDir({
+      env: { [MIN_FREE_MB_ENV]: '1024' },
+      home: root,
+      osTmpdir: root,
+      // The same filesystem `statfs` would over-report: only the quota reading is below the floor.
+      read: () => ({ availableBytes: acceptedBytes, source: HEADROOM_SOURCE_QUOTA }),
+      makeTempDir: (parent) => join(parent, 'quay-e2e-fixed'),
+      log: (line) => lines.push(line),
+    });
+    assert.equal(resolved.explicit, false);
+    assert.equal(resolved.availableBytes, acceptedBytes);
+    assert.equal(resolved.source, HEADROOM_SOURCE_QUOTA);
+    // The `[e2e]` line has to say which number bounded the run, not just what the number was.
+    assert.ok(
+      lines.some((line) => line.includes(`headroom-source=${HEADROOM_SOURCE_QUOTA}`) && line.includes(`free-bytes=${acceptedBytes}`)),
+      `expected a headroom-source line naming the quota reading, got: ${lines.join(' | ')}`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('AC1 quota-reading-unavailable-falls-back: statfs answers, and the [e2e] line says so', () => {
+  const root = makeScratchRoot();
+  try {
+    /** @type {string[]} */
+    const lines = [];
+    const fallbackBytes = 3 * 1024 * MIB;
+    const resolved = resolveE2eDataDir({
+      env: { [MIN_FREE_MB_ENV]: '1024' },
+      home: root,
+      osTmpdir: root,
+      // No quota ledger for this filesystem: the reading must fall back rather than refuse or accept
+      // a zero it never measured.
+      read: (target) => readWritableHeadroom(target, {
+        readQuotaHeadroom: () => null,
+        statfsAvailable: () => fallbackBytes,
+      }),
+      makeTempDir: (parent) => join(parent, 'quay-e2e-fixed'),
+      log: (line) => lines.push(line),
+    });
+    assert.equal(resolved.availableBytes, fallbackBytes);
+    assert.equal(resolved.source, HEADROOM_SOURCE_STATFS);
+    assert.ok(
+      lines.some((line) => line.includes(`headroom-source=${HEADROOM_SOURCE_STATFS}`)),
+      `the fallback has to be visible on the [e2e] line, got: ${lines.join(' | ')}`,
+    );
+    // A filesystem that could not be read at all has no source to name — it must not be reported as
+    // a statfs reading of zero.
+    const unreadable = readWritableHeadroom('/nowhere', {
+      readQuotaHeadroom: () => null,
+      statfsAvailable: () => null,
+    });
+    assert.deepEqual(unreadable, { availableBytes: null, source: null });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('AC1 the XFS ledger is read as hard-limit minus blocks, and an absent limit is unavailable, not zero', () => {
+  // The real shape measured on this host on 2026-11-13; trailing `[6 days]` grace makes the mount
+  // point the fourth-of-five fields, which is why it is matched rather than counted.
+  const ledger = [
+    'Disk quotas for User yale (1004)',
+    'Filesystem              Blocks      Quota      Limit  Warn/Time      Mounted on',
+    '/dev/vdb             523772148  471859200  524288000   00  [6 days] /data',
+    '',
+  ].join('\n');
+  assert.equal(parseXfsQuotaHeadroom(ledger, { mountPath: '/data' }), (524288000 - 523772148) * 1024);
+  assert.equal(parseXfsQuotaHeadroom(ledger, { mountPath: '/elsewhere' }), null, 'another filesystem is not this one');
+  assert.equal(parseXfsQuotaHeadroom('/dev/vdb 100 50 0 00 /data\n', { mountPath: '/data' }), null, 'no hard limit is not zero headroom');
+  // The mount table side: the longest matching mount point wins and a path boundary is respected.
+  const mounts = parseMountTable('/dev/vdb /data xfs rw 0 0\n/dev/vdb /data/home xfs rw 0 0\n/dev/vda2 / ext4 rw 0 0\n');
+  assert.equal(mountFor('/data/home/yale/.cache', mounts)?.path, '/data/home');
+  assert.equal(mountFor('/dataset', mounts)?.path, '/');
+});
+
+test('AC4 a short candidate is swept and re-read before the decision; a healthy one is not swept at all', () => {
+  /** @type {string[]} */
+  const order = [];
+  /** @type {Record<string, number>} */
+  const readings = { '/short': 100 * MIB, '/roomy': 2048 * MIB };
+  const selection = selectDataDir({
+    candidates: ['/short'],
+    minFreeBytes: 1024 * MIB,
+    read: (target) => {
+      order.push(`read:${target}`);
+      return { availableBytes: readings[target], source: HEADROOM_SOURCE_QUOTA };
+    },
+    reclaim: (target) => {
+      order.push(`reclaim:${target}`);
+      // The sweep frees room; the very next reading is what the decision is made on.
+      readings[target] = 2048 * MIB;
+    },
+  });
+  assert.deepEqual(order, ['read:/short', 'reclaim:/short', 'read:/short'], 'sweep, re-read, then decide');
+  assert.equal(selection.ok, true);
+  assert.equal(selection.reclaimed, true);
+  assert.equal(selection.availableBytes, 2048 * MIB);
+
+  // A candidate that already has room must not pay for a scan of a parent nothing will be written
+  // into. Without this half, "the callback ran" would be satisfied by a sweep of every candidate.
+  order.length = 0;
+  const healthy = selectDataDir({
+    candidates: ['/roomy'],
+    minFreeBytes: 1024 * MIB,
+    read: (target) => {
+      order.push(`read:${target}`);
+      return { availableBytes: readings[target], source: HEADROOM_SOURCE_QUOTA };
+    },
+    reclaim: (target) => { order.push(`reclaim:${target}`); },
+  });
+  assert.deepEqual(order, ['read:/roomy']);
+  assert.equal(healthy.ok, true);
+  assert.equal(healthy.reclaimed, false);
+
+  // A sweep that does not free enough leaves the candidate short: it is refused, and the refusal
+  // names the reading taken *after* the sweep.
+  order.length = 0;
+  const stillShort = selectDataDir({
+    candidates: ['/short'],
+    minFreeBytes: 1024 * MIB,
+    read: () => ({ availableBytes: 100 * MIB, source: HEADROOM_SOURCE_QUOTA }),
+    reclaim: () => {},
+  });
+  assert.equal(stillShort.ok, false);
+  assert.match(stillShort.reason, /candidate \/short: 104857600 bytes available, shortfall 968884224 bytes/);
+});

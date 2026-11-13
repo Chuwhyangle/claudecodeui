@@ -16,11 +16,16 @@
  * the three failures reaching an assertion of the criterion.
  *
  * WHAT IS READ, AND WHEN. The choice is made *at the moment it is made*, from the filesystem in
- * front of it: each candidate's filesystem is asked for its available bytes (`statfs(2)`, the same
- * field `df` prints as `Avail`), and a candidate is usable only if it can really hold the run. The
- * floor is a reading too, not a constant buried in here — `QUAY_E2E_DATA_DIR_MIN_FREE_MB` overrides
- * it, which is what makes "no candidate is big enough" reachable without root and without standing
- * up a small filesystem.
+ * front of it, and a candidate is usable only if it can really hold the run. "Really hold" is the
+ * user's remaining *writable* headroom, not the filesystem's size: on this host `/data` is XFS with
+ * `usrquota`, and `statfs` reported 1739 GiB `bavail` while `xfs_quota` showed 0.49 GiB left under
+ * the hard limit — a run then wrote into an exhausted quota (`EDQUOT`, errno -122) and a green
+ * criterion was reported red by a truncated trace. So the reading is quota-first
+ * (`xfs_quota -c 'quota -u <uid>' <mount>`, non-root readable here) and falls back to `statfs(2)`
+ * only when no quota answer exists, naming which reading it used on the `[e2e]` line. The floor is a
+ * reading too, not a constant buried in here — `QUAY_E2E_DATA_DIR_MIN_FREE_MB` overrides it, which
+ * is what makes "no candidate is big enough" reachable without root and without standing up a small
+ * filesystem.
  *
  * WHAT IS NOT DONE. No candidate that fails the floor is ever silently accepted, and "nothing
  * qualifies" is not a fallback to `os.tmpdir()`: it ends the run before it starts, naming the
@@ -30,11 +35,13 @@
  * has room", not "the data lives under /data".
  *
  * The three numbers a run prints about its own choice — the selected data directory, that
- * filesystem's available bytes, and the floor applied — are on one `[e2e]` line, so an outside
- * reader can check them against `df` instead of taking the run's word for it.
+ * filesystem's available bytes, and the floor applied — are on one `[e2e]` line, and the reading
+ * that answered for them is named on the line beside it, so an outside reader can check the run
+ * against `df` or `xfs_quota` instead of taking its word for it.
  */
 
-import { mkdirSync, mkdtempSync, statfsSync, writeSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, statfsSync, writeSync } from 'node:fs';
 import { homedir as osHomedir, tmpdir as osTmpdirPath } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -68,10 +75,32 @@ export const DEFAULT_MIN_FREE_MB = 1024;
 const BYTES_PER_MIB = 1024 * 1024;
 
 /**
+ * The two readings `readWritableHeadroom` can answer with.
+ *
+ * Printed on the `[e2e]` line rather than kept private: a reader checking the run against `df`/`xfs_quota`
+ * has to know *which* number the run was bounded by. `xfs-quota` is the user's own remaining hard-limit
+ * headroom; `statfs` is the filesystem's `bavail`, the fallback that is blind to a quota.
+ */
+export const HEADROOM_SOURCE_QUOTA = 'xfs-quota';
+export const HEADROOM_SOURCE_STATFS = 'statfs';
+
+/**
+ * Where the kernel lists the mount table, and the bound on asking `xfs_quota` a question.
+ *
+ * `/proc/self/mounts` is read rather than `df`, because the answer needs the *mount point* of the
+ * candidate (that is the argument `xfs_quota` takes) and no subprocess is needed to get it. The
+ * timeout exists so a wedged quota tool cannot stall config evaluation: a reading that does not
+ * arrive withholds the quota answer, it does not hold the run.
+ */
+export const MOUNT_TABLE_PATH = '/proc/self/mounts';
+export const QUOTA_READ_TIMEOUT_MS = 5_000;
+
+/**
  * @typedef {object} CandidateReading
  * @property {string} path The candidate as considered.
  * @property {number | null} availableBytes Bytes available on that candidate's filesystem, or null when it could not be read.
  * @property {boolean} ok Whether that candidate cleared the floor.
+ * @property {string} [source] Which reading answered — see `HEADROOM_SOURCE_QUOTA` / `HEADROOM_SOURCE_STATFS`.
  */
 
 /**
@@ -80,6 +109,8 @@ const BYTES_PER_MIB = 1024 * 1024;
  * @property {string} parent The candidate that was accepted, as the parent to create the run's directory under.
  * @property {number} availableBytes Bytes available on the accepted filesystem.
  * @property {number} minFreeBytes The floor the choice was made against.
+ * @property {string | null} source Which reading answered for the accepted candidate.
+ * @property {boolean} reclaimed True when the accepted candidate was swept and re-read before being accepted.
  * @property {CandidateReading[]} readings Every candidate considered, in order, up to and including the accepted one.
  */
 
@@ -117,6 +148,201 @@ export const fsAvailableBytes = (target) => {
       probe = parent;
     }
   }
+};
+
+/**
+ * One line of the kernel mount table, as far as this module needs it.
+ *
+ * @typedef {object} MountReading
+ * @property {string} path The mount point, unescaped.
+ * @property {string} fstype The filesystem type from the third column.
+ */
+
+/**
+ * The escape sequences `/proc/self/mounts` uses inside a field.
+ *
+ * Mount points may contain spaces and tabs, which the kernel writes as `\040` and `\011` rather than
+ * quoting the field. A path compared without undoing them would never equal the real mount point.
+ */
+/** @type {[RegExp, string][]} */
+const MOUNT_ESCAPES = [
+  [/\\040/g, ' '],
+  [/\\011/g, '\t'],
+  [/\\012/g, '\n'],
+  [/\\134/g, '\\'],
+];
+
+/**
+ * Parses `/proc/self/mounts` into the readings `mountFor` needs.
+ *
+ * Sixth field of a mount table line is the mount point, third is the filesystem type. Blank lines are
+ * skipped rather than treated as malformed: the procfs file ends with one.
+ *
+ * @param {string} text
+ * @returns {MountReading[]}
+ */
+export const parseMountTable = (text) => {
+  /** @type {MountReading[]} */
+  const readings = [];
+  for (const line of String(text).split('\n')) {
+    if (line.trim() === '') continue;
+    const fields = line.split(' ');
+    if (fields.length < 3) continue;
+    let mountPath = fields[1];
+    for (const [pattern, replacement] of MOUNT_ESCAPES) mountPath = mountPath.replace(pattern, replacement);
+    readings.push({ path: mountPath, fstype: fields[2] });
+  }
+  return readings;
+};
+
+/**
+ * The mount a path lives on: the longest mount point that is a path-prefix of `target`.
+ *
+ * Longest and not first, because mounts nest — `/data` and `/data/home` can both exist, and the
+ * inner one is the filesystem a quota answer would belong to. The comparison is on a path boundary,
+ * so `/dataset` is not inside `/data`.
+ *
+ * @param {string} target
+ * @param {MountReading[]} mounts
+ * @returns {MountReading | null}
+ */
+export const mountFor = (target, mounts) => {
+  /** @type {MountReading | null} */
+  let best = null;
+  for (const mount of mounts) {
+    const inside = mount.path === '/' || target === mount.path || target.startsWith(`${mount.path}/`);
+    if (!inside) continue;
+    if (best === null || mount.path.length > best.path.length) best = mount;
+  }
+  return best;
+};
+
+/**
+ * The headroom, in bytes, from one `xfs_quota -c 'quota -u <uid>' <mount>` output.
+ *
+ * The ledger's first three numeric columns are blocks used, soft quota and hard limit, in 1 KiB
+ * blocks; the headroom reported is hard-limit minus used, which is the number a write is actually
+ * refused against (`EDQUOT`, errno -122). A filesystem that reports no hard limit (`Limit` 0), no
+ * numbers at all, or single quotes that do not parse is *not* a zero headroom — it is an unavailable
+ * reading, and `null` says so rather than letting the caller read it as "full".
+ *
+ * The mount point is matched by suffix rather than by column position: the tail of the line is
+ * `Warn/Time` followed by the mount point, and the time column itself is omitted or written as
+ * `[6 days]`, so the fixed columns do not line up across hosts.
+ *
+ * @param {string} output
+ * @param {{ mountPath?: string }} [options]
+ * @returns {number | null}
+ */
+export const parseXfsQuotaHeadroom = (output, options = {}) => {
+  const wanted = options.mountPath;
+  for (const rawLine of String(output).split('\n')) {
+    // Used, soft quota, hard limit, then the variable-width `Warn/Time` and mount point.
+    const match = rawLine.match(/^\S+\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/);
+    if (!match) continue;
+    const tail = match[4].trimEnd();
+    const mountedOn = tail.includes(']')
+      ? tail.slice(tail.lastIndexOf(']') + 1).trim()
+      : tail.replace(/^\S+\s*/, '').trim();
+    if (wanted !== undefined && mountedOn !== wanted) continue;
+    const blocks = Number(match[1]);
+    const limit = Number(match[3]);
+    if (!Number.isFinite(blocks) || !Number.isFinite(limit) || limit <= 0) continue;
+    // Blocks are KiB units in every `xfs_quota` report; the floor at zero is because a user can be
+    // *over* the hard limit (the ledger counts allocated blocks, not a clamped allowance).
+    return Math.max(0, (limit - blocks) * 1024);
+  }
+  return null;
+};
+
+/**
+ * The invoking user's remaining hard-quota headroom on `target`'s filesystem, or null.
+ *
+ * The defect this closes: `statfs` reported 1739 GiB `bavail` on `/data` while the user's XFS quota
+ * had 0.49 GiB left, so a 1 GiB floor never fired and a run started writing into an exhausted
+ * quota. This reading is the one that can see that. It is only meaningful on XFS with `usrquota`
+ * enabled and a readable ledger; every other shape — a non-XFS mount, `xfs_quota` absent, a uid the
+ * platform does not have, a ledger with no limit — answers null, and the caller falls back openly.
+ *
+ * @param {string} target
+ * @param {{
+ *   uid?: number | null,
+ *   mountTable?: MountReading[],
+ *   readMounts?: () => string,
+ *   execFile?: (file: string, args: string[], options: object) => string | Buffer,
+ *   timeoutMs?: number,
+ * }} [options]
+ * @returns {number | null}
+ */
+export const readQuotaHeadroom = (target, options = {}) => {
+  const uid = options.uid !== undefined
+    ? options.uid
+    : (typeof process.getuid === 'function' ? process.getuid() : null);
+  if (uid === null) return null;
+
+  /** @type {MountReading[]} */
+  let mounts;
+  if (options.mountTable !== undefined) {
+    mounts = options.mountTable;
+  } else {
+    try {
+      const readMounts = options.readMounts ?? (() => String(readFileSync(MOUNT_TABLE_PATH, 'utf8')));
+      mounts = parseMountTable(readMounts());
+    } catch {
+      return null;
+    }
+  }
+
+  const mount = mountFor(target, mounts);
+  if (mount === null) return null;
+
+  const exec = options.execFile ?? ((file, args, execOptions) => execFileSync(file, args, /** @type {any} */ (execOptions)));
+  /** @type {string} */
+  let output;
+  try {
+    output = String(exec(
+      'xfs_quota',
+      ['-c', `quota -u ${uid}`, mount.path],
+      { encoding: 'utf8', timeout: options.timeoutMs ?? QUOTA_READ_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] },
+    ));
+  } catch {
+    // Not installed, not permitted, not XFS: all the same reading for this decision.
+    return null;
+  }
+  return parseXfsQuotaHeadroom(output, { mountPath: mount.path });
+};
+
+/**
+ * The writable headroom for `target`, quota-first and statfs-fallback, with its source named.
+ *
+ * @param {string} target
+ * @param {{
+ *   readQuotaHeadroom?: (target: string) => number | null,
+ *   statfsAvailable?: (target: string) => number | null,
+ * } & Parameters<typeof readQuotaHeadroom>[1]} [options]
+ * @returns {{ availableBytes: number | null, source: string | null }}
+ */
+export const readWritableHeadroom = (target, options = {}) => {
+  /** @type {number | null} */
+  let quota = null;
+  try {
+    quota = options.readQuotaHeadroom !== undefined
+      ? options.readQuotaHeadroom(target)
+      : readQuotaHeadroom(target, options);
+  } catch {
+    quota = null;
+  }
+  if (quota !== null) return { availableBytes: quota, source: HEADROOM_SOURCE_QUOTA };
+
+  const statfsAvailable = options.statfsAvailable ?? fsAvailableBytes;
+  /** @type {number | null} */
+  let statfsBytes = null;
+  try {
+    statfsBytes = statfsAvailable(target);
+  } catch {
+    statfsBytes = null;
+  }
+  return { availableBytes: statfsBytes, source: statfsBytes === null ? null : HEADROOM_SOURCE_STATFS };
 };
 
 /**
@@ -162,10 +388,11 @@ export const dataDirCandidates = (options = {}) => {
  */
 const describeShortfall = (minFreeBytes, readings) => {
   const lines = readings.map((reading) => {
+    const source = reading.source === undefined ? '' : ` (headroom-source=${reading.source})`;
     if (reading.availableBytes === null) {
-      return `[e2e]   candidate ${reading.path}: filesystem could not be read, so it cannot be shown to hold ${minFreeBytes} bytes`;
+      return `[e2e]   candidate ${reading.path}: filesystem could not be read, so it cannot be shown to hold ${minFreeBytes} bytes${source}`;
     }
-    return `[e2e]   candidate ${reading.path}: ${reading.availableBytes} bytes available, shortfall ${minFreeBytes - reading.availableBytes} bytes`;
+    return `[e2e]   candidate ${reading.path}: ${reading.availableBytes} bytes available, shortfall ${minFreeBytes - reading.availableBytes} bytes${source}`;
   });
   return [
     `[e2e] refusing to start the run: insufficient free space for the e2e data directory — no candidate filesystem holds the required ${minFreeBytes} bytes.`,
@@ -181,30 +408,75 @@ const describeShortfall = (minFreeBytes, readings) => {
  * reachable from a test without a small filesystem: a case can hand in a reader that answers with
  * numbers, and "no candidate qualifies" is then an input rather than an environment.
  *
- * @param {{ candidates: string[], minFreeBytes: number, availableBytes?: (target: string) => number | null }} options
+ * @param {{
+ *   candidates: string[],
+ *   minFreeBytes: number,
+ *   availableBytes?: (target: string) => number | null,
+ *   read?: (target: string) => { availableBytes: number | null, source?: string | null } | null | undefined,
+ *   reclaim?: (target: string) => void,
+ * }} options
  * @returns {SelectionAccepted | SelectionRefused}
  */
-export const selectDataDir = ({ candidates, minFreeBytes, availableBytes = fsAvailableBytes }) => {
+export const selectDataDir = ({ candidates, minFreeBytes, availableBytes = fsAvailableBytes, read, reclaim }) => {
+  /** @type {(target: string) => { availableBytes: number | null, source: string | null }} */
+  const readOne = read === undefined
+    ? (target) => {
+        /** @type {number | null} */
+        let bytes = null;
+        try {
+          bytes = availableBytes(target);
+        } catch {
+          // An injected reader that throws is a candidate whose filesystem could not be read, which
+          // is the same reading `fsAvailableBytes` gives for a path no `statfs` reaches.
+          bytes = null;
+        }
+        return { availableBytes: bytes, source: null };
+      }
+    : (target) => {
+        /** @type {{ availableBytes: number | null, source?: string | null } | null | undefined} */
+        let reading;
+        try {
+          reading = read(target);
+        } catch {
+          reading = null;
+        }
+        return {
+          availableBytes: reading === null || reading === undefined ? null : (reading.availableBytes ?? null),
+          source: reading === null || reading === undefined ? null : (reading.source ?? null),
+        };
+      };
+
   /** @type {CandidateReading[]} */
   const readings = [];
   for (const candidate of candidates) {
-    /** @type {number | null} */
-    let available = null;
-    try {
-      available = availableBytes(candidate);
-    } catch {
-      // An injected reader that throws is a candidate whose filesystem could not be read, which is
-      // the same reading `fsAvailableBytes` gives for a path no `statfs` reaches.
-      available = null;
+    let { availableBytes: available, source } = readOne(candidate);
+    let reclaimed = false;
+    // The quota arm: a candidate that is short gets one sweep and one *re-read*, and the decision is
+    // made on the re-reading. This is the "sweep, re-read, then decide" order — without the second
+    // read the sweep would have happened after the refusal, which is the state the 2026-11-13 defect
+    // was found in. A reclaim callback that throws is housekeeping failing, not a reason to fail the
+    // selection; the re-read simply reports the same shortfall and the candidate is refused.
+    if (reclaim !== undefined && available !== null && available < minFreeBytes) {
+      try {
+        reclaim(candidate);
+      } catch {
+        // Ignored on purpose; see above.
+      }
+      ({ availableBytes: available, source } = readOne(candidate));
+      reclaimed = true;
     }
+    /** @type {CandidateReading} */
+    const reading = { path: candidate, availableBytes: available, ok: false };
+    if (source !== null) reading.source = source;
     // Tested on `available` itself rather than on a separate `ok` boolean: TypeScript narrows a
     // local across its own guard and not across a boolean derived from it, so the `availableBytes`
     // the accepted result carries is provably a number here.
     if (available !== null && available >= minFreeBytes) {
-      readings.push({ path: candidate, availableBytes: available, ok: true });
-      return { ok: true, parent: candidate, availableBytes: available, minFreeBytes, readings };
+      reading.ok = true;
+      readings.push(reading);
+      return { ok: true, parent: candidate, availableBytes: available, minFreeBytes, source, reclaimed, readings };
     }
-    readings.push({ path: candidate, availableBytes: available, ok: false });
+    readings.push(reading);
   }
   return { ok: false, reason: describeShortfall(minFreeBytes, readings), minFreeBytes, readings };
 };
@@ -220,7 +492,7 @@ export const selectDataDir = ({ candidates, minFreeBytes, availableBytes = fsAva
  * @param {Record<string, string | undefined>} env
  * @returns {number | null}
  */
-const minFreeBytesFromEnv = (env) => {
+export const minFreeBytesFromEnv = (env) => {
   const raw = env[MIN_FREE_MB_ENV];
   if (raw === undefined || raw.trim() === '') return DEFAULT_MIN_FREE_MB * BYTES_PER_MIB;
   const parsed = Number(raw);
@@ -247,11 +519,13 @@ const minFreeBytesFromEnv = (env) => {
  *   home?: string,
  *   osTmpdir?: string,
  *   availableBytes?: (target: string) => number | null,
+ *   read?: (target: string) => { availableBytes: number | null, source?: string | null } | null | undefined,
+ *   reclaim?: (target: string) => void,
  *   makeTempDir?: (parent: string) => string,
  *   log?: (line: string) => void,
  *   fail?: (message: string) => never,
  * }} [options]
- * @returns {{ dataDir: string, explicit: boolean, availableBytes: number | null, minFreeBytes: number | null }}
+ * @returns {{ dataDir: string, explicit: boolean, availableBytes: number | null, minFreeBytes: number | null, source: string | null, reclaimed: boolean }}
  */
 export const resolveE2eDataDir = (options = {}) => {
   const env = options.env ?? process.env;
@@ -269,7 +543,7 @@ export const resolveE2eDataDir = (options = {}) => {
 
   const declared = env[DATA_DIR_ENV];
   if (typeof declared === 'string' && declared.trim() !== '') {
-    return { dataDir: declared, explicit: true, availableBytes: null, minFreeBytes: null };
+    return { dataDir: declared, explicit: true, availableBytes: null, minFreeBytes: null, source: null, reclaimed: false };
   }
 
   const minFreeBytes = minFreeBytesFromEnv(env);
@@ -281,10 +555,19 @@ export const resolveE2eDataDir = (options = {}) => {
     );
   }
 
+  // Injected `availableBytes` is the test seam the existing controls use; when neither it nor a
+  // `read` is supplied, the real quota-first reading answers. The wrapper keeps one code path for
+  // both without making the injected readers silently lose to the default.
+  const read = options.read
+    ?? (options.availableBytes !== undefined
+      ? (target) => ({ availableBytes: /** @type {(target: string) => number | null} */ (options.availableBytes)(target), source: null })
+      : readWritableHeadroom);
+
   const selection = selectDataDir({
     candidates: dataDirCandidates({ env, home: options.home, osTmpdir: options.osTmpdir }),
     minFreeBytes,
-    availableBytes: options.availableBytes,
+    read,
+    reclaim: options.reclaim,
   });
   if (!selection.ok) fail(selection.reason);
 
@@ -296,10 +579,22 @@ export const resolveE2eDataDir = (options = {}) => {
     `[e2e] data-dir=${dataDir} free-bytes=${selection.availableBytes} min-free-bytes=${selection.minFreeBytes}`
       + ` (candidate ${selection.parent})`,
   );
+  // A second line, and only when the reading has a source to name: the line above is a pinned,
+  // parseable token sequence, so the provenance of `free-bytes` is stated beside it rather than
+  // spliced into it. An injected reader (`availableBytes`) has no source and prints nothing, which
+  // keeps the controls that assert "exactly one line" honest.
+  if (selection.source !== null) {
+    log(
+      `[e2e] headroom-source=${selection.source} free-bytes=${selection.availableBytes}`
+        + ` min-free-bytes=${selection.minFreeBytes} (candidate ${selection.parent})`,
+    );
+  }
   return {
     dataDir,
     explicit: false,
     availableBytes: selection.availableBytes,
     minFreeBytes: selection.minFreeBytes,
+    source: selection.source,
+    reclaimed: selection.reclaimed,
   };
 };

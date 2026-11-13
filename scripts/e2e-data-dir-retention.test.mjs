@@ -455,3 +455,207 @@ test('AC2/AC5 the default parents are the selector’s candidates, existing ones
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Appended by gap-ac323-e2e-scratch-quota-headroom-and-interrupted-run-reclaim. The imports above
+// are pinned (no-deleted-lines control), so the new names arrive in a second statement.
+import {
+  COMPLETED_MIN_AGE_MS,
+  INTERRUPTED_MIN_AGE_MS,
+  COMPLETED_TTL_MINUTES_ENV,
+  INTERRUPTED_TTL_MINUTES_ENV,
+  completedTtlMsFromEnv,
+  interruptedTtlMsFromEnv,
+  reclaimForHeadroom,
+} from './e2e-data-dir-retention.mjs';
+
+const MINUTE_MS = 60_000;
+
+test('AC3 completed runs are reclaimable after 15 minutes, interrupted ones only after 60', () => {
+  const entries = [
+    { name: `${RUN_DIR_PREFIX}completed-at`, mtimeMs: NOW - COMPLETED_MIN_AGE_MS, completed: true },
+    { name: `${RUN_DIR_PREFIX}completed-young`, mtimeMs: NOW - 5 * MINUTE_MS, completed: true },
+    { name: `${RUN_DIR_PREFIX}interrupted-at`, mtimeMs: NOW - INTERRUPTED_MIN_AGE_MS, completed: false },
+    { name: `${RUN_DIR_PREFIX}interrupted-young`, mtimeMs: NOW - 20 * MINUTE_MS, completed: false },
+  ];
+  const { reclaimable, kept } = selectReclaimableDirs({
+    entries,
+    ttlMs: null,
+    completedTtlMs: COMPLETED_MIN_AGE_MS,
+    interruptedTtlMs: INTERRUPTED_MIN_AGE_MS,
+    now: NOW,
+  });
+  // The boundary is strict (`>`): exactly at the class TTL is already reclaimable.
+  assert.deepEqual(
+    reclaimable.map((candidate) => candidate.name),
+    [`${RUN_DIR_PREFIX}completed-at`, `${RUN_DIR_PREFIX}interrupted-at`],
+  );
+  assert.deepEqual(
+    kept.map((candidate) => candidate.name),
+    [`${RUN_DIR_PREFIX}completed-young`, `${RUN_DIR_PREFIX}interrupted-young`],
+  );
+  // The interrupted bound's derivation, asserted rather than restated: six times the largest
+  // criterion timeout (600_000 ms) is the smallest value that cannot still contain a live run.
+  assert.ok(
+    INTERRUPTED_MIN_AGE_MS >= 6 * 600_000,
+    `interrupted TTL ${INTERRUPTED_MIN_AGE_MS} ms is not safely above the longest criterion`,
+  );
+  assert.ok(COMPLETED_MIN_AGE_MS < INTERRUPTED_MIN_AGE_MS, 'a finished run must be reclaimable sooner than a possibly-live one');
+});
+
+test('AC3 the current run is excluded from both classes, even when far past either TTL', () => {
+  const current = `${RUN_DIR_PREFIX}CURRENT`;
+  for (const completed of [true, false]) {
+    const { reclaimable, kept } = selectReclaimableDirs({
+      entries: [{ name: current, mtimeMs: NOW - 30 * DAY_MS, completed }],
+      ttlMs: null,
+      completedTtlMs: COMPLETED_MIN_AGE_MS,
+      interruptedTtlMs: INTERRUPTED_MIN_AGE_MS,
+      exclude: [current],
+      now: NOW,
+    });
+    assert.deepEqual(reclaimable, [], `completed=${completed} must not let the exclusion through`);
+    assert.deepEqual(kept.map((candidate) => candidate.name), [current], 'it was considered and kept');
+  }
+});
+
+test('AC3 both class TTLs are readings the environment can move, and an unreadable one reclaims nothing', () => {
+  assert.equal(completedTtlMsFromEnv({}), COMPLETED_MIN_AGE_MS);
+  assert.equal(interruptedTtlMsFromEnv({}), INTERRUPTED_MIN_AGE_MS);
+  assert.equal(completedTtlMsFromEnv({ [COMPLETED_TTL_MINUTES_ENV]: '1' }), MINUTE_MS);
+  assert.equal(interruptedTtlMsFromEnv({ [INTERRUPTED_TTL_MINUTES_ENV]: '2' }), 2 * MINUTE_MS);
+  for (const raw of ['0', '-1', 'abc', 'NaN', 'Infinity']) {
+    assert.equal(completedTtlMsFromEnv({ [COMPLETED_TTL_MINUTES_ENV]: raw }), null, `completed ${raw} is not a bound`);
+    assert.equal(interruptedTtlMsFromEnv({ [INTERRUPTED_TTL_MINUTES_ENV]: raw }), null, `interrupted ${raw} is not a bound`);
+  }
+
+  // The real reader's classification on real directories: an interrupted 20-minute-old directory is
+  // kept, while a *completed* directory of the same age is reclaimable. Without the `.last-run.json`
+  // marker this split cannot be reached, which is why the fixture writes one.
+  const root = makeScratchRoot();
+  try {
+    const completedOld = join(root, `${RUN_DIR_PREFIX}COMPLETED`);
+    const interruptedYoung = join(root, `${RUN_DIR_PREFIX}INTERRUPTED-YOUNG`);
+    const interruptedOld = join(root, `${RUN_DIR_PREFIX}INTERRUPTED-OLD`);
+    for (const dir of [completedOld, interruptedYoung, interruptedOld]) mkdirSync(dir);
+    mkdirSync(join(completedOld, 'test-results'));
+    writeFileSync(join(completedOld, 'test-results', '.last-run.json'), '{"status":"passed"}');
+    backdate(completedOld, 20 * MINUTE_MS);
+    backdate(interruptedYoung, 20 * MINUTE_MS);
+    backdate(interruptedOld, 61 * MINUTE_MS);
+    const report = reclaimDataDirs({ parent: root, env: {}, now: Date.now });
+    assert.deepEqual(
+      report.reclaimedNames.sort(),
+      [`${RUN_DIR_PREFIX}COMPLETED`, `${RUN_DIR_PREFIX}INTERRUPTED-OLD`].sort(),
+      'a finished 20-minute-old run is reclaimable; an interrupted one of the same age is not',
+    );
+    assert.equal(existsSync(interruptedYoung), true, 'the possibly-live run directory survives');
+    assert.equal(report.completed, 1);
+    assert.equal(report.interrupted, 2);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('AC4 a below-floor headroom reclaims oldest-first until the floor is reached', () => {
+  const MIB = 1024 * 1024;
+  let headroom = 1 * 1024 * MIB;
+  /** @type {string[]} */
+  const removed = [];
+  const report = reclaimForHeadroom({
+    parent: '/fixture/parent',
+    floorBytes: 3 * 1024 * MIB,
+    completedTtlMs: COMPLETED_MIN_AGE_MS,
+    interruptedTtlMs: INTERRUPTED_MIN_AGE_MS,
+    budgetMs: Number.POSITIVE_INFINITY,
+    // Five interrupted entries, all past the 60-minute class TTL, deliberately listed newest-first so
+    // "oldest first" is the module's ordering rather than the reader's.
+    readEntries: () => [
+      { name: `${RUN_DIR_PREFIX}age-70`, mtimeMs: Date.now() - 70 * MINUTE_MS },
+      { name: `${RUN_DIR_PREFIX}age-150`, mtimeMs: Date.now() - 150 * MINUTE_MS },
+      { name: `${RUN_DIR_PREFIX}age-90`, mtimeMs: Date.now() - 90 * MINUTE_MS },
+      { name: `${RUN_DIR_PREFIX}age-120`, mtimeMs: Date.now() - 120 * MINUTE_MS },
+      { name: `${RUN_DIR_PREFIX}age-10`, mtimeMs: Date.now() - 10 * MINUTE_MS },
+    ],
+    headroomBytes: () => headroom,
+    remove: (target) => {
+      removed.push(target.slice(target.lastIndexOf('/') + 1));
+      headroom += 1024 * MIB; // one GiB freed per directory, so the floor is reached after two
+    },
+    now: Date.now,
+  });
+  assert.deepEqual(removed, [`${RUN_DIR_PREFIX}age-150`, `${RUN_DIR_PREFIX}age-120`], 'oldest first, stopping at the floor');
+  assert.equal(report.headroomBefore, 1 * 1024 * MIB);
+  assert.equal(report.headroomAfter, 3 * 1024 * MIB);
+  assert.equal(report.floorMet, true);
+  assert.equal(report.exhausted, false);
+  assert.equal(report.budgetReached, false);
+  assert.equal(report.eligible, 4, 'the 10-minute-old interrupted directory is not eligible at all');
+  // The reading that makes the arm falsifiable: with the candidates exhausted and the floor unmet,
+  // the report says so instead of silently accepting the shortfall.
+  headroom = 0;
+  const exhausted = reclaimForHeadroom({
+    parent: '/fixture/parent',
+    floorBytes: 3 * 1024 * MIB,
+    completedTtlMs: COMPLETED_MIN_AGE_MS,
+    interruptedTtlMs: INTERRUPTED_MIN_AGE_MS,
+    budgetMs: Number.POSITIVE_INFINITY,
+    readEntries: () => [{ name: `${RUN_DIR_PREFIX}only`, mtimeMs: Date.now() - 90 * MINUTE_MS }],
+    headroomBytes: () => headroom,
+    remove: () => {},
+    now: Date.now,
+  });
+  assert.equal(exhausted.reclaimed, 1);
+  assert.equal(exhausted.floorMet, false);
+  assert.equal(exhausted.exhausted, true);
+  assert.match(exhausted.summary, /exhausted=true/);
+});
+
+test('AC4 the run-path budget still bounds the sweep and reports budgetReached', () => {
+  /** @type {string[]} */
+  const removed = [];
+  let clock = Date.now();
+  const report = reclaimForHeadroom({
+    parent: '/fixture/parent',
+    floorBytes: 1024 * 1024 * 1024,
+    completedTtlMs: COMPLETED_MIN_AGE_MS,
+    interruptedTtlMs: INTERRUPTED_MIN_AGE_MS,
+    budgetMs: 100,
+    readEntries: () => Array.from({ length: 10 }, (_, index) => ({
+      name: `${RUN_DIR_PREFIX}${index}`,
+      mtimeMs: Date.now() - (90 + index) * MINUTE_MS,
+    })),
+    // A headroom that never improves keeps the sweep going until the budget stops it.
+    headroomBytes: () => 0,
+    remove: (target) => { removed.push(target); },
+    now: () => { clock += 40; return clock; },
+  });
+  assert.equal(report.budgetReached, true, 'a sweep stopped by its budget must say so');
+  assert.equal(report.exhausted, false, 'a budget stop is not candidate exhaustion');
+  assert.ok(report.reclaimed < 10, 'the budget is reached before the end');
+  assert.ok(report.reclaimed >= 1, 'the budget must not stop the sweep before it has done anything');
+  assert.match(report.summary, /budget-reached=true/);
+});
+
+test('AC4 a healthy headroom does not delete beyond the age rule', () => {
+  /** @type {string[]} */
+  const removed = [];
+  const report = reclaimForHeadroom({
+    parent: '/fixture/parent',
+    floorBytes: 1024 * 1024 * 1024,
+    completedTtlMs: COMPLETED_MIN_AGE_MS,
+    interruptedTtlMs: INTERRUPTED_MIN_AGE_MS,
+    budgetMs: Number.POSITIVE_INFINITY,
+    readEntries: () => [
+      { name: `${RUN_DIR_PREFIX}old-interrupted`, mtimeMs: Date.now() - 90 * MINUTE_MS },
+      { name: `${RUN_DIR_PREFIX}young-interrupted`, mtimeMs: Date.now() - 10 * MINUTE_MS },
+    ],
+    // Ten GiB free against a one GiB floor: healthy, so nothing outside the age rule may be touched.
+    headroomBytes: () => 10 * 1024 * 1024 * 1024,
+    remove: (target) => { removed.push(target.slice(target.lastIndexOf('/') + 1)); },
+    now: Date.now,
+  });
+  assert.deepEqual(removed, [`${RUN_DIR_PREFIX}old-interrupted`], 'the ordinary age sweep still runs');
+  assert.equal(report.floorMet, true, 'the reading was healthy from the start');
+  assert.equal(report.exhausted, false);
+  assert.ok(!removed.includes(`${RUN_DIR_PREFIX}young-interrupted`), 'a possibly-live run is never traded for headroom');
+});
