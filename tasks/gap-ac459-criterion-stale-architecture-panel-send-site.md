@@ -94,3 +94,8 @@ residual-oversize 拆分任务的 Touches 只声明了 `src/modules/architecture
 - 负臂是实测而非描述：两条夹具臂各自变红的实际输出在任务里可见；同一正臂在活代码根上为绿。
 - 既有臂一条不少：删臂、把断言降级为存在性检查、或为凑零命中改写 AC4 的非目标面，任一出现都算未完成。
 - 提交包含判据文件与任务文件自身，`git status` 干净；任务顶层 `goal_ac: AC-459` 保留，下一轮 driver 可直接独立复验。
+
+## Touches
+
+- `electron/tests/cloudpit-runtime-identity-surfaces.test.mjs`
+- `tasks/gap-ac459-criterion-stale-architecture-panel-send-site.md`
