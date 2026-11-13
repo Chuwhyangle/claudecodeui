@@ -179,13 +179,3 @@ not ok - server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts: Assert
 本轮核实：**不是**本任务 delta 引入——`git diff develop -- server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts` 为空（该文件与 develop 逐字相同）。隔离复跑修复前 **3/3 红**，每次点名 `attention.lock`。机制：常驻 `quay-fleet run`（`~/.quay-fleet/service.pid` pid 4070501）的 attention 写入口 `withAttentionLock` 每段以 `wx` 独占创建 `attention.lock`、放锁时 `unlink`；本轮实测该文件在 10s 内被重建 40 次（≈250ms 一次），而 AC3 守卫的 `RESIDENT_SERVICE_FILES` 只列了 `attention.json`（被豁免的写目标）与 `inbox.lock`（outbox 的同类锁），漏了这把锁。修法：把 `attention.lock` 列入 `RESIDENT_SERVICE_FILES`，并在既有 `AC3 guard: …exemption set…` 用例里加 `isResidentServiceFile('attention.lock') === true` 直接断言；被测契约、写动词、`registry.json`/`initiatives.json` 字面检查与「未声明文件仍红」负控均未动。
 
 修复后隔离复跑 **4/4 绿**（每次 `ℹ tests 18 / fail 0`；最后一次 diagnostic `no file under /data/home/yale/.quay-fleet moved during the run`）。合并 develop 后复验：`npm run typecheck` exit 0、`npm run lint` exit 0；AC-120 判据再跑 3 次全绿（15.2s / 15.6s / 15.8s，`watchdog-armed: config-eval-ms=493/242/258`，`boot … at 3859/3595/3928ms`，`[voice-upload] file=2.600s uploaded=1.500s bytes=48044`），三次对 `\[e2e\] watchdog:|Test timeout of .* exceeded|Unknown system error -122` 命中 0。实现 commit：`bc370f4f0`。
-
-## Blocker
-
-**2026-11-13T03:42:34.945Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts:   AssertionError [ERR_ASSERTION]: files under /data/home/yale/.quay-fleet moved during the contract run and are not written by the resident fleet service: attention.lock [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts]
-- run_id：wk-prod-anchor
-- session_id：ed1aa8cb-2fa9-432c-91f1-936571173a23
-
-**续轮处理（2026-11-13）**：已按上条修复——`attention.lock` 加入 AC3 守卫的 resident-service 豁免集并加直接断言（commit `bc370f4f0`），隔离 4/4 绿；该红是守卫与常驻服务写锁的竞态，与本任务 e2e 内墙 delta 无关，已将该测试文件声明进 `## Touches`。
