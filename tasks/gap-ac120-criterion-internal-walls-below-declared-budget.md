@@ -65,7 +65,7 @@ errno −122 是 Linux `EDQUOT`（用户配额耗尽）。同一时刻在飞任�
 - [x] AC3 判据语义未弱化（承重）：`git diff <merge-base(HEAD,develop)> -- e2e/voice-trim.spec.ts` 只含 timeout 常量与注释行；以下原行逐字仍在：`expect(upload.subarray(0, 4).toString('ascii')).toBe('RIFF')`、`expect(uploadSec).toBeLessThanOrEqual(FIXTURE_SEC + CAPTURE_TOLERANCE_SEC)`、`await expect.poll(() => fidelityMessages` + `.toBeGreaterThan(fidelityBefore)`、`await expect(uploadEntry()).toHaveCount(0)`、`await expect(uploadInput()).toHaveCount(0)`、`expect(requests.length).toBe(requestsBefore + 1)`；新增行匹配 `retries|repeat-each|test\.skip|test\.only|page\.route\(` 的条数为 0。
 - [x] AC4 内墙承重（诱导对，除变异外完全同构）：(a) 临时把内墙还原为 `35_000` 并在测试体开头注入 `await page.waitForTimeout(45_000)` ⇒ exit 1，输出逐字含 `Test timeout of 35000ms exceeded`；(b) 保留新墙 + 同一注入 ⇒ exit 0；(c) 去掉注入后复绿，`git status --porcelain` 无变异残留。三份原始输出与 wall 入档。
 - [x] AC5 假形态仍红（承重，证明不是把判据放宽换绿）：(a) 临时把上传入口改成旁路（选中文件后直接 `onTranscript('fixed')`、不经上传）⇒ 判据 exit 1，红在识别器请求/上传体断言上（AC-120 的假形态 (1)）；(b) 临时让入口无视开关（`?voiceDebug=off` 也渲染）⇒ exit 1，红在 leg 2 的 `toHaveCount(0)` 上（假形态 (4)）。两个变异各自登记 diff 与失败断言逐字，还原后复绿。
-- [x] AC6 契约面不被改窄：`npm run typecheck` 与 `npm run lint` exit 0；`git diff --name-only $(git merge-base develop HEAD)` 全部落在 `## Touches` 内；依赖任务的 `status` 读回为 `done`。
+- [x] AC6 契约面不被改窄：`npm run typecheck` 与 `npm run lint` exit 0；`git diff --name-only $(git merge-base develop HEAD)` 全部落在 `## Touches` 内（`e2e/voice-trim.spec.ts` 与续轮加入的 `server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts`）；依赖任务的 `status` 读回为 `done`。
 
 ## DoD
 
@@ -73,11 +73,12 @@ errno −122 是 Linux `EDQUOT`（用户配额耗尽）。同一时刻在飞任�
 
 ⛔ 不得用 `retries`、`repeat-each`、`test.skip`、`test.only`、`page.route(`、改判据命令、改任何 `expect` 或放宽 `AC120_*` 常量换绿；不得改 `playwright.config.ts` 或 `scripts/e2e-data-dir-*.mjs`（在飞 AC-323 任务的 Touches）。若依赖任务落地后判据仍稳定红在产品面上，停手上报置 `needs-human`，不得把量具红写成产品绿。
 
-该轴仍暗,理由:本任务只调整 e2e 判据自身的 duration 墙与注释，未新增或移除模块、依赖或跨层引用，L_D/L_G 无可比读数。
+该轴仍暗,理由:本任务只调整 e2e 判据自身的 duration 墙与注释、并修补 fan-in suite 假红的测试守卫豁免，未新增或移除模块、依赖或跨层引用，L_D/L_G 无可比读数。
 
 ## Touches
 
 - e2e/voice-trim.spec.ts（只改 `beforeAll` 与 AC-120 用例的 `test.setTimeout` 及其注释；断言零改动）
+- server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts（续轮：fan-in suite 假红的根因修复——AC3 home 守卫漏豁免常驻服务持续重建的 `attention.lock`；只加豁免与一条直接断言，被测契约、写动词与业务代码零改动）
 - tasks/gap-ac120-criterion-internal-walls-below-declared-budget.md（自触）
 
 ## 完成记录
@@ -160,12 +161,24 @@ $ grep -nE '35_000|40_000' e2e/voice-trim.spec.ts                        # 0 hit
 
 - `npm run typecheck` ⇒ exit **0**（tsconfig / server / scripts 三段）。
 - `npm run lint` ⇒ exit **0**（仅既有 warning）。
-- `git diff --name-only $(git merge-base develop HEAD)`（worktree 内）= `e2e/voice-trim.spec.ts`，在 `## Touches` 内；task_write 的自触 `tasks/gap-ac120-criterion-internal-walls-below-declared-budget.md` 亦在 Touches 内。
+- `git diff --name-only $(git merge-base develop HEAD)`（worktree 内）= `e2e/voice-trim.spec.ts` 与 `server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts`（续轮），均在 `## Touches` 内；task_write 的自触 `tasks/gap-ac120-criterion-internal-walls-below-declared-budget.md` 亦在 Touches 内。
 - 依赖任务 `gap-ac323-e2e-scratch-quota-headroom-and-interrupted-run-reclaim` 读回 `status: "done"`。
 
 ### DoD 落地后读数（worker 权限边界）
 
 AC4/AC5 的诱导对与两个假形态均已真跑，退出码与红态原文如上；未出现「静默换绿」。DoD 末段要求「driver 的下一轮 goal gate 重跑 AC-120 读到新树、`.quay/gate-events.jsonl` 尾部为 `pass` 且 `treeSha == 落地树 HEAD^{tree}`」——这是合入 develop 之后由 driver 的 goal gate 产生的读数，worker 在自有 worktree 内无法读取落地树；本条按 worker 流程把实现与证据交给 fan-in，落地后的 GateEvent 由下一轮 goal 复跑记录。
+
+### 续轮（2026-11-13）：fan-in suite 假红根因 `attention.lock` 与修复
+
+上一轮 exited-not-landed 的 suite 红在 `server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts` 的 `AC3: the operator fleet home is untouched by the run`，逐字：
+
+```
+not ok - server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts: AssertionError [ERR_ASSERTION]: files under /data/home/yale/.quay-fleet moved during the contract run and are not written by the resident fleet service: attention.lock
+```
+
+本轮核实：**不是**本任务 delta 引入——`git diff develop -- server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts` 为空（该文件与 develop 逐字相同）。隔离复跑修复前 **3/3 红**，每次点名 `attention.lock`。机制：常驻 `quay-fleet run`（`~/.quay-fleet/service.pid` pid 4070501）的 attention 写入口 `withAttentionLock` 每段以 `wx` 独占创建 `attention.lock`、放锁时 `unlink`；本轮实测该文件在 10s 内被重建 40 次（≈250ms 一次），而 AC3 守卫的 `RESIDENT_SERVICE_FILES` 只列了 `attention.json`（被豁免的写目标）与 `inbox.lock`（outbox 的同类锁），漏了这把锁。修法：把 `attention.lock` 列入 `RESIDENT_SERVICE_FILES`，并在既有 `AC3 guard: …exemption set…` 用例里加 `isResidentServiceFile('attention.lock') === true` 直接断言；被测契约、写动词、`registry.json`/`initiatives.json` 字面检查与「未声明文件仍红」负控均未动。
+
+修复后隔离复跑 **4/4 绿**（每次 `ℹ tests 18 / fail 0`；最后一次 diagnostic `no file under /data/home/yale/.quay-fleet moved during the run`）。合并 develop 后复验：`npm run typecheck` exit 0、`npm run lint` exit 0；AC-120 判据再跑 3 次全绿（15.2s / 15.6s / 15.8s，`watchdog-armed: config-eval-ms=493/242/258`，`boot … at 3859/3595/3928ms`，`[voice-upload] file=2.600s uploaded=1.500s bytes=48044`），三次对 `\[e2e\] watchdog:|Test timeout of .* exceeded|Unknown system error -122` 命中 0。实现 commit：`bc370f4f0`。
 
 ## Blocker
 
@@ -174,3 +187,5 @@ AC4/AC5 的诱导对与两个假形态均已真跑，退出码与红态原文如
 - 未落地原因：step=suite: not ok - server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts:   AssertionError [ERR_ASSERTION]: files under /data/home/yale/.quay-fleet moved during the contract run and are not written by the resident fleet service: attention.lock [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts]
 - run_id：wk-prod-anchor
 - session_id：ed1aa8cb-2fa9-432c-91f1-936571173a23
+
+**续轮处理（2026-11-13）**：已按上条修复——`attention.lock` 加入 AC3 守卫的 resident-service 豁免集并加直接断言（commit `bc370f4f0`），隔离 4/4 绿；该红是守卫与常驻服务写锁的竞态，与本任务 e2e 内墙 delta 无关，已将该测试文件声明进 `## Touches`。
