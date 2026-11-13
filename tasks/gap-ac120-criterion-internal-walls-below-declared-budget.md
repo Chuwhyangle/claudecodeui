@@ -166,3 +166,11 @@ $ grep -nE '35_000|40_000' e2e/voice-trim.spec.ts                        # 0 hit
 ### DoD 落地后读数（worker 权限边界）
 
 AC4/AC5 的诱导对与两个假形态均已真跑，退出码与红态原文如上；未出现「静默换绿」。DoD 末段要求「driver 的下一轮 goal gate 重跑 AC-120 读到新树、`.quay/gate-events.jsonl` 尾部为 `pass` 且 `treeSha == 落地树 HEAD^{tree}`」——这是合入 develop 之后由 driver 的 goal gate 产生的读数，worker 在自有 worktree 内无法读取落地树；本条按 worker 流程把实现与证据交给 fan-in，落地后的 GateEvent 由下一轮 goal 复跑记录。
+
+## Blocker
+
+**2026-11-13T03:42:34.945Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts:   AssertionError [ERR_ASSERTION]: files under /data/home/yale/.quay-fleet moved during the contract run and are not written by the resident fleet service: attention.lock [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts]
+- run_id：wk-prod-anchor
+- session_id：ed1aa8cb-2fa9-432c-91f1-936571173a23
