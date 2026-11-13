@@ -45,11 +45,11 @@ Route the providers -> services and providers -> list/claude re-exports through 
 
 **复核（用仓库自己的读法，与 AC-394 同源）**：`server/shared/imports/import-graph.ts` 在 scope=server 上重测，finding 属实，且树上的非平凡目录 SCC 只有这一个：
 
-- before: `sccs=[[modules/providers, modules/providers/list/claude, modules/providers/services]]`，组内目录边 5 条 / 组内文件边 43 条。
+- before: `sccs=[[modules/providers, modules/providers/list/claude, modules/providers/services]]`，组内目录边 5 条 / 组内文件边 43 条。其中 barrel `index.ts` 自己贡献 18 条（root->services 12、root->list/claude 6），其余由 `provider.registry.ts`(5)、`provider.routes.ts`(8) 以及反向的 services->root(7)、services->list/claude(3)、list/claude->services(2) 构成。
 - 闭环不是 barrel 自己。真正把环闭上的两条腿是：
   (a) 7 个 `services/*.service.ts` 直接 import 父目录的 `provider.registry.ts`（services -> modules/providers）；
   (b) 2 个 `list/claude` 文件 import `services/session-ai-title.service.ts`（list/claude -> services）。
-- barrel `index.ts` 的 43 条出边（root -> services 21 / root -> list/claude 10 等）只是把一个本就存在的环放大成“re-export hub”的形状；删它单靠不够，删掉上面两条腿才是修复。
+- barrel `index.ts` 的组内出边只是把一个本就存在的环放大成“re-export hub”的形状；只删 barrel 不够，删掉上面两条腿才是修复。
 
 **修复（两个只删边的改动，不新增成员、不合并组）**：
 
