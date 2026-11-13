@@ -81,12 +81,54 @@ residual-oversize 拆分任务的 Touches 只声明了 `src/modules/architecture
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test electron/tests/cloudpit-runtime-identity-surfaces.test.mjs` 退出 0，`fail 0`，且 `pass` ≥ 10；把尾部输出（tests/pass/fail 计数与 `✔ AC-459 expect: one BroadcastChannel name feeds both architecture surfaces`）贴进任务。
-- [ ] AC2: 判据的 BroadcastChannel 正臂不再对单个叶子文件断言 `sendArchitectureChatMessage`，改为 `architectureSendChain(root)`：四个链文件逐环命中，`src/modules/architecture/`（排除 `tests/` 与 bridge 定义）内 `sendArchitectureChatMessage(` 的调用文件恰好一个且为 `useArchitecturePanelActions.ts`；`grep -n "architectureSendChain" electron/tests/cloudpit-runtime-identity-surfaces.test.mjs` 非空可复核。
-- [ ] AC3: 负臂实测（贴输出）：`tmp/` 夹具删掉 actions hook 的调用 ⇒ 该用例红；`tmp/` 夹具增加第二个调用文件 ⇒ 该用例红；两臂都走注入 root，不碰活代码。
-- [ ] AC4: 既有臂逐条保留并同轮通过：AC2 零命中且 `filesScanned >= 20`、AC3 两条注入旧名变红、AC4 非目标面夹具与活面断言、AC6 历史账本、IPC/preload/desktopWindow 三处一致、contextBridge 两个名字、语义面同步面清单；`git diff` 显示判据文件外无非目标面改动。
-- [ ] AC5: 非目标面未被为凑零命中而改写：`electron/appIdMigration.js` 仍有 `LEGACY_DESKTOP_APP_ID` 且活值 `APP_USER_MODEL_ID` 仍是 `ai.cloudpit.desktop`；`cloudcli://session|architecture` 仍在 `src/modules/cockpit/tests/observationUri.test.ts` 钉为 null；`git diff --stat` 证明 `tasks/ goals/ adr/ experiments/ docs/proposals/ CHANGELOG` 无改动。
-- [ ] AC6: `git diff --stat` 只含 `electron/tests/cloudpit-runtime-identity-surfaces.test.mjs` 与 `tasks/gap-ac459-criterion-stale-architecture-panel-send-site.md`（若链真断需改代码，则按 Proposal 非目标补 Touches 并在任务里说明）。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test electron/tests/cloudpit-runtime-identity-surfaces.test.mjs` 退出 0，`fail 0`，且 `pass` ≥ 10；把尾部输出（tests/pass/fail 计数与 `✔ AC-459 expect: one BroadcastChannel name feeds both architecture surfaces`）贴进任务。
+- [x] AC2: 判据的 BroadcastChannel 正臂不再对单个叶子文件断言 `sendArchitectureChatMessage`，改为 `architectureSendChain(root)`：四个链文件逐环命中，`src/modules/architecture/`（排除 `tests/` 与 bridge 定义）内 `sendArchitectureChatMessage(` 的调用文件恰好一个且为 `useArchitecturePanelActions.ts`；`grep -n "architectureSendChain" electron/tests/cloudpit-runtime-identity-surfaces.test.mjs` 非空可复核。
+- [x] AC3: 负臂实测（贴输出）：`tmp/` 夹具删掉 actions hook 的调用 ⇒ 该用例红；`tmp/` 夹具增加第二个调用文件 ⇒ 该用例红；两臂都走注入 root，不碰活代码。
+- [x] AC4: 既有臂逐条保留并同轮通过：AC2 零命中且 `filesScanned >= 20`、AC3 两条注入旧名变红、AC4 非目标面夹具与活面断言、AC6 历史账本、IPC/preload/desktopWindow 三处一致、contextBridge 两个名字、语义面同步面清单；`git diff` 显示判据文件外无非目标面改动。
+- [x] AC5: 非目标面未被为凑零命中而改写：`electron/appIdMigration.js` 仍有 `LEGACY_DESKTOP_APP_ID` 且活值 `APP_USER_MODEL_ID` 仍是 `ai.cloudpit.desktop`；`cloudcli://session|architecture` 仍在 `src/modules/cockpit/tests/observationUri.test.ts` 钉为 null；`git diff --stat` 证明 `tasks/ goals/ adr/ experiments/ docs/proposals/ CHANGELOG` 无改动。
+- [x] AC6: `git diff --stat` 只含 `electron/tests/cloudpit-runtime-identity-surfaces.test.mjs` 与 `tasks/gap-ac459-criterion-stale-architecture-panel-send-site.md`（若链真断需改代码，则按 Proposal 非目标补 Touches 并在任务里说明）。
+
+### 执行读数（2026-11-14）
+
+修复前（同一 worktree、同一命令）：
+
+```
+ℹ fail 1
+✖ AC-459 expect: one BroadcastChannel name feeds both architecture surfaces
+  AssertionError [ERR_ASSERTION]: the standalone architecture page sends over the bridge
+  at electron/tests/cloudpit-runtime-identity-surfaces.test.mjs:313:10
+EXIT=1
+```
+
+修复后（worktree `/data/home/yale/work/claudecodeui-worktrees/gap-ac459-criterion-stale-architecture-panel-send-site`，commit `02eacfbb3`）：
+
+```
+✔ AC2: the live runtime identity surfaces are clean, and the scan is not vacuous (281.060715ms)
+✔ AC-459 expect: IPC registration, preload invoke/on and webContents.send agree (0.628241ms)
+✔ AC-459 expect: contextBridge exposes only the two Cloudpit names and consumers read them (0.512203ms)
+✔ AC-459 expect: one BroadcastChannel name feeds both architecture surfaces (4.733893ms)
+✔ AC-459 expect: the dev-only semantic surface installs the Cloudpit global everywhere (0.566967ms)
+✔ AC3: an injected pre-2.0 IPC channel in a tmp fixture is reported against electron/main.js (1.475816ms)
+✔ AC3: an injected pre-2.0 scenario global in a tmp fixture is reported against src/semantic.js (0.86339ms)
+✔ AC3: a tmp fixture whose actions hook drops the send call breaks the chain (2.780457ms)
+✔ AC3: a tmp fixture with a second send caller breaks the chain (1.407698ms)
+✔ AC4: a tmp fixture holding only the non-goal cloudcli identifiers stays clean (0.87349ms)
+✔ AC4: the live non-goal identity pins are untouched (0.278474ms)
+✔ AC6: the history ledger still records the pre-2.0 names (7.395272ms)
+ℹ tests 12
+ℹ pass 12
+ℹ fail 0
+EXIT=0
+```
+
+AC2 复核：`grep -n "architectureSendChain"` 命中 247（定义）、280（断言包装）、547 与 571（两条负臂）。
+正臂读数：四环无断链；`callerFiles` 恰为 `['src/modules/architecture/render/useArchitecturePanelActions.ts']`；`callInsideStandaloneBranch=true`。
+负臂读数：删调用夹具 `brokenLinks=[useArchitecturePanelActions.ts]`、`callerFiles=[]`，`assertArchitectureSendChain` 抛「the standalone send chain is intact」；第二调用文件夹具 `callerFiles=[architecturePanelCanvas.tsx, useArchitecturePanelActions.ts]`，抛「exactly one file calls the bridge」。两条负臂都把同一判据跑红，未触碰活代码。
+
+AC5 复核：`electron/appIdMigration.js:37` 仍为 `export const LEGACY_DESKTOP_APP_ID = 'ai.cloudcli.desktop';`；`electron/main.js:17` 仍为 `const APP_USER_MODEL_ID = 'ai.cloudpit.desktop';`；`src/modules/cockpit/tests/observationUri.test.ts:56-60` 仍把 `cloudcli://session|architecture` 钉为 null；`git diff --stat -- tasks/ goals/ adr/ experiments/ docs/proposals/ CHANGELOG` 为空。
+AC6 复核：`git diff --stat` 仅 `electron/tests/cloudpit-runtime-identity-surfaces.test.mjs`（180 insertions / 6 deletions），无活代码改动。
+
+- 该轴仍暗,理由:本任务只改判据文件、不新增或搬动模块，L_D/L_G 架构读数不因本 diff 变化。
 
 ## DoD
 
