@@ -70,6 +70,17 @@ Split render/ into three subpackages (inspector+selection, minimap+viewport chro
 - 基线：`architecture-ratchet.baseline.json` 删除 Inspector/Minimap 两条、重键 PlantUmlGraph；`frontend-import-cycle-budget.baseline.json` 的 readings 在 merge develop 后按同一共享扫描器重测为 files=746 / staticFileEdges=2685 / nodeCount=136 / unresolvedInternal=100 / nonLiteralDynamic=2，pin 组不变。
 - 探针只立案不执行：复核、拆分、验证全部由派发链的 worker 会话执行，例程没有代跑。
 
+### Post-merge re-verification（2026-11-14，续做轮；merge develop b24dede32 之后）
+- 15 个 merge 冲突（`architecture-ratchet.baseline.json` + `render/*` 与 `tests/*` 的 import 路径）按语义并集解决：保留 develop 的 `dom/{interaction,readout,planning}`、`layout/{drawing,engine,plantuml,panel}` 新路径，同时保留本分支的 `render/{viewport,inspector,curation}` 新路径；`architecture-ratchet.baseline.json` 条目取 develop 侧 + 本分支的 render lowering/re-key，note 合并两段。develop 新增的 `architectureCurationController` / `architectureFitExportController` / `useArchitectureRefresh` / `architectureChromeController` 导入已由本分支的子包 barrel 覆盖，未重复引入。
+- 另修一处 merge 后遗留旧路径：`render/viewport/minimapGeometry.ts` 的 `layout/svgViewport` → `layout/engine/svgViewport`。
+- 类型：client / server / scripts 三个 `tsc --noEmit` → 0 error。
+- 客户端回归：`npx vitest run src/modules/architecture/tests --maxWorkers=2` → 44 files / 691 tests passed。
+- 结构棘轮：`architecture-ratchet.test.ts` + `frontend-import-cycle-budget.test.ts` → 18 pass / 0 fail（develop 新增 3 条用例）；cycleGroups 仍 4 组、moduleSccGroups 仍 1 组。
+- 前置图读数按 merge 后的树重测（同一 `server/shared/imports/import-graph.ts` 扫描器）：files=753 / staticFileEdges=2716 / nodeCount=142 / unresolvedInternal=100 / nonLiteralDynamic=2，已回写 `frontend-import-cycle-budget.baseline.json`。
+- 受影响服务端判据：`cloudpit-runtime-flip` + `architecture-routes` → 50 pass / 0 fail；`oxlint src/modules/architecture server/shared/tests e2e/architecture-canvas-layout.spec.ts` → 0 error。
+- package 读数复测（worktree 直接文件 / 导出 function+class 计数）：render 19 files（entity 直接计数 25，archguard 口径记录为 27）、viewport 18/45、inspector 5/7、curation 7/13，均满足 files<=20 且 entities<=50。
+- `anti-drift-touches-check --merge-target develop` → OK（56 files，全部在 5 条 Touches glob 内）。
+
 ## ADR-007 dark-axis record
 - L_D archguard: render fileCount=19 entityCount=27 (was 44/89); viewport fileCount=18 entityCount=45; inspector fileCount=5 entityCount=7; curation fileCount=7 entityCount=13; all <= minFiles20/minEntities50
 - L_G archguard: directoryCycleGroups=4 (unchanged), newDirectoryCycleGroups=0, moduleSccGroups=1 (unchanged)
