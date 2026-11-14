@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-src-architecture-render
 title: "architecture-analysis: 44 direct files / 89 entities / fanOut 12 / fanIn
   1 (archguard package-stats, fresh 2026-11-14) — the 2026-11-04 architecture
   split moved the implementation "
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
