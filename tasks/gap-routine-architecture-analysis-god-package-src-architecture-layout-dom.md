@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-src-architecture-layout-dom
 title: "architecture-analysis: layout = 12 files / 117 entities (highest entity
   count in src) and dom = 22 files / 84 entities with fanIn 5 — both breach
   minEntities=50, and dom additional"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
