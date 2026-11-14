@@ -12,8 +12,8 @@ import {
   bottomInfoSlotRect,
   cornerChromeRects,
   rectsOverlap,
-} from '@/modules/architecture/dom/bottomSlotLayout';
-import { placeHoverHint } from '@/modules/architecture/dom/hoverHintPlacement';
+} from '@/modules/architecture/dom/readout/bottomSlotLayout';
+import { placeHoverHint } from '@/modules/architecture/dom/readout/hoverHintPlacement';
 import {
   ArchitectureMinimap,
   drawingFitsInViewport,

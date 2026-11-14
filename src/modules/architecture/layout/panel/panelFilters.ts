@@ -5,9 +5,9 @@ import {
   type ArchitectureElementRelationFilter,
   type ArchitectureFilterHidden,
   type ArchitectureRelationPreset,
-} from '@/modules/architecture/dom/elementRelationFilter';
-import type { PanelStorageLike } from '@/modules/architecture/layout/panelPersistence';
-import type { ArchitectureGraphResult } from '@/modules/architecture/dom/useArchitectureGraph';
+} from '@/modules/architecture/dom/readout/elementRelationFilter';
+import type { PanelStorageLike } from '@/modules/architecture/layout/panel/panelPersistence';
+import type { ArchitectureGraphResult } from '@/modules/architecture/dom/planning/useArchitectureGraph';
 
 // The panel's pure filter layer: the stored element/relation filter and its
 // validation, the composition of the server's `hidden` reading with a local

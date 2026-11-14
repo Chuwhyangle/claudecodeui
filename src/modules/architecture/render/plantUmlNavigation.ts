@@ -13,11 +13,11 @@ import type { ArchitectureDiffHighlight } from '@/modules/architecture/dom/rende
 import {
   PACKAGE_NAV_PREFIX,
   type EntityNavigationItem,
-} from '@/modules/architecture/dom/entityNavigation';
-import type { LayoutOrientation, OrientationSize } from '@/modules/architecture/dom/layoutOrientation';
-import { memberDisplayLimits } from '@/modules/architecture/layout/archguardToPlantUml';
-import { capDrawnMemberRows } from '@/modules/architecture/layout/drawnFit';
-import { nodeElement, type PlantUmlRenderDetailed } from '@/modules/architecture/layout/graphDom';
+} from '@/modules/architecture/dom/interaction/entityNavigation';
+import type { LayoutOrientation, OrientationSize } from '@/modules/architecture/dom/planning/layoutOrientation';
+import { memberDisplayLimits } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
+import { capDrawnMemberRows } from '@/modules/architecture/layout/drawing/drawnFit';
+import { nodeElement, type PlantUmlRenderDetailed } from '@/modules/architecture/layout/drawing/graphDom';
 import { GROUP_PREFIX, STUB_PREFIX } from '@/modules/architecture/dom/graphConstants';
 
 const MEMBER_LIMITS_STORAGE_KEY = 'architecture-member-limits';

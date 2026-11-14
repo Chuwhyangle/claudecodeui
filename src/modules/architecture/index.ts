@@ -1,11 +1,11 @@
 export { default as ArchitecturePanel } from '@/modules/architecture/render/ArchitecturePanel';
-export { useArchitectureGraph } from '@/modules/architecture/dom/useArchitectureGraph';
+export { useArchitectureGraph } from '@/modules/architecture/dom/planning/useArchitectureGraph';
 export type {
   ArchitectureGraphResult,
   ArchitectureGraphStats,
   ArchitectureProvenance,
   ArchitectureView,
-} from '@/modules/architecture/dom/useArchitectureGraph';
+} from '@/modules/architecture/dom/planning/useArchitectureGraph';
 export {
   isArchitectureTabVisible,
   useEnsureArchitectureTabVisible,

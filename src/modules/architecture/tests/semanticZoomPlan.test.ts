@@ -33,7 +33,7 @@ import {
   SEMANTIC_IDENTITY_SCALE,
   SEMANTIC_MIN_FONT_MOBILE_PX,
   SEMANTIC_MIN_FONT_PX,
-} from '@/modules/architecture/dom/semanticZoomPlan';
+} from '@/modules/architecture/dom/planning/semanticZoomPlan';
 
 /**
  * The semantic-zoom content plan, in isolation.

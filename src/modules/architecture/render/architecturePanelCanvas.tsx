@@ -7,7 +7,7 @@
  * The legend is a sibling fragment, so it arrives as a prop rather than through
  * the panel model.
  */
-import { HOVER_HINT_MARGIN_PX } from '@/modules/architecture/dom/hoverHintPlacement';
+import { HOVER_HINT_MARGIN_PX } from '@/modules/architecture/dom/readout/hoverHintPlacement';
 import { CanvasHeaderSlotContext, CompactToolbarSlotContext } from '@/modules/architecture/hooks/useTouchLayout';
 import { ArchitectureEmptyState } from '@/modules/architecture/render/ArchitectureEmptyState';
 import { ArchitectureSelectionTray } from '@/modules/architecture/render/ArchitectureSelectionTray';

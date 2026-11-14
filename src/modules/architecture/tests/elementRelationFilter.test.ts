@@ -17,7 +17,7 @@ import {
   showAllFilter,
   type ArchitectureElementRelationFilter,
   type ArchitectureRelationPreset,
-} from '@/modules/architecture/dom/elementRelationFilter';
+} from '@/modules/architecture/dom/readout/elementRelationFilter';
 // The marker geometry lives beside its only consumer; this file pins it as a
 // pure function (the panel test proves the drawn dots follow it).
 import { markerAnchor } from '@/modules/architecture/render/PlantUmlGraph';

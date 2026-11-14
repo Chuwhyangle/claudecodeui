@@ -3,7 +3,7 @@ import {
   ARCHITECTURE_SCOPE_MAX,
   ARCHITECTURE_SCOPE_MIN,
   type ArchitectureDetailTier,
-} from '@/modules/architecture/dom/detailRanking';
+} from '@/modules/architecture/dom/readout/detailRanking';
 
 /**
  * The architecture page's standalone deep link.

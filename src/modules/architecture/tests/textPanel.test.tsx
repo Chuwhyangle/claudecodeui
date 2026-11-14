@@ -16,15 +16,15 @@ import {
   archguardToPlantUml,
   parserSafePlantUml,
   type ArchitectureDiagramView,
-} from '@/modules/architecture/layout/archguardToPlantUml';
+} from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import { renderWithMemberDetail } from '@/modules/architecture/render/PlantUmlGraph';
-import { buildPlantUmlText, standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantUmlText';
+import { buildPlantUmlText, standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantuml/plantUmlText';
 import type {
   ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
   ArchitectureRendererGraph,
 } from '@/modules/architecture/dom/rendererContract';
-import type { ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
+import type { ArchitectureSelection } from '@/modules/architecture/dom/interaction/selectionModel';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import type * as SharedApiModule from '@/shared/api';
 

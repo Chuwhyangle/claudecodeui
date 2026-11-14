@@ -1,4 +1,4 @@
-import type { SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
+import type { SvgViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
 
 /**
  * What remains of the readable-zoom policy after the single-scale contract.

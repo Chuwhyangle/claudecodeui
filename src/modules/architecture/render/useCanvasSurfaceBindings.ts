@@ -10,18 +10,18 @@
  */
 import { useEffect, type RefObject } from 'react';
 
-import type { GraphGestureController } from '@/modules/architecture/dom/graphGestureController';
-import type { GraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
-import type { GraphLayoutPipeline, GraphLayoutCommit } from '@/modules/architecture/layout/graphLayoutPipeline';
-import type { GraphViewportController, GraphZoom } from '@/modules/architecture/layout/graphViewportController';
-import type { SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
+import type { GraphGestureController } from '@/modules/architecture/dom/interaction/graphGestureController';
+import type { GraphSelectionController } from '@/modules/architecture/dom/interaction/graphSelectionController';
+import type { GraphLayoutPipeline, GraphLayoutCommit } from '@/modules/architecture/layout/drawing/graphLayoutPipeline';
+import type { GraphViewportController, GraphZoom } from '@/modules/architecture/layout/drawing/graphViewportController';
+import type { SvgViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
 import {
   createSvgDragPan,
   createSvgTouchGestures,
   createSvgViewport,
-} from '@/modules/architecture/layout/svgViewport';
-import { measureLayoutAspect, drawStickyLabels, positionOverviewHint } from '@/modules/architecture/layout/graphDom';
-import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
+} from '@/modules/architecture/layout/engine/svgViewport';
+import { measureLayoutAspect, drawStickyLabels, positionOverviewHint } from '@/modules/architecture/layout/drawing/graphDom';
+import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/planning/semanticZoomPlan';
 import { forcedDefaultFocus } from '@/modules/architecture/render/plantUmlControlArm';
 
 /** Every reading the surface bindings close over. */

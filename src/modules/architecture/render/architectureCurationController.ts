@@ -31,7 +31,7 @@ import {
   type CurationActionResult,
   type CurationStorageLike,
   type CurationStore,
-} from '@/modules/architecture/dom/curationStore';
+} from '@/modules/architecture/dom/interaction/curationStore';
 
 /** How long a curation Toast lives before dismissing itself. */
 export const CURATION_TOAST_MS = 12_000;

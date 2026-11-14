@@ -16,35 +16,35 @@
 import { useEffect, type RefObject } from 'react';
 
 import type { ArchitectureRendererEdge, ArchitectureNodeIdShape, ArchitectureRendererGraph, ArchitectureDiffHighlight } from '@/modules/architecture/dom/rendererContract';
-import type { ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
-import type { GraphGestureController } from '@/modules/architecture/dom/graphGestureController';
-import type { GraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
-import type { GraphLayoutPipeline, GraphLayoutSnapshot } from '@/modules/architecture/layout/graphLayoutPipeline';
-import type { GraphViewportController, GraphZoom } from '@/modules/architecture/layout/graphViewportController';
-import type { SvgFitPlacement, SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
+import type { ArchitectureDiagramView } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
+import type { GraphGestureController } from '@/modules/architecture/dom/interaction/graphGestureController';
+import type { GraphSelectionController } from '@/modules/architecture/dom/interaction/graphSelectionController';
+import type { GraphLayoutPipeline, GraphLayoutSnapshot } from '@/modules/architecture/layout/drawing/graphLayoutPipeline';
+import type { GraphViewportController, GraphZoom } from '@/modules/architecture/layout/drawing/graphViewportController';
+import type { SvgFitPlacement, SvgViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
 import type {
   PlantUmlApplyView,
   PlantUmlRenderDetailed,
   PlantUmlToPlantUml,
   SemanticCapture,
-} from '@/modules/architecture/layout/graphDom';
-import type { SemanticZoomLayout } from '@/modules/architecture/layout/semanticZoomLayout';
-import { archguardToPlantUml, parserSafePlantUml } from '@/modules/architecture/layout/archguardToPlantUml';
-import { standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantUmlText';
+} from '@/modules/architecture/layout/drawing/graphDom';
+import type { SemanticZoomLayout } from '@/modules/architecture/layout/engine/semanticZoomLayout';
+import { archguardToPlantUml, parserSafePlantUml } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
+import { standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantuml/plantUmlText';
 import {
   createLayoutEngine,
   type ArchitectureLayoutEngineClass,
-} from '@/modules/architecture/layout/elkAspectEngine';
+} from '@/modules/architecture/layout/engine/elkAspectEngine';
 import {
   graphFingerprint,
   type LayoutOrientation,
-} from '@/modules/architecture/dom/layoutOrientation';
-import { semanticContentBounds } from '@/modules/architecture/layout/semanticZoomLayout';
-import { LAYOUT_STATUS_THRESHOLD_MS } from '@/modules/architecture/layout/graphLayoutPipeline';
-import { capDrawnMemberRows, drawnFitScaleOf } from '@/modules/architecture/layout/drawnFit';
-import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
-import { canvasIsTooWide } from '@/modules/architecture/layout/readableZoom';
-import { centerElementInContainer, measureViewportSize } from '@/modules/architecture/layout/svgViewport';
+} from '@/modules/architecture/dom/planning/layoutOrientation';
+import { semanticContentBounds } from '@/modules/architecture/layout/engine/semanticZoomLayout';
+import { LAYOUT_STATUS_THRESHOLD_MS } from '@/modules/architecture/layout/drawing/graphLayoutPipeline';
+import { capDrawnMemberRows, drawnFitScaleOf } from '@/modules/architecture/layout/drawing/drawnFit';
+import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/planning/semanticZoomPlan';
+import { canvasIsTooWide } from '@/modules/architecture/layout/engine/readableZoom';
+import { centerElementInContainer, measureViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
 import {
   addEdgeHitTargets,
   addNodeHitTargets,
@@ -61,7 +61,7 @@ import {
   rendererOptionsFor,
   restoreEntityIds,
   reverseAliases,
-} from '@/modules/architecture/layout/graphDom';
+} from '@/modules/architecture/layout/drawing/graphDom';
 import {
   afterPaint,
   applyDiffStyles,

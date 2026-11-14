@@ -22,8 +22,8 @@
  * that file is over the 800-line architecture-ratchet limit and the ratchet may
  * only fall: the logic is additive and gets its own (sub-limit) file.
  */
-import type { PlannedPackageTab } from '@/modules/architecture/dom/semanticZoomPlan';
-import type { SemanticRect } from '@/modules/architecture/dom/semanticZoomRead';
+import type { PlannedPackageTab } from '@/modules/architecture/dom/planning/semanticZoomPlan';
+import type { SemanticRect } from '@/modules/architecture/dom/planning/semanticZoomRead';
 
 /** The content tiers; tier `C` draws packages only and keeps the mapped box. */
 export type PackageBoundsTier = 'A' | 'B' | 'C' | 'D';

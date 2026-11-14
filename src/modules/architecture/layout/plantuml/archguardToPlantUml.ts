@@ -7,7 +7,7 @@ import {
   OVERVIEW_GROUP_LIMIT,
   scopeRelativePath,
   type AdaptiveGrouping,
-} from '@/modules/architecture/dom/adaptiveGrouping';
+} from '@/modules/architecture/dom/planning/adaptiveGrouping';
 import type {
   ArchitectureEntityMember,
   ArchitectureNodeIdShape,
@@ -16,7 +16,7 @@ import type {
   ArchitectureNeighborhood,
   ArchitectureNeighborhoodEdge,
   ArchitectureNeighborhoodNode,
-} from '@/modules/architecture/dom/useArchitectureGraph';
+} from '@/modules/architecture/dom/planning/useArchitectureGraph';
 
 /**
  * ArchGuard neighbourhood JSON → PlantUML class-diagram source.

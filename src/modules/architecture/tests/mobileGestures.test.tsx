@@ -9,7 +9,7 @@ import type * as SharedApiModule from '@/shared/api';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
-import { addNodeHitTargets, nearestNodeHitId } from '@/modules/architecture/layout/graphDom';
+import { addNodeHitTargets, nearestNodeHitId } from '@/modules/architecture/layout/drawing/graphDom';
 
 /**
  * The architecture tab's mobile input contract:

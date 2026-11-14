@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 
 import { test } from 'vitest';
 
-import * as readableZoom from '@/modules/architecture/layout/readableZoom';
+import * as readableZoom from '@/modules/architecture/layout/engine/readableZoom';
 import {
   canvasIsTooWide,
   MIN_READABLE_FONT_PX,
   READABLE_ZOOM_SCALE,
   RENDERED_LABEL_FONT_PX,
   WIDE_CANVAS_ASPECT_RATIO,
-} from '@/modules/architecture/layout/readableZoom';
-import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/svgViewport';
+} from '@/modules/architecture/layout/engine/readableZoom';
+import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/engine/svgViewport';
 
 /**
  * The readable floor and the band test that survive the single-scale contract.

@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { createGraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
+import { createGraphSelectionController } from '@/modules/architecture/dom/interaction/graphSelectionController';
 import { DOUBLE_TAP_MS } from '@/modules/architecture/dom/graphConstants';
 
 /** A hand-driven clock: `now` only moves when the test moves it. */

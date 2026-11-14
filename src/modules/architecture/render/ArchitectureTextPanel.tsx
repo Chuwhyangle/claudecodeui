@@ -1,7 +1,7 @@
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
+import type { ArchitectureDiagramView } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import {
   architectureExportFilename,
   downloadTextFile,
@@ -19,13 +19,13 @@ import {
   type ArchitecturePlantUmlDocument,
   type ArchitectureTextRect,
   type ArchitectureTextScope,
-} from '@/modules/architecture/layout/plantUmlText';
+} from '@/modules/architecture/layout/plantuml/plantUmlText';
 import type {
   ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
   ArchitectureRendererGraph,
 } from '@/modules/architecture/dom/rendererContract';
-import type { ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
+import type { ArchitectureSelection } from '@/modules/architecture/dom/interaction/selectionModel';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/Dialog';
 import { formatAbsoluteTime } from '@/shared/utils';
 

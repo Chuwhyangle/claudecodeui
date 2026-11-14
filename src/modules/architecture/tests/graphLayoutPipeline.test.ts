@@ -21,14 +21,14 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ExplosionLodScheduler } from '@/modules/architecture/dom/explosionLod';
-import type { SemanticCapture } from '@/modules/architecture/layout/graphDom';
+import type { ExplosionLodScheduler } from '@/modules/architecture/dom/planning/explosionLod';
+import type { SemanticCapture } from '@/modules/architecture/layout/drawing/graphDom';
 import {
   createGraphLayoutPipeline,
   type GraphLayoutActions,
   type GraphLayoutCommit,
-} from '@/modules/architecture/layout/graphLayoutPipeline';
-import type { SemanticTier, SemanticZoomLayout } from '@/modules/architecture/layout/semanticZoomLayout';
+} from '@/modules/architecture/layout/drawing/graphLayoutPipeline';
+import type { SemanticTier, SemanticZoomLayout } from '@/modules/architecture/layout/engine/semanticZoomLayout';
 import type { Clock } from '@/shared/types';
 
 /**

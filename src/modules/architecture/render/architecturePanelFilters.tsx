@@ -6,10 +6,10 @@
  * Extracted from `ArchitecturePanel.tsx` unchanged (residual-oversize split,
  * `gap-routine-architecture-analysis-architecture-panel-plantuml-residual-oversize`).
  */
-import { ARCHITECTURE_ELEMENT_KINDS, ARCHITECTURE_RELATION_PRESETS, activeFilterCount, keptMentionedCount, resetFilter } from '@/modules/architecture/dom/elementRelationFilter';
+import { ARCHITECTURE_ELEMENT_KINDS, ARCHITECTURE_RELATION_PRESETS, activeFilterCount, keptMentionedCount, resetFilter } from '@/modules/architecture/dom/readout/elementRelationFilter';
 import type { ArchitectureEntityKind } from '@/modules/architecture/dom/rendererContract';
 import { TOUCH_CONTROL_GAP_PX, TOUCH_TARGET_STYLE } from '@/modules/architecture/hooks/useTouchLayout';
-import { seedMarkerMode } from '@/modules/architecture/layout/archguardToPlantUml';
+import { seedMarkerMode } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import { MENTIONED_HINT_ID } from '@/modules/architecture/render/architecturePanelShared';
 import { LegendSwatch } from '@/modules/architecture/render/LegendSwatch';
 import type { ArchitectureSearchCommit } from '@/modules/architecture/render/architectureSearchController';

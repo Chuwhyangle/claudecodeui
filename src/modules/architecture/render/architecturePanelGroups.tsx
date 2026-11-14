@@ -5,8 +5,8 @@
  * Extracted from `ArchitecturePanel.tsx` unchanged (residual-oversize split,
  * `gap-routine-architecture-analysis-architecture-panel-plantuml-residual-oversize`).
  */
-import { ARCHITECTURE_DETAIL_TIERS, ARCHITECTURE_SCOPE_MAX, ARCHITECTURE_SCOPE_MIN, rankArchitectureDetail } from '@/modules/architecture/dom/detailRanking';
-import type { ArchitectureDetailTier } from '@/modules/architecture/dom/detailRanking';
+import { ARCHITECTURE_DETAIL_TIERS, ARCHITECTURE_SCOPE_MAX, ARCHITECTURE_SCOPE_MIN, rankArchitectureDetail } from '@/modules/architecture/dom/readout/detailRanking';
+import type { ArchitectureDetailTier } from '@/modules/architecture/dom/readout/detailRanking';
 
 import { TOUCH_CONTROL_GAP_PX } from '@/modules/architecture/hooks/useTouchLayout';
 import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';

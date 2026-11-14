@@ -15,9 +15,9 @@ import {
   archguardToPlantUml,
   parserSafePlantUml,
   type ArchitectureDiagramView,
-} from '@/modules/architecture/layout/archguardToPlantUml';
+} from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import { renderWithMemberDetail } from '@/modules/architecture/render/PlantUmlGraph';
-import { standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantUmlText';
+import { standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantuml/plantUmlText';
 import {
   architectureExportFilename,
   EXPORT_PNG_MAX_EDGE,
@@ -26,7 +26,7 @@ import {
   sanitizeFilenameSegment,
 } from '@/modules/architecture/render/exportArtifacts';
 import type * as ExportArtifactsModule from '@/modules/architecture/render/exportArtifacts';
-import { rankArchitectureDetail } from '@/modules/architecture/dom/detailRanking';
+import { rankArchitectureDetail } from '@/modules/architecture/dom/readout/detailRanking';
 import type { ArchitectureRendererGraph } from '@/modules/architecture/dom/rendererContract';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 

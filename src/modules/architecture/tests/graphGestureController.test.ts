@@ -15,8 +15,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { createGraphGestureController } from '@/modules/architecture/dom/graphGestureController';
-import type { ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
+import { createGraphGestureController } from '@/modules/architecture/dom/interaction/graphGestureController';
+import type { ArchitectureSelection } from '@/modules/architecture/dom/interaction/selectionModel';
 
 /** A press shape the controller accepts; defaults are a fine-pointer drag. */
 function press(overrides: Partial<Parameters<ReturnType<typeof createGraphGestureController>['pointerDown']>[0]> = {}) {

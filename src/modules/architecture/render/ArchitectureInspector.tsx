@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { nodeFileOf } from '@/modules/architecture/layout/archguardToPlantUml';
+import { nodeFileOf } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import {
   MENTION_HIT_LIMIT,
   useMentions,
   type ArchitectureMentionHit,
 } from '@/modules/architecture/hooks/useMentions';
-import type { ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
+import type { ArchitectureSelection } from '@/modules/architecture/dom/interaction/selectionModel';
 import type {
   ArchitectureNodeIdShape,
   ArchitectureRendererEdge,

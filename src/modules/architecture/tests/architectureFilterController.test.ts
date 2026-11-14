@@ -18,14 +18,14 @@ import {
   createArchitectureFilterController,
   FILTER_REQUEST_DEBOUNCE_MS,
 } from '@/modules/architecture/render/architectureFilterController';
-import type { ArchitectureDetailTier } from '@/modules/architecture/dom/detailRanking';
+import type { ArchitectureDetailTier } from '@/modules/architecture/dom/readout/detailRanking';
 import {
   ARCHITECTURE_DEFAULT_FILTER,
   type ArchitectureElementRelationFilter,
-} from '@/modules/architecture/dom/elementRelationFilter';
-import { filterStorageKey } from '@/modules/architecture/layout/panelFilters';
+} from '@/modules/architecture/dom/readout/elementRelationFilter';
+import { filterStorageKey } from '@/modules/architecture/layout/panel/panelFilters';
 import type { Clock } from '@/shared/types';
-import type { PanelStorageLike } from '@/modules/architecture/layout/panelPersistence';
+import type { PanelStorageLike } from '@/modules/architecture/layout/panel/panelPersistence';
 
 type Timer = {
   handle: number;

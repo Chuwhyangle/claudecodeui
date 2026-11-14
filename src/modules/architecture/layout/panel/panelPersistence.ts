@@ -3,8 +3,8 @@ import {
   clampArchitectureScope,
   DEFAULT_ARCHITECTURE_SCOPE,
   type ArchitectureDetailTier,
-} from '@/modules/architecture/dom/detailRanking';
-import type { CurationStorageLike } from '@/modules/architecture/dom/curationStore';
+} from '@/modules/architecture/dom/readout/detailRanking';
+import type { CurationStorageLike } from '@/modules/architecture/dom/interaction/curationStore';
 
 // The panel's localStorage seam: every remembered knob (scope, detail tier,
 // the one-off touch hint, the curation store's backing store) lives here, so

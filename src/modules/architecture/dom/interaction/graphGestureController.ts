@@ -44,7 +44,7 @@ import type {
   ArchitectureRendererHover,
   ArchitectureRendererNode,
 } from '@/modules/architecture/dom/rendererContract';
-import type { ArchitectureSelection, ArchitectureSelectionRect } from '@/modules/architecture/dom/selectionModel';
+import type { ArchitectureSelection, ArchitectureSelectionRect } from '@/modules/architecture/dom/interaction/selectionModel';
 
 /** The marquee rectangle in the canvas's coordinates; null while no drag runs. */
 export type GraphGestureMarquee = {

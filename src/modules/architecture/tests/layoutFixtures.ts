@@ -1,4 +1,4 @@
-import { archguardToPlantUml } from '@/modules/architecture/layout/archguardToPlantUml';
+import { archguardToPlantUml } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import type { ArchitectureRendererGraph } from '@/modules/architecture/dom/rendererContract';
 
 /**

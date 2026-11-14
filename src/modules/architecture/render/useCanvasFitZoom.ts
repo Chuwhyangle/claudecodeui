@@ -11,12 +11,12 @@
 import { useCallback, useEffect, type RefObject } from 'react';
 
 import type { ArchitectureRendererGraph } from '@/modules/architecture/dom/rendererContract';
-import type { GraphLayoutPipeline } from '@/modules/architecture/layout/graphLayoutPipeline';
-import type { GraphViewportController, GraphZoom, GraphViewportFitRequest } from '@/modules/architecture/layout/graphViewportController';
-import { solveFitArea, type FitOverlayRect } from '@/modules/architecture/layout/semanticZoomLayout';
-import type { SvgFitPlacement, SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
-import { clampZoomScale, fitAreaInsets, measureHostSize, measureViewportSize } from '@/modules/architecture/layout/svgViewport';
-import { measureLayoutAspect } from '@/modules/architecture/layout/graphDom';
+import type { GraphLayoutPipeline } from '@/modules/architecture/layout/drawing/graphLayoutPipeline';
+import type { GraphViewportController, GraphZoom, GraphViewportFitRequest } from '@/modules/architecture/layout/drawing/graphViewportController';
+import { solveFitArea, type FitOverlayRect } from '@/modules/architecture/layout/engine/semanticZoomLayout';
+import type { SvgFitPlacement, SvgViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
+import { clampZoomScale, fitAreaInsets, measureHostSize, measureViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
+import { measureLayoutAspect } from '@/modules/architecture/layout/drawing/graphDom';
 import { forcedFullscreenReservedMargins } from '@/modules/architecture/render/plantUmlControlArm';
 
 /** Every reading the fit/zoom half closes over. */

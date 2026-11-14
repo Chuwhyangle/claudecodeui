@@ -1,11 +1,11 @@
 import type { PlantUmlEntity, PlantUmlModel } from '@yalehwang/plantuml-js/elk';
 
-import { DEFAULT_NODE_ID_SHAPE, directoryPathOf } from '@/modules/architecture/dom/adaptiveGrouping';
+import { DEFAULT_NODE_ID_SHAPE, directoryPathOf } from '@/modules/architecture/dom/planning/adaptiveGrouping';
 import {
   archguardToPlantUml,
   parserSafePlantUml,
   type ArchitectureDiagramView,
-} from '@/modules/architecture/layout/archguardToPlantUml';
+} from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import type {
   ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,

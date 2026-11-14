@@ -6,7 +6,7 @@ import {
   LOD_DEADZONE_RATIO,
   LOD_DEBOUNCE_MS,
   tierWithinDeadzone,
-} from '@/modules/architecture/dom/explosionLod';
+} from '@/modules/architecture/dom/planning/explosionLod';
 
 /**
  * The zoom-transition plumbing that outlived the retired level thresholds.

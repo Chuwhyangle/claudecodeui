@@ -43,12 +43,12 @@ import { createExternalStore, defaultClock } from '@/shared/utils';
 import {
   ASPECT_RELAYOUT_DEBOUNCE_MS,
   shouldRelayoutForAspect,
-} from '@/modules/architecture/layout/elkAspectEngine';
+} from '@/modules/architecture/layout/engine/elkAspectEngine';
 import {
   createExplosionLodScheduler,
   type ExplosionLodScheduler,
-} from '@/modules/architecture/dom/explosionLod';
-import type { SemanticCapture } from '@/modules/architecture/layout/graphDom';
+} from '@/modules/architecture/dom/planning/explosionLod';
+import type { SemanticCapture } from '@/modules/architecture/layout/drawing/graphDom';
 import {
   chooseLayoutOrientation,
   createOrientationCache,
@@ -58,17 +58,17 @@ import {
   type LayoutOrientation,
   type OrientationDecision,
   type OrientationSize,
-} from '@/modules/architecture/dom/layoutOrientation';
-import { READABLE_ZOOM_SCALE } from '@/modules/architecture/layout/readableZoom';
+} from '@/modules/architecture/dom/planning/layoutOrientation';
+import { READABLE_ZOOM_SCALE } from '@/modules/architecture/layout/engine/readableZoom';
 import {
   lodDepthForTier,
   solveFitScale,
   solveSemanticZoom,
   type SemanticTier,
   type SemanticZoomLayout,
-} from '@/modules/architecture/layout/semanticZoomLayout';
-import { SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
-import type { SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
+} from '@/modules/architecture/layout/engine/semanticZoomLayout';
+import { SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/planning/semanticZoomPlan';
+import type { SvgViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
 
 /** One measured layout of a drawing kind: how many entities, and how long ELK took. */
 export type LayoutSample = { readonly nodes: number; readonly ms: number };

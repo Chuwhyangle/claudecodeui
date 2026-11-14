@@ -22,7 +22,7 @@ import {
   curationStorageKey,
   type ArchitectureCurationItem,
   type CurationStorageLike,
-} from '@/modules/architecture/dom/curationStore';
+} from '@/modules/architecture/dom/interaction/curationStore';
 import type { Clock } from '@/shared/types';
 
 type Timer = {

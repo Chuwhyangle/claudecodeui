@@ -37,7 +37,7 @@ import {
   type SvgViewportAnchor,
   type SvgViewportController,
   type SvgViewportSize,
-} from '@/modules/architecture/layout/svgViewport';
+} from '@/modules/architecture/layout/engine/svgViewport';
 
 /** Whether the drawing follows the canvas (`auto`) or keeps a reader-chosen scale. */
 export type GraphZoomMode = 'auto' | 'manual';
