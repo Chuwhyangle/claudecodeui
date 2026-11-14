@@ -50,6 +50,15 @@
  * `index.ts` (value-importing `readVoiceConfig`/`voiceConfigHeaders` back) stayed one file-level
  * value SCC, invisible to every committed ratchet. The third reading below is the same walk,
  * resolver and Tarjan core at file nodes over `src/shared`, pinned to ZERO non-trivial SCCs.
+ *
+ * ENTITY GRANULARITY (finding `cycle-voice-asr-factory-singleton`, 2026-11-14). All three
+ * readings above collapse their nodes to files or directories, so a cycle between two ENTITIES OF
+ * ONE FILE is invisible to every one of them. That is how `createVoiceClientAsrEngine` (the
+ * standalone adapter factory) and `VoiceClientAsrEngine` (the per-tab lifecycle class) stayed a
+ * 2-node SCC: the factory reached `voiceClientAsrEngineInstance.noteProgress()` from its worker
+ * message handler, while `install()` called the factory. Archguard's class-level reading saw it;
+ * the committed ratchets did not. The fourth reading below is an entity-level reference graph over
+ * `src/shared`, pinned to ZERO non-trivial SCCs.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -57,10 +66,13 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
+
 import {
   collectTypeScriptSources,
   scanFileImportGraph,
   scanImportGraph,
+  scriptKindFor,
   strongComponents,
   type FileGraph,
   type Graph,
@@ -415,4 +427,265 @@ test('negative control: a one-way file import is not a cycle', () => {
     'the edge must resolve — an unresolved import would make the empty SCC list vacuous',
   );
   assert.doesNotThrow(() => assertNoFileSccs(graph.nonTrivialSccs), 'an acyclic reading matches the empty pin');
+});
+
+// ── The ENTITY-level reading of `src/shared` (finding `cycle-voice-asr-factory-singleton`) ──────
+//
+// The three readings above stop at files and directories, so two entities IN ONE FILE cannot be a
+// cycle to any of them. This one keeps exported entities as nodes and draws an edge when one
+// entity's declaration references another. It asks the same question archguard's class-level
+// `sccCount` asks — "can these two pieces of behaviour only be understood cyclically?" — at the
+// granularity where the finding was measured. The pin is empty, like the file-level one.
+//
+// WHAT IS AN ENTITY. An exported function or class declaration, and an exported `const` bound to a
+// function expression or arrow (a function in all but spelling). Exported singletons — `export
+// const x = new Klass()` — are not nodes of their own: they are ALIASES to the class they
+// instantiate, which is what makes a reference to `voiceClientAsrEngineInstance` an edge back to
+// `VoiceClientAsrEngine` (and therefore the exact regression this criterion exists for). Interfaces
+// and type aliases are excluded on purpose: this is a graph of behaviour, and a type-only reference
+// cannot call anything.
+//
+// The edges are read from the TypeScript syntax tree, never from grepped text: declaration names,
+// member-access names, property keys, parameters and import/export specifiers are not references.
+// A name shared by two files resolves to both (conservative: it can only over-report a cycle,
+// never hide one). Only `src/shared` is read, matching the finding's scope.
+
+/** One exported entity: the node whose body contributes the out-edges. */
+type EntityNode = { id: string; name: string; node: ts.Node };
+
+type EntityGraph = {
+  /** How many exported entities the walk found — the non-vacuity reading. */
+  entityCount: number;
+  /** How many distinct entity→entity references were resolved — the other non-vacuity reading. */
+  edgeCount: number;
+  nodes: string[];
+  nonTrivialSccs: string[][];
+};
+
+/**
+ * Non-vacuity floors for the ENTITY-level `src/shared` reading. The merged tree carries 230
+ * entities and 117 entity→entity references (measured 2026-11-14, the same day as the finding).
+ * The floors sit far below so only a collapsed walk trips them.
+ */
+const MIN_SHARED_ENTITIES = 150;
+const MIN_SHARED_ENTITY_EDGES = 70;
+
+/** `export` on the declaration itself; a declaration re-exported from elsewhere is not a node here. */
+function isExportedDeclaration(node: ts.Node): boolean {
+  return (ts.getCombinedModifierFlags(node as ts.Declaration) & ts.ModifierFlags.Export) !== 0;
+}
+
+/** Collect one file's exported entities plus the `export const x = new C()` aliases to class `C`. */
+function collectEntities(file: string, source: ts.SourceFile): { entities: EntityNode[]; singletons: Map<string, string> } {
+  const entities: EntityNode[] = [];
+  const singletons = new Map<string, string>();
+  const add = (name: string, node: ts.Node): void => {
+    entities.push({ id: `${file}#${name}`, name, node });
+  };
+
+  ts.forEachChild(source, (node) => {
+    if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) {
+      if (node.name !== undefined && isExportedDeclaration(node)) add(node.name.text, node);
+      return;
+    }
+    if (!ts.isVariableStatement(node) || !isExportedDeclaration(node)) return;
+
+    for (const declaration of node.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+      const initializer = declaration.initializer;
+      if (ts.isNewExpression(initializer) && ts.isIdentifier(initializer.expression)) {
+        singletons.set(declaration.name.text, initializer.expression.text);
+      } else if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+        add(declaration.name.text, declaration);
+      }
+    }
+  });
+
+  return { entities, singletons };
+}
+
+/**
+ * The names one entity's declaration references, ignoring the positions where the same text is a
+ * declaration or a member name rather than a use of some other entity.
+ */
+function referencedNames(node: ts.Node, candidates: ReadonlySet<string>): Set<string> {
+  const found = new Set<string>();
+
+  const visit = (current: ts.Node): void => {
+    if (ts.isIdentifier(current) && candidates.has(current.text)) {
+      const parent = current.parent;
+      const declaresName =
+        ((ts.isFunctionDeclaration(parent) || ts.isClassDeclaration(parent) || ts.isVariableDeclaration(parent)
+          || ts.isParameter(parent) || ts.isBindingElement(parent) || ts.isMethodDeclaration(parent)
+          || ts.isPropertyDeclaration(parent))
+          && (parent as { name?: ts.Node }).name === current);
+      const isMemberName = ts.isPropertyAccessExpression(parent) && parent.name === current;
+      const isPropertyKey = ts.isPropertyAssignment(parent) && parent.name === current;
+      const isSpecifier =
+        ts.isImportSpecifier(parent) || ts.isImportClause(parent) || ts.isNamespaceImport(parent)
+        || ts.isExportSpecifier(parent) || ts.isQualifiedName(parent);
+      if (!declaresName && !isMemberName && !isPropertyKey && !isSpecifier) found.add(current.text);
+    }
+    ts.forEachChild(current, visit);
+  };
+
+  ts.forEachChild(node, visit);
+  return found;
+}
+
+/**
+ * The entity-level reference graph. Pure over its sources, so the real tree and a synthetic fixture
+ * drive the same code — the property the three readings above also rely on.
+ */
+function scanEntityReferenceGraph(sources: readonly SourceFile[]): EntityGraph {
+  const entities: EntityNode[] = [];
+  const singletons = new Map<string, string>();
+
+  for (const source of sources) {
+    const parsed = ts.createSourceFile(
+      source.path,
+      source.text,
+      ts.ScriptTarget.ESNext,
+      /* setParentNodes */ true,
+      scriptKindFor(source.path),
+    );
+    const collected = collectEntities(source.path, parsed);
+    entities.push(...collected.entities);
+    for (const [name, target] of collected.singletons) singletons.set(name, target);
+  }
+
+  const byName = new Map<string, EntityNode[]>();
+  for (const entity of entities) {
+    const group = byName.get(entity.name) ?? [];
+    group.push(entity);
+    byName.set(entity.name, group);
+  }
+
+  /** A reference resolves directly to an entity, or through a singleton alias to its class. */
+  const resolve = (name: string): EntityNode[] => {
+    const direct = byName.get(name);
+    if (direct !== undefined) return direct;
+    const aliased = singletons.get(name);
+    return aliased === undefined ? [] : (byName.get(aliased) ?? []);
+  };
+
+  const candidateNames = new Set<string>([...byName.keys(), ...singletons.keys()]);
+  const adjacency = new Map<string, string[]>(entities.map((entity) => [entity.id, []]));
+  const seen = new Set<string>();
+  let edgeCount = 0;
+
+  for (const entity of entities) {
+    for (const name of referencedNames(entity.node, candidateNames)) {
+      for (const target of resolve(name)) {
+        if (target.id === entity.id) continue;
+        const key = `${entity.id}\u0000${target.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        adjacency.get(entity.id)?.push(target.id);
+        edgeCount += 1;
+      }
+    }
+  }
+
+  const nodes = entities.map((entity) => entity.id).sort();
+  const sorted = new Map([...adjacency].map(([from, targets]) => [from, [...targets].sort()]));
+  const sccs = strongComponents(nodes, sorted);
+  return {
+    entityCount: entities.length,
+    edgeCount,
+    nodes,
+    nonTrivialSccs: sccs.filter((component) => component.length >= 2),
+  };
+}
+
+/** Scan a synthetic file tree through the same entity reader, so controls drive the real reading. */
+function scanEntityFixture(files: Record<string, string>): EntityGraph {
+  const sources: SourceFile[] = Object.entries(files).map(([filePath, text]) => ({ path: filePath, text }));
+  return scanEntityReferenceGraph(sources);
+}
+
+/** The entity-level pin: zero non-trivial SCCs. Any addition reds; a shrink is impossible. */
+function assertNoEntitySccs(measured: readonly string[][]): void {
+  assert.deepEqual(
+    measured,
+    [],
+    'src/shared gained an ENTITY-level SCC. Two exported entities that reference each other can be ' +
+      'understood only cyclically, and the file-/directory-/module-level readings above cannot see ' +
+      'it when both live in one file. Invert one edge (an owner passes the callback in; the callee ' +
+      'does not reach back for the owner), never pin the cycle.',
+  );
+}
+
+test('the current src/shared entity graph carries no cycle', () => {
+  const sources = collectTypeScriptSources(SRC_DIR).filter((source) => source.path.startsWith('shared/'));
+  const graph = scanEntityReferenceGraph(sources);
+
+  assert.ok(
+    graph.entityCount >= MIN_SHARED_ENTITIES,
+    `src/shared entity scan read ${graph.entityCount} entities (< ${MIN_SHARED_ENTITIES}) — a collapsed walk is not a clean one`,
+  );
+  assert.ok(
+    graph.edgeCount >= MIN_SHARED_ENTITY_EDGES,
+    `src/shared entity scan resolved ${graph.edgeCount} references (< ${MIN_SHARED_ENTITY_EDGES}) — the graph is not being read`,
+  );
+  // The reading must actually contain the pair the finding named, or "zero cycles" would be a
+  // statement about an unrelated graph.
+  assert.ok(
+    graph.nodes.includes('shared/voice-asr/voiceClientAsrWorker.ts#createVoiceClientAsrEngine'),
+    'the entity reading no longer sees the standalone client ASR factory',
+  );
+  assert.ok(
+    graph.nodes.includes('shared/voice-asr/voiceClientAsrWorker.ts#VoiceClientAsrEngine'),
+    'the entity reading no longer sees the per-tab client ASR lifecycle class',
+  );
+
+  console.log(`(entity) src/shared entities=${graph.entityCount} edges=${graph.edgeCount} sccs=${JSON.stringify(graph.nonTrivialSccs)}`);
+  assertNoEntitySccs(graph.nonTrivialSccs);
+});
+
+test('positive control: the factory→singleton→class shape reds the entity-level pin', () => {
+  // The exact pre-fix shape, one file: the factory's handler reaches the singleton, the class's
+  // `install()` calls the factory, and the singleton is a `new` of that class.
+  const cyclic = scanEntityFixture({
+    'shared/x/engine.ts': [
+      'export function createEngine() { return engineInstance.noteProgress(); }',
+      'export class Engine { install() { return createEngine(); } }',
+      'export const engineInstance = new Engine();',
+    ].join('\n'),
+  });
+
+  assert.equal(cyclic.edgeCount, 2, 'both references must resolve — otherwise the red reading is vacuous');
+  assert.deepEqual(
+    normalize(cyclic.nonTrivialSccs),
+    normalize([['shared/x/engine.ts#Engine', 'shared/x/engine.ts#createEngine']]),
+    'the entity scanner must see the planted factory/class cycle through the singleton alias',
+  );
+  assert.throws(
+    () => assertNoEntitySccs(cyclic.nonTrivialSccs),
+    /gained an ENTITY-level SCC/,
+    'a same-file entity cycle must red the same assertion the real tree uses',
+  );
+
+  // THE DISCRIMINATING TWIN: the same three declarations with the factory's reach DELETED (the fix
+  // this criterion guards) are acyclic. One line is the whole difference.
+  const fixed = scanEntityFixture({
+    'shared/x/engine.ts': [
+      'export function createEngine() { return null; }',
+      'export class Engine { install() { return createEngine(); } }',
+      'export const engineInstance = new Engine();',
+    ].join('\n'),
+  });
+  assert.deepEqual(fixed.nonTrivialSccs, [], 'the one-way class → factory edge is a dependency, not a cycle');
+  assert.equal(fixed.edgeCount, 1, 'the surviving edge must still resolve, or the green reading is vacuous');
+  assert.doesNotThrow(() => assertNoEntitySccs(fixed.nonTrivialSccs), 'an acyclic reading matches the empty pin');
+});
+
+test('negative control: a one-way entity reference is not a cycle', () => {
+  const graph = scanEntityFixture({
+    'shared/y/a.ts': 'export function helper() { return 1; }\nexport function user() { return helper(); }\n',
+  });
+
+  assert.deepEqual(graph.nonTrivialSccs, [], 'a one-way call cannot close an entity-level cycle');
+  assert.equal(graph.edgeCount, 1, 'the edge must resolve — an unresolved reference would make the empty SCC list vacuous');
+  assert.doesNotThrow(() => assertNoEntitySccs(graph.nonTrivialSccs), 'an acyclic reading matches the empty pin');
 });
