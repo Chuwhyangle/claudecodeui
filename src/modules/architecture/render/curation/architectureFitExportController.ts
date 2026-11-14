@@ -33,7 +33,7 @@ import {
   rasterizeSvgToPng,
   type ArchitectureExportSize,
   type ArchitecturePngTarget,
-} from '@/modules/architecture/render/exportArtifacts';
+} from '@/modules/architecture/render/curation/exportArtifacts';
 import type {
   ArchitectureDrawnPlantUml,
   ArchitectureEntityKind,

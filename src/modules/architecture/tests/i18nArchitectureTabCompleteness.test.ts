@@ -32,10 +32,10 @@ const LOCALES_DIR = resolve(REPO_ROOT, 'src', 'modules', 'i18n', 'locales');
  */
 const ARCHITECTURE_SOURCES = [
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'ArchitecturePanel.tsx'),
-  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'ArchitectureDock.tsx'),
-  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'ArchitectureInspector.tsx'),
-  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'ArchitectureTextPanel.tsx'),
-  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'ArchitectureSelectionTray.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'viewport', 'ArchitectureDock.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'inspector', 'ArchitectureInspector.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'inspector', 'ArchitectureTextPanel.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'inspector', 'ArchitectureSelectionTray.tsx'),
   // The manual re-analysis confirmation/running/failure dialog: its chrome is
   // part of the same tab surface, so a missing translation must be red here too.
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'render', 'ArchitectureRefreshDialog.tsx'),

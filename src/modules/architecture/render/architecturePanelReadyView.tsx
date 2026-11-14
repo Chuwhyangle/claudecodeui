@@ -10,14 +10,13 @@
  */
 
 import { TOUCH_CONTROL_GAP_PX } from '@/modules/architecture/hooks/useTouchLayout';
-import { ArchitectureCurationManager } from '@/modules/architecture/render/ArchitectureCurationManager';
-import { ArchitectureDock } from '@/modules/architecture/render/ArchitectureDock';
-import { ArchitectureInspector } from '@/modules/architecture/render/ArchitectureInspector';
+import { ArchitectureCurationManager, CurationToast } from '@/modules/architecture/render/curation';
+import { ArchitectureDock, ArchitectureSheet } from '@/modules/architecture/render/viewport';
+import {
+  ArchitectureInspector,
+  ArchitectureTextPanel,
+} from '@/modules/architecture/render/inspector';
 import { ArchitectureRefreshDialog } from '@/modules/architecture/render/ArchitectureRefreshDialog';
-
-import { ArchitectureSheet } from '@/modules/architecture/render/ArchitectureSheet';
-import { ArchitectureTextPanel } from '@/modules/architecture/render/ArchitectureTextPanel';
-import { CurationToast } from '@/modules/architecture/render/CurationToast';
 
 import { useArchitecturePanelActions, type ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import { ArchitecturePanelCanvas } from '@/modules/architecture/render/architecturePanelCanvas';

@@ -2,13 +2,16 @@ import { type ComponentType, type KeyboardEvent as ReactKeyboardEvent, useCallba
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { PlantUmlGraph } from '@/modules/architecture/render/PlantUmlGraph';
-import { type ArchitectureCurationPage } from '@/modules/architecture/render/ArchitectureCurationManager';
+import { PlantUmlGraph, useArchitectureRefresh, createArchitectureChromeController } from '@/modules/architecture/render/viewport';
+import {
+  createArchitectureCurationController,
+  createArchitectureFitExportController,
+  type ArchitectureCurationPage,
+} from '@/modules/architecture/render/curation';
 
 
 
 import { type ArchitectureCurationHiddenEdge, type ArchitectureCurationItem, type CurationActionResult } from '@/modules/architecture/dom/curationStore';
-import { createArchitectureCurationController } from '@/modules/architecture/render/architectureCurationController';
 import { createArchitectureFilterController } from '@/modules/architecture/render/architectureFilterController';
 import { createArchitectureSearchController } from '@/modules/architecture/render/architectureSearchController';
 import { resolveCurationItems, useProjectSearch } from '@/modules/architecture/hooks/useProjectSearch';
@@ -20,7 +23,6 @@ import { rankArchitectureDetail, type ArchitectureDetailTier } from '@/modules/a
 
 import { applyFilter, ARCHITECTURE_ELEMENT_KINDS, hiddenTotal, relationsForPreset, type ArchitectureElementRelationFilter, type ArchitectureRelationPreset } from '@/modules/architecture/dom/elementRelationFilter';
 
-import { createArchitectureFitExportController } from '@/modules/architecture/render/architectureFitExportController';
 import { BOTTOM_SLOT_INFO_INSET_PX, overlayLayoutDefect } from '@/modules/architecture/dom/bottomSlotLayout';
 import { shortTouchDockForm, TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/dom/layoutBudget';
@@ -29,7 +31,6 @@ import { type ArchitectureHintRect } from '@/modules/architecture/dom/hoverHintP
 import type { ArchitectureDetailReading, ArchitectureDiffHighlight, ArchitectureRendererEdge, ArchitectureRendererGraph, ArchitectureRendererHover, ArchitectureRendererNode, ArchitectureRendererProps } from '@/modules/architecture/dom/rendererContract';
 
 import { createSelectionState, reduceSelection, selectionInScope, selectionsInScope, type ArchitectureSelection, type ArchitectureSelectionScope } from '@/modules/architecture/dom/selectionModel';
-import { useArchitectureRefresh } from '@/modules/architecture/render/useArchitectureRefresh';
 import { useArchitectureGraph } from '@/modules/architecture/dom/useArchitectureGraph';
 import { useArchitectureFullscreen } from '@/modules/architecture/render/useArchitectureFullscreen';
 import { parseArchitectureDeepLink, type ArchitectureDeepLinkState } from '@/modules/architecture/render/architectureDeepLink';
@@ -44,7 +45,6 @@ import { parseArchitectureDeepLink, type ArchitectureDeepLinkState } from '@/mod
 import { useDismissiblePopover } from '@/modules/architecture/render/useDismissiblePopover';
 import { addHidden, EMPTY_HIDDEN, truncationReading, type ArchitectureGranularity } from '@/modules/architecture/layout/panelFilters';
 import { BROWSER_CURATION_STORAGE, BROWSER_PANEL_STORAGE, readStoredTouchHintDismissed, writeStoredTouchHintDismissed } from '@/modules/architecture/layout/panelPersistence';
-import { createArchitectureChromeController } from '@/modules/architecture/render/architectureChromeController';
 import { ArchitecturePanelShell } from '@/modules/architecture/render/architecturePanelShell';
 import { EMPTY_VIEW_UNRESOLVED_LIMIT, nodeIdShapeOf, parseDeepLinkDiffHighlight, readReadoutExpandedInSession, READOUT_EXPANDED_SESSION_KEY } from '@/modules/architecture/render/architecturePanelShared';
 

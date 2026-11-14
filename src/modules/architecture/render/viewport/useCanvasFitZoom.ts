@@ -17,7 +17,7 @@ import { solveFitArea, type FitOverlayRect } from '@/modules/architecture/layout
 import type { SvgFitPlacement, SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
 import { clampZoomScale, fitAreaInsets, measureHostSize, measureViewportSize } from '@/modules/architecture/layout/svgViewport';
 import { measureLayoutAspect } from '@/modules/architecture/layout/graphDom';
-import { forcedFullscreenReservedMargins } from '@/modules/architecture/render/plantUmlControlArm';
+import { forcedFullscreenReservedMargins } from '@/modules/architecture/render/viewport/plantUmlControlArm';
 
 /** Every reading the fit/zoom half closes over. */
 export type CanvasFitZoomArgs = {

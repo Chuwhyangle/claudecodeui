@@ -10,7 +10,7 @@
 import { HOVER_HINT_MARGIN_PX } from '@/modules/architecture/dom/hoverHintPlacement';
 import { CanvasHeaderSlotContext, CompactToolbarSlotContext } from '@/modules/architecture/hooks/useTouchLayout';
 import { ArchitectureEmptyState } from '@/modules/architecture/render/ArchitectureEmptyState';
-import { ArchitectureSelectionTray } from '@/modules/architecture/render/ArchitectureSelectionTray';
+import { ArchitectureSelectionTray } from '@/modules/architecture/render/inspector';
 import { nodeIdShapeOf } from '@/modules/architecture/render/architecturePanelShared';
 import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';

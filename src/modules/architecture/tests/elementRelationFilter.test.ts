@@ -20,7 +20,7 @@ import {
 } from '@/modules/architecture/dom/elementRelationFilter';
 // The marker geometry lives beside its only consumer; this file pins it as a
 // pure function (the panel test proves the drawn dots follow it).
-import { markerAnchor } from '@/modules/architecture/render/PlantUmlGraph';
+import { markerAnchor } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,

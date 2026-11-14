@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { api } from '@/shared/api';
 import {
   createArchitectureRefreshController,
-} from '@/modules/architecture/render/architectureRefreshController';
+} from '@/modules/architecture/render/viewport/architectureRefreshController';
 import type { ArchitectureRefreshStatus } from '@/shared/types';
 
 export type {

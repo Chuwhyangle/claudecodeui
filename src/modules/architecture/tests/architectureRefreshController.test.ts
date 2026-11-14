@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createArchitectureRefreshController,
   type ArchitectureRefreshClock,
-} from '@/modules/architecture/render/architectureRefreshController';
+} from '@/modules/architecture/render/viewport/architectureRefreshController';
 import type { ArchitectureRefreshStatus } from '@/shared/types';
 
 /**

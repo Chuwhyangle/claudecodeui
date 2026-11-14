@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/dom/adaptiveGrouping';
-import { ArchitectureMinimap } from '@/modules/architecture/render/ArchitectureMinimap';
+import { ArchitectureMinimap } from '@/modules/architecture/render/viewport/ArchitectureMinimap';
 import { BOTTOM_SLOT_GAP_PX, bottomCornerLayout, overlayLayoutDefect } from '@/modules/architecture/dom/bottomSlotLayout';
 import { DEFAULT_NEIGHBORHOOD_HOPS, type ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
 
@@ -40,20 +40,20 @@ export {
   keyboardA11yDefect,
   pickNavigationStart,
   renderWithMemberDetail,
-} from '@/modules/architecture/render/plantUmlNavigation';
+} from '@/modules/architecture/render/viewport/plantUmlNavigation';
 export type {
   KeyboardA11yDefect,
   NavigationPoint,
-} from '@/modules/architecture/render/plantUmlNavigation';
+} from '@/modules/architecture/render/viewport/plantUmlNavigation';
 
-import { clearNavigationFocus, navigationDomId, DIFF_HIGHLIGHT_STYLE } from '@/modules/architecture/render/plantUmlNavigation';
-import { usePlantUmlDrawing } from '@/modules/architecture/render/usePlantUmlDrawing';
-import { useCanvasPointerInteractions } from '@/modules/architecture/render/useCanvasPointerInteractions';
-import { useCanvasKeyboardNavigation } from '@/modules/architecture/render/useCanvasKeyboardNavigation';
-import { useCanvasFitZoom } from '@/modules/architecture/render/useCanvasFitZoom';
-import { autoFitDisabled, forcedFullscreenReservedMargins, FULLSCREEN_FIT_ROUNDING_ALLOWANCE_PX } from '@/modules/architecture/render/plantUmlControlArm';
-import { useCanvasDrawingSemantics } from '@/modules/architecture/render/useCanvasDrawingSemantics';
-import { useCanvasSurfaceBindings } from '@/modules/architecture/render/useCanvasSurfaceBindings';
+import { clearNavigationFocus, navigationDomId, DIFF_HIGHLIGHT_STYLE } from '@/modules/architecture/render/viewport/plantUmlNavigation';
+import { usePlantUmlDrawing } from '@/modules/architecture/render/viewport/usePlantUmlDrawing';
+import { useCanvasPointerInteractions } from '@/modules/architecture/render/viewport/useCanvasPointerInteractions';
+import { useCanvasKeyboardNavigation } from '@/modules/architecture/render/viewport/useCanvasKeyboardNavigation';
+import { useCanvasFitZoom } from '@/modules/architecture/render/viewport/useCanvasFitZoom';
+import { autoFitDisabled, forcedFullscreenReservedMargins, FULLSCREEN_FIT_ROUNDING_ALLOWANCE_PX } from '@/modules/architecture/render/viewport/plantUmlControlArm';
+import { useCanvasDrawingSemantics } from '@/modules/architecture/render/viewport/useCanvasDrawingSemantics';
+import { useCanvasSurfaceBindings } from '@/modules/architecture/render/viewport/useCanvasSurfaceBindings';
 
 /** Kept exported here because this renderer is where the geometry test looks for it. */
 export { capDrawnMemberRows };

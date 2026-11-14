@@ -29,7 +29,7 @@ import {
   visiblePercent,
   visibleRangeRect,
   type MinimapViewportReading,
-} from '@/modules/architecture/render/ArchitectureMinimap';
+} from '@/modules/architecture/render/viewport/ArchitectureMinimap';
 
 /**
  * The architecture canvas minimap.

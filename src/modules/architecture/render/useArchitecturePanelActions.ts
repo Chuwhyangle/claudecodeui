@@ -11,7 +11,7 @@
  */
 import type { useTranslation } from 'react-i18next';
 
-import type { ArchitectureExportNotice, ArchitectureFitExportController } from '@/modules/architecture/render/architectureFitExportController';
+import type { ArchitectureExportNotice, ArchitectureFitExportController } from '@/modules/architecture/render/curation';
 import type { ArchitectureSearchController } from '@/modules/architecture/render/architectureSearchController';
 import type { ArchitectureGraphResult } from '@/modules/architecture/dom/useArchitectureGraph';
 import type { ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
@@ -27,8 +27,8 @@ import {
 } from '@/modules/architecture/dom/selectionModel';
 import { readSvgNaturalSize } from '@/modules/architecture/layout/svgViewport';
 import { buildFullPlantUmlDocument } from '@/modules/architecture/layout/plantUmlText';
-import { architectureExportFilename, serializeSvgForExport } from '@/modules/architecture/render/exportArtifacts';
-import { buildSelectionMessage } from '@/modules/architecture/render/ArchitectureSelectionTray';
+import { architectureExportFilename, serializeSvgForExport } from '@/modules/architecture/render/curation/exportArtifacts';
+import { buildSelectionMessage } from '@/modules/architecture/render/inspector';
 import { sendArchitectureChatMessage } from '@/modules/architecture/render/architectureChatBridge';
 import { readDraftText, writeDraftText } from '@/shared/api/chatDrafts';
 import { nodeIdShapeOf } from '@/modules/architecture/render/architecturePanelShared';

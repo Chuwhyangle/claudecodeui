@@ -11,13 +11,13 @@ import type { ArchitectureGraphResult } from '@/modules/architecture';
 import {
   ArchitectureTextPanel,
   ArchitectureTextSyntaxBadge,
-} from '@/modules/architecture/render/ArchitectureTextPanel';
+} from '@/modules/architecture/render/inspector/ArchitectureTextPanel';
 import {
   archguardToPlantUml,
   parserSafePlantUml,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/layout/archguardToPlantUml';
-import { renderWithMemberDetail } from '@/modules/architecture/render/PlantUmlGraph';
+import { renderWithMemberDetail } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import { buildPlantUmlText, standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantUmlText';
 import type {
   ArchitectureDrawnPlantUml,

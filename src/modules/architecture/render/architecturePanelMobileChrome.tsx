@@ -5,7 +5,7 @@
  * Extracted from `ArchitecturePanel.tsx` unchanged (residual-oversize split,
  * `gap-routine-architecture-analysis-architecture-panel-plantuml-residual-oversize`).
  */
-import { ArchitectureSelectionTray } from '@/modules/architecture/render/ArchitectureSelectionTray';
+import { ArchitectureSelectionTray } from '@/modules/architecture/render/inspector';
 import { nodeIdShapeOf } from '@/modules/architecture/render/architecturePanelShared';
 import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';

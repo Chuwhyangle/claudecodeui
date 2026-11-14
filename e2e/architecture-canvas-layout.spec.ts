@@ -4987,7 +4987,7 @@ test('control arm — restoring the default detail puts the overflow row back in
     touch: false,
   });
   let rewrites = 0;
-  await page.route('**/src/modules/architecture/render/PlantUmlGraph.tsx*', async (route) => {
+  await page.route('**/src/modules/architecture/render/viewport/PlantUmlGraph.tsx*', async (route) => {
     const response = await route.fetch();
     const body = await response.text();
     const rewritten = body.replace(

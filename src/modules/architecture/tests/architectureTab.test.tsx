@@ -32,7 +32,7 @@ import {
 } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 import type { ArchitectureRendererProps } from '@/modules/architecture/dom/rendererContract';
-import { CurationToast } from '@/modules/architecture/render/CurationToast';
+import { CurationToast } from '@/modules/architecture/render/curation/CurationToast';
 import type { ArchitectureNeighborhood } from '@/modules/architecture/dom/useArchitectureGraph';
 import {
   archguardToPlantUml,
@@ -43,7 +43,7 @@ import {
   memberOverflowLabel,
   parserSafePlantUml,
 } from '@/modules/architecture/layout/archguardToPlantUml';
-import { capDrawnMemberRows, pickNavigationStart, renderWithMemberDetail } from '@/modules/architecture/render/PlantUmlGraph';
+import { capDrawnMemberRows, pickNavigationStart, renderWithMemberDetail } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import {
   buildFullPlantUmlDocument,
   standardiseDrawnStereotypes,
@@ -3570,14 +3570,14 @@ test('activation fetches once; a view switch re-requests because the element axi
 
 test('the renderer is reached through a dynamic import, never the first-screen chunk', () => {
   const graphSource = readFileSync(
-    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'PlantUmlGraph.tsx'),
+    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'viewport', 'PlantUmlGraph.tsx'),
     'utf8',
   );
   // The lazy renderer import lives in the drawing hook after the residual
   // oversize split; the criterion reads BOTH files so it still lands on the one
   // place the first-screen chunk could be broken from.
   const drawingSource = readFileSync(
-    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'usePlantUmlDrawing.ts'),
+    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'viewport', 'usePlantUmlDrawing.ts'),
     'utf8',
   );
   const bridgeSource = readFileSync(

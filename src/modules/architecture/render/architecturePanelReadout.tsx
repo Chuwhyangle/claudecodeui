@@ -10,7 +10,7 @@ import { ARCHITECTURE_DETAIL_TIERS, ARCHITECTURE_SCOPE_MIN } from '@/modules/arc
 import { ARCHITECTURE_ELEMENT_KINDS, hiddenTotal, resetFilter, showAllFilter } from '@/modules/architecture/dom/elementRelationFilter';
 
 import { diffHighlightCounts } from '@/modules/architecture/render/architecturePanelShared';
-import { formatRefreshElapsed } from '@/modules/architecture/render/useArchitectureRefresh';
+import { formatRefreshElapsed } from '@/modules/architecture/render/viewport';
 import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
 import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';

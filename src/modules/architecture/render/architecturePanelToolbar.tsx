@@ -9,7 +9,7 @@
  * panel model (`scope`) instead of a component-local closure.
  */
 import { ExternalLink, Maximize2, Minimize2 } from 'lucide-react';
-import { ArchitectureExportMenu } from '@/modules/architecture/render/ArchitectureExportMenu';
+import { ArchitectureExportMenu } from '@/modules/architecture/render/curation';
 import { buildArchitectureStandaloneHref } from '@/modules/architecture/render/architectureDeepLink';
 import type { ArchitectureDeepLinkState } from '@/modules/architecture/render/architectureDeepLink';
 import { Tooltip } from '@/shared/ui';

@@ -5,7 +5,7 @@ import type { ArchitectureDiagramView } from '@/modules/architecture/layout/arch
 import {
   architectureExportFilename,
   downloadTextFile,
-} from '@/modules/architecture/render/exportArtifacts';
+} from '@/modules/architecture/render/curation/exportArtifacts';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import {
   buildFullPlantUmlDocument,

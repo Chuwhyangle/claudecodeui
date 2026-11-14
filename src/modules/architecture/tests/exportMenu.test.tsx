@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { checkSyntax, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
@@ -16,7 +16,7 @@ import {
   parserSafePlantUml,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/layout/archguardToPlantUml';
-import { renderWithMemberDetail } from '@/modules/architecture/render/PlantUmlGraph';
+import { renderWithMemberDetail } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import { standardiseDrawnStereotypes } from '@/modules/architecture/layout/plantUmlText';
 import {
   architectureExportFilename,
@@ -24,8 +24,8 @@ import {
   exportTimestamp,
   pngTargetSize,
   sanitizeFilenameSegment,
-} from '@/modules/architecture/render/exportArtifacts';
-import type * as ExportArtifactsModule from '@/modules/architecture/render/exportArtifacts';
+} from '@/modules/architecture/render/curation/exportArtifacts';
+import type * as ExportArtifactsModule from '@/modules/architecture/render/curation/exportArtifacts';
 import { rankArchitectureDetail } from '@/modules/architecture/dom/detailRanking';
 import type { ArchitectureRendererGraph } from '@/modules/architecture/dom/rendererContract';
 import enCommon from '@/modules/i18n/locales/en/common.json';
@@ -61,7 +61,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
 // The rasteriser needs a real canvas, which jsdom does not implement. Its unit
 // bounds are covered below; the panel path only needs to know what it was
 // asked to draw and that the notice follows the returned target.
-vi.mock('@/modules/architecture/render/exportArtifacts', async (importOriginal) => {
+vi.mock('@/modules/architecture/render/curation/exportArtifacts', async (importOriginal) => {
   const actual = await importOriginal<typeof ExportArtifactsModule>();
   return { ...actual, rasterizeSvgToPng: artifactMock.rasterizeSvgToPng };
 });
@@ -667,10 +667,22 @@ test('the text page downloads the same document under the same filename as the e
 });
 
 test('the filename and download mechanics exist once in the architecture module', () => {
-  const moduleDir = resolve(process.cwd(), 'src', 'modules', 'architecture', 'render');
-  const sources = readdirSync(moduleDir).filter((file) => /\.tsx?$/.test(file));
+  // The render tree is split into `viewport/`, `inspector/` and `curation/` leaves behind
+  // `index.ts` barrels, so the ownership reading walks all four directories.
+  const renderDir = resolve(process.cwd(), 'src', 'modules', 'architecture', 'render');
+  const packageDirs = ['', 'viewport', 'inspector', 'curation']
+    .map((pkg) => (pkg ? join(renderDir, pkg) : renderDir));
+  const sources = packageDirs.flatMap((dir) =>
+    readdirSync(dir).filter((file) => /\.tsx?$/.test(file)).map((file) => join(dir, file)),
+  );
+  const fileOf = (name: string): string => {
+    const found = sources.filter((file) => basename(file) === name);
+    assert.equal(found.length, 1, `expected exactly one ${name} under the architecture render tree`);
+    return found[0];
+  };
   const withDefinition = (needle: string): string[] => sources
-    .filter((file) => readFileSync(join(moduleDir, file), 'utf8').includes(needle))
+    .filter((file) => readFileSync(file, 'utf8').includes(needle))
+    .map((file) => basename(file))
     .sort();
 
   // The two consumer files must IMPORT the shared helpers; neither may define
@@ -683,32 +695,32 @@ test('the filename and download mechanics exist once in the architecture module'
   // panel's export actions live in `useArchitecturePanelActions.ts` after the
   // residual-oversize split); the text page builds and downloads its own document.
   for (const consumer of ['useArchitecturePanelActions.ts', 'ArchitectureTextPanel.tsx']) {
-    const source = readFileSync(join(moduleDir, consumer), 'utf8');
+    const source = readFileSync(fileOf(consumer), 'utf8');
     assert.match(
       source,
-      /import \{[^}]*\barchitectureExportFilename\b[^}]*\} from '@\/modules\/architecture\/render\/exportArtifacts'/s,
+      /import \{[^}]*\barchitectureExportFilename\b[^}]*\} from '@\/modules\/architecture\/render\/curation\/exportArtifacts'/s,
       `${consumer} must import the shared filename scheme`,
     );
   }
   // The download mechanics are the export owner's now: the panel and the text
   // page must not grow a second copy of them.
-  const textPanelSource = readFileSync(join(moduleDir, 'ArchitectureTextPanel.tsx'), 'utf8');
+  const textPanelSource = readFileSync(fileOf('ArchitectureTextPanel.tsx'), 'utf8');
   assert.match(
     textPanelSource,
-    /import \{[^}]*\bdownloadTextFile\b[^}]*\} from '@\/modules\/architecture\/render\/exportArtifacts'/s,
+    /import \{[^}]*\bdownloadTextFile\b[^}]*\} from '@\/modules\/architecture\/render\/curation\/exportArtifacts'/s,
     'ArchitectureTextPanel.tsx must import the shared download helper',
   );
-  const ownerSource = readFileSync(join(moduleDir, 'architectureFitExportController.ts'), 'utf8');
+  const ownerSource = readFileSync(fileOf('architectureFitExportController.ts'), 'utf8');
   for (const helper of ['downloadTextFile', 'downloadBlob', 'rasterizeSvgToPng']) {
     assert.match(
       ownerSource,
-      new RegExp(`import \\{[^}]*\\b${helper}\\b[^}]*\\} from '@/modules/architecture/render/exportArtifacts'`, 's'),
+      new RegExp(`import \\{[^}]*\\b${helper}\\b[^}]*\\} from '@/modules/architecture/render/curation/exportArtifacts'`, 's'),
       `the export owner must import the shared ${helper} helper`,
     );
   }
   assert.doesNotMatch(
-    readFileSync(join(moduleDir, 'ArchitecturePanel.tsx'), 'utf8'),
-    /import \{[^}]*\bdownloadTextFile\b[^}]*\} from '@\/modules\/architecture\/render\/exportArtifacts'/s,
+    readFileSync(fileOf('ArchitecturePanel.tsx'), 'utf8'),
+    /import \{[^}]*\bdownloadTextFile\b[^}]*\} from '@\/modules\/architecture\/render\/curation\/exportArtifacts'/s,
     'the panel forwards the export to its owner instead of downloading itself',
   );
 });

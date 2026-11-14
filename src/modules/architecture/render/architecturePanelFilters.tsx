@@ -11,7 +11,7 @@ import type { ArchitectureEntityKind } from '@/modules/architecture/dom/renderer
 import { TOUCH_CONTROL_GAP_PX, TOUCH_TARGET_STYLE } from '@/modules/architecture/hooks/useTouchLayout';
 import { seedMarkerMode } from '@/modules/architecture/layout/archguardToPlantUml';
 import { MENTIONED_HINT_ID } from '@/modules/architecture/render/architecturePanelShared';
-import { LegendSwatch } from '@/modules/architecture/render/LegendSwatch';
+import { LegendSwatch } from '@/modules/architecture/render/viewport';
 import type { ArchitectureSearchCommit } from '@/modules/architecture/render/architectureSearchController';
 import type { ArchitecturePanelActions } from '@/modules/architecture/render/useArchitecturePanelActions';
 import type { ArchitecturePanelScope } from '@/modules/architecture/render/ArchitecturePanel';

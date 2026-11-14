@@ -17,7 +17,7 @@ import { describe, it, vi } from 'vitest';
 import {
   createArchitectureCurationController,
   CURATION_TOAST_MS,
-} from '@/modules/architecture/render/architectureCurationController';
+} from '@/modules/architecture/render/curation/architectureCurationController';
 import {
   curationStorageKey,
   type ArchitectureCurationItem,

@@ -18,8 +18,8 @@ import type { GraphLayoutPipeline, GraphLayoutCommit, GraphLayoutSnapshot } from
 import type { GraphZoom } from '@/modules/architecture/layout/graphViewportController';
 import type { SemanticCapture } from '@/modules/architecture/layout/graphDom';
 import type { SemanticZoomLayout } from '@/modules/architecture/layout/semanticZoomLayout';
-import { forcedFitCssFactor } from '@/modules/architecture/render/plantUmlControlArm';
-import { applyDiffStyles, pinFocusMarker } from '@/modules/architecture/render/plantUmlNavigation';
+import { forcedFitCssFactor } from '@/modules/architecture/render/viewport/plantUmlControlArm';
+import { applyDiffStyles, pinFocusMarker } from '@/modules/architecture/render/viewport/plantUmlNavigation';
 import { addNodeHitTargets, defaultViewOf, drawSemanticLayout, drawStickyLabels, highlightSelection, markDrawingUnselectable, nodeElement, positionOverviewHint } from '@/modules/architecture/layout/graphDom';
 import { applyZoomScale } from '@/modules/architecture/layout/svgViewport';
 

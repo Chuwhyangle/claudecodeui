@@ -21,7 +21,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatRefreshElapsed } from '@/modules/architecture/render/useArchitectureRefresh';
+import { formatRefreshElapsed } from '@/modules/architecture/render/viewport';
 
 /** What the dialog is showing: the confirmation, a live run, or a failed run. */
 export type ArchitectureRefreshDialogPhase = 'confirm' | 'running' | 'failed';

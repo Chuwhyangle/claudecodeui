@@ -17,7 +17,7 @@ import type { ArchitectureRendererGraph, ArchitectureRendererNode } from '@/modu
 import type { GraphGestureController } from '@/modules/architecture/dom/graphGestureController';
 import type { GraphSelectionController, GraphSelectionSnapshot } from '@/modules/architecture/dom/graphSelectionController';
 import { moveEntityFocus, PACKAGE_NAV_PREFIX, type EntityNavigationDirection, type EntityNavigationItem } from '@/modules/architecture/dom/entityNavigation';
-import { clearNavigationFocus, collectNavigationItems, farthestNavigationStart, normalizedPackageId, packageIdOfNodeId, keyboardA11yDefect, navigationElementOf, paintNavigationFocus, pickNavigationStart, type NavigationPoint } from '@/modules/architecture/render/plantUmlNavigation';
+import { clearNavigationFocus, collectNavigationItems, farthestNavigationStart, normalizedPackageId, packageIdOfNodeId, keyboardA11yDefect, navigationElementOf, paintNavigationFocus, pickNavigationStart, type NavigationPoint } from '@/modules/architecture/render/viewport/plantUmlNavigation';
 import { announceSelection, highlightRelations, selectionOf } from '@/modules/architecture/layout/graphDom';
 import { ZOOM_STEP, centerElementInContainer } from '@/modules/architecture/layout/svgViewport';
 import { KEYBOARD_PAN_STEP } from '@/modules/architecture/dom/graphConstants';

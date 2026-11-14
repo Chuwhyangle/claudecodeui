@@ -22,7 +22,7 @@ import {
 } from '@/modules/architecture/layout/svgViewport';
 import { measureLayoutAspect, drawStickyLabels, positionOverviewHint } from '@/modules/architecture/layout/graphDom';
 import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
-import { forcedDefaultFocus } from '@/modules/architecture/render/plantUmlControlArm';
+import { forcedDefaultFocus } from '@/modules/architecture/render/viewport/plantUmlControlArm';
 
 /** Every reading the surface bindings close over. */
 export type CanvasSurfaceBindingArgs = {

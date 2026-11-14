@@ -7,7 +7,7 @@ import { archguardToPlantUml, parserSafePlantUml } from '@/modules/architecture/
 import {
   PLANTUML_MEMBER_DETAIL,
   renderWithMemberDetail,
-} from '@/modules/architecture/render/PlantUmlGraph';
+} from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import type { PlantUmlRenderDetailed } from '@/modules/architecture/layout/graphDom';
 import {
   buildFullPlantUmlDocument,

@@ -70,7 +70,7 @@ import {
   layoutSizeOf,
   pinFocusMarker,
   renderWithMemberDetail,
-} from '@/modules/architecture/render/plantUmlNavigation';
+} from '@/modules/architecture/render/viewport/plantUmlNavigation';
 
 /**
  * Every reading the draw effect closes over. The three controllers and the two

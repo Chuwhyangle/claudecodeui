@@ -9,12 +9,12 @@ import { afterEach, beforeAll, beforeEach, test, vi } from 'vitest';
 
 import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
-import { ArchitectureSelectionTray } from '@/modules/architecture/render/ArchitectureSelectionTray';
+import { ArchitectureSelectionTray } from '@/modules/architecture/render/inspector/ArchitectureSelectionTray';
 import {
   archguardToPlantUml,
   parserSafePlantUml,
 } from '@/modules/architecture/layout/archguardToPlantUml';
-import { renderWithMemberDetail } from '@/modules/architecture/render/PlantUmlGraph';
+import { renderWithMemberDetail } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import {
   buildPlantUmlText,
   measurePlantUmlText,

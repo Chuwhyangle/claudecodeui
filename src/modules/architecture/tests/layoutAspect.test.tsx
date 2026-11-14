@@ -57,7 +57,7 @@ import {
   type OrientationSize,
 } from '@/modules/architecture/dom/layoutOrientation';
 import { captureSemanticDrawing } from '@/modules/architecture/layout/graphDom';
-import { capDrawnMemberRows } from '@/modules/architecture/render/PlantUmlGraph';
+import { capDrawnMemberRows } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import { semanticDrawnFitScale } from '@/modules/architecture/layout/drawnFit';
 import { SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
 import enCommon from '@/modules/i18n/locales/en/common.json';
@@ -519,7 +519,7 @@ test('the layout engine is constructed in exactly one factory, through the publi
   // The engine is built where the drawing happens: the drawing hook after the
   // residual oversize split (`PlantUmlGraph.tsx` holds no layout code).
   const graphSource = readFileSync(
-    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'usePlantUmlDrawing.ts'),
+    resolve(process.cwd(), 'src', 'modules', 'architecture', 'render', 'viewport', 'usePlantUmlDrawing.ts'),
     'utf8',
   );
   const engineSource = readFileSync(
