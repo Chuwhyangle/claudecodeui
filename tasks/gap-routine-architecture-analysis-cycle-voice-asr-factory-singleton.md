@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-cycle-voice-asr-factory-singleton
 title: "architecture-analysis: Fresh archguard entity SCC (scope src 93e0a992) =
   one 2-node cycle: the standalone factory reaches into the class singleton at
   line 1011 (voiceClientAsrEngin"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
