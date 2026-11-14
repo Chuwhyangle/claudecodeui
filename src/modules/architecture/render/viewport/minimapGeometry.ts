@@ -6,7 +6,7 @@
  * without a browser. `ArchitectureMinimap` re-exports this surface, so the
  * geometry test keeps reading it from the component module.
  */
-import { type SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
+import { type SvgViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
 import { clamp } from '@/shared/utils';
 
 /** The PC minimap size the proposal fixes; the drawing is letterboxed inside it. */
