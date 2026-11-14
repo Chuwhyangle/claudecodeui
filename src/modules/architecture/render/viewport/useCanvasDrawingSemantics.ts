@@ -11,17 +11,17 @@
 import { useCallback, useEffect, type RefObject } from 'react';
 
 import type { ArchitectureDiffHighlight, ArchitectureNodeIdShape } from '@/modules/architecture/dom/rendererContract';
-import type { ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
-import type { GraphGestureController } from '@/modules/architecture/dom/graphGestureController';
-import type { GraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
-import type { GraphLayoutPipeline, GraphLayoutCommit, GraphLayoutSnapshot } from '@/modules/architecture/layout/graphLayoutPipeline';
-import type { GraphZoom } from '@/modules/architecture/layout/graphViewportController';
-import type { SemanticCapture } from '@/modules/architecture/layout/graphDom';
-import type { SemanticZoomLayout } from '@/modules/architecture/layout/semanticZoomLayout';
+import type { ArchitectureDiagramView } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
+import type { GraphGestureController } from '@/modules/architecture/dom/interaction/graphGestureController';
+import type { GraphSelectionController } from '@/modules/architecture/dom/interaction/graphSelectionController';
+import type { GraphLayoutPipeline, GraphLayoutCommit, GraphLayoutSnapshot } from '@/modules/architecture/layout/drawing/graphLayoutPipeline';
+import type { GraphZoom } from '@/modules/architecture/layout/drawing/graphViewportController';
+import type { SemanticCapture } from '@/modules/architecture/layout/drawing/graphDom';
+import type { SemanticZoomLayout } from '@/modules/architecture/layout/engine/semanticZoomLayout';
 import { forcedFitCssFactor } from '@/modules/architecture/render/viewport/plantUmlControlArm';
 import { applyDiffStyles, pinFocusMarker } from '@/modules/architecture/render/viewport/plantUmlNavigation';
-import { addNodeHitTargets, defaultViewOf, drawSemanticLayout, drawStickyLabels, highlightSelection, markDrawingUnselectable, nodeElement, positionOverviewHint } from '@/modules/architecture/layout/graphDom';
-import { applyZoomScale } from '@/modules/architecture/layout/svgViewport';
+import { addNodeHitTargets, defaultViewOf, drawSemanticLayout, drawStickyLabels, highlightSelection, markDrawingUnselectable, nodeElement, positionOverviewHint } from '@/modules/architecture/layout/drawing/graphDom';
+import { applyZoomScale } from '@/modules/architecture/layout/engine/svgViewport';
 
 /** Every reading the semantic write path closes over. */
 export type CanvasDrawingSemanticsArgs = {

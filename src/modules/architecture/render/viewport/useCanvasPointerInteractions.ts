@@ -18,8 +18,8 @@ import type {
   ArchitectureRendererHover,
   ArchitectureRendererNode,
 } from '@/modules/architecture/dom/rendererContract';
-import type { GraphGestureController } from '@/modules/architecture/dom/graphGestureController';
-import type { GraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
+import type { GraphGestureController } from '@/modules/architecture/dom/interaction/graphGestureController';
+import type { GraphSelectionController } from '@/modules/architecture/dom/interaction/graphSelectionController';
 import { GROUP_PREFIX, STUB_PREFIX } from '@/modules/architecture/dom/graphConstants';
 import {
   announceSelection,
@@ -30,7 +30,7 @@ import {
   highlightSelection,
   nodeElement,
   relationsOf,
-} from '@/modules/architecture/layout/graphDom';
+} from '@/modules/architecture/layout/drawing/graphDom';
 
 /** Every reading the pointer interactions close over. */
 export type CanvasPointerInteractionArgs = {

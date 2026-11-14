@@ -33,7 +33,7 @@ import {
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 import type { ArchitectureRendererProps } from '@/modules/architecture/dom/rendererContract';
 import { CurationToast } from '@/modules/architecture/render/curation/CurationToast';
-import type { ArchitectureNeighborhood } from '@/modules/architecture/dom/useArchitectureGraph';
+import type { ArchitectureNeighborhood } from '@/modules/architecture/dom/planning/useArchitectureGraph';
 import {
   archguardToPlantUml,
   displayName,
@@ -42,23 +42,23 @@ import {
   MEMBER_MAX_ROWS,
   memberOverflowLabel,
   parserSafePlantUml,
-} from '@/modules/architecture/layout/archguardToPlantUml';
+} from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import { capDrawnMemberRows, pickNavigationStart, renderWithMemberDetail } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import {
   buildFullPlantUmlDocument,
   standardiseDrawnStereotypes,
-} from '@/modules/architecture/layout/plantUmlText';
+} from '@/modules/architecture/layout/plantuml/plantUmlText';
 import {
   NODE_SIZE_ENTITIES,
   nodeSizeEntityGraph,
   nodeSizeMemberSignature,
 } from '@/../e2e/support/architectureFixture';
-import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/svgViewport';
-import { MAX_FIT_SCALE } from '@/modules/architecture/layout/semanticZoomLayout';
-import { SEMANTIC_MIN_FONT_MOBILE_PX } from '@/modules/architecture/dom/semanticZoomPlan';
-import { RENDERED_LABEL_FONT_PX } from '@/modules/architecture/layout/readableZoom';
-import { ORIENTATION_REASON } from '@/modules/architecture/dom/layoutOrientation';
-import { placeHoverHint } from '@/modules/architecture/dom/hoverHintPlacement';
+import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/engine/svgViewport';
+import { MAX_FIT_SCALE } from '@/modules/architecture/layout/engine/semanticZoomLayout';
+import { SEMANTIC_MIN_FONT_MOBILE_PX } from '@/modules/architecture/dom/planning/semanticZoomPlan';
+import { RENDERED_LABEL_FONT_PX } from '@/modules/architecture/layout/engine/readableZoom';
+import { ORIENTATION_REASON } from '@/modules/architecture/dom/planning/layoutOrientation';
+import { placeHoverHint } from '@/modules/architecture/dom/readout/hoverHintPlacement';
 
 /**
  * The architecture tab's wiring, end to end at the component seam:
@@ -3581,7 +3581,7 @@ test('the renderer is reached through a dynamic import, never the first-screen c
     'utf8',
   );
   const bridgeSource = readFileSync(
-    resolve(process.cwd(), 'src', 'modules', 'architecture', 'layout', 'archguardToPlantUml.ts'),
+    resolve(process.cwd(), 'src', 'modules', 'architecture', 'layout', 'plantuml', 'archguardToPlantUml.ts'),
     'utf8',
   );
 

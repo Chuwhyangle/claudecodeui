@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { test } from 'vitest';
 
-import { buildReadout, drawnKindCounts, relatedScopeTotal } from '@/modules/architecture/dom/readoutNumbers';
+import { buildReadout, drawnKindCounts, relatedScopeTotal } from '@/modules/architecture/dom/readout/readoutNumbers';
 
 /**
  * The readout contract, as a pure function:

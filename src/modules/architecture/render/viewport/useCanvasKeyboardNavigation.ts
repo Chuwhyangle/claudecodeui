@@ -14,12 +14,12 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { TFunction } from 'i18next';
 
 import type { ArchitectureRendererGraph, ArchitectureRendererNode } from '@/modules/architecture/dom/rendererContract';
-import type { GraphGestureController } from '@/modules/architecture/dom/graphGestureController';
-import type { GraphSelectionController, GraphSelectionSnapshot } from '@/modules/architecture/dom/graphSelectionController';
-import { moveEntityFocus, PACKAGE_NAV_PREFIX, type EntityNavigationDirection, type EntityNavigationItem } from '@/modules/architecture/dom/entityNavigation';
+import type { GraphGestureController } from '@/modules/architecture/dom/interaction/graphGestureController';
+import type { GraphSelectionController, GraphSelectionSnapshot } from '@/modules/architecture/dom/interaction/graphSelectionController';
+import { moveEntityFocus, PACKAGE_NAV_PREFIX, type EntityNavigationDirection, type EntityNavigationItem } from '@/modules/architecture/dom/interaction/entityNavigation';
 import { clearNavigationFocus, collectNavigationItems, farthestNavigationStart, normalizedPackageId, packageIdOfNodeId, keyboardA11yDefect, navigationElementOf, paintNavigationFocus, pickNavigationStart, type NavigationPoint } from '@/modules/architecture/render/viewport/plantUmlNavigation';
-import { announceSelection, highlightRelations, selectionOf } from '@/modules/architecture/layout/graphDom';
-import { ZOOM_STEP, centerElementInContainer } from '@/modules/architecture/layout/svgViewport';
+import { announceSelection, highlightRelations, selectionOf } from '@/modules/architecture/layout/drawing/graphDom';
+import { ZOOM_STEP, centerElementInContainer } from '@/modules/architecture/layout/engine/svgViewport';
 import { KEYBOARD_PAN_STEP } from '@/modules/architecture/dom/graphConstants';
 
 /** Every reading the keyboard navigation closes over. */

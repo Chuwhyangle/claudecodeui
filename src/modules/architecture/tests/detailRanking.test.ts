@@ -8,11 +8,11 @@ import {
   clampArchitectureScope,
   rankArchitectureDetail,
   type ArchitectureDetailTier,
-} from '@/modules/architecture/dom/detailRanking';
+} from '@/modules/architecture/dom/readout/detailRanking';
 import {
   applyFilter,
   ARCHITECTURE_DEFAULT_FILTER,
-} from '@/modules/architecture/dom/elementRelationFilter';
+} from '@/modules/architecture/dom/readout/elementRelationFilter';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererNode,

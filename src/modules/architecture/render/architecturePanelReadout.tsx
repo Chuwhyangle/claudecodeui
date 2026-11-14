@@ -6,8 +6,8 @@
  * `gap-routine-architecture-analysis-architecture-panel-plantuml-residual-oversize`).
  */
 import { RefreshCw } from 'lucide-react';
-import { ARCHITECTURE_DETAIL_TIERS, ARCHITECTURE_SCOPE_MIN } from '@/modules/architecture/dom/detailRanking';
-import { ARCHITECTURE_ELEMENT_KINDS, hiddenTotal, resetFilter, showAllFilter } from '@/modules/architecture/dom/elementRelationFilter';
+import { ARCHITECTURE_DETAIL_TIERS, ARCHITECTURE_SCOPE_MIN } from '@/modules/architecture/dom/readout/detailRanking';
+import { ARCHITECTURE_ELEMENT_KINDS, hiddenTotal, resetFilter, showAllFilter } from '@/modules/architecture/dom/readout/elementRelationFilter';
 
 import { diffHighlightCounts } from '@/modules/architecture/render/architecturePanelShared';
 import { formatRefreshElapsed } from '@/modules/architecture/render/viewport';

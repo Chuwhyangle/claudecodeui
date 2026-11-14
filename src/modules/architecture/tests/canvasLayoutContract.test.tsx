@@ -9,7 +9,7 @@ import type * as SharedApiModule from '@/shared/api';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
-import { planHintPlacement, planRectsIntersect } from '@/modules/architecture/dom/semanticZoomPlan';
+import { planHintPlacement, planRectsIntersect } from '@/modules/architecture/dom/planning/semanticZoomPlan';
 
 /**
  * The architecture canvas's layout contract, read structurally.

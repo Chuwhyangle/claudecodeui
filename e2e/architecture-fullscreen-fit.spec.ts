@@ -23,7 +23,7 @@ import { awaitClientMounted, warmClientStartup, type RequestFailure } from './su
  * THE READING. One `page.evaluate` per state, because the claim is a relation
  * between boxes that must be read on one frame. The available area is computed
  * page-side by `availableFitArea`, a verbatim mirror of
- * `solveFitArea` in `src/modules/architecture/layout/semanticZoomLayout.ts` — the e2e
+ * `solveFitArea` in `src/modules/architecture/layout/engine/semanticZoomLayout.ts` — the e2e
  * tree does not import the app's `@`-aliased modules. The app also publishes
  * the box it solved against as `data-architecture-fit-viewport`; the reading
  * asserts the two agree, so the measurement cannot silently drift from the

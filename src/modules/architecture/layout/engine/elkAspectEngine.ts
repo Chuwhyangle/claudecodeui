@@ -1,6 +1,6 @@
 import type { LayoutEngine } from '@yalehwang/plantuml-js/elk';
 
-import type { LayoutOrientation } from '@/modules/architecture/dom/layoutOrientation';
+import type { LayoutOrientation } from '@/modules/architecture/dom/planning/layoutOrientation';
 
 /**
  * The container-aspect layout hint for the architecture diagram.

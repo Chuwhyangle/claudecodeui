@@ -13,15 +13,15 @@ import { ArchitectureSelectionTray } from '@/modules/architecture/render/inspect
 import {
   archguardToPlantUml,
   parserSafePlantUml,
-} from '@/modules/architecture/layout/archguardToPlantUml';
+} from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import { renderWithMemberDetail } from '@/modules/architecture/render/viewport/PlantUmlGraph';
 import {
   buildPlantUmlText,
   measurePlantUmlText,
   standardiseDrawnStereotypes,
-} from '@/modules/architecture/layout/plantUmlText';
+} from '@/modules/architecture/layout/plantuml/plantUmlText';
 import type { ArchitectureDrawnPlantUml } from '@/modules/architecture/dom/rendererContract';
-import { selectionKey, resolveDraftScope, type ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
+import { selectionKey, resolveDraftScope, type ArchitectureSelection } from '@/modules/architecture/dom/interaction/selectionModel';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import type * as SharedApiModule from '@/shared/api';
 import { readDraftText, resetChatDrafts, writeDraftText } from '@/shared/api/chatDrafts';

@@ -6,13 +6,13 @@ import type {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { overlayLayoutDefect } from '@/modules/architecture/dom/bottomSlotLayout';
+import { overlayLayoutDefect } from '@/modules/architecture/dom/readout/bottomSlotLayout';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import {
   measureViewportSize,
   readSvgNaturalSize,
   type SvgViewportSize,
-} from '@/modules/architecture/layout/svgViewport';
+} from '@/modules/architecture/layout/engine/svgViewport';
 import { clamp } from '@/shared/utils';
 
 import {

@@ -17,13 +17,13 @@
  * re-exports {@link capDrawnMemberRows} so its existing consumers are unchanged.
  */
 
-import { MEMBER_MAX_ROWS, memberOverflowLabel } from '@/modules/architecture/layout/archguardToPlantUml';
-import { captureSemanticDrawing } from '@/modules/architecture/layout/graphDom';
-import type { OrientationSize } from '@/modules/architecture/dom/layoutOrientation';
+import { MEMBER_MAX_ROWS, memberOverflowLabel } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
+import { captureSemanticDrawing } from '@/modules/architecture/layout/drawing/graphDom';
+import type { OrientationSize } from '@/modules/architecture/dom/planning/layoutOrientation';
 import {
   solveFitScale,
   type SemanticDrawingGeometry,
-} from '@/modules/architecture/layout/semanticZoomLayout';
+} from '@/modules/architecture/layout/engine/semanticZoomLayout';
 
 /**
  * The fit scale one RENDERED layout direction would be painted at, measured on

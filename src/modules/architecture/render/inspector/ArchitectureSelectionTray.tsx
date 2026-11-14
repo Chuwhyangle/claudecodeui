@@ -3,24 +3,24 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 
-import { nodeFileOf, type ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
+import { nodeFileOf, type ArchitectureDiagramView } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import {
   BOTTOM_SLOT_INFO_INSET_PX,
   overlayLayoutDefect,
-} from '@/modules/architecture/dom/bottomSlotLayout';
+} from '@/modules/architecture/dom/readout/bottomSlotLayout';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import {
   buildPlantUmlText,
   measurePlantUmlText,
   TEXT_HUGE_TOKEN_THRESHOLD,
   type ArchitectureTextScope,
-} from '@/modules/architecture/layout/plantUmlText';
+} from '@/modules/architecture/layout/plantuml/plantUmlText';
 import type {
   ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
   ArchitectureRendererGraph,
 } from '@/modules/architecture/dom/rendererContract';
-import { selectionKey, type ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
+import { selectionKey, type ArchitectureSelection } from '@/modules/architecture/dom/interaction/selectionModel';
 import { formatAbsoluteTime } from '@/shared/utils';
 
 /**

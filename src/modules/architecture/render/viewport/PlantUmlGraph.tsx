@@ -3,28 +3,28 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/dom/adaptiveGrouping';
+import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/dom/planning/adaptiveGrouping';
 import { ArchitectureMinimap } from '@/modules/architecture/render/viewport/ArchitectureMinimap';
-import { BOTTOM_SLOT_GAP_PX, bottomCornerLayout, overlayLayoutDefect } from '@/modules/architecture/dom/bottomSlotLayout';
-import { DEFAULT_NEIGHBORHOOD_HOPS, type ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
+import { BOTTOM_SLOT_GAP_PX, bottomCornerLayout, overlayLayoutDefect } from '@/modules/architecture/dom/readout/bottomSlotLayout';
+import { DEFAULT_NEIGHBORHOOD_HOPS, type ArchitectureDiagramView } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 
 
 
-import { solveFitArea, type FitAreaRect, type FitOverlayRect } from '@/modules/architecture/layout/semanticZoomLayout';
-import { createGraphLayoutPipeline } from '@/modules/architecture/layout/graphLayoutPipeline';
-import { capDrawnMemberRows } from '@/modules/architecture/layout/drawnFit';
-import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
+import { solveFitArea, type FitAreaRect, type FitOverlayRect } from '@/modules/architecture/layout/engine/semanticZoomLayout';
+import { createGraphLayoutPipeline } from '@/modules/architecture/layout/drawing/graphLayoutPipeline';
+import { capDrawnMemberRows } from '@/modules/architecture/layout/drawing/drawnFit';
+import { SEMANTIC_MIN_FONT_MOBILE_PX, SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/planning/semanticZoomPlan';
 import { PORTRAIT_CONTROL_BAND_PX, TOUCH_CONTROL_GAP_PX, TOUCH_TARGET_STYLE, useCanvasHeaderSlot, useCompactToolbarSlot, useTouchLayout, ZOOM_CLUSTER_TARGET_STYLE } from '@/modules/architecture/hooks/useTouchLayout';
 
 import type { ArchitectureDiffHighlight, ArchitectureRendererEdge, ArchitectureRendererNode, ArchitectureRendererProps } from '@/modules/architecture/dom/rendererContract';
 
-import { createGraphGestureController } from '@/modules/architecture/dom/graphGestureController';
-import { createGraphSelectionController } from '@/modules/architecture/dom/graphSelectionController';
-import { createGraphViewportController, type GraphZoom } from '@/modules/architecture/layout/graphViewportController';
-import { selectionsIntersectingBox, type ArchitectureSelection } from '@/modules/architecture/dom/selectionModel';
-import { centeredScrollForDrawingRect, clampZoomScale, fitPlacementAvoidingCorners, measureHostSize, measureViewportSize, MIN_READABLE_ZOOM_SCALE, MIN_ZOOM_SCALE, readSvgNaturalSize, ZOOM_STEP, type SvgCornerRect, type SvgFitPlacement, type SvgViewportSize } from '@/modules/architecture/layout/svgViewport';
+import { createGraphGestureController } from '@/modules/architecture/dom/interaction/graphGestureController';
+import { createGraphSelectionController } from '@/modules/architecture/dom/interaction/graphSelectionController';
+import { createGraphViewportController, type GraphZoom } from '@/modules/architecture/layout/drawing/graphViewportController';
+import { selectionsIntersectingBox, type ArchitectureSelection } from '@/modules/architecture/dom/interaction/selectionModel';
+import { centeredScrollForDrawingRect, clampZoomScale, fitPlacementAvoidingCorners, measureHostSize, measureViewportSize, MIN_READABLE_ZOOM_SCALE, MIN_ZOOM_SCALE, readSvgNaturalSize, ZOOM_STEP, type SvgCornerRect, type SvgFitPlacement, type SvgViewportSize } from '@/modules/architecture/layout/engine/svgViewport';
 import { ENTITY_HIGHLIGHT_EVENT, GROUP_PREFIX, STUB_PREFIX, TOOLBAR_BUTTON_CLASS } from '@/modules/architecture/dom/graphConstants';
-import { applySelectionStyles, boxCandidates, clearHighlight, defaultViewOf, drawnPackageFrame, highlightSelection, isEntityGraph, nearestNodeHitId, positionOverviewHint } from '@/modules/architecture/layout/graphDom';
+import { applySelectionStyles, boxCandidates, clearHighlight, defaultViewOf, drawnPackageFrame, highlightSelection, isEntityGraph, nearestNodeHitId, positionOverviewHint } from '@/modules/architecture/layout/drawing/graphDom';
 import { CANVAS_UNSELECTABLE_STYLE, HIGHLIGHT_STYLE } from '@/modules/architecture/dom/graphStyles';
 
 /**
@@ -32,7 +32,7 @@ import { CANVAS_UNSELECTABLE_STYLE, HIGHLIGHT_STYLE } from '@/modules/architectu
  * drawing helpers; it stays exported from this module because the renderer is
  * where a reader (and the geometry test) expects to find it.
  */
-export { markerAnchor } from '@/modules/architecture/layout/graphDom';
+export { markerAnchor } from '@/modules/architecture/layout/drawing/graphDom';
 
 export {
   KEYBOARD_A11Y_STORAGE_KEY,

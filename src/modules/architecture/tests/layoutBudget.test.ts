@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { test } from 'vitest';
 
-import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/dom/layoutBudget';
+import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/dom/planning/layoutBudget';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererNode,

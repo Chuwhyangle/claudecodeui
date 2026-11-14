@@ -6,7 +6,7 @@ import {
   buildHierarchyIndexFromSvg,
   ROOT_PACKAGE_ID,
   type ArchitectureHierarchyIndex,
-} from '@/modules/architecture/dom/hierarchyIndex';
+} from '@/modules/architecture/dom/interaction/hierarchyIndex';
 import type { ArchitectureRendererGraph } from '@/modules/architecture/dom/rendererContract';
 
 /**

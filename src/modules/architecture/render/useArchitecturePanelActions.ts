@@ -13,9 +13,9 @@ import type { useTranslation } from 'react-i18next';
 
 import type { ArchitectureExportNotice, ArchitectureFitExportController } from '@/modules/architecture/render/curation';
 import type { ArchitectureSearchController } from '@/modules/architecture/render/architectureSearchController';
-import type { ArchitectureGraphResult } from '@/modules/architecture/dom/useArchitectureGraph';
-import type { ArchitectureDiagramView } from '@/modules/architecture/layout/archguardToPlantUml';
-import type { ArchitectureGranularity } from '@/modules/architecture/layout/panelFilters';
+import type { ArchitectureGraphResult } from '@/modules/architecture/dom/planning/useArchitectureGraph';
+import type { ArchitectureDiagramView } from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
+import type { ArchitectureGranularity } from '@/modules/architecture/layout/panel/panelFilters';
 import type {
   ArchitectureRendererGraph,
   ArchitectureRendererNode,
@@ -24,9 +24,9 @@ import {
   resolveDraftScope,
   type ArchitectureSelection,
   type ArchitectureSelectionAction,
-} from '@/modules/architecture/dom/selectionModel';
-import { readSvgNaturalSize } from '@/modules/architecture/layout/svgViewport';
-import { buildFullPlantUmlDocument } from '@/modules/architecture/layout/plantUmlText';
+} from '@/modules/architecture/dom/interaction/selectionModel';
+import { readSvgNaturalSize } from '@/modules/architecture/layout/engine/svgViewport';
+import { buildFullPlantUmlDocument } from '@/modules/architecture/layout/plantuml/plantUmlText';
 import { architectureExportFilename, serializeSvgForExport } from '@/modules/architecture/render/curation/exportArtifacts';
 import { buildSelectionMessage } from '@/modules/architecture/render/inspector';
 import { sendArchitectureChatMessage } from '@/modules/architecture/render/architectureChatBridge';

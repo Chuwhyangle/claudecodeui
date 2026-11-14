@@ -25,9 +25,9 @@
  * sizes, compression alpha, the tier budget, determinism and the anchor).
  */
 
-import { tierWithinDeadzone } from '@/modules/architecture/dom/explosionLod';
-import { computePackageBounds } from '@/modules/architecture/dom/semanticZoomPackageBounds';
-import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/svgViewport';
+import { tierWithinDeadzone } from '@/modules/architecture/dom/planning/explosionLod';
+import { computePackageBounds } from '@/modules/architecture/dom/planning/semanticZoomPackageBounds';
+import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/engine/svgViewport';
 export type {
   SemanticDrawingGeometry,
   SemanticEdgeGeometry,
@@ -35,14 +35,14 @@ export type {
   SemanticNodeGeometry,
   SemanticPackageGeometry,
   SemanticRect,
-} from '@/modules/architecture/dom/semanticZoomRead';
+} from '@/modules/architecture/dom/planning/semanticZoomRead';
 import type {
   SemanticDrawingGeometry,
   SemanticEdgeGeometry,
   SemanticNodeGeometry,
   SemanticPackageGeometry,
   SemanticRect,
-} from '@/modules/architecture/dom/semanticZoomRead';
+} from '@/modules/architecture/dom/planning/semanticZoomRead';
 import {
   followCompactedFrame,
   planCompactFrameHeight,
@@ -71,7 +71,7 @@ import {
   type PlanPoint,
   type PlanRect,
   type StickyLabelCandidate,
-} from '@/modules/architecture/dom/semanticZoomPlan';
+} from '@/modules/architecture/dom/planning/semanticZoomPlan';
 import { clamp } from '@/shared/utils';
 
 /** The four content tiers, from richest to sparsest. */

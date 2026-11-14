@@ -6,7 +6,7 @@ import {
   moveEntityFocus,
   PACKAGE_NAV_PREFIX,
   type EntityNavigationItem,
-} from '@/modules/architecture/dom/entityNavigation';
+} from '@/modules/architecture/dom/interaction/entityNavigation';
 
 /**
  * The entity-navigation cursor's contract:

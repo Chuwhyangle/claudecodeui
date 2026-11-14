@@ -13,8 +13,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { createGraphViewportController } from '@/modules/architecture/layout/graphViewportController';
-import { MAX_ZOOM_SCALE, MIN_ZOOM_SCALE } from '@/modules/architecture/layout/svgViewport';
+import { createGraphViewportController } from '@/modules/architecture/layout/drawing/graphViewportController';
+import { MAX_ZOOM_SCALE, MIN_ZOOM_SCALE } from '@/modules/architecture/layout/engine/svgViewport';
 import type { Clock } from '@/shared/types';
 
 /**

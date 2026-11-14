@@ -14,7 +14,7 @@
  * per drawing) and `tests/semanticZoomRead.test.ts`.
  */
 
-import type { PlanPoint } from '@/modules/architecture/dom/semanticZoomPlan';
+import type { PlanPoint } from '@/modules/architecture/dom/planning/semanticZoomPlan';
 
 /** A rectangle in drawing user units. */
 export type SemanticRect = {

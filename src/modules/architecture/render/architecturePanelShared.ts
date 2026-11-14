@@ -7,7 +7,7 @@
  * the standalone deep link's diff parameters).
  */
 import type { ArchitectureDiffHighlight, ArchitectureNodeIdShape } from '@/modules/architecture/dom/rendererContract';
-import type { ArchitectureGranularity } from '@/modules/architecture/layout/panelFilters';
+import type { ArchitectureGranularity } from '@/modules/architecture/layout/panel/panelFilters';
 
 /**
  * The id scheme the server used for a subgraph. File ids ARE project-relative

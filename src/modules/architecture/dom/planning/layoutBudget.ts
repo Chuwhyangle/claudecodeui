@@ -3,7 +3,7 @@ import {
   orderArchitectureNodesByImportance,
   rankArchitectureDetail,
   type ArchitectureDetailTier,
-} from '@/modules/architecture/dom/detailRanking';
+} from '@/modules/architecture/dom/readout/detailRanking';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,

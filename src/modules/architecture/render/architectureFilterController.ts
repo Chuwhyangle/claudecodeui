@@ -21,17 +21,17 @@ import { createExternalStore, defaultClock } from '@/shared/utils';
 import {
   filtersEqual,
   type ArchitectureElementRelationFilter,
-} from '@/modules/architecture/dom/elementRelationFilter';
+} from '@/modules/architecture/dom/readout/elementRelationFilter';
 import {
   clampArchitectureScope,
   type ArchitectureDetailTier,
-} from '@/modules/architecture/dom/detailRanking';
+} from '@/modules/architecture/dom/readout/detailRanking';
 import {
   filterStorageKey,
   readStoredFilter,
   writeStoredFilter,
   type ArchitectureGranularity,
-} from '@/modules/architecture/layout/panelFilters';
+} from '@/modules/architecture/layout/panel/panelFilters';
 import {
   detailStorageKey,
   readStoredDetail,
@@ -40,7 +40,7 @@ import {
   writeStoredDetail,
   writeStoredScope,
   type PanelStorageLike,
-} from '@/modules/architecture/layout/panelPersistence';
+} from '@/modules/architecture/layout/panel/panelPersistence';
 
 /** How long a filter/view change waits before it becomes a request. */
 export const FILTER_REQUEST_DEBOUNCE_MS = 250;

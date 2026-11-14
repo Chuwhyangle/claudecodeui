@@ -2,19 +2,19 @@
 // highlight and selection painting, annotations, the semantic rewrite, hit
 // bands and marquee candidates. Pure geometry lives in `svgViewport.ts` /
 // `semanticZoomPlan.ts`; this file is the layer that touches the document.
-import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/dom/adaptiveGrouping';
+import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/dom/planning/adaptiveGrouping';
 import {
   isSessionSeedNode,
   nodeFileOf,
   seedMarkerMode,
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
-} from '@/modules/architecture/layout/archguardToPlantUml';
+} from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import {
   type ReadableZoomHint,
   type ReadableZoomMode,
-} from '@/modules/architecture/layout/readableZoom';
-import { clampAspectRatio, type ArchitectureLayoutEngine } from '@/modules/architecture/layout/elkAspectEngine';
+} from '@/modules/architecture/layout/engine/readableZoom';
+import { clampAspectRatio, type ArchitectureLayoutEngine } from '@/modules/architecture/layout/engine/elkAspectEngine';
 import {
   ENTITY_SELECTED_EVENT,
   GROUP_PREFIX,
@@ -36,12 +36,12 @@ import type {
 import {
   readSemanticDrawingGeometry,
   type SemanticEntityKind,
-} from '@/modules/architecture/dom/semanticZoomRead';
+} from '@/modules/architecture/dom/planning/semanticZoomRead';
 import {
   semanticCompartmentRules,
   type SemanticDrawingGeometry,
   type SemanticZoomLayout,
-} from '@/modules/architecture/layout/semanticZoomLayout';
+} from '@/modules/architecture/layout/engine/semanticZoomLayout';
 import {
   PACKAGE_TAB_INSET_PX,
   placeStickyLabels,
@@ -50,16 +50,16 @@ import {
   planStickyLabels,
   type PlanPoint,
   type PlanRect,
-} from '@/modules/architecture/dom/semanticZoomPlan';
+} from '@/modules/architecture/dom/planning/semanticZoomPlan';
 import type {
   ArchitectureBoxCandidate,
   ArchitectureSelectionRect,
-} from '@/modules/architecture/dom/selectionModel';
+} from '@/modules/architecture/dom/interaction/selectionModel';
 import {
   centerElementInContainer,
   readSvgNaturalSize,
   type SvgViewportSize,
-} from '@/modules/architecture/layout/svgViewport';
+} from '@/modules/architecture/layout/engine/svgViewport';
 import { parseCssPx } from '@/shared/utils';
 
 /**

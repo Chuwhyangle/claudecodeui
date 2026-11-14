@@ -7,7 +7,7 @@ import {
   directoryPathOf,
   OVERVIEW_GROUP_LIMIT,
   scopeRelativePath,
-} from '@/modules/architecture/dom/adaptiveGrouping';
+} from '@/modules/architecture/dom/planning/adaptiveGrouping';
 
 /**
  * The overview's adaptive directory grouping.

@@ -19,12 +19,12 @@
  */
 import type { Clock } from '@/shared/types';
 import { createExternalStore, defaultClock } from '@/shared/utils';
-import { orderArchitectureNodesByImportance } from '@/modules/architecture/dom/detailRanking';
+import { orderArchitectureNodesByImportance } from '@/modules/architecture/dom/readout/detailRanking';
 import {
   placeHoverHint,
   type ArchitectureHintRect,
   type ArchitectureHintSize,
-} from '@/modules/architecture/dom/hoverHintPlacement';
+} from '@/modules/architecture/dom/readout/hoverHintPlacement';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererHover,

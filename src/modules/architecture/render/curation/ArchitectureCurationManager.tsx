@@ -5,7 +5,7 @@ import type {
   ArchitectureCurationHiddenEdge,
   ArchitectureCurationItem,
   ArchitectureCurationState,
-} from '@/modules/architecture/dom/curationStore';
+} from '@/modules/architecture/dom/interaction/curationStore';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 
 /** The three pages the manager offers, in the task's order. */

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeAll, describe, test } from 'vitest';
 
-import { createLayoutEngine, type ArchitectureLayoutEngine } from '@/modules/architecture/layout/elkAspectEngine';
+import { createLayoutEngine, type ArchitectureLayoutEngine } from '@/modules/architecture/layout/engine/elkAspectEngine';
 import {
   buildSemanticPackageTree,
   densestWindowAnchor,
@@ -19,27 +19,27 @@ import {
   type SemanticRect,
   type SemanticTier,
   type SemanticZoomLayout,
-} from '@/modules/architecture/layout/semanticZoomLayout';
+} from '@/modules/architecture/layout/engine/semanticZoomLayout';
 import {
   readSemanticDrawingGeometry,
   type SemanticEdgeGeometry,
   type SemanticNodeGeometry,
   type SemanticPackageGeometry,
-} from '@/modules/architecture/dom/semanticZoomRead';
-import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/svgViewport';
+} from '@/modules/architecture/dom/planning/semanticZoomRead';
+import { MIN_ZOOM_SCALE } from '@/modules/architecture/layout/engine/svgViewport';
 import {
   addEdgeHitTargets,
   captureSemanticDrawing,
   drawSemanticLayout,
   type SemanticCapture,
-} from '@/modules/architecture/layout/graphDom';
-import { capDrawnMemberRows, semanticDrawnFitScale } from '@/modules/architecture/layout/drawnFit';
+} from '@/modules/architecture/layout/drawing/graphDom';
+import { capDrawnMemberRows, semanticDrawnFitScale } from '@/modules/architecture/layout/drawing/drawnFit';
 import {
   planCompactFrameHeight,
   planRectsIntersect,
   SEMANTIC_MIN_FONT_PX,
   SEMANTIC_STRETCH_LIMIT,
-} from '@/modules/architecture/dom/semanticZoomPlan';
+} from '@/modules/architecture/dom/planning/semanticZoomPlan';
 import { TWENTY_SIX_PACKAGE_HIERARCHY } from '@/modules/architecture/tests/layoutFixtures';
 
 /**

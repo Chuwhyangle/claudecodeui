@@ -14,7 +14,7 @@ import {
   MEMBER_MAX_ROWS,
   memberDisplayLimits,
   memberOverflowLabel,
-} from '@/modules/architecture/layout/archguardToPlantUml';
+} from '@/modules/architecture/layout/plantuml/archguardToPlantUml';
 import {
   NODE_SIZE_ENTITIES,
   nodeSizeEntityGraph,
@@ -33,7 +33,7 @@ import {
   type ArchitectureLayoutEngine,
   type ArchitectureLayoutEngineClass,
   type ArchitectureLayoutEngineOptions,
-} from '@/modules/architecture/layout/elkAspectEngine';
+} from '@/modules/architecture/layout/engine/elkAspectEngine';
 import {
   EIGHTEEN_GROUP_OVERVIEW,
   TWENTY_SIX_PACKAGE_HIERARCHY,
@@ -55,11 +55,11 @@ import {
   ORIENTATION_RATIO_THRESHOLD,
   ORIENTATION_REASON,
   type OrientationSize,
-} from '@/modules/architecture/dom/layoutOrientation';
-import { captureSemanticDrawing } from '@/modules/architecture/layout/graphDom';
+} from '@/modules/architecture/dom/planning/layoutOrientation';
+import { captureSemanticDrawing } from '@/modules/architecture/layout/drawing/graphDom';
 import { capDrawnMemberRows } from '@/modules/architecture/render/viewport/PlantUmlGraph';
-import { semanticDrawnFitScale } from '@/modules/architecture/layout/drawnFit';
-import { SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/semanticZoomPlan';
+import { semanticDrawnFitScale } from '@/modules/architecture/layout/drawing/drawnFit';
+import { SEMANTIC_MIN_FONT_PX } from '@/modules/architecture/dom/planning/semanticZoomPlan';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import type * as SharedApiModule from '@/shared/api';
 
@@ -523,7 +523,7 @@ test('the layout engine is constructed in exactly one factory, through the publi
     'utf8',
   );
   const engineSource = readFileSync(
-    resolve(process.cwd(), 'src', 'modules', 'architecture', 'layout', 'elkAspectEngine.ts'),
+    resolve(process.cwd(), 'src', 'modules', 'architecture', 'layout', 'engine', 'elkAspectEngine.ts'),
     'utf8',
   );
 

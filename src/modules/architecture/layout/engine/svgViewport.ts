@@ -14,7 +14,7 @@
  * reviewed and tested without a laid-out browser.
  */
 
-import { READABLE_ZOOM_SCALE } from '@/modules/architecture/layout/readableZoom';
+import { READABLE_ZOOM_SCALE } from '@/modules/architecture/layout/engine/readableZoom';
 import { parseCssPx } from '@/shared/utils';
 
 /** A width/height pair, in SVG user units or CSS pixels. */
