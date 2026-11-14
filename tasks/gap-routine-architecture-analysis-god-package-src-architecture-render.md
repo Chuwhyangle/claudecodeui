@@ -88,3 +88,51 @@ Split render/ into three subpackages (inspector+selection, minimap+viewport chro
 - `server/shared/tests/architecture-ratchet.baseline.json`
 - `server/shared/tests/frontend-import-cycle-budget.baseline.json`
 - `tasks/gap-routine-architecture-analysis-god-package-src-architecture-render.md`
+
+## Blocker
+
+**2026-11-14T13:10:27.615Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/architecture-ratchet.baseline.json
+CONFLICT (content): Merge conflict in server/shared/tests/architecture-ratchet.baseline.json
+Auto-merging src/modules/architecture/render/ArchitecturePanel.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/render/ArchitecturePanel.tsx
+Auto-merging src/modules/architecture/render/architecturePanelCanvas.tsx
+Auto-merging src/modules/architecture/render/architecturePanelFilters.tsx
+Auto-merging src/modules/architecture/render/architecturePanelReadout.tsx
+Auto-merging src/modules/architecture/render/curation/architectureFitExportController.ts
+Auto-merging src/modules/architecture/render/inspector/ArchitectureInspector.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/render/inspector/ArchitectureInspector.tsx
+Auto-merging src/modules/architecture/render/inspector/ArchitectureTextPanel.tsx
+Auto-merging src/modules/architecture/render/useArchitecturePanelActions.ts
+CONFLICT (content): Merge conflict in src/modules/architecture/render/useArchitecturePanelActions.ts
+Auto-merging src/modules/architecture/render/viewport/ArchitectureMinimap.tsx
+Auto-merging src/modules/architecture/render/viewport/PlantUmlGraph.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/render/viewport/PlantUmlGraph.tsx
+Auto-merging src/modules/architecture/render/viewport/useCanvasDrawingSemantics.ts
+CONFLICT (content): Merge conflict in src/modules/architecture/render/viewport/useCanvasDrawingSemantics.ts
+Auto-merging src/modules/architecture/render/viewport/useCanvasFitZoom.ts
+CONFLICT (content): Merge conflict in src/modules/architecture/render/viewport/useCanvasFitZoom.ts
+Auto-merging src/modules/architecture/render/viewport/useCanvasKeyboardNavigation.ts
+CONFLICT (content): Merge conflict in src/modules/architecture/render/viewport/useCanvasKeyboardNavigation.ts
+Auto-merging src/modules/architecture/render/viewport/useCanvasSurfaceBindings.ts
+CONFLICT (content): Merge conflict in src/modules/architecture/render/viewport/useCanvasSurfaceBindings.ts
+Auto-merging src/modules/architecture/render/viewport/usePlantUmlDrawing.ts
+Auto-merging src/modules/architecture/tests/architectureCurationController.test.ts
+Auto-merging src/modules/architecture/tests/architectureTab.test.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/tests/architectureTab.test.tsx
+Auto-merging src/modules/architecture/tests/elementRelationFilter.test.ts
+Auto-merging src/modules/architecture/tests/exportMenu.test.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/tests/exportMenu.test.tsx
+Auto-merging src/modules/architecture/tests/layoutAspect.test.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/tests/layoutAspect.test.tsx
+Auto-merging src/modules/architecture/tests/minimap.test.tsx
+Auto-merging src/modules/architecture/tests/plantUmlText.test.ts
+CONFLICT (content): Merge conflict in src/modules/architecture/tests/plantUmlText.test.ts
+Auto-merging src/modules/architecture/tests/selectionTray.test.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/tests/selectionTray.test.tsx
+Auto-merging src/modules/architecture/tests/textPanel.test.tsx
+CONFLICT (content): Merge conflict in src/modules/architecture/tests/textPanel.test.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：700529e5-affc-4e9c-acba-0febf6209c64
