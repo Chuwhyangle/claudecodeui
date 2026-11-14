@@ -47,8 +47,10 @@ import {
   VOICE_CLIENT_READINESS_GRACE_MS,
   VOICE_CLIENT_RTF_THRESHOLD,
   createVoiceClientAsrEngine,
+  installVoiceClientAsrEngine,
   routeClientAsrSegment,
   startVoiceClientAsrWorker,
+  voiceClientAsrEngineInstance,
   type VoiceClientEngineDeps,
   type VoiceClientFallbackDetail,
   type VoiceClientWorkerHandle,
@@ -131,7 +133,10 @@ beforeEach(() => {
 afterEach(() => {
   window.removeEventListener(CLIENT_ASR_FALLBACK_EVENT, listen);
   // The adapter holds the installed engine in a module-level slot, which is exactly what makes the
-  // routing testable — and exactly what has to be cleared between cases.
+  // routing testable — and exactly what has to be cleared between cases. The per-tab lifecycle owns
+  // that slot when the case installed through `installVoiceClientAsrEngine`, so it is reset too:
+  // its `installed`/progress memo must not decide a later case.
+  voiceClientAsrEngineInstance.dispose();
   installWasmEngine(null);
   // The shared API module keeps the published rows and the effective profile in the same kind of
   // slot, and the fallback resolver reads the first of them. Both are cleared, so a case that
@@ -579,7 +584,10 @@ describe('a segment that arrives while the model is still downloading', () => {
         listeners.push(listener);
       },
     };
-    installWasmEngine(createVoiceClientAsrEngine({ probe: async () => READY_READING, spawn: () => handle }));
+    // Installed through the per-tab lifecycle — the production composition — because the progress
+    // mirror `voiceClientAsrProgress()` reads is the lifecycle's, fed by the sink `install()` hands
+    // the factory. Installing the bare factory would exercise a wiring that does not ship.
+    installVoiceClientAsrEngine({ probe: async () => READY_READING, spawn: () => handle });
 
     const startedAt = Date.now();
     const routing = routeClientAsrSegment({ request: clip(), invocation: invocation(), durationSec: 3 });

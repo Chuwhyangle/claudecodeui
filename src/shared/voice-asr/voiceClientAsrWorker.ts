@@ -1008,7 +1008,6 @@ export function createVoiceClientAsrEngine(
     spawned.addEventListener('message', (event) => {
       const reply = event.data;
       if (reply.kind === 'progress') {
-        voiceClientAsrEngineInstance.noteProgress(reply.progress);
         observers.onProgress?.(reply.progress);
         return;
       }
@@ -1116,23 +1115,17 @@ export function createVoiceClientAsrEngine(
 // ── the composition root ─────────────────────────────────────────────────────────────────────
 
 /**
- * This tab's client-recogniser engine: the four pieces of per-tab state this module keeps, behind one
- * explicit lifecycle.
+ * This tab's client-recogniser engine: the four pieces of per-tab state this module keeps, behind
+ * one explicit lifecycle. As loose module-level bindings they could not be read, reset or reasoned
+ * about as a unit, and `dispose()` had nowhere to live. The fields are private so the only writes
+ * are the methods below: `ready()` owns the readiness memo, `install()` the installed port,
+ * `preload()` the download memo, `noteProgress()` the progress mirror.
  *
- * WHY A CLASS. Installing the port, starting the model download, asking the server for its asset
- * reading, and mirroring download progress are four moments in ONE object's life, not four unrelated
- * memos. As loose module-level bindings they could not be read, reset or reasoned about as a unit —
- * a test could install a fake port but had no way to unhook the module's own, and `dispose()` had
- * nowhere to live. The fields are private so the only writes are the methods below: `ready()` owns
- * the readiness memo, `install()` owns the installed port, `preload()` owns the download memo,
- * `noteProgress()` owns the progress mirror. Behaviour is unchanged, field for field.
- *
- * INSTALL AND PRELOAD ARE MEMOISED AND IDEMPOTENT because their callers are React hooks: a hook body
- * runs on every render, and installing a fresh engine each time would leak a worker per render. The
- * adapter reads the port through `installWasmEngine`, so `install()` is the one write that makes
+ * INSTALL AND PRELOAD ARE MEMOISED AND IDEMPOTENT because their callers are React hooks. The adapter
+ * reads the port through `installWasmEngine`, so `install()` is the one write that makes
  * `sensevoice-wasm` answerable at all. Nothing happens at import: a page that never selects this
- * provider never spawns a worker, and a test that installs its own fake engine is not fighting a real
- * one installed behind its back.
+ * provider never spawns a worker, and a test that installs its own fake engine is not fighting a
+ * real one installed behind its back.
  */
 export class VoiceClientAsrEngine {
   /** The server's client-asset reading, one ask per page; see `ready()`. */
@@ -1161,10 +1154,10 @@ export class VoiceClientAsrEngine {
     return this.readinessRequest;
   }
 
-  /** Installs this tab's engine on the adapter, once, and returns it. */
+  /** Installs this tab's engine on the adapter, once, and returns it; the progress mirror is wired here as a sink. */
   install(options: VoiceClientEngineOptions = {}): WasmEnginePort & { observers: Observers } {
     if (this.installed === null) {
-      this.installed = createVoiceClientAsrEngine(options);
+      this.installed = createVoiceClientAsrEngine({ ...options, onProgress: this.mirroring(options.onProgress) });
       installWasmEngine(this.installed);
     }
     return this.installed;
@@ -1221,6 +1214,12 @@ export class VoiceClientAsrEngine {
     this.lastProgress = progress;
   }
 
+  /** Wraps a caller's progress sink so the mirror advances whichever sink is currently installed. */
+  private mirroring = (sink?: (progress: VoiceModelProgress) => void) => (progress: VoiceModelProgress): void => {
+    this.noteProgress(progress);
+    sink?.(progress);
+  };
+
   /**
    * Points the installed engine's progress and notice reporting at a caller, whenever one shows up.
    *
@@ -1235,7 +1234,8 @@ export class VoiceClientAsrEngine {
     onNotice?: (message: string) => void;
   }): void {
     if (this.installed === null) return;
-    if (observers.onProgress !== undefined) this.installed.observers.onProgress = observers.onProgress;
+    // Re-wrapped, not replaced: the late subscriber must not stop `progress()` from advancing.
+    if (observers.onProgress !== undefined) this.installed.observers.onProgress = this.mirroring(observers.onProgress);
     if (observers.onNotice !== undefined) this.installed.observers.onNotice = observers.onNotice;
   }
 
