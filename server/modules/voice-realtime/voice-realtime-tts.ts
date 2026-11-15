@@ -36,6 +36,13 @@
 // registry before the rule module (the ordering that avoids the provider's TDZ) and already pays
 // the two repo-root `shared/` imports that AC-394's unresolved-internal budget counts. A pair of its
 // own here would push that ratchet reading from 19 to 21.
+//
+// The byte merge this leaf streams through has ONE declaration: the repo-root shared byte module,
+// where the browser's narrator path reads the same function (a local copy here was the server half
+// of archguard duplicate group 816ec1a3b49021eb). It is named through the `@shared/…` alias rather
+// than a relative specifier, so it adds no pair to that same budget.
+import { concatBytes } from '@shared/asr/contract/transcriptionWire.js';
+
 import { DASHSCOPE_PUBLIC_HOSTNAME } from './voice-realtime-dashscope-transport.js';
 
 /**
@@ -608,16 +615,6 @@ function scanVoiceRealtimeTtsRiffHeader(bytes: Uint8Array): VoiceRealtimeTtsRiff
     if (advance <= 8) return { state: 'invalid' }; // a size that cannot advance would never terminate
     offset += advance;
   }
-}
-
-/** Concatenates two byte slices, leaving both inputs untouched. */
-function concatBytes(head: Uint8Array, tail: Uint8Array): Uint8Array {
-  if (head.length === 0) return tail;
-  if (tail.length === 0) return head;
-  const merged = new Uint8Array(head.length + tail.length);
-  merged.set(head, 0);
-  merged.set(tail, head.length);
-  return merged;
 }
 
 /**

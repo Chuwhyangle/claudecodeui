@@ -328,6 +328,27 @@ export function base64Encode(bytes: Uint8Array): string {
 }
 
 /**
+ * Joins two byte slices into a new buffer, leaving both inputs untouched.
+ *
+ * Both ends of the Live Voice path accumulate bytes one frame at a time — the server's TTS leaf
+ * grows the WAV header and its PCM as the service streams them, and the browser grows a narrator
+ * utterance while it schedules it — and each used to carry its own byte-identical copy
+ * (archguard duplicate group `816ec1a3b49021eb`, 8 statements / 85 tokens). Two copies of a merge
+ * are two places to change a length rule, so there is one, here, beside the protocol's other byte
+ * arithmetic.
+ *
+ * The two empty-input short-circuits are what keep an empty frame free rather than a copy.
+ */
+export function concatBytes(head: Uint8Array, tail: Uint8Array): Uint8Array {
+  if (head.length === 0) return tail;
+  if (tail.length === 0) return head;
+  const merged = new Uint8Array(head.length + tail.length);
+  merged.set(head, 0);
+  merged.set(tail, head.length);
+  return merged;
+}
+
+/**
  * The budget subject: the audio bytes plus every hint the declaration acknowledges, measured as
  * the bytes the wire would carry them as.
  *
