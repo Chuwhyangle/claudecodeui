@@ -42,7 +42,7 @@ import {
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from '../voice-realtime-ws-proxy.service.js';
-import { ANNOUNCE_PHRASES } from "../voice-realtime-announce-phrases.js";
+import { ANNOUNCE_PHRASES } from "../core/voice-realtime-announce-phrases.js";
 import { VOICE_REALTIME_CONTEXT_HEADER, loadVoiceRealtimeSettings } from '../voice-realtime-settings.js';
 import {
   SPEAKER_TRACKING_MODEL_DIR_DEFAULT,

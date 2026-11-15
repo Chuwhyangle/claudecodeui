@@ -25,13 +25,13 @@ import { EventEmitter } from 'node:events';
 import { WebSocket as WS } from 'ws';
 
 import type { RealtimeSegmentCommitMode } from "./frames/voice-realtime-bridge.service.js";
-import type { DashscopeWireObserver } from './voice-realtime-dashscope-transport.js';
+import type { DashscopeWireObserver } from './core/voice-realtime-dashscope-transport.js';
 import type { TurnDetectionOverride } from "./transport/voice-realtime-turn-detection.js";
-import type { UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
+import type { UpstreamPoolRotation } from './core/voice-realtime-upstream-pool.js';
 import type {
   VoiceRealtimeOutboundFrame,
   VoiceRealtimeProxySeams,
-} from './voice-realtime-contract.js';
+} from './connection/voice-realtime-contract.js';
 
 /** The sample rate the Realtime session's `pcm16` input expects. */
 const PCM_SAMPLE_RATE = 16_000;

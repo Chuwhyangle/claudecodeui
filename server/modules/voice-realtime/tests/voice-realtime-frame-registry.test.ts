@@ -67,7 +67,7 @@ import { createFakeTransport } from './realtime-bridge-harness.js';
 const TEST_SOURCE = fileURLToPath(import.meta.url);
 
 /** The proxy's own file, for the "the handler did not come from there" readings. */
-const WS_PROXY_SOURCE = fileURLToPath(new URL('../voice-realtime-ws-proxy.service.ts', import.meta.url));
+const WS_PROXY_SOURCE = fileURLToPath(new URL('../connection/voice-realtime-ws-proxy.service.ts', import.meta.url));
 
 /** The handlers file, for the "every shipped handler is registered from there" reading. */
 const HANDLERS_REL = 'server/modules/voice-realtime/voice-realtime-frame-handlers.ts';

@@ -156,12 +156,14 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** This test module's directory — where a mutant copy must sit so its relative imports resolve. */
 const MODULE_DIR = path.resolve(HERE, '..');
 /** The shipping proxy: what the AC2 mutation copies. */
-const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'voice-realtime-connection-transport.ts');
+const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'connection/voice-realtime-connection-transport.ts');
 
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
+/** The shipping module's own directory — a mutant copy must sit beside it so its relative imports resolve. */
+const COPY_DIR = path.dirname(SHIPPING_PROXY_MODULE);
 /** A copy this process owns: prefixed AND pid-tagged, so a sibling's copy is never mistaken for ours. */
-const ownCopy = (label: string): string => path.join(MODULE_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
+const ownCopy = (label: string): string => path.join(COPY_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /** The disposition's one send — the line whose removal returns the reply to the old silent `return`. */
 const DISPOSITION_SEND = "this.send({ type: 'heard_not_forwarded' });";
@@ -191,7 +193,7 @@ test('AC2 false form: removing the disposition send returns MODEL_TEXT_REPLY to 
     writeFileSync(mutPath, mutatedSource, 'utf8');
     // The chunk is imported by the proxy, so copy the proxy twice with its connection-frames import
     // retargeted at the base/mutant chunk.
-    const proxyShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+    const proxyShipping = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
     const proxySource = readFileSync(proxyShipping, 'utf8');
     const importAnchor = "} from './voice-realtime-connection-transport.js';";
     assert.equal(proxySource.split(importAnchor).length - 1, 1, 'the proxy must import the connection chunk exactly once');
@@ -232,7 +234,7 @@ test('AC2 false form: removing the disposition send returns MODEL_TEXT_REPLY to 
 // ── residue ─────────────────────────────────────────────────────────────────────────────────────
 
 test('the false form leaves none of this process`s copies behind', () => {
-  const leftovers = readdirSync(MODULE_DIR).filter(
+  const leftovers = readdirSync(COPY_DIR).filter(
     (name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`),
   );
   assert.deepEqual(leftovers, []);

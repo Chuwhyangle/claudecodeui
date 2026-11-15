@@ -1,9 +1,9 @@
 // The connection handler's run-boundary stages: host-queue sampling, the run-end summary and
 // the busy quiet window. Split out of `voice-realtime-ws-proxy.service.ts` (2026-11-03).
 import { VOICE_MAX_TIMER_DELAY_MS } from "./voice-realtime-exec-status.js";
-import { voiceMessageBytes } from './frames/relay-text.js';
-import { DEFAULT_RUN_END_SUMMARY_POLL_MS, DEFAULT_RUN_END_SUMMARY_SETTLE_MS, DEFAULT_RUN_OUTPUT_WAIT_MS, RUN_END_SUMMARY_MAX_VERBATIM_TAIL, readVoiceRealtimeSummaryQuality } from './frames/run-end-quality.js';
-import { VOICE_BUSY_QUIET_CAP_MS, VOICE_BUSY_QUIET_SINCE_PIECE_MS, VOICE_BUSY_QUIET_WINDOW_MS, VOICE_BUSY_RELEASE_PRIORITY, VOICE_REALTIME_BUSY_POLL_MS, VoiceBusyRelease } from './transport/connection-tuning.js';
+import { voiceMessageBytes } from '../frames/relay-text.js';
+import { DEFAULT_RUN_END_SUMMARY_POLL_MS, DEFAULT_RUN_END_SUMMARY_SETTLE_MS, DEFAULT_RUN_OUTPUT_WAIT_MS, RUN_END_SUMMARY_MAX_VERBATIM_TAIL, readVoiceRealtimeSummaryQuality } from '../frames/run-end-quality.js';
+import { VOICE_BUSY_QUIET_CAP_MS, VOICE_BUSY_QUIET_SINCE_PIECE_MS, VOICE_BUSY_QUIET_WINDOW_MS, VOICE_BUSY_RELEASE_PRIORITY, VOICE_REALTIME_BUSY_POLL_MS, VoiceBusyRelease } from '../transport/connection-tuning.js';
 import { errorFrame } from "./voice-realtime-transport-errors.js";
 import type { HostCommandLifecycleReading, HostQueueReading, VoiceRealtimeRunDigestPatch } from './voice-realtime-contract.js';
 import type { VoiceRealtimeConnection } from './voice-realtime-ws-proxy.service.js';

@@ -381,6 +381,17 @@ const MODULE_DIR = path.resolve(HERE, '..');
 type FalseForm = { file: string; label: string; anchor: string; replacement: string; why: string };
 
 /**
+ * The directory a shipping module named by a false form lives in. The 2026-11-15 split moved the
+ * connection/contract family into `connection/`; `frames/…` and `transport/…` forms already carry
+ * their directory in the name.
+ */
+function shippingDir(file: string): string {
+  return /^voice-realtime-(connection-[a-z]+|ws-proxy\.service|contract|exec-status|frame-handlers|frame-registry|instructions|narrator|narrator-queue|settings|transport-errors|trunk-step-handlers|trunk-steps)\.ts$/.test(file)
+    ? path.join(MODULE_DIR, 'connection')
+    : MODULE_DIR;
+}
+
+/**
  * Loads a shipping module with `form` applied, as a transient copy BESIDE it.
  *
  * Beside it because the module's own imports are relative and must keep resolving, and NAMED with the
@@ -396,7 +407,7 @@ type FalseForm = { file: string; label: string; anchor: string; replacement: str
  * module directly. Forms anchored in the proxy or the gate module keep the single-copy shape.
  */
 async function loadFalseForm<T>(form: FalseForm): Promise<T> {
-  const shipping = path.join(MODULE_DIR, form.file);
+  const shipping = path.join(shippingDir(form.file), form.file);
   const source = readFileSync(shipping, 'utf8');
   const occurrences = source.split(form.anchor).length - 1;
   assert.equal(occurrences, 1, `the "${form.label}" false form's anchor is not in ${form.file} exactly once`);
@@ -414,9 +425,9 @@ async function loadFalseForm<T>(form: FalseForm): Promise<T> {
         rmSync(target, { force: true });
       }
     }
-    const chunkShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+    const chunkShipping = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
     const chunkAnchor = `} from './${path.basename(shipping, '.ts')}.js';`;
-    const proxyTarget = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-proxy-${process.pid}.ts`);
+    const proxyTarget = path.join(path.dirname(chunkShipping), `__criterion-falsify-${form.label}-proxy-${process.pid}.ts`);
     const chunkSource = readFileSync(chunkShipping, 'utf8');
     assert.equal(chunkSource.split(chunkAnchor).length - 1, 1, 'the proxy must import the mutated chunk exactly once');
     writeFileSync(proxyTarget, chunkSource.replace(chunkAnchor, `} from './${path.basename(target, '.ts')}.js';`), 'utf8');
@@ -431,17 +442,17 @@ async function loadFalseForm<T>(form: FalseForm): Promise<T> {
   // The handler set is imported by the CONNECTION CHUNK (the handler bodies moved there in the
   // 2026-11-03 split), and the proxy imports the chunk. Copy both links: mutant handlers, a
   // connection-frames copy pointed at them, and a proxy copy pointed at that chunk copy.
-  const handlersTarget = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-handlers-${process.pid}.ts`);
-  const chunkShipping = path.join(MODULE_DIR, 'voice-realtime-connection-frames.ts');
+  const handlersTarget = path.join(path.dirname(shipping), `__criterion-falsify-${form.label}-handlers-${process.pid}.ts`);
+  const chunkShipping = path.join(MODULE_DIR, 'connection/voice-realtime-connection-frames.ts');
   const chunkSource = readFileSync(chunkShipping, 'utf8');
   const chunkAnchor = "} from './voice-realtime-frame-handlers.js';";
   assert.equal(chunkSource.split(chunkAnchor).length - 1, 1, 'the connection chunk must import the handler set exactly once');
-  const chunkTarget = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-chunk-${process.pid}.ts`);
-  const proxyShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+  const chunkTarget = path.join(path.dirname(chunkShipping), `__criterion-falsify-${form.label}-chunk-${process.pid}.ts`);
+  const proxyShipping = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
   const proxySource = readFileSync(proxyShipping, 'utf8');
   const proxyAnchor = "} from './voice-realtime-connection-frames.js';";
   assert.equal(proxySource.split(proxyAnchor).length - 1, 1, 'the proxy must import the connection chunk exactly once');
-  const proxyTarget = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-${process.pid}.ts`);
+  const proxyTarget = path.join(path.dirname(proxyShipping), `__criterion-falsify-${form.label}-${process.pid}.ts`);
   writeFileSync(handlersTarget, source.replace(form.anchor, form.replacement), 'utf8');
   writeFileSync(
     chunkTarget,
@@ -501,7 +512,7 @@ function wireWith(module: ProxyModule, options: Parameters<typeof wire>[0] = {})
 
 // ── the source, read for the code-path evidence AC2 asks for ───────────────────────────────────────
 
-const PROXY_SOURCE = readFileSync(path.join(MODULE_DIR, 'voice-realtime-connection-transport.ts'), 'utf8');
+const PROXY_SOURCE = readFileSync(path.join(MODULE_DIR, 'connection/voice-realtime-connection-transport.ts'), 'utf8');
 /**
  * The inbound-frame handler set, read for the same code-path evidence.
  *
@@ -511,7 +522,7 @@ const PROXY_SOURCE = readFileSync(path.join(MODULE_DIR, 'voice-realtime-connecti
  * the gate CONSTRUCTION (`uplinkVadRequested`, `createUplinkVadGate`), which the AC2
  * reading below still finds in {@link PROXY_SOURCE}.
  */
-const HANDLERS_SOURCE = readFileSync(path.join(MODULE_DIR, 'voice-realtime-frame-handlers.ts'), 'utf8');
+const HANDLERS_SOURCE = readFileSync(path.join(MODULE_DIR, 'connection/voice-realtime-frame-handlers.ts'), 'utf8');
 /** The proxy's single import of the handler set, retargeted so a proxy copy drives the mutant handlers. */
 const HANDLERS_IMPORT_SPECIFIER = "'./voice-realtime-frame-handlers.js'";
 
@@ -1285,10 +1296,11 @@ async function loadPreSeamProxy(): Promise<ProxyModule> {
     `the derived pre-seam revision ${rev} must not mention \`uplinkVad\` (the derivation is stale)`,
   );
   // The historical proxy's relative imports still name the pre-split root files. Rewrite them to the
-  // subdirectories the 2026-11-03 split created, so the old code can be imported beside today's tree.
+  // subdirectories the 2026-11-03 split and the 2026-11-15 connection/core split created, so the old
+  // code can be imported beside today's tree.
   const movedByDir: Record<string, string> = {
     'voice-realtime-tools': 'frames', 'voice-realtime-closing-turn': 'frames',
-    'voice-realtime-announce-phrases': 'frames', 'voice-realtime-mode': 'frames',
+    'voice-realtime-mode': 'frames',
     'voice-realtime-omission-fill': 'frames', 'voice-realtime-bridge.service': 'frames',
     'voice-speaker-bank': 'frames', 'voice-realtime-uplink-vad-gate': 'frames',
     'voice-realtime-uplink-vad-arm-point': 'frames', 'voice-realtime-speaker-model': 'frames',
@@ -1297,10 +1309,23 @@ async function loadPreSeamProxy(): Promise<ProxyModule> {
     'voice-realtime-silence-tail': 'transport', 'voice-realtime-uplink-vad': 'transport',
     'voice-realtime-turn-detection': 'transport', 'voice-speaker-attractor': 'transport',
     'voice-speaker-selector': 'transport', 'voice-speaker-tracking-arm': 'transport',
+    // 2026-11-15: the contract/connection family and the TTS/DashScope leaves left the package root.
+    'voice-realtime-ws-proxy.service': 'connection', 'voice-realtime-connection-frames': 'connection',
+    'voice-realtime-connection-transport': 'connection', 'voice-realtime-connection-turn': 'connection',
+    'voice-realtime-contract': 'connection', 'voice-realtime-exec-status': 'connection',
+    'voice-realtime-frame-handlers': 'connection', 'voice-realtime-frame-registry': 'connection',
+    'voice-realtime-instructions': 'connection', 'voice-realtime-narrator': 'connection',
+    'voice-realtime-narrator-queue': 'connection', 'voice-realtime-settings': 'connection',
+    'voice-realtime-transport-errors': 'connection', 'voice-realtime-trunk-step-handlers': 'connection',
+    'voice-realtime-trunk-steps': 'connection',
+    'voice-realtime-announce-phrases': 'core', 'voice-realtime-dashscope-transport': 'core',
+    'voice-realtime-speaker-seam': 'core', 'voice-realtime-spend-guard': 'core',
+    'voice-realtime-summary': 'core', 'voice-realtime-tts': 'core', 'voice-realtime-upstream-pool': 'core',
   };
   let ported = source;
   for (const [base, dir] of Object.entries(movedByDir)) {
     ported = ported.split(`'./${base}.js'`).join(`'./${dir}/${base}.js'`);
+    ported = ported.split(`"./${base}.js"`).join(`"./${dir}/${base}.js"`);
   }
   const target = path.join(MODULE_DIR, `__criterion-falsify-preseam-${process.pid}.ts`);
   writeFileSync(target, ported, 'utf8');

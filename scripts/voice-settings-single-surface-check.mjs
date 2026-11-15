@@ -74,7 +74,7 @@ const REGISTRY_FILE = 'shared/voice/voiceSettingsRegistry.ts';
 /** The two consumer types AC (a) names: the browser's store and the server's settings-file loader. */
 const CONSUMER_FILES = [
   'src/shared/api/voiceConfig.ts',
-  'server/modules/voice-realtime/voice-realtime-settings.ts',
+  'server/modules/voice-realtime/connection/voice-realtime-settings.ts',
 ];
 
 /**

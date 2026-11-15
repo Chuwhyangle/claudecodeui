@@ -72,12 +72,14 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** This module's directory — where a mutant copy must sit so its relative imports resolve. */
 const MODULE_DIR = path.resolve(HERE, '..');
 /** The shipping transport: what the two mutations below copy. */
-const SHIPPING_TRANSPORT_MODULE = path.join(MODULE_DIR, 'voice-realtime-dashscope-transport.ts');
+const SHIPPING_TRANSPORT_MODULE = path.join(MODULE_DIR, 'core/voice-realtime-dashscope-transport.ts');
 
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
 /** A copy this process owns: prefixed AND pid-tagged, so a sibling's copy is never mistaken for ours. */
-const ownCopy = (label: string): string => path.join(MODULE_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
+/** The shipping module's own directory — a mutant copy must sit beside it so its relative imports resolve. */
+const COPY_DIR = path.dirname(SHIPPING_TRANSPORT_MODULE);
+const ownCopy = (label: string): string => path.join(COPY_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /** The signature the shipping (and copied) factory exposes. */
 type CreateTransportFn = (options?: DashscopeTransportOptions) => DashscopeTransport;
@@ -401,7 +403,7 @@ test('AC4: a rejected result leaves the delivery record — and the wire — exa
 // ── the copies this process wrote are gone ───────────────────────────────────────────────────
 
 test('this criterion leaves none of its own falsify copies behind', () => {
-  const strays = readdirSync(MODULE_DIR).filter(
+  const strays = readdirSync(COPY_DIR).filter(
     (name) => name.startsWith(`${TEMP_PREFIX}receipt-`) && name.includes(`-${process.pid}.ts`),
   );
   assert.deepEqual(strays, [], `criterion copies must be removed; found ${JSON.stringify(strays)}`);

@@ -29,7 +29,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ANNOUNCE_PHRASES } from "../voice-realtime-announce-phrases.js";
+import { ANNOUNCE_PHRASES } from "../core/voice-realtime-announce-phrases.js";
 import {
   createVoiceRealtimeTtsCache,
   type VoiceRealtimeTtsCache,

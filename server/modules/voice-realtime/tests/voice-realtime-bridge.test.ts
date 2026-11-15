@@ -690,18 +690,20 @@ const MODULE_DIR = path.resolve(HERE, '..');
 /** The shipping bridge: what the mutation copies. */
 const SHIPPING_BRIDGE_MODULE = path.join(MODULE_DIR, 'frames/voice-realtime-bridge.service.ts');
 /** The shipping proxy: what the import retarget copies. */
-const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
+/** The shipping proxy's own directory — its mutant copy must sit beside it so its relative imports resolve. */
+const COPY_DIR = path.dirname(SHIPPING_PROXY_MODULE);
 /** A copy this process owns: prefixed AND pid-tagged, so a sibling criterion's copy is never mistaken for ours. */
-const ownCopy = (label: string): string => path.join(MODULE_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
+const ownCopy = (label: string): string => path.join(COPY_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /** The hold, as it ships: the malformed call is kept for its response's own outcome. */
 const HOLD_ANCHOR = '          holdMalformed(fault);';
 /** The same statement with the hold removed — report on arrival, exactly the pre-task behaviour. */
 const IMMEDIATE_MUTANT = '          emitError(fault);';
 /** The proxy's single import of the bridge: retargeted so the mutant proxy drives the mutant bridge. */
-const BRIDGE_IMPORT_ANCHOR = "} from \"./frames/voice-realtime-bridge.service.js\";";
+const BRIDGE_IMPORT_ANCHOR = "} from \"../frames/voice-realtime-bridge.service.js\";";
 
 /** Rewrites ONE anchor in the shipping source, refusing to proceed unless it occurs exactly once. */
 function mutate(source: string, anchor: string, replacement: string): string {
@@ -728,7 +730,7 @@ test('AC4 false form: reporting a truncated call on arrival puts the MALFORMED_F
   const mutatedProxy = mutate(
     proxySource,
     BRIDGE_IMPORT_ANCHOR,
-    `} from './frames/${path.basename(bridgeCopyPath, '.ts')}.js';`,
+    `} from '../frames/${path.basename(bridgeCopyPath, '.ts')}.js';`,
   );
 
   try {
@@ -756,8 +758,8 @@ test('AC4 false form: reporting a truncated call on arrival puts the MALFORMED_F
 });
 
 test('the false forms leave none of this process`s copies behind', () => {
-  const leftovers = readdirSync(MODULE_DIR).filter(
-    (name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`),
+  const leftovers = [COPY_DIR, path.dirname(SHIPPING_BRIDGE_MODULE)].flatMap((dir) =>
+    readdirSync(dir).filter((name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`)),
   );
   assert.deepEqual(leftovers, []);
 });

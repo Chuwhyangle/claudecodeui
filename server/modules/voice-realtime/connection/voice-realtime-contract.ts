@@ -19,30 +19,30 @@
  * (`index.ts`). The browser side mirrors these shapes in
  * `src/modules/chat-voice/voice-realtime/useVoiceRealtimeSession.ts`.
  */
-import type { VoiceRealtimeAudioCapture } from "./transport/voice-realtime-audio-capture.js";
+import type { VoiceRealtimeAudioCapture } from "../transport/voice-realtime-audio-capture.js";
 import type {
   RealtimeBridgeState,
   RealtimeSegmentCommitMode,
   RealtimeSegmentEndReason,
   RealtimeToolExecutor,
   RealtimeTransport,
-} from "./frames/voice-realtime-bridge.service.js";
-import type { VoiceRealtimeClosingTurn } from "./frames/voice-realtime-closing-turn.js";
+} from "../frames/voice-realtime-bridge.service.js";
+import type { VoiceRealtimeClosingTurn } from "../frames/voice-realtime-closing-turn.js";
 import type { VoiceRealtimeFrameRegistry } from './voice-realtime-frame-registry.js';
-import type { VoiceRealtimeTransport } from "./frames/voice-realtime-mode.js";
-import type { OmissionFillParams } from "./frames/voice-realtime-omission-fill.js";
+import type { VoiceRealtimeTransport } from "../frames/voice-realtime-mode.js";
+import type { OmissionFillParams } from "../frames/voice-realtime-omission-fill.js";
 import type { VoiceRealtimeSettings } from './voice-realtime-settings.js';
-import type { SilenceTailOptions } from "./transport/voice-realtime-silence-tail.js";
-import type { VoiceSpeakerTrackerSeam } from './voice-realtime-speaker-seam.js';
+import type { SilenceTailOptions } from "../transport/voice-realtime-silence-tail.js";
+import type { VoiceSpeakerTrackerSeam } from '../core/voice-realtime-speaker-seam.js';
 import type {
   VoiceRealtimeTtsFrame,
   VoiceRealtimeTtsInput,
   VoiceRealtimeTtsResult,
-} from './voice-realtime-tts.js';
+} from '../core/voice-realtime-tts.js';
 import type { VoiceRealtimeTrunkStepRegistry } from './voice-realtime-trunk-steps.js';
-import type { TurnDetectionValues } from "./transport/voice-realtime-turn-detection.js";
-import type { UplinkVadClassifier } from "./transport/voice-realtime-uplink-vad.js";
-import type { UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
+import type { TurnDetectionValues } from "../transport/voice-realtime-turn-detection.js";
+import type { UplinkVadClassifier } from "../transport/voice-realtime-uplink-vad.js";
+import type { UpstreamPoolRotation } from '../core/voice-realtime-upstream-pool.js';
 
 //----------------- the relay queue's byte bound ------------
 

@@ -287,11 +287,12 @@ const deliveredSends = (entries: readonly VoiceRealtimeLogEntry[]) =>
 /** Where the shipping modules and their falsify copies live. */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_DIR = path.resolve(HERE, '..');
-const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'voice-realtime-connection-frames.ts');
+const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'connection/voice-realtime-connection-frames.ts');
 const SHIPPING_BRIDGE_MODULE = path.join(MODULE_DIR, 'frames/voice-realtime-bridge.service.ts');
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
-const ownCopy = (label: string): string => path.join(MODULE_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
+/** The proxy's own directory — a proxy copy must sit beside it so its relative imports resolve. */
+const ownCopy = (label: string): string => path.join(path.dirname(SHIPPING_PROXY_MODULE), `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /** How many times `needle` occurs in `haystack`. */
 function countOccurrences(haystack: string, needle: string): number {
@@ -316,7 +317,7 @@ async function withMutantCopy<T>(
   const basePath = path.join(dir, `${TEMP_PREFIX}${label}-base-${process.pid}.ts`);
   const mutPath = path.join(dir, `${TEMP_PREFIX}${label}-mut-${process.pid}.ts`);
   const connectionChunk = path.basename(modulePath).startsWith('voice-realtime-connection-');
-  const proxyShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+  const proxyShipping = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
   const importAnchor = `} from './${path.basename(modulePath, '.ts')}.js';`;
   const proxyBase = ownCopy(`${label}-proxy-base`);
   const proxyMut = ownCopy(`${label}-proxy-mut`);
@@ -487,7 +488,9 @@ test('AC1: the false forms leave none of this process`s copies behind', () => {
   const leftovers = readFileSync(SHIPPING_PROXY_MODULE, 'utf8').includes(TEMP_PREFIX);
   assert.equal(leftovers, false, 'the shipping module must not be a falsify copy');
   assert.deepEqual(
-    readdirSync(MODULE_DIR).filter((name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`)),
+    [MODULE_DIR, path.dirname(SHIPPING_PROXY_MODULE)].flatMap((dir) =>
+      readdirSync(dir).filter((name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`)),
+    ),
     [],
     'a falsify copy outlives the test that wrote it',
   );

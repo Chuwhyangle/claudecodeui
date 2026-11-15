@@ -80,8 +80,8 @@ import {
   DEFAULT_VOICE_REALTIME_TTS_MODEL,
   VOICE_REALTIME_TTS_PATH,
   VOICE_REALTIME_TTS_VOICE_ENV,
-} from '../server/modules/voice-realtime/voice-realtime-tts';
-import { ANNOUNCE_PHRASES } from '../server/modules/voice-realtime/voice-realtime-announce-phrases';
+} from '../server/modules/voice-realtime/core/voice-realtime-tts';
+import { ANNOUNCE_PHRASES } from '../server/modules/voice-realtime/core/voice-realtime-announce-phrases';
 import { installWavMic, playWavMic, wavMicReading } from '../experiments/voice-e2e-harness/wavMic';
 import { startScriptedUpstream, type ScriptedUpstreamServer } from './voiceRealtimeScriptedUpstream';
 import {

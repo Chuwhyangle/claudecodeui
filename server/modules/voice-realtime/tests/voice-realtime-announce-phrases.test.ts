@@ -33,7 +33,7 @@ import {
   pickAnnouncePhrase,
   pickAnnouncePhraseFrom,
   resolveAnnouncePhrases,
-} from "../voice-realtime-announce-phrases.js";
+} from "../core/voice-realtime-announce-phrases.js";
 import {
   handleVoiceRealtimeConnection,
   type VoiceRealtimeInboundFrame,

@@ -96,7 +96,7 @@ function sourceTriggerHits(region: string): string[] {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The module that builds the instructions — the file a reviewer greps for a keyword table. */
-const INSTRUCTIONS_SOURCE = path.resolve(HERE, '..', 'voice-realtime-instructions.ts');
+const INSTRUCTIONS_SOURCE = path.resolve(HERE, '..', 'connection/voice-realtime-instructions.ts');
 
 /**
  * The literal text of the instructions array as it is WRITTEN in the source file — now the body of

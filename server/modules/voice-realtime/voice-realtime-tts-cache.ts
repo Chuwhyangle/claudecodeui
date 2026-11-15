@@ -41,7 +41,7 @@ import {
   type VoiceRealtimeTtsOptions,
   type VoiceRealtimeTtsResult,
   type VoiceRealtimeTtsSynthesis,
-} from './voice-realtime-tts.js';
+} from './core/voice-realtime-tts.js';
 
 /** How many synthesized sentences one connection keeps before the oldest is discarded. */
 export const DEFAULT_VOICE_REALTIME_TTS_CACHE_MAX_ENTRIES = 64;

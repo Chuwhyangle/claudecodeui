@@ -132,8 +132,8 @@ import type {
   RealtimeFunctionDeclaration,
   RealtimeServerMessage,
   RealtimeTransport,
-} from "./frames/voice-realtime-bridge.service.js";
-import { DEFAULT_TURN_DETECTION } from "./transport/voice-realtime-turn-detection.js";
+} from "../frames/voice-realtime-bridge.service.js";
+import { DEFAULT_TURN_DETECTION } from "../transport/voice-realtime-turn-detection.js";
 
 /**
  * DashScope's Qwen realtime WebSocket endpoint (China/Beijing region).

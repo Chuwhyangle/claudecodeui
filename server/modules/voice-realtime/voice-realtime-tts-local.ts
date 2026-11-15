@@ -31,8 +31,8 @@ import { errorMessage } from "../../shared/utils.js";
 import {
   emitVoiceRealtimeSynthesisFrames,
   type VoiceRealtimeTtsSynthesis,
-} from './voice-realtime-tts.js';
-import type { VoiceRealtimeNarratorTtsSeam } from './voice-realtime-contract.js';
+} from './core/voice-realtime-tts.js';
+import type { VoiceRealtimeNarratorTtsSeam } from './connection/voice-realtime-contract.js';
 
 /**
  * The sherpa runtime's smallest useful surface. Declared by shape, not by import, so this leaf stays

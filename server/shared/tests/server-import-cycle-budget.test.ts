@@ -419,6 +419,15 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/user',
   'modules/voice',
   'modules/voice-realtime',
+  // 2026-11-15 (gap-routine-architecture-analysis-god-package-server-voice-realtime-ea9ee0c7):
+  // the voice-realtime god-package split created `connection/` (the contract + connection-install
+  // family) and `core/` (TTS/DashScope/speaker leaves). Registered under AC-394 (c)'s escape hatch
+  // because the package root legitimately imports each of them and `connection/` imports `core/`
+  // and the existing `frames/`/`transport/` leaves; every edge is one-way (root -> connection ->
+  // core, connection -> frames/transport), so no SCC is added and `directoryManifest`/`nodeCount`
+  // rise by two. No cycle group changes.
+  'modules/voice-realtime/connection',
+  'modules/voice-realtime/core',
   'modules/voice-realtime/frames',
   'modules/voice-realtime/transport',
   'modules/websocket',

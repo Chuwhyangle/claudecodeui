@@ -68,7 +68,7 @@ import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bri
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The shipping proxy module — the file the false form loads. */
-const SHIPPING_PROXY_MODULE = path.resolve(HERE, '../voice-realtime-ws-proxy.service.ts');
+const SHIPPING_PROXY_MODULE = path.resolve(HERE, '../connection/voice-realtime-ws-proxy.service.ts');
 /**
  * The sibling file the `hello` branch now lives in.
  *
@@ -77,7 +77,7 @@ const SHIPPING_PROXY_MODULE = path.resolve(HERE, '../voice-realtime-ws-proxy.ser
  * the handler and rewires the proxy copy to import that mutant. The criterion is the
  * same reading — a proxy that never declares must fail the escape hatch.
  */
-const SHIPPING_HANDLERS_MODULE = path.resolve(HERE, '../voice-realtime-frame-handlers.ts');
+const SHIPPING_HANDLERS_MODULE = path.resolve(HERE, '../connection/voice-realtime-frame-handlers.ts');
 /** The proxy's single import of the handler set, retargeted so the mutant proxy drives the mutant handlers. */
 const HANDLERS_IMPORT_SPECIFIER = "'./voice-realtime-frame-handlers.js'";
 /** The browser's protocol module: the AC2 client half, loaded as a real module. */
@@ -87,7 +87,9 @@ const SERVER_INDEX = path.resolve(HERE, '../../../index.ts');
 
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
-const ownCopy = (label: string): string => path.resolve(HERE, `../${TEMP_PREFIX}${label}-${process.pid}.ts`);
+/** The shipping proxy's own directory — a mutant copy must sit beside it so its relative imports resolve. */
+const COPY_DIR = path.dirname(SHIPPING_PROXY_MODULE);
+const ownCopy = (label: string): string => path.join(COPY_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /** Bytes in one 100 ms mono 16-bit frame at 16 kHz — the capture cadence the real page uses. */
 const PCM_RATE = 16_000;
@@ -433,7 +435,7 @@ test('AC6 false form: refusing to declare makes the escape-hatch case red', asyn
   assert.equal(countOccurrences(handlersSource, DECLARE_GATE), 1, 'the declare anchor must occur exactly once');
   // The handler set is imported by the CONNECTION CHUNK (2026-11-03 split), and the proxy imports
   // the chunk. Build the mutant chain: mutant handlers -> chunk copy -> proxy copy.
-  const chunkShipping = path.resolve(HERE, '../voice-realtime-connection-frames.ts');
+  const chunkShipping = path.resolve(HERE, '../connection/voice-realtime-connection-frames.ts');
   const chunkSource = readFileSync(chunkShipping, 'utf8');
   const chunkAnchor = "} from './voice-realtime-frame-handlers.js';";
   assert.equal(countOccurrences(chunkSource, chunkAnchor), 1, 'the connection chunk must import the handler set exactly once');
@@ -470,8 +472,7 @@ test('AC6 false form: refusing to declare makes the escape-hatch case red', asyn
 });
 
 test('AC6: the false form leaves none of this process`s copies behind', () => {
-  const moduleDir = path.resolve(HERE, '..');
-  const leftovers = readdirSync(moduleDir).filter(
+  const leftovers = readdirSync(COPY_DIR).filter(
     (name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`),
   );
   assert.deepEqual(leftovers, []);

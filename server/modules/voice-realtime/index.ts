@@ -73,7 +73,7 @@ export {
   type DashscopeTransportError,
   type DashscopeTransportOptions,
   type DashscopeWireObserver,
-} from './voice-realtime-dashscope-transport.js';
+} from './core/voice-realtime-dashscope-transport.js';
 export {
   connect,
   type RealtimeBridge,
@@ -141,7 +141,7 @@ export {
   type UpstreamPoolHooks,
   type UpstreamPoolOptions,
   type UpstreamPoolRotation,
-} from './voice-realtime-upstream-pool.js';
+} from './core/voice-realtime-upstream-pool.js';
 // Silence Tail Suppression (decision doc §10, GOAL-044 / AC-364): the continuous wire's upload state
 // machine, the environment switch that resolves it (OFF unless a deployment names it), and the two
 // lines that report a resolution. Consumed by `server/index.ts`, which resolves it at the assembly
@@ -181,7 +181,7 @@ export {
   type VoiceRealtimeNarratorTtsSeam,
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
-} from './voice-realtime-ws-proxy.service.js';
+} from './connection/voice-realtime-ws-proxy.service.js';
 // The Live Voice connection registry: which sessions are in a voice connection RIGHT NOW. The relay
 // owns the lifetime (it marks a session as a connection is handled and clears it on every exit), and
 // the resident launch's `UserPromptSubmit` hook reads it when a prompt is submitted. Exported through
@@ -250,7 +250,7 @@ export {
   type SpeakerEmbedder,
   type SpeakerTrackerModel,
   type VoiceSpeakerTrackerSeam,
-} from './voice-realtime-speaker-seam.js';
+} from './core/voice-realtime-speaker-seam.js';
 // THE SPEAKER MODEL'S PROVISIONING SERVICE (2026-10-21): the CAM++ weights are a runtime artifact,
 // not a release file. `server/index.ts` builds this service from the settings file's
 // `speakerTracking` block and hands its two verbs to the routes; the settings page reads the state
@@ -316,7 +316,7 @@ export {
   resolveVoiceRealtimeRunEndAckCandidates,
   resolveVoiceRealtimeSummaryStandin,
   type VoiceRealtimeNarratorWiring,
-} from './voice-realtime-narrator.js';
+} from './connection/voice-realtime-narrator.js';
 // The run-end summary's SIDE TEXT MODEL leaf (2026-10-20): one `chat/completions` ask per run end,
 // `qwen-flash` under the B-1 `voice` prompt (no hard length; Markdown and read-back are still
 // refused). `server/index.ts` builds it when `VOICE_REALTIME_SUMMARY_MODEL` is set (credential = the
@@ -329,7 +329,7 @@ export {
   type VoiceRealtimeRunEndSummarizer,
   type VoiceRealtimeRunEndSummarizerInput,
   type VoiceRealtimeRunEndSummarizerOptions,
-} from './voice-realtime-summary.js';
+} from './core/voice-realtime-summary.js';
 // The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the override,
 // the environment and the settings file. `server/index.ts` calls it at the assembly point both the
 // browser socket and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as
@@ -345,7 +345,7 @@ export {
   type SpendGuardFileValues,
   type SpendWindowLimitResolution,
   type SpendWindowLimitSource,
-} from "./voice-realtime-spend-guard.js";
+} from "./core/voice-realtime-spend-guard.js";
 // The HTTP-layer Live Voice diagnosis (an audio file through the same proxy a microphone
 // uses). `server/index.ts` mounts the router and reuses `summarizeWireObservation` for the
 // always-on upstream log; the criterion drives `runVoiceRealtimeDiagnosis` directly.
@@ -444,7 +444,7 @@ export {
   streamVoiceRealtimeSpeech,
   type VoiceRealtimeTtsFrame,
   type VoiceRealtimeTtsOptions,
-} from './voice-realtime-tts.js';
+} from './core/voice-realtime-tts.js';
 // The LOCAL CPU TTS leaf (2026-10-19): the same narrator text synthesized by a bundled Kokoro model
 // through sherpa-onnx-node instead of the DashScope cloud. `server/index.ts` switches to it when
 // `VOICE_REALTIME_TTS_LOCAL` is set; unset keeps the cloud leaf.
@@ -468,7 +468,7 @@ export {
   pickAnnouncePhraseFrom,
   resolveAnnouncePhrases,
   type AnnouncePhraseResolution,
-} from "./voice-realtime-announce-phrases.js";
+} from "./core/voice-realtime-announce-phrases.js";
 // The settings file's loader. `server/index.ts` reads it ONCE per connection at assembly: the TTS
 // cache warms the same `announcePhrases` table the proxy's announce gate speaks, and the run-end
 // `summaryModel` / `runEndAck` keys are read from that same reading (environment > file > default,
@@ -483,7 +483,7 @@ export {
   type VoiceRealtimeRuntimeConfigReading,
   type VoiceRealtimeSettings,
   type VoiceRuntimeValueSource,
-} from './voice-realtime-settings.js';
+} from './connection/voice-realtime-settings.js';
 export {
   DEFAULT_VOICE_REALTIME_TTS_CACHE_MAX_ENTRIES,
   createVoiceRealtimeTtsCache,

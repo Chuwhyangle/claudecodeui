@@ -62,7 +62,7 @@ import type { RealtimeToolExecutor } from "./frames/voice-realtime-bridge.servic
 import {
   VOICE_QUEUE_MAX_BYTES,
   type VoiceRealtimeExecStatusReading,
-} from './voice-realtime-contract.js';
+} from './connection/voice-realtime-contract.js';
 
 /**
  * The VOICE plane's own `session_interrupt` fields — the ones the MCP gateway's declaration does

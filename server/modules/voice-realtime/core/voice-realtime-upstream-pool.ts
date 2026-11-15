@@ -37,7 +37,7 @@ import type {
   RealtimeBridge,
   RealtimeBridgeHooks,
   RealtimeBridgeState,
-} from "./frames/voice-realtime-bridge.service.js";
+} from "../frames/voice-realtime-bridge.service.js";
 
 /**
  * How long the active session may sit idle before the pool switches to the standby.

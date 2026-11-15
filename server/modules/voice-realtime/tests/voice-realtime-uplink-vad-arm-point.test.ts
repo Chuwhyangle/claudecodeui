@@ -277,10 +277,21 @@ const settle = (ms = 40): Promise<void> => new Promise((resolve) => setTimeout(r
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_DIR = path.resolve(HERE, '..');
-const PROXY_SOURCE = readFileSync(path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts'), 'utf8');
+const PROXY_SOURCE = readFileSync(path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts'), 'utf8');
 const INDEX_SOURCE = readFileSync(path.join(MODULE_DIR, '..', '..', 'index.ts'), 'utf8');
 
 type FalseForm = { file: string; label: string; anchor: string; replacement: string; why: string };
+
+/**
+ * The directory a shipping module named by a false form lives in. The 2026-11-15 split moved the
+ * connection/contract family into `connection/`; `frames/…` and `transport/…` forms already carry
+ * their directory in the name.
+ */
+function shippingDir(file: string): string {
+  return /^voice-realtime-(connection-[a-z]+|ws-proxy\.service|contract|exec-status|frame-handlers|frame-registry|instructions|narrator|narrator-queue|settings|transport-errors|trunk-step-handlers|trunk-steps)\.ts$/.test(file)
+    ? path.join(MODULE_DIR, 'connection')
+    : MODULE_DIR;
+}
 
 /**
  * Loads a shipping module with `form` applied, as a transient copy BESIDE it — beside it so its relative
@@ -288,7 +299,7 @@ type FalseForm = { file: string; label: string; anchor: string; replacement: str
  * by name. The anchor must occur exactly once, so a mutation that stopped matching is a red here.
  */
 async function loadFalseForm<T>(form: FalseForm): Promise<T> {
-  const shipping = path.join(MODULE_DIR, form.file);
+  const shipping = path.join(shippingDir(form.file), form.file);
   const source = readFileSync(shipping, 'utf8');
   const occurrences = source.split(form.anchor).length - 1;
   assert.equal(occurrences, 1, `the "${form.label}" false form's anchor is not in ${form.file} exactly once`);
@@ -298,9 +309,9 @@ async function loadFalseForm<T>(form: FalseForm): Promise<T> {
   // A mutated CONNECTION CHUNK alone would never run: the handler imports the shipping chunk. Copy
   // the proxy too, retargeting its one import of that chunk at the mutant.
   const connectionChunk = /^voice-realtime-connection-[a-z]+\.ts$/.test(form.file);
-  const proxyShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+  const proxyShipping = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
   const importAnchor = `} from './${path.basename(shipping, '.ts')}.js';`;
-  const proxyTarget = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-proxy-${process.pid}.ts`);
+  const proxyTarget = path.join(path.dirname(proxyShipping), `__criterion-falsify-${form.label}-proxy-${process.pid}.ts`);
   try {
     if (!connectionChunk) return (await import(pathToFileURL(target).href)) as T;
     const proxySource = readFileSync(proxyShipping, 'utf8');

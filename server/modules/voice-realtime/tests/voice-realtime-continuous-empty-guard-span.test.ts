@@ -315,11 +315,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** This test module's directory — where a mutant copy must sit so its relative imports resolve. */
 const MODULE_DIR = path.resolve(HERE, '..');
 /** The shipping proxy: what the false forms copy. */
-const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'voice-realtime-connection-frames.ts');
+const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'connection/voice-realtime-connection-frames.ts');
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
+/** The shipping module's own directory — a mutant copy must sit beside it so its relative imports resolve. */
+const COPY_DIR = path.dirname(SHIPPING_PROXY_MODULE);
 /** A copy this process owns: prefixed AND pid-tagged, so a sibling criterion's copy is never mistaken for ours. */
-const ownCopy = (label: string): string => path.join(MODULE_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
+const ownCopy = (label: string): string => path.join(COPY_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /**
  * The span guard's decision — the ONE expression the "last item alone" false form rewrites.
@@ -358,7 +360,7 @@ async function importProxy(modulePath: string): Promise<{ handleVoiceRealtimeCon
 
 /** Imports a chunk copy THROUGH a proxy copy that retargets its one connection-frames import. */
 async function importChunkThroughProxy(chunkPath: string, label: string): Promise<{ handleVoiceRealtimeConnection: HandleConnection; proxyPath: string }> {
-  const proxyShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+  const proxyShipping = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
   const proxySource = readFileSync(proxyShipping, 'utf8');
   const importAnchor = "} from './voice-realtime-connection-frames.js';";
   assert.equal(proxySource.split(importAnchor).length - 1, 1, 'the proxy must import the connection chunk exactly once');
@@ -562,7 +564,7 @@ test('AC4: a MALFORMED (truncated) call leaves the watermark where it was, so th
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 
 test('the false forms leave none of this process`s copies behind', () => {
-  const leftovers = readdirSync(MODULE_DIR).filter(
+  const leftovers = readdirSync(COPY_DIR).filter(
     (name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`),
   );
   assert.deepEqual(leftovers, []);

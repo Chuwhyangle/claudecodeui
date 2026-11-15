@@ -1,4 +1,4 @@
-import type { RealtimeBridgeError, RealtimeSegmentForensics } from "./frames/voice-realtime-bridge.service.js";
+import type { RealtimeBridgeError, RealtimeSegmentForensics } from "../frames/voice-realtime-bridge.service.js";
 import type { VoiceRealtimeOutboundFrame } from "./voice-realtime-contract.js";
 
 // The bridge/transport failure vocabulary rendered as the browser's error text.

@@ -40,7 +40,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The shipping matrix module — the file AC1 reads and the false form copies. */
 const SHIPPING_SERVICE = path.resolve(HERE, '../services/provider-capabilities.service.ts');
 /** The voice relay module whose comment cited the old value (AC2). */
-const SHIPPING_PROXY = path.resolve(HERE, '../../voice-realtime/voice-realtime-ws-proxy.service.ts');
+const SHIPPING_PROXY = path.resolve(HERE, '../../voice-realtime/connection/voice-realtime-ws-proxy.service.ts');
 
 /** The prefix every falsify copy carries; `server/tsconfig.json` excludes it from the program. */
 const TEMP_PREFIX = '__criterion-falsify-cancel-queued-';

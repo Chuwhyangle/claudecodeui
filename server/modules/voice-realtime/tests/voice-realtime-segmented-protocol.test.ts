@@ -737,12 +737,11 @@ test('AC7 CLI: `--segments` splits the clip here and prints each segment seq/dur
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The shipping module directory — where a mutant copy must sit so its relative imports resolve. */
 const MODULE_DIR = path.resolve(HERE, '..');
-const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'voice-realtime-connection-frames.ts');
-const SHIPPING_TRANSPORT_MODULE = path.join(MODULE_DIR, 'voice-realtime-connection-transport.ts');
+const SHIPPING_PROXY_MODULE = path.join(MODULE_DIR, 'connection/voice-realtime-connection-frames.ts');
+const SHIPPING_TRANSPORT_MODULE = path.join(MODULE_DIR, 'connection/voice-realtime-connection-transport.ts');
 const SHIPPING_BRIDGE_MODULE = path.join(MODULE_DIR, 'frames/voice-realtime-bridge.service.ts');
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
-const ownCopy = (label: string): string => path.join(MODULE_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /** How many times `needle` occurs in `haystack`. */
 function countOccurrences(haystack: string, needle: string): number {
@@ -763,13 +762,16 @@ async function withMutantCopy<T>(
 ): Promise<T> {
   const source = readFileSync(modulePath, 'utf8');
   assert.equal(countOccurrences(source, anchor), 1, `the ${label} anchor must occur exactly once`);
-  const basePath = ownCopy(`${label}-base`);
-  const mutPath = ownCopy(`${label}-mut`);
+  // Copies sit BESIDE the shipping module so each copy's own relative imports keep resolving.
+  const moduleDir = path.dirname(modulePath);
+  const copyIn = (dir: string, name: string): string => path.join(dir, `${TEMP_PREFIX}${name}-${process.pid}.ts`);
+  const basePath = copyIn(moduleDir, `${label}-base`);
+  const mutPath = copyIn(moduleDir, `${label}-mut`);
   const connectionChunk = path.basename(modulePath).startsWith('voice-realtime-connection-');
-  const proxyShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+  const proxyShipping = path.join(MODULE_DIR, 'connection/voice-realtime-ws-proxy.service.ts');
   const importAnchor = `} from './${path.basename(modulePath, '.ts')}.js';`;
-  const proxyBase = ownCopy(`${label}-proxy-base`);
-  const proxyMut = ownCopy(`${label}-proxy-mut`);
+  const proxyBase = copyIn(path.dirname(proxyShipping), `${label}-proxy-base`);
+  const proxyMut = copyIn(path.dirname(proxyShipping), `${label}-proxy-mut`);
   try {
     writeFileSync(basePath, source, 'utf8');
     writeFileSync(mutPath, source.replace(anchor, mutation), 'utf8');

@@ -216,11 +216,13 @@ const firstIndexOf = (session: Session, type: string): number => session.wire.fi
 /** Where the module's directory and the shipping transport are, for the falsify copy. */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_DIR = path.resolve(HERE, '..');
-const SHIPPING_TRANSPORT_MODULE = path.join(MODULE_DIR, 'voice-realtime-dashscope-transport.ts');
+const SHIPPING_TRANSPORT_MODULE = path.join(MODULE_DIR, 'core/voice-realtime-dashscope-transport.ts');
 
 /** The prefix every falsify copy carries, so this process's own copies are identifiable. */
 const TEMP_PREFIX = '__criterion-falsify-';
-const ownCopy = (label: string): string => path.join(MODULE_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
+/** The shipping module's own directory — a mutant copy must sit beside it so its relative imports resolve. */
+const COPY_DIR = path.dirname(SHIPPING_TRANSPORT_MODULE);
+const ownCopy = (label: string): string => path.join(COPY_DIR, `${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
 /**
  * THE LINE THAT MAKES THE SWITCH OUTRANK THE DEFAULTS. Removing it restores the pre-2026-10-12
@@ -432,7 +434,7 @@ test('AC4: the journal`s session.update line carries the turn_detection reading'
 // ── residue ─────────────────────────────────────────────────────────────────────────────────
 
 test('the AC1 false form leaves none of this process`s copies behind', () => {
-  const leftovers = readdirSync(MODULE_DIR).filter(
+  const leftovers = readdirSync(COPY_DIR).filter(
     (name) => name.startsWith(TEMP_PREFIX) && name.endsWith(`-${process.pid}.ts`),
   );
   assert.deepEqual(leftovers, []);

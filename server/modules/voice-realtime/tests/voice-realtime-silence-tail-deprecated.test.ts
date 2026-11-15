@@ -69,7 +69,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The composition root whose per-connection wiring this file pins as source text. */
 const SERVER_INDEX = path.resolve(HERE, '../../../index.ts');
 /** The relay whose uplink-gate exclusion branch AC4 reads. */
-const WS_PROXY = path.resolve(HERE, '../voice-realtime-connection-transport.ts');
+const WS_PROXY = path.resolve(HERE, '../connection/voice-realtime-connection-transport.ts');
 
 /**
  * The builder's own source region in `server/index.ts`: from the assembly point to the next top-level

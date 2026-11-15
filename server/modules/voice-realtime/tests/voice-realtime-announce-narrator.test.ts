@@ -29,7 +29,7 @@ import test from 'node:test';
 import { WebSocket as WS } from 'ws';
 
 import type { RealtimeServerMessage, RealtimeToolExecutor } from '../index.js';
-import { ANNOUNCE_PHRASES, pickAnnouncePhrase } from "../voice-realtime-announce-phrases.js";
+import { ANNOUNCE_PHRASES, pickAnnouncePhrase } from "../core/voice-realtime-announce-phrases.js";
 import {
   handleVoiceRealtimeConnection,
   type VoiceRealtimeInboundFrame,

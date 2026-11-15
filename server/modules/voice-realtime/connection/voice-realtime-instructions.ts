@@ -1,5 +1,5 @@
 import type { HostRunActivityReading, VoiceRealtimeOutboundFrame } from './voice-realtime-contract.js';
-import { DEFAULT_VOICE_REALTIME_CLOSING_TURN, afterStopSentence, type VoiceRealtimeClosingTurn } from './frames/voice-realtime-closing-turn.js';
+import { DEFAULT_VOICE_REALTIME_CLOSING_TURN, afterStopSentence, type VoiceRealtimeClosingTurn } from '../frames/voice-realtime-closing-turn.js';
 
 // The relay's instruction text and the connection's independent note composers. Moved out of
 // the ws proxy service so the wire handler keeps orchestration, not prompt text.
