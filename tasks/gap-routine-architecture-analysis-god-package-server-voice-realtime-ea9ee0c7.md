@@ -136,3 +136,11 @@ Move the frame/turn dispatch stages that remain in ws-proxy.service.ts behind th
 - `server/shared/tests/server-import-cycle-budget.baseline.json`
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-god-package-server-voice-realtime-ea9ee0c7.md`
+
+## Blocker
+
+**2026-11-15T13:27:47.237Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/cloudpit-goal-exit-gate.test.ts:   AssertionError [ERR_ASSERTION]: a directory outside the frozen baseline is a NEW module directory: modules/voice-realtime/connection, modules/voice-realtime/core. This is a recorded-change ratchet: add it to cloudpit-goal-exit-gate.baseline.json.moduleDirectories AND to GATE_DIRECTORY_PIN in the s [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/cloudpit-goal-exit-gate.test.ts,server/shared/tests/cloudpit-goal-exit-gate.test.ts changed=-]
+- run_id：wk-prod-anchor
+- session_id：2a94c390-3c23-4c2f-870d-9d6a372c1dba
