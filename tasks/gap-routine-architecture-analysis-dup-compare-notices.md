@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-dup-compare-notices
 title: "architecture-analysis: archguard duplicate group 83bd173111f40177: 6
   statements / 89 tokens / 6 savable lines, and the SEVERITY_RANK table is
   duplicated too (server:112 vs client:2"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
