@@ -196,6 +196,18 @@ const GATE_DIRECTORY_PIN: readonly string[] = [
   'modules/user',
   'modules/voice',
   'modules/voice-realtime',
+  // TENTH RECORDED CHANGE (2026-11-15,
+  // gap-routine-architecture-analysis-god-package-server-voice-realtime-ea9ee0c7):
+  // the voice-realtime god-package split moved the 15-file package-root SCC into
+  // `connection/` and the 7 leaves only `connection/` depends on into `core/`
+  // (root 29 files / 83 entities -> 19 / 15). Edges run root -> connection ->
+  // core and connection -> frames/transport only; `connection/` never imports
+  // the package root back, so the directory graph stays acyclic and the AC-394
+  // G1 cycle is unchanged (`sccs=[]`). Added here and to
+  // cloudpit-goal-exit-gate.baseline.json together, exactly as the
+  // recorded-change contract requires.
+  'modules/voice-realtime/connection',
+  'modules/voice-realtime/core',
   'modules/voice-realtime/frames',
   'modules/voice-realtime/transport',
   'modules/websocket',
