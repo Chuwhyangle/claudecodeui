@@ -15,6 +15,7 @@
  * is what keeps this module from importing the system module (N8).
  */
 
+import { compareNotices } from '@shared/noticeOrder.js';
 import { AppError } from '@/shared/utils.js';
 
 //----------------- NOTICE MODEL ------------
@@ -108,13 +109,6 @@ export type NoticeRegistry = {
   dismiss(userId: number, noticeId: string, revision: string): Promise<{ ok: true }>;
 };
 
-/** Lowest number wins the slot. */
-const SEVERITY_RANK: Record<NoticeSeverity, number> = {
-  blocking: 0,
-  attention: 1,
-  info: 2,
-};
-
 /**
  * Only a `condition` that is not `blocking` may be dismissed through the revision endpoint.
  * `event` means 「confirmed」 and `decision` means 「ruled on」 — neither is a revision dismissal,
@@ -123,17 +117,6 @@ const SEVERITY_RANK: Record<NoticeSeverity, number> = {
  */
 function isDismissible(notice: Notice): boolean {
   return notice.lifecycle === 'condition' && notice.severity !== 'blocking';
-}
-
-/**
- * The slot's order: severity first (blocking > attention > info), then the newest `raisedAt`,
- * then the id so two notices raised in the same millisecond still order deterministically.
- */
-function compareNotices(left: Notice, right: Notice): number {
-  const bySeverity = SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity];
-  if (bySeverity !== 0) return bySeverity;
-  if (left.raisedAt !== right.raisedAt) return right.raisedAt.localeCompare(left.raisedAt);
-  return left.id.localeCompare(right.id);
 }
 
 /**
