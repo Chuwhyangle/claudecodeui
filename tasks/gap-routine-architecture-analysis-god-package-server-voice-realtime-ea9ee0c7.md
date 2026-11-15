@@ -56,6 +56,7 @@ Move the frame/turn dispatch stages that remain in ws-proxy.service.ts behind th
 - archguard `query --cycles`（server scope）：before/after 均 `No dependency cycles detected.`；同一读数 entities=1431 relations=7616 sourceFiles=689（before relations=7618 / sourceFiles=677）。
 - `server/shared/tests/architecture-ratchet.test.ts` + `server/shared/tests/server-import-cycle-budget.test.ts`：18/18 pass（新目录 `connection`/`core` 已登记进 MANIFEST_PIN + baseline JSON；oversize/mutable 读数已逐条重键）。
 - voice-realtime 包全量：893 tests，886 pass，7 fail。7 条全部可归因为**develop 既有红**，非本任务引入：在 pristine develop（e9fc72812）上逐条复现 `voice-realtime-queue-lifecycle-completion` 的 2 条（idle subscribe / end to end）与 `voice-realtime-interrupt` 的 real-assembly 4 条；第 7 条 `AC5` 的 residue 断言只在多文件并发时误报「有临时副本未清理」（同进程 `git status -- server/modules/voice-realtime` 会被其它并发测试文件的 `__criterion-falsify-*` 命中），单独跑该文件 34/34 pass。另：本机 shell 的 `VOICE_REALTIME_SETTINGS_PATH` 指向 silence=1500 的宿主 settings，未清环境时 `VERIFY AC2` 会确定性红 —— 套件实跑时已 unset 该环境组（ambient-env leak，与本改动无关）。
+- `server/shared/tests/cloudpit-goal-exit-gate.test.ts`：3/3 pass（连同 `server-import-cycle-budget.test.ts` + `architecture-ratchet.test.ts` 一起跑 21/21 pass）。该文件的 AC-455 目录臂是 recorded-change 棘轮（measured ⊆ baseline ⊆ GATE_DIRECTORY_PIN）；本任务新增的 `modules/voice-realtime/connection` 与 `modules/voice-realtime/core` 已按契约在**同一次改动**（commit c5c8388af）里同时登记进 `GATE_DIRECTORY_PIN` 与 `cloudpit-goal-exit-gate.baseline.json.moduleDirectories`（第十次 recorded change），未抬高任何既有读数：`extra=[]`、`baselineOutsidePin=[]`、`utilsLineCount` 仍 116。
 
 - L_G archguard(server scope): cycles=0 entities=1431 relations=7616 sourceFiles=689
 
@@ -133,6 +134,8 @@ Move the frame/turn dispatch stages that remain in ws-proxy.service.ts behind th
 - `server/modules/voice-realtime/voice-realtime-tts.ts`
 - `server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts`
 - `server/shared/tests/architecture-ratchet.baseline.json`
+- `server/shared/tests/cloudpit-goal-exit-gate.baseline.json`
+- `server/shared/tests/cloudpit-goal-exit-gate.test.ts`
 - `server/shared/tests/server-import-cycle-budget.baseline.json`
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-god-package-server-voice-realtime-ea9ee0c7.md`
@@ -144,3 +147,4 @@ Move the frame/turn dispatch stages that remain in ws-proxy.service.ts behind th
 - 未落地原因：step=suite: not ok - server/shared/tests/cloudpit-goal-exit-gate.test.ts:   AssertionError [ERR_ASSERTION]: a directory outside the frozen baseline is a NEW module directory: modules/voice-realtime/connection, modules/voice-realtime/core. This is a recorded-change ratchet: add it to cloudpit-goal-exit-gate.baseline.json.moduleDirectories AND to GATE_DIRECTORY_PIN in the s [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/cloudpit-goal-exit-gate.test.ts,server/shared/tests/cloudpit-goal-exit-gate.test.ts changed=-]
 - run_id：wk-prod-anchor
 - session_id：2a94c390-3c23-4c2f-870d-9d6a372c1dba
+- 2026-11-15 后续：已在同一次改动里把 `modules/voice-realtime/connection` 与 `modules/voice-realtime/core` 登记进 GATE_DIRECTORY_PIN + cloudpit-goal-exit-gate.baseline.json（commit c5c8388af），该文件单独 3/3、与另两个棘轮文件合跑 21/21 全绿。
