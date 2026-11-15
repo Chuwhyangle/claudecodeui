@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { compareNotices, SEVERITY_RANK } from '@shared/noticeOrder';
 import {
   DeployConfirmDialog,
 } from '@/modules/cockpit';
@@ -25,13 +26,6 @@ const defaultReadDeploy: DeployReadinessPort = async () => {
   return (await response.json()) as DeployReadinessReading;
 };
 
-/** Lowest rank wins the slot. */
-const SEVERITY_RANK: Record<Notice['severity'], number> = {
-  blocking: 0,
-  attention: 1,
-  info: 2,
-};
-
 /** Only a non-blocking condition may be dismissed through the revision endpoint (N2). The
  * server enforces the same rule; rendering the button is the client's independent half. */
 function isDismissible(notice: Notice): boolean {
@@ -43,14 +37,9 @@ function isSlotWorthy(notice: Notice): boolean {
   return notice.scope === 'global' && SEVERITY_RANK[notice.severity] <= SEVERITY_RANK.attention;
 }
 
-/** Blocking first, then the newest `raisedAt`, then the id so same-millisecond entries stay
- * deterministic. The server already sorts, but the slot must not depend on that ordering. */
-function compareNotices(left: Notice, right: Notice): number {
-  const bySeverity = SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity];
-  if (bySeverity !== 0) return bySeverity;
-  if (left.raisedAt !== right.raisedAt) return right.raisedAt.localeCompare(left.raisedAt);
-  return left.id.localeCompare(right.id);
-}
+/* The comparator is shared with the registry (`@shared/noticeOrder`), but the slot still sorts
+ * its own filtered arrays: the server already sorts, and the slot must not depend on that
+ * ordering. That independence is what the slot's own ordering criterion drives. */
 
 type NoticeSlotProps = {
   list?: NoticeListPort;

@@ -11,6 +11,12 @@
  * Used by `useVoiceRealtimeSession`, this module's only consumer.
  */
 
+// The byte merge this module used to declare itself lives in the repo-root shared byte module,
+// beside the server TTS leaf that streams through the same function. The alias is what keeps this
+// module's public name stable for its consumer; it defines nothing. (The two copies were the client
+// half of archguard duplicate group 816ec1a3b49021eb.)
+export { concatBytes as concatNarratorBytes } from '@shared/asr/contract/transcriptionWire';
+
 /**
  * The fields of a RIFF/WAVE header streaming playback needs.
  *
@@ -81,16 +87,6 @@ function narratorUint32LE(bytes: Uint8Array, offset: number): number | null {
   return (
     (bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16) | (bytes[offset + 3]! << 24)) >>> 0
   );
-}
-
-/** Joins two byte slices without mutating either. */
-export function concatNarratorBytes(head: Uint8Array, tail: Uint8Array): Uint8Array {
-  if (head.length === 0) return tail;
-  if (tail.length === 0) return head;
-  const merged = new Uint8Array(head.length + tail.length);
-  merged.set(head, 0);
-  merged.set(tail, head.length);
-  return merged;
 }
 
 /**
