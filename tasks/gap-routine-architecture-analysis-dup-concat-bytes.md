@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-dup-concat-bytes
 title: "architecture-analysis: archguard duplicate group 816ec1a3b49021eb: 8
   statements / 85 tokens / 8 savable lines — one Uint8Array merge helper
   implemented on both server and client, s"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
