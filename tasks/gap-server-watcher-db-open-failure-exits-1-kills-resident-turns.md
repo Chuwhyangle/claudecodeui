@@ -1,7 +1,7 @@
 ---
 id: gap-server-watcher-db-open-failure-exits-1-kills-resident-turns
 title: Cloudpit server crashes twice with exit code 1, killing resident session turns
-status: todo
+status: ready
 labels:
   - gap
   - defect
