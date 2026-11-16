@@ -180,3 +180,28 @@ $ npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/t
 ### ADR-007 暗轴
 
 - 该轴仍暗,理由:本任务只把判据 runner 的硬编码 probe 路径重指到被 god-package 分裂搬走的现存模块并补一条守用例，未改任何模块依赖边、未运行 archguard，L_D/L_G 没有本轮可记的量化读数。
+
+## Blocker
+
+**2026-11-16T07:18:47.533Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=parse-mechanical-fan-in: unparseable fresh mechanical fan-in output: node:internal/modules/cjs/loader:1568
+  throw err;
+  ^
+
+Error: Cannot find module '/data/home/yale/.claude/plugins/cache/quay/quay/0.30.1/scripts/dist/worker-driver.ts'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+    at Module._load (node:internal/modules/cjs/loader:1341:5)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v24.21.0
+- run_id：wk-prod-anchor
+- session_id：2b834ae2-cc66-432a-88c1-8486a9d674af
