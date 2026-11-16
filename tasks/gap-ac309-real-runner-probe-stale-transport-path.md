@@ -2,7 +2,7 @@
 id: gap-ac309-real-runner-probe-stale-transport-path
 title: AC-309 判据 runner 的 probe 路径被 voice-realtime god-package 分裂搬空（transport →
   core/）致判据恒红；重指现存出货模块 + 命名 server tsconfig 注册 + 守用例
-status: todo
+status: ready
 labels:
   - gap
   - defect
