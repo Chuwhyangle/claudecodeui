@@ -178,6 +178,31 @@ $ bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json \
 
 `unknown=` pin 的前后读数：**改动前 `unknown=501`，改动后 `unknown=501`（未变）**。原因如实登记：该 pin（`server/shared/tests/quay-test-script.test.ts:327`）由**合成** manifest 驱动（同文件 288 行 `for (let i = 0; i < 507; i += 1)` 造 507 条 `server/synthetic/…`），不读真实收集；真实收集的两条判据（AC1 的 `rest.length`、AC3 的 `collectedServerFiles()`）都是运行时计算、没有字面量可撞。因此新增一个真实 test 文件既不改 501 的合成 pin，也没有让时长基线覆盖闸转红（AC7 判据同轮 14/14 绿），无需上调。
 
+### DoD — 真实运行读数（2026-11-16 本检出复核）
+
+```
+$ systemctl --user show -p NRestarts -p MainPID claudecodeui-server.service
+MainPID=984604
+NRestarts=3
+
+$ journalctl --user -u claudecodeui-server.service --since "2026-11-16 14:40:00" --until "2026-11-16 14:50:00"
+Nov 16 14:43:13 … claudecodeui-server.service: Main process exited, code=exited, status=1/FAILURE
+Nov 16 14:43:13 … claudecodeui-server.service: Failed with result 'exit-code'.
+Nov 16 14:43:18 … Scheduled restart job, restart counter is at 2.
+Nov 16 14:43:18 … Started claudecodeui-server.service - claudecodeui server.
+Nov 16 14:46:19 … claudecodeui-server.service: Main process exited, code=exited, status=1/FAILURE
+Nov 16 14:46:19 … claudecodeui-server.service: Failed with result 'exit-code'.
+Nov 16 14:46:24 … Scheduled restart job, restart counter is at 3.
+Nov 16 14:46:24 … Started claudecodeui-server.service - claudecodeui server.
+
+$ pgrep -fc 'claudecodeui-session-'
+1
+```
+
+journal **未轮转**：上面窗口的两条 `code=exited, status=1/FAILURE` 是事故原文，`NRestarts=3` 与 Proposal 的 restart counter 3 一致。事故当次「16 个 scope 同秒 Consumed、恢复 16/16」来自 Proposal 已记录的 `server.log` 取证；该 415 MB append 日志不在本 worktree，且当前 `pgrep` 只剩 1 个常驻 scope（会话已空闲退出），因此事故时点的 scope 计数**无法在本轮重新复现**，按原文引用而不重造。journalctl 过滤 `resident-restore` 在本 unit 无命中（该日志走 append 文件而非 journal），如实登记。
+
+诚实边界（再次声明）：本任务的绿态读数来自判据的子进程注入（修复后进程不退出且仍应答请求），**不是在部署后的 `claudecodeui-server.service` 上**取得。合并 ≠ 部署；本任务不声称线上服务已完成部署验证，部署后应以 `NRestarts` 不再增长作为线上复核。
+
 ### ADR-007 暗轴
 
 该轴仍暗,理由:本任务只改服务端崩溃守卫、数据库指针写与历史读取，不改变模块依赖图的环/扇入扇出，L_D/L_G 无适用读数
