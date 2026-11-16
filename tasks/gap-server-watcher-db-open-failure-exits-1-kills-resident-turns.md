@@ -51,13 +51,13 @@ Each crash tore down all 16 `claudecodeui-session-<serverPid>-*.scope` resident 
 
 ## AC
 
-- [ ] AC1 **退出路径被指名，判据能跑**：新增判据 `server/modules/providers/tests/sessions-watcher-failure-guard.test.ts`；`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/sessions-watcher-failure-guard.test.ts` 退出 0 且输出 `fail 0`。完成记录必须写出 exit-1 路径的**具体来源**——具体 handler 名，或库的 `file:line`，或「没有任何 handler，异常帧穿到顶层」这一读数；并逐字贴 `grep -n "process.exit(1)" server/index.ts` 与新增守卫的 `file:line`。⛔「可能是 better-sqlite3 / 可能是 systemd」这类猜测不算读数。
-- [ ] AC2 **故障注入红→绿双向**：(a) 在**修复前**的树（或把新守卫临时注释掉）上注入「DB 不可打开 / watcher 同步抛 `unable to open database file`」，子进程实测 **exit 1**，把退出码与该进程最后几行输出逐字记下（红态基线）；(b) 修复后**同一条注入**下该子进程不因这次失败退出（父进程断言它仍在服务：例如仍能应答一次请求或仍打印后续活动），退出码读数写进完成记录。两读都必须来自判据本身，⛔ 不得用 transcript 或「看起来对」代替。
-- [ ] AC3 **退出前完整栈、不截断**：注入路径上进程 stderr/stdout 至少出现 1 行 `    at ` 形式的栈帧，且同时含错误的 `name` 与完整 `message`；判据机械断言「日志末行是完整行」（该行不是被截断的半个 token，例如不是以 `claud` 这类断词结尾）。⛔ 只 `console.error(error.message)`、不含栈 ⇒ 本 AC 红。
-- [ ] AC4 **中断可机读（重放或显式中断标记）**：崩溃 + 重启后，被打断 turn 的悬挂 `tool_use` 要么被重放，要么在状态面 / API 面带一个可读的中断标记；判据断言该字段名与其值（逐字）。若该标记经 UI 呈现，按 AGENTS.md 的 UI 要求另补 MCP 浏览器实际操作 + `tmp/` 截图，以及 `node scripts/ui-scenario.mjs <scenario.json>` 的 JSON 报告；若重放明确不在范围内，完成记录必须逐字写明「本任务不做重放」并给出用户可见信号的入口。
-- [ ] AC5 **范围受控**：`git diff --name-only $(git merge-base HEAD develop)` 的每一行都在 `## Touches` 内；本任务新增的每个 server 测试文件都在 Touches 里。
-- [ ] AC6 **仓库门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
-- [ ] AC7 **新测试文件的既有 pin 同步**：`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0；本任务新增 server 测试文件后，把该文件里的收集数 `unknown=` pin 按实测上调并逐字贴出改动前后两个数字（该 pin 在本仓确有先例：同批任务记录过 `unknown=486→487`）。若 suite 的时长基线覆盖闸因新文件转红，同一轮按实测值同步并贴读数。
+- [x] AC1 **退出路径被指名，判据能跑**：新增判据 `server/modules/providers/tests/sessions-watcher-failure-guard.test.ts`；`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/sessions-watcher-failure-guard.test.ts` 退出 0 且输出 `fail 0`。完成记录必须写出 exit-1 路径的**具体来源**——具体 handler 名，或库的 `file:line`，或「没有任何 handler，异常帧穿到顶层」这一读数；并逐字贴 `grep -n "process.exit(1)" server/index.ts` 与新增守卫的 `file:line`。⛔「可能是 better-sqlite3 / 可能是 systemd」这类猜测不算读数。
+- [x] AC2 **故障注入红→绿双向**：(a) 在**修复前**的树（或把新守卫临时注释掉）上注入「DB 不可打开 / watcher 同步抛 `unable to open database file`」，子进程实测 **exit 1**，把退出码与该进程最后几行输出逐字记下（红态基线）；(b) 修复后**同一条注入**下该子进程不因这次失败退出（父进程断言它仍在服务：例如仍能应答一次请求或仍打印后续活动），退出码读数写进完成记录。两读都必须来自判据本身，⛔ 不得用 transcript 或「看起来对」代替。
+- [x] AC3 **退出前完整栈、不截断**：注入路径上进程 stderr/stdout 至少出现 1 行 `    at ` 形式的栈帧，且同时含错误的 `name` 与完整 `message`；判据机械断言「日志末行是完整行」（该行不是被截断的半个 token，例如不是以 `claud` 这类断词结尾）。⛔ 只 `console.error(error.message)`、不含栈 ⇒ 本 AC 红。
+- [x] AC4 **中断可机读（重放或显式中断标记）**：崩溃 + 重启后，被打断 turn 的悬挂 `tool_use` 要么被重放，要么在状态面 / API 面带一个可读的中断标记；判据断言该字段名与其值（逐字）。若该标记经 UI 呈现，按 AGENTS.md 的 UI 要求另补 MCP 浏览器实际操作 + `tmp/` 截图，以及 `node scripts/ui-scenario.mjs <scenario.json>` 的 JSON 报告；若重放明确不在范围内，完成记录必须逐字写明「本任务不做重放」并给出用户可见信号的入口。
+- [x] AC5 **范围受控**：`git diff --name-only $(git merge-base HEAD develop)` 的每一行都在 `## Touches` 内；本任务新增的每个 server 测试文件都在 Touches 里。
+- [x] AC6 **仓库门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] AC7 **新测试文件的既有 pin 同步**：`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0；本任务新增 server 测试文件后，把该文件里的收集数 `unknown=` pin 按实测上调并逐字贴出改动前后两个数字（该 pin 在本仓确有先例：同批任务记录过 `unknown=486→487`）。若 suite 的时长基线覆盖闸因新文件转红，同一轮按实测值同步并贴读数。
 
 ## DoD
 
@@ -69,11 +69,128 @@ Each crash tore down all 16 `claudecodeui-session-<serverPid>-*.scope` resident 
 - **可复现性**：所有命令都能在 Claude 会话里按 `docs/operations/process-isolation-and-memory-caps.md` →「Running tests from a Claude session」跑（单文件直跑，或多文件时 `bash scripts/with-memory-cap.sh … --test --test-concurrency=<N>` 两者齐备）；⛔ 不在会话里跑全量 suite。
 - **诚实边界**：若重放确认为范围外，完成记录必须写「本任务只保证显式中断信号，不保证 turn 重放」，⛔ 不得用「重启后 16/16 恢复」冒充「被打断的 turn 被恢复」。
 
+## Evidence
+
+### AC1 — exit-1 路径的具体来源
+
+**读数：没有任何 handler，异常帧穿到顶层。** `server/` 全树没有 `uncaughtException` / `unhandledRejection` / `setUncaughtExceptionCaptureCallback` 安装点（`grep -rn "uncaughtException\|unhandledRejection\|setUncaughtExceptionCaptureCallback" server/ --include=*.ts` 只命中三处测试文件）。服务端唯一的 `process.exit(1)` 是启动失败路径：
+
+```
+$ grep -n 'process\.exit(1)' server/index.ts
+2853:        process.exit(1);
+```
+
+崩溃发生在 boot 之后，走的是另一条路：`server.listen(port, host, async () => { … await initializeSessionsWatcher(); … })`（`server/index.ts`，修复前为 `await initializeSessionsWatcher();`）的 `async` 回调返回值没有 `.catch`；`SessionsWatcher.start()` 的**第一次** `await sessionSynchronizerService.synchronizeSessions()` 当时不在任何 `try` 内。DB 短暂不可打开时该 promise reject，成为无人处理的 rejection，Node 默认 `--unhandled-rejections=throw` 抛出未捕获异常并 `exit(1)`。进程在同一时刻正用异步 stderr 写 `Session watcher sync failed for provider "claud…`，退出截断了这次写 —— 与 `server.log` 里那行断词完全吻合。
+
+新增守卫的 `file:line`：
+
+```
+$ grep -n 'export function installProcessCrashGuard\|export function writeCrashReportSync\|export function formatCrashReport' server/shared/process-crash-guard.ts
+73:export function formatCrashReport(label: string, error: unknown, disposition: CrashDisposition): string {
+87:export function writeCrashReportSync(label: string, error: unknown, disposition: CrashDisposition): void {
+108:export function installProcessCrashGuard(options: ProcessCrashGuardOptions = {}): () => void {
+```
+
+接线读数：`server/index.ts:2668 installProcessCrashGuard();`；`server/index.ts:2764 await startSessionsWatcherSafely();`；`server/modules/providers/services/sessions-watcher.service.ts:916 export async function startSessionsWatcherSafely(`。
+
+判据运行（单文件直跑）：
+
+```
+$ bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json \
+    --test server/modules/providers/tests/sessions-watcher-failure-guard.test.ts
+✔ AC2(a): the pre-fix wiring exits 1 on a database-open failure (red baseline) (444.8ms)
+✔ AC2(b)+AC3: the fixed wiring survives the same failure, still serves, and reports a complete stack (454.2ms)
+✔ AC3: the fatal path writes the whole stack synchronously and exits 1 on a complete line (218.2ms)
+✔ AC4: a crash-interrupted turn reads back as a machine-readable turnInterrupted marker (317.0ms)
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+```
+
+### AC2 — 故障注入红→绿（读数来自判据本身）
+
+注入 = 把 `sessionSynchronizerService.synchronizeSessions` 换成抛 `name=SqliteError, message=unable to open database file`。
+
+- **红态（修复前 wiring，`isolateInitialSyncFailure: false`）**：子进程 `exit code = 1`（判据 `assert.equal(run.code, 1, …)` 通过）；`RED_SHOULD_NOT_REACH` 没有打印；stderr 含 `SqliteError`、`unable to open database file` 与 `    at ` 帧（见 AC3 段）。
+- **绿态（修复后 wiring）**：同一注入下，子进程 `startSessionsWatcherSafely()` 先吞下 inner sync 失败、再吞下 outer start 失败；父进程真的向子进程监听的 `http://127.0.0.1:<port>/` 发了一次请求，读回 `200 "alive"` —— 判据 `assert.ok(run.served, …)` 通过，证明它仍在服务而不是"看起来没退出"。
+
+### AC3 — 退出前完整栈、不截断
+
+判据打印并断言（原文）：
+
+```
+[crash-guard] initial-session-sync-failure name=SqliteError message=unable to open database file
+    at sessionSynchronizerService.synchronizeSessions (…)
+    …
+[crash-guard] initial-session-sync-failure served-through
+[crash-guard] watcher-start-failure name=SqliteError message=unable to open database file
+    at …
+[crash-guard] watcher-start-failure served-through
+```
+
+fatal 路径（未捕获异常）末行逐字为 `[crash-guard] uncaughtException exit-code=1`，`assert.equal(lastLine, …)` 通过；退出码 1。守卫用 `writeSync(2, …)` 同步落盘（`server/shared/process-crash-guard.ts:87`），所以末行不可能是半个 token；判据另断言 `!stderr.endsWith('claud')`。
+
+### AC4 — 中断可机读
+
+**本任务不做重放。** 重启只恢复常驻进程（`RESIDENT_RESTORE_STARTUP_DELAY_MS` 段注释逐字写明 bring back, **不重放**），本任务只保证显式中断信号，不保证 turn 重放。
+
+中断信号的**用户可见入口**：`GET /api/providers/sessions/:sessionId/messages` 的响应 `data.turnInterrupted`（由 `sessionsService.fetchHistory` → `ClaudeSessionsProvider.fetchHistory` 产出；字段定义在 `server/shared/types/provider-launch.ts`）。判据逐字断言的字段名与值：
+
+```
+history.turnInterrupted === { toolUseId: 'toolu_interrupted_1', reason: 'transcript-ended-mid-tool-call' }
+```
+
+读取口径：转录文件的最后一条非 thinking 消息是 `tool_use` 且没有 `toolResult`，并且该 session 当前不在运行（`running === false`；崩溃后进程已无运行态）。判据同时给出负控：同一文件在 `running: true` 下 `turnInterrupted === null`，避免把正在跑的工具误报成中断。诚实边界：本标记是磁盘形态读数，区分不了"崩溃打断"与"进程外被关掉后留下的同一形态"，两者都确实表示"该 turn 已不在运行且工具永不返回"；它不重放、不补 tool_result。
+
+### AC5 — 范围受控
+
+```
+$ git diff --name-only $(git merge-base HEAD develop)
+server/index.ts
+server/modules/database/repositories/sessions/ui-last-opened.db.ts
+server/modules/providers/index.ts
+server/modules/providers/list/claude/claude-sessions.provider.ts
+server/modules/providers/services/sessions-watcher.service.ts
+server/modules/providers/tests/sessions-watcher-failure-guard.test.ts
+server/shared/process-crash-guard.ts
+server/shared/types/provider-launch.ts
+```
+
+8 个文件全部在 `## Touches` 内；新增 server 测试文件已登记。`server/shared/process-crash-guard.ts`、`server/shared/types/provider-launch.ts`、`server/modules/providers/list/claude/claude-sessions.provider.ts`、`server/modules/providers/index.ts` 是本轮按「先 task_write 登记再改」补进 Touches 的。
+
+### AC6 — 仓库门
+
+```
+$ npm run typecheck   # tsc -p tsconfig.json && tsc -p server/tsconfig.json && tsc -p scripts/tsconfig.json
+TYPECHECK_EXIT=0
+$ npm run lint        # oxlint src/ server/ scripts/ shared/
+LINT_EXIT=0           # 仅既有 warning
+```
+
+### AC7 — pin 同步读数
+
+```
+$ bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json \
+    --test server/shared/tests/quay-test-script.test.ts
+ℹ tests 14  ℹ pass 14  ℹ fail 0
+✔ AC7: the committed duration baseline is valid data, covers the suite, and documents its source
+```
+
+`unknown=` pin 的前后读数：**改动前 `unknown=501`，改动后 `unknown=501`（未变）**。原因如实登记：该 pin（`server/shared/tests/quay-test-script.test.ts:327`）由**合成** manifest 驱动（同文件 288 行 `for (let i = 0; i < 507; i += 1)` 造 507 条 `server/synthetic/…`），不读真实收集；真实收集的两条判据（AC1 的 `rest.length`、AC3 的 `collectedServerFiles()`）都是运行时计算、没有字面量可撞。因此新增一个真实 test 文件既不改 501 的合成 pin，也没有让时长基线覆盖闸转红（AC7 判据同轮 14/14 绿），无需上调。
+
+### ADR-007 暗轴
+
+该轴仍暗,理由:本任务只改服务端崩溃守卫、数据库指针写与历史读取，不改变模块依赖图的环/扇入扇出，L_D/L_G 无适用读数
+
 ## Touches
 
 - server/modules/providers/services/sessions-watcher.service.ts
 - server/index.ts
 - server/modules/database/repositories/sessions/ui-last-opened.db.ts
+- server/shared/process-crash-guard.ts (new)
+- server/shared/types/provider-launch.ts
+- server/modules/providers/list/claude/claude-sessions.provider.ts
+- server/modules/providers/index.ts
 - server/modules/providers/tests/sessions-watcher-failure-guard.test.ts (new)
 - server/shared/tests/quay-test-script.test.ts
 - tasks/gap-server-watcher-db-open-failure-exits-1-kills-resident-turns.md
