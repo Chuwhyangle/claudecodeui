@@ -56,13 +56,13 @@ voice-realtime-ambiguity REAL paired reading: 1 failure(s)
 
 ## AC
 
-- [ ] AC1 判据从红变绿：`env -u TSX_TSCONFIG_PATH -u TSX_TS_CONFIG_PATH node experiments/voice-realtime-ambiguity/run-real.mjs` 退出 **0**，输出含 `n=24 × 2 arm(s) × 3 rep(s)` 与 `voice-realtime-ambiguity REAL paired reading: OK`；改前同命令 exit 1、stderr 逐字 `[probe] transport: …/voice-realtime/voice-realtime-dashscope-transport.ts does not exist`（立案读数，完成记录须逐字贴出改前/改后两次）。
-- [ ] AC2 读数不变（承重）：改后同命令打印的四类场景读数逐字仍为 `homophone-entity-ambiguity arm A 9/18 arm B 10/18`、`self-correction arm A 6/15 arm B 4/15`、`coreference arm A 0/15 arm B 7/15`、`world-model arm A 6/24 arm B 11/24`、`TOTAL arm A 21/72 arm B 32/72`，并含 `7/7 control(s) moved in the predicted direction` 与 `real=7/7 moved  control=inverted=against  runs=straddle=red`；`git diff develop...HEAD -- experiments/voice-realtime-ambiguity/fixtures/ experiments/voice-realtime-ambiguity/PREREG.md experiments/voice-realtime-ambiguity/run.mjs` 输出为**空**。
-- [ ] AC3 probe 指向现存的出货模块：完成记录给出证明 `MODULE_PATHS.transport` 所指文件存在且含 `export function createDashscopeTransport` 的逐字读数（`ls -l` + `grep -n`），路径为 `server/modules/voice-realtime/core/voice-realtime-dashscope-transport.ts`；并给出 `git show --stat 3cee05605` 中该文件 `{ => core}/` 的移动行作为归因证据。
-- [ ] AC4 tsx 注册命名 server tsconfig：`run-real.mjs` 的注册行逐字为 `register({ tsconfig: fileURLToPath(new URL('../../server/tsconfig.json', import.meta.url)) })`（形态同 AC-307 给 `run.mjs` 的注册），且 AC1 的清洗 env 命令在该注册下仍 exit 0。
-- [ ] AC5 守用例证明会红：新用例以清洗 env spawn 裸命令并断言 exit 0；把 `MODULE_PATHS.transport` 临时改回旧路径后该用例**变红**、恢复后变绿（两次读数都给出）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts` 退出 0。
-- [ ] AC6 三条取假形态仍各自非零退出且判词指名原因：`--corpus=empty`（判词含 `the corpus is EMPTY`）、`--control=inverted`（判词含 `朝预测的**反方向**移动`）、`--runs=straddle`（判词含 `the readings come from 2 different runs`）——修好 probe 之后这三条不得被 probe 的噪声掩盖或静默失效。
-- [ ] AC7 静态门：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1 判据从红变绿：`env -u TSX_TSCONFIG_PATH -u TSX_TS_CONFIG_PATH node experiments/voice-realtime-ambiguity/run-real.mjs` 退出 **0**，输出含 `n=24 × 2 arm(s) × 3 rep(s)` 与 `voice-realtime-ambiguity REAL paired reading: OK`；改前同命令 exit 1、stderr 逐字 `[probe] transport: …/voice-realtime/voice-realtime-dashscope-transport.ts does not exist`（立案读数，完成记录须逐字贴出改前/改后两次）。
+- [x] AC2 读数不变（承重）：改后同命令打印的四类场景读数逐字仍为 `homophone-entity-ambiguity arm A 9/18 arm B 10/18`、`self-correction arm A 6/15 arm B 4/15`、`coreference arm A 0/15 arm B 7/15`、`world-model arm A 6/24 arm B 11/24`、`TOTAL arm A 21/72 arm B 32/72`，并含 `7/7 control(s) moved in the predicted direction` 与 `real=7/7 moved  control=inverted=against  runs=straddle=red`；`git diff develop...HEAD -- experiments/voice-realtime-ambiguity/fixtures/ experiments/voice-realtime-ambiguity/PREREG.md experiments/voice-realtime-ambiguity/run.mjs` 输出为**空**。
+- [x] AC3 probe 指向现存的出货模块：完成记录给出证明 `MODULE_PATHS.transport` 所指文件存在且含 `export function createDashscopeTransport` 的逐字读数（`ls -l` + `grep -n`），路径为 `server/modules/voice-realtime/core/voice-realtime-dashscope-transport.ts`；并给出 `git show --stat 3cee05605` 中该文件 `{ => core}/` 的移动行作为归因证据。
+- [x] AC4 tsx 注册命名 server tsconfig：`run-real.mjs` 的注册行逐字为 `register({ tsconfig: fileURLToPath(new URL('../../server/tsconfig.json', import.meta.url)) })`（形态同 AC-307 给 `run.mjs` 的注册），且 AC1 的清洗 env 命令在该注册下仍 exit 0。
+- [x] AC5 守用例证明会红：新用例以清洗 env spawn 裸命令并断言 exit 0；把 `MODULE_PATHS.transport` 临时改回旧路径后该用例**变红**、恢复后变绿（两次读数都给出）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts` 退出 0。
+- [x] AC6 三条取假形态仍各自非零退出且判词指名原因：`--corpus=empty`（判词含 `the corpus is EMPTY`）、`--control=inverted`（判词含 `朝预测的**反方向**移动`）、`--runs=straddle`（判词含 `the readings come from 2 different runs`）——修好 probe 之后这三条不得被 probe 的噪声掩盖或静默失效。
+- [x] AC7 静态门：`npm run typecheck`、`npm run lint` 退出 0。
 
 ## DoD
 
@@ -75,3 +75,108 @@ voice-realtime-ambiguity REAL paired reading: 1 failure(s)
 - experiments/voice-realtime-ambiguity/fixtures/real-paired.json（只读不改：AC2 的逐字读数来源）
 - scripts/voice-realtime-status-cost.mjs（只读不改：同族第二条断点的登记，另一机制、不在本条修）
 - tasks/gap-ac309-real-runner-probe-stale-transport-path.md（自触）
+
+## 完成记录
+
+实现提交：`c65117122 fix(voice-realtime): re-point the AC-309 runner probe at the moved transport + guard it`（2 文件，+38/−2）。worktree `/data/home/yale/work/claudecodeui-worktrees/gap-ac309-real-runner-probe-stale-transport-path`，分支 `task/gap-ac309-real-runner-probe-stale-transport-path`，基线 `4e0cb5a42`（= 立案时 develop）。
+
+### AC1 判据从红变绿
+
+改前（worktree 净检出、改动前同一棵树，`env -u TSX_TSCONFIG_PATH -u TSX_TS_CONFIG_PATH node experiments/voice-realtime-ambiguity/run-real.mjs`）→ **EXIT 1**，stderr 逐字：
+
+```
+voice-realtime-ambiguity REAL paired reading: 1 failure(s)
+  [probe] transport: /data/home/yale/work/claudecodeui-worktrees/gap-ac309-real-runner-probe-stale-transport-path/server/modules/voice-realtime/voice-realtime-dashscope-transport.ts does not exist
+```
+
+改后同命令 → **EXIT 0**，stdout 逐字含 `n=24 × 2 arm(s) × 3 rep(s) = 144 reading(s) expected`，末行逐字：
+
+```
+voice-realtime-ambiguity REAL paired reading: OK — n=24 × 2 arm(s) × 3 rep(s); quality numbers are a reading and are NOT a criterion
+```
+
+### AC2 读数不变
+
+改后同命令逐字：
+
+```
+n=24 × 2 arm(s) × 3 rep(s) = 144 reading(s) expected
+  homophone-entity-ambiguity   arm A 9/18   arm B 10/18
+  self-correction              arm A 6/15   arm B 4/15
+  coreference                  arm A 0/15   arm B 7/15
+  world-model                  arm A 6/24   arm B 11/24
+  TOTAL                        arm A 21/72   arm B 32/72
+…
+  7/7 control(s) moved in the predicted direction
+…
+  real=7/7 moved  control=inverted=against  runs=straddle=red
+```
+
+改前/改后 stdout 逐行 diff（仅剔除含绝对 probe 路径的 5 行头部）除新增的那一行 `… REAL paired reading: OK …` 外**完全一致**。冻结物：`git diff develop...HEAD -- experiments/voice-realtime-ambiguity/fixtures/ experiments/voice-realtime-ambiguity/PREREG.md experiments/voice-realtime-ambiguity/run.mjs | wc -l` → **0**。
+
+### AC3 probe 指向现存的出货模块
+
+```
+$ ls -l server/modules/voice-realtime/core/voice-realtime-dashscope-transport.ts
+-rw-rw-r-- 1 yale yale 79504 Nov 16 15:12 server/modules/voice-realtime/core/voice-realtime-dashscope-transport.ts
+$ grep -n "export function createDashscopeTransport" server/modules/voice-realtime/core/voice-realtime-dashscope-transport.ts
+859:export function createDashscopeTransport(options: DashscopeTransportOptions = {}): DashscopeTransport {
+```
+
+归因（`3cee05605` 的移动行）：
+
+```
+$ git show --stat=200 --find-renames 3cee05605 | grep dashscope-transport
+ server/modules/voice-realtime/{ => core}/voice-realtime-dashscope-transport.ts             |    4 +-
+$ git show --name-status --find-renames 3cee05605 | grep dashscope-transport
+R099	server/modules/voice-realtime/voice-realtime-dashscope-transport.ts	server/modules/voice-realtime/core/voice-realtime-dashscope-transport.ts
+```
+
+### AC4 tsx 注册命名 server tsconfig
+
+`experiments/voice-realtime-ambiguity/run-real.mjs:57` 逐字：
+
+```
+register({ tsconfig: fileURLToPath(new URL('../../server/tsconfig.json', import.meta.url)) });
+```
+
+AC1 的清洗 env 命令在该注册下 exit 0（见 AC1）。
+
+### AC5 守用例证明会红
+
+绿（恢复 `core/` 后）：
+
+```
+$ npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
+✔ AC-309 guard: `node experiments/voice-realtime-ambiguity/run-real.mjs` exits 0 under a washed tsx env (2581.128695ms)
+ℹ tests 6  ℹ pass 6  ℹ fail 0        (exit 0)
+```
+
+红（把 `MODULE_PATHS.transport` 临时改回旧路径，同一命令）：
+
+```
+✖ AC-309 guard: `node experiments/voice-realtime-ambiguity/run-real.mjs` exits 0 under a washed tsx env (2812.472688ms)
+ℹ tests 6  ℹ pass 5  ℹ fail 1        (exit 1)
+  voice-realtime-ambiguity REAL paired reading: 1 failure(s)
+    [probe] transport: …/server/modules/voice-realtime/voice-realtime-dashscope-transport.ts does not exist
+```
+
+失败集只有这一条新用例（其余 5 条 AC-307 等用例仍绿），恢复后复跑 exit 0。
+
+### AC6 三条取假形态
+
+```
+--corpus=empty    → exit 1  [n] the corpus is EMPTY — n=0 × 2 arm(s) = 0 readings, and an empty reading is not a green one
+--control=inverted→ exit 1  [control] --control=inverted … —— 朝预测的**反方向**移动
+--runs=straddle   → exit 1  [pairing] the readings come from 2 different runs (1970-01-01T00:00:00.000Z (1 reading(s)); run-voice-realtime-paired-live-1 (179 reading(s))) — two arms compared in one run must not straddle runs
+```
+
+三者在修好的 probe 下各自非零退出、判词指名原因，未被 probe 噪声掩盖。
+
+### AC7 静态门
+
+`npm run typecheck` → exit 0（三个 tsc 项目全过）；`npm run lint` → exit 0（仅仓库既有 warning，两个改动文件零命中）。
+
+### ADR-007 暗轴
+
+- 该轴仍暗,理由:本任务只把判据 runner 的硬编码 probe 路径重指到被 god-package 分裂搬走的现存模块并补一条守用例，未改任何模块依赖边、未运行 archguard，L_D/L_G 没有本轮可记的量化读数。
