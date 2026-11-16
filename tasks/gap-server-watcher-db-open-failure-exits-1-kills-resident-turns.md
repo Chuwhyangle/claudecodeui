@@ -219,3 +219,28 @@ journal **未轮转**：上面窗口的两条 `code=exited, status=1/FAILURE` �
 - server/modules/providers/tests/sessions-watcher-failure-guard.test.ts (new)
 - server/shared/tests/quay-test-script.test.ts
 - tasks/gap-server-watcher-db-open-failure-exits-1-kills-resident-turns.md
+
+## Blocker
+
+**2026-11-16T07:23:40.229Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=parse-mechanical-fan-in: unparseable fresh mechanical fan-in output: node:internal/modules/cjs/loader:1568
+  throw err;
+  ^
+
+Error: Cannot find module '/data/home/yale/.claude/plugins/cache/quay/quay/0.30.1/scripts/dist/worker-driver.ts'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
+    at Module._load (node:internal/modules/cjs/loader:1341:5)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v24.21.0
+- run_id：wk-prod-anchor
+- session_id：8c8a8872-bbd1-48f2-9e5e-150c343a58fc
