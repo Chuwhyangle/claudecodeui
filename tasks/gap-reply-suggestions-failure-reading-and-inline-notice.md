@@ -121,6 +121,8 @@ extra:
 - server/modules/reply-suggestions/tests/reply-suggestions-guard.test.ts
 - server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts
 - src/shared/api/clientTail.ts
+- src/shared/api/requests.ts
+- src/shared/api/replySuggestionsType.ts (new)
 - src/shared/types.ts
 - src/shared/tests/replySuggestionsApi.test.ts
 - src/shared/tests/replySuggestionsTypeSync.test.ts
@@ -128,6 +130,7 @@ extra:
 - src/modules/chat-support/index.ts
 - src/modules/chat-composer/hooks/useReplySuggestions.ts
 - src/modules/chat-composer/hooks/useSuggestionChips.ts
+- src/modules/chat-composer/index.ts
 - src/modules/chat-composer/composer/InputSuggestionChips.tsx
 - src/modules/chat-composer/composer/SuggestionFailureNotice.tsx (new)
 - src/modules/chat-composer/composer/ChatComposer.tsx
@@ -138,6 +141,7 @@ extra:
 - src/modules/chat/tests/i18nChatSuggestionsCompleteness.test.ts (new)
 - src/modules/chat/tests/inputSuggestionsComposer.test.tsx
 - src/modules/chat/tests/chatComposerReplyChips.test.tsx
+- src/modules/chat/tests/chatComposerSuggestHighlight.test.tsx
 - server/shared/tests/architecture-ratchet.baseline.json
 - server/shared/tests/architecture-ratchet.test.ts
 - server/shared/tests/quay-test-script.test.ts

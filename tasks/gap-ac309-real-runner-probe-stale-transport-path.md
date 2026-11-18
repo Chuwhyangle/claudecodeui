@@ -2,7 +2,7 @@
 id: gap-ac309-real-runner-probe-stale-transport-path
 title: AC-309 判据 runner 的 probe 路径被 voice-realtime god-package 分裂搬空（transport →
   core/）致判据恒红；重指现存出货模块 + 命名 server tsconfig 注册 + 守用例
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -181,27 +181,37 @@ $ npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/t
 
 - 该轴仍暗,理由:本任务只把判据 runner 的硬编码 probe 路径重指到被 god-package 分裂搬走的现存模块并补一条守用例，未改任何模块依赖边、未运行 archguard，L_D/L_G 没有本轮可记的量化读数。
 
+## 第二轮复查（2026-11-18，合并 develop 后）
+
+本轮在既有 worktree 上把全部 AC 逐条复跑，全部仍成立；预合并门全过。
+
+- AC1：`env -u TSX_TSCONFIG_PATH -u TSX_TS_CONFIG_PATH node experiments/voice-realtime-ambiguity/run-real.mjs` → **EXIT 0**，末行 `voice-realtime-ambiguity REAL paired reading: OK — n=24 × 2 arm(s) × 3 rep(s)`。
+- AC2：读数逐字不变 — `homophone-entity-ambiguity arm A 9/18 arm B 10/18`、`self-correction arm A 6/15 arm B 4/15`、`coreference arm A 0/15 arm B 7/15`、`world-model arm A 6/24 arm B 11/24`、`TOTAL arm A 21/72 arm B 32/72`、`7/7 control(s) moved in the predicted direction`、`real=7/7 moved  control=inverted=against  runs=straddle=red`。
+- AC5：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts` → tests 6 / pass 6 / fail 0（含 `✔ AC-309 guard … exits 0 under a washed tsx env`）。
+- AC6：`--corpus=empty` exit 1（`the corpus is EMPTY`）、`--control=inverted` exit 1（`朝预测的**反方向**移动`）、`--runs=straddle` exit 1（`the readings come from 2 different runs`）。
+- AC7：`npm run typecheck` exit 0；`npm run lint` exit 0（仅仓库既有 warning）。
+- 预合并门：`git merge --no-edit develop` 无冲突；`anti-drift-touches-check` → `ANTI-DRIFT OK … 2 actual file(s), all within declared Touches (5 glob(s))`，exit 0。
+
 ## Blocker
 
-**2026-11-16T07:18:47.533Z — worker 未落地（exited-not-landed）**
+**2026-11-18T10:06:42.504Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=parse-mechanical-fan-in: unparseable fresh mechanical fan-in output: node:internal/modules/cjs/loader:1568
-  throw err;
-  ^
-
-Error: Cannot find module '/data/home/yale/.claude/plugins/cache/quay/quay/0.30.1/scripts/dist/worker-driver.ts'
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
-    at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
-    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
-    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
-    at Module._load (node:internal/modules/cjs/loader:1341:5)
-    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
-    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
-    at node:internal/main/run_main_module:33:47 {
-  code: 'MODULE_NOT_FOUND',
-  requireStack: []
-}
-
-Node.js v24.21.0
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
-- session_id：2b834ae2-cc66-432a-88c1-8486a9d674af
+- session_id：bbcba56e-6346-4f1e-9b18-a4e47884ea90
+
+**2026-11-18（第二轮 worker）— 真因：环境缺料 + fan-in A/B 空签名工件；不在本任务 delta**
+
+1. `src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` 是 **develop 上的既存红**，与本分支逐字节相同（`git diff --stat develop...HEAD -- <file>` 为空）。本轮直接单跑该文件：`5 failed | 24 passed`，五条失败全部是**外部语料缺失**——`/data/home/yale/work/tc-verify/` 整个目录在本机已不存在（`corpus/long/L4-nonstop.wav`、`corpus/public/LibriSpeech/dev-clean`、long manifest 皆无；`find /data /home -name L4-nonstop.wav` 无命中）。该语料在仓库外、由已不在任何 commit 里的 `tc-verify/tools/long-corpus.mjs` 用 TTS 片段拼成（`git log --all -- tools/long-corpus.mjs` 为空），本机无法重建；自制音频会让文件内的实质读数（ceiling cut 位置、quiet frame、0.4s overlap）失真，故**不伪造**。
+2. 同一轮 suite 的基线复跑（`.quay/fan-in-suite-gap-ac309-real-runner-probe-stale-transport-path~wk-prod-anchor~baseline-1794996362412-63764c.log`）在同一文件上给出**逐字相同**的 `not ok` 行，机械 A/B 却判 `changed-assertion`。根因是签名解析的日志形状差：`__PERFILE__` 标记行向后 **8 行**窗口内找 `AssertionError:`——全量日志里该窗口只有 `__PERFILE_KIND__`/其他 per-file 行 ⇒ 任务侧记下 `file\0`（空文本）；基线单文件复跑里 `not ok` 行就在标记行下第 3 行 ⇒ 基线侧记下 `file\0<assertion-text>`。任务侧因此多出一条 `{file, text:""}`，`compareFailureSignatures` 判 changed。**确定性**，重退一轮必然原样复现（同族已记入 `~/.claude/shared-lessons/baseline-a-b-changed-assertion-can-be-empty-marker-artifact.md`）。
+3. 因此本任务在当前 host 上**无法**靠再实现变绿；该红不属本任务 delta，且无在飞任务认领语料（`tasks/*.md` 的 todo/ready/needs-human 中，除本任务与同阻塞姊妹 `gap-server-watcher-db-open-failure-exits-1-kills-resident-turns` 外无 Touches 命中）。⛔ 未改 `voiceLiveSegmenter.test.ts`、未放宽其断言、未把缺料改成 skip：那会越过本任务交付面（DoD 只允许三处）并无授权地放宽仓库证据面。恢复 `/data/home/yale/work/tc-verify/corpus/`（或由项目决定外部语料缺失时该文件的降级形态）需要人类/管理层的决定。
+## Needs-Human
+
+**执行 2026-11-18T10:22:19.442Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：LOOP DEADLOCK: task gap-ac309-real-runner-probe-stale-transport-path has been blocked by the SAME pre-existing red set for 3 consecutive fan-in rounds (signature unchanged across rounds). Blocked red points: src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts. No other task in the carrier shares this signature yet — if more arrive, they are mutually landing gates. Suggested resolution: land ANY ONE of them first (each one's own fix is outside the blocked set, so the red set does not grow); the others' blocked sets then shrink by that red point and they land in turn. If a landing still makes it worse, a human must decide the order. ⛔ The gates were NOT relaxed: every new/changed red point still hard-fails this task (baseline-equivalence exemption never covers a red the task introduced). — 停止自动重派（电路断路器：同一既存红签名连续 3 轮未变）。⛔ 判据未放宽：本次新增 / 断言文本变化的红点仍然硬红（既存红等价豁免只覆盖「不变差」的方向）。
+- 失败步/判词：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：2698e4bf-289d-44ca-b03b-4aa740e77376
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-ac309-real-runner-probe-stale-transport-path~wk-prod-anchor~1794997027060-aa8810.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-ac309-real-runner-probe-stale-transport-path-wk-prod-anchor.log
