@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-failure-reading-and-inline-notice
 title: 回复建议失败可见化：上游 502 等失败在输入框内显示行内降级状态，详情浮层仅在点击后弹出
-status: todo
+status: ready
 labels:
   - gap
   - defect
