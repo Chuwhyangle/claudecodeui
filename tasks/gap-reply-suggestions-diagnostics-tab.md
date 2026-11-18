@@ -184,3 +184,11 @@ recent failures (2):
 - src/modules/settings/tests/diagnosticsSettingsTab.test.tsx (new)
 - src/modules/settings/tests/i18nDiagnosticsCompleteness.test.ts (new)
 - src/modules/i18n/locales/*/settings.json
+
+## Blocker
+
+**2026-11-18T12:25:06.719Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：10b01e15-06da-4f8f-9b32-cf0463d8d0aa
