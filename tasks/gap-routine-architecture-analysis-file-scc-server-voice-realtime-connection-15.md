@@ -90,6 +90,13 @@ Extract a leaf contract module for the VoiceRealtimeConnection shape that frames
 - `voice-realtime-trunk-steps.test.ts` 9/9、`voice-realtime-frame-registry.test.ts` 4/4、`voice-realtime-diagnose.test.ts` + `voice-realtime-segmented-protocol.test.ts` 33/33、`voice-realtime-active-sessions.test.ts` + `voice-realtime-teardown-races.test.ts` 7/7、`voice-realtime-bridge.test.ts` + `voice-realtime-continuous-empty-guard-span.test.ts` 23/23、`provider-capabilities-cancel-queued.test.ts` 2/2。
 - `voice-realtime-bridge.test.ts` 的 AC4 false form 原先把 ws-proxy 当作 bridge import 所在的复制源；类下沉后 bridge import 在 `voice-realtime-connection.ts`，该 false form 改为同时复制 state 模块与 proxy 副本并逐级重定向，正控/负控均保持通过。
 
+### 复验（第 2 轮 worker，merge develop 之后）
+- `git merge develop` → 干净合并（无冲突），HEAD 9d315cd01。
+- `server/shared/tests/server-import-cycle-budget.test.ts` → 13/13 pass；case `(k)` 打印 `[file-scc] files=17 intraPackageEdges=50 sccs=[]`。
+- `server/modules/voice-realtime/tests/voice-realtime-bridge.test.ts` → 16/16 pass（含 AC4 false form）。
+- `anti-drift-touches-check` → `ANTI-DRIFT OK`：13 个实际改动文件全在声明的 15 条 Touches 内。
+- `task_check` → `execute->done` 门 `ok:true`（acTotal=2 acChecked=2 dodTotal=2 dodChecked=2）。
+
 ### 未做 / 边界
 - 未下调 `architecture-ratchet.baseline.json` 的 contract 条目（1176）：现读数已低于 800 直接不计数，ratchet 判绿并提示可下调；本任务不改共享基线，避免与并行 SCC 任务争同一文件。
 - 目录级 AC-394 读数未变（单目录本来 0 环），`GATE_DIRECTORY_PIN` 无新目录，故未改。
@@ -101,3 +108,11 @@ Extract a leaf contract module for the VoiceRealtimeConnection shape that frames
 - 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
 - session_id：7624f979-42d8-45d6-9473-33dc0093e6e9
+
+**2026-11-18T10:46:08Z — 第 2 轮 worker 复核：suite 红仍是 develop 预存红，不是本任务 delta**
+
+- 两条 suite 红与 develop 基线逐字相同：driver 在 detached develop worktree（`8aea1c3de301`）上重跑同样两个文件，消息与耗时（provider-models 963ms vs 928ms；voiceLiveSegmenter 30056ms vs 30118ms）一致；`.quay/develop-red-set.json` 也把两文件标为本轮开始前已存在（firstSeenAt `2026-11-18T10:01:27Z`）。
+- `src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts`：外部语料 `/data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav` 在本机不存在 —— 整个 `/data/home/yale/work/tc-verify` 目录都已不在（语料按既有决定不进仓库，见 `docs/experiments/README.md`）。测试按设计硬失败而非 skip；本任务 Touches 不含该文件，且不能用「跳过」换绿。
+- `server/modules/providers/tests/provider-models.service.test.ts`：单跑实测失败在 `:670` 的 `assert.deepEqual(offered, visible)` —— 账号刷新后的 codex 目录比预设 `CODEX_PREDEFINED_MODELS` 多了 `gpt-6.2-astra` / `gpt-6.2-sol`（预置 8 项 vs 账号 10 项）。这是上游账号目录漂移，develop 同红。
+- `changed-assertion` 的成因是日志形状而非断言变化：全量 suite 日志里 `not ok` 行在 `__PERFILE__ ... passed=false` 之后 28 行（第 882 / 910 行，超出 `SIG_ASSERTION_LOOKAHEAD=8`），任务侧 marker 签名被解析为空串；基线重跑日志只含 2 个文件、断言落在 lookahead 内，marker 签名非空。两侧 TAP 条目逐字相同（`AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at ...`）。机械 A/B 因而把预存红判成 changed。
+- 未在本任务内修这两条：都在 Touches 外、且属于 develop 预存红（需要单独的修复任务：恢复外部语料 / 重新整理 codex 预置目录）。⛔ 没有放宽任何门，也没有把预存红当作本任务的产物。
