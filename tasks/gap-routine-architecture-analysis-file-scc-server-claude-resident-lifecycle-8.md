@@ -85,3 +85,11 @@ Split the handler TABLE (data) from the registry (behaviour) into a leaf module 
 - `server/modules/providers/tests/claude-resident-outcome-registry.test.ts`
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-file-scc-server-claude-resident-lifecycle-8.md`
+
+## Blocker
+
+**2026-11-18T10:28:32.809Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：c536de82-94cd-4879-b0d3-13609819c5a9
