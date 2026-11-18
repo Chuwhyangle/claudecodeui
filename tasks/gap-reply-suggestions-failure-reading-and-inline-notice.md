@@ -188,14 +188,6 @@ extra:
 
 该轴仍暗,理由:本任务无蒸馏/图学习产物，只有失败可见化的产品变更
 
-## Blocker
-
-**2026-11-18T11:02:53.876Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/shared/tests/frontend-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: src directory cycles do not match the committed baseline. A cycle may only shrink: when one is genuinely closed, lower CYCLE_GROUPS here and the committed JSON in the same commit. Never add a member or a group to accommodate a red reading. [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/frontend-import-cycle-budget.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx,server/shared/tests/frontend-import-cycle-budget.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
-- run_id：wk-prod-anchor
-- session_id：9ce87898-d99e-4470-8d01-0104002703aa
-
 ## 重试记录（worker, 2026-11-18 第二次）
 
 上一次 fan-in 的 suite 红已定位并修复（不是 flake）：
