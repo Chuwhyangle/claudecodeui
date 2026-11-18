@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-log-drawer
 title: 回复建议日志抽屉：进程内脱敏日志环 + 按 requestId 过滤的右侧抽屉
-status: ready
+status: done
 labels:
   - gap
 parent: null
