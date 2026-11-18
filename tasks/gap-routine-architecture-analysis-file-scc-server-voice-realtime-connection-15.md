@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-server-voice-realtime-connection-
 title: "architecture-analysis: All 15 files of
   server/modules/voice-realtime/connection form ONE file-level SCC (shortest
   cycle: connection-frames.ts:33 → ws-proxy.service.ts:385 → connect"
-status: ready
+status: needs-human
 labels:
   - gap
   - routine-filed
@@ -116,3 +116,14 @@ Extract a leaf contract module for the VoiceRealtimeConnection shape that frames
 - `server/modules/providers/tests/provider-models.service.test.ts`：单跑实测失败在 `:670` 的 `assert.deepEqual(offered, visible)` —— 账号刷新后的 codex 目录比预设 `CODEX_PREDEFINED_MODELS` 多了 `gpt-6.2-astra` / `gpt-6.2-sol`（预置 8 项 vs 账号 10 项）。这是上游账号目录漂移，develop 同红。
 - `changed-assertion` 的成因是日志形状而非断言变化：全量 suite 日志里 `not ok` 行在 `__PERFILE__ ... passed=false` 之后 28 行（第 882 / 910 行，超出 `SIG_ASSERTION_LOOKAHEAD=8`），任务侧 marker 签名被解析为空串；基线重跑日志只含 2 个文件、断言落在 lookahead 内，marker 签名非空。两侧 TAP 条目逐字相同（`AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at ...`）。机械 A/B 因而把预存红判成 changed。
 - 未在本任务内修这两条：都在 Touches 外、且属于 develop 预存红（需要单独的修复任务：恢复外部语料 / 重新整理 codex 预置目录）。⛔ 没有放宽任何门，也没有把预存红当作本任务的产物。
+
+## Needs-Human
+
+**执行 2026-11-18T10:57:30.318Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：LOOP DEADLOCK: task gap-routine-architecture-analysis-file-scc-server-voice-realtime-connection-15 has been blocked by the SAME pre-existing red set for 3 consecutive fan-in rounds (signature unchanged across rounds). Blocked red points: src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts. Other tasks blocked by the identical red set: gap-ac309-real-runner-probe-stale-transport-path, gap-routine-architecture-analysis-file-scc-server-claude-resident-lifecycle-8, gap-routine-architecture-analysis-file-scc-src-architecture-render-9 — each of these tasks fixes a red point OUTSIDE the blocked set, so they are mutually landing gates (none can produce a green full suite while the others' reds remain). Suggested resolution: land ANY ONE of them first (each one's own fix is outside the blocked set, so the red set does not grow); the others' blocked sets then shrink by that red point and they land in turn. If a landing still makes it worse, a human must decide the order. ⛔ The gates were NOT relaxed: every new/changed red point still hard-fails this task (baseline-equivalence exemption never covers a red the task introduced). — 停止自动重派（电路断路器：同一既存红签名连续 3 轮未变）。⛔ 判据未放宽：本次新增 / 断言文本变化的红点仍然硬红（既存红等价豁免只覆盖「不变差」的方向）。
+- 失败步/判词：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：d8986b67-aa48-415e-94a7-4b166db6bb47
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-routine-architecture-analysis-file-scc-server-voice-realtime-connection-15~wk-prod-anchor~1794998817193-efb0fa.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-routine-architecture-analysis-file-scc-server-voice-realtime-connection-15-wk-prod-anchor.log

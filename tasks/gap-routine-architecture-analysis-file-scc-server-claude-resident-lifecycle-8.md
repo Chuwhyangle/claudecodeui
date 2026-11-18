@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-server-claude-resident-lifecycle-
 title: "architecture-analysis: 8 of the 18 files in
   modules/providers/list/claude/lifecycle sit in one SCC (registry:49 imports
   handlers, handlers:56 imports registry; resident-host.types."
-status: ready
+status: needs-human
 labels:
   - gap
   - routine-filed
@@ -56,6 +56,7 @@ Split the handler TABLE (data) from the registry (behaviour) into a leaf module 
 ### 读数（修复前 → 修复后）
 
 - L_G file-graph (`scanFileImportGraph`, lifecycle package): files before=18 after=18; intraPackageEdges before=54 after=50; nonTrivialSccs before=1 after=1; maxSccMembers before=8 after=6; outcomeFilesInScc before=2 after=0
+- L_G file-graph retry re-measure (merged develop): files=18 intraPackageEdges=50 nonTrivialSccs=1 maxSccMembers=6 outcomeFilesInScc=0; residual members = resident-host.types.ts / resident-launch.ts / resident-ledger-runtime.ts / resident-process.types.ts / resident-settings.ts / resident-turn.types.ts
 - 残留 SCC（用例 (k) 已钉，只许缩小）：`resident-host.types.ts` / `resident-launch.ts` / `resident-ledger-runtime.ts` / `resident-process.types.ts` / `resident-settings.ts` / `resident-turn.types.ts`。这是本包 ledger/settings/process 的类型缠绕，本任务未展开；它现在被用例 (k) 显式读数，不再对目录棘轮与 mcp-gateway 单包 pin 不可见。
 - L_G 仪器口径：`archguard-runner` 的六个 scope 只覆盖 quay 自身，本仓库的 `src`/`server` 均实测 `analyze exited 1` ⇒ NOT EVALUATED；因此不假报 `cycles=0`，上面的读数是本仓库文件级扫描器的真实读数。
 
@@ -68,6 +69,17 @@ Split the handler TABLE (data) from the registry (behaviour) into a leaf module 
 - `server/shared/tests/server-import-cycle-budget.test.ts` → 13/13 pass；用例 (k) 打印 `files=18 intraPackageEdges=50 sccs=[[6 members]]`
 - `server/shared/tests/architecture-ratchet.test.ts` → 6/6 pass
 - `server/shared/tests/cloudpit-goal-exit-gate.test.ts` → 3/3 pass
+
+### 重跑证据（retry 会话，worktree merge develop 后）
+
+- `git merge --no-edit develop` → 无冲突，仅 `tasks/*.md` 变动，`server/` 零改动。
+- `tsc --noEmit -p server/tsconfig.json` → exit 0
+- `oxlint`（上述 6 个改动文件）→ exit 0
+- `claude-resident-outcome-registry.test.ts` → 4/4 pass
+- `claude-resident-lifecycle-outcome-registry.test.ts` + `claude-resident-control-queue.test.ts` → 6/6 pass
+- `server-import-cycle-budget.test.ts` → 13/13 pass；用例 (k) 重新打印 `files=18 intraPackageEdges=50 sccs=[["resident-host.types.ts","resident-launch.ts","resident-ledger-runtime.ts","resident-process.types.ts","resident-settings.ts","resident-turn.types.ts"]]`
+- `architecture-ratchet.test.ts` + `cloudpit-goal-exit-gate.test.ts` → 9/9 pass
+- `anti-drift-touches-check` → ANTI-DRIFT OK：6 actual files 全在 Touches 内。
 
 ## AC
 - [x] `.quay/routine-findings.jsonl` 中 finding `file-scc-server-claude-resident-lifecycle-8`（routine `architecture-analysis`，runId `architecture-analysis-1794995539540`）所描述的问题被复核并处置
@@ -93,3 +105,20 @@ Split the handler TABLE (data) from the registry (behaviour) into a leaf module 
 - 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
 - session_id：c536de82-94cd-4879-b0d3-13609819c5a9
+
+**2026-11-18 retry 复核 — 归因结论：非本任务引入，属 develop 基线红**
+
+- `src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` 不在本任务 Touches 内，worktree 与 develop 对该文件内容零差异（`git diff 03d7034fd develop -- <file>` 为空）。
+- 该红是环境资源缺失：`/data/home/yale/work/tc-verify` 整个目录在本机不存在，测试在 `existsSync(L4_PATH)` 处硬断言失败。
+- `.quay/develop-red-set.json`（evaluatedAt 2026-11-18T10:57:04Z）已把同一文件登记为 develop 红，且 lastSignature 正是同一条 missing-corpus 文本；上轮被判 `changed-assertion` 是基线快照文本与任务侧文本前缀（`AssertionError [ERR_ASSERTION]: `）不一致所致，不是测试行为变化。
+- 本轮任务侧全部判据实跑通过（见上「重跑证据」），未新增任何红文件。
+## Needs-Human
+
+**执行 2026-11-18T11:08:02.147Z — 停派终止（失败无法归因，⛔ 不再重派）**
+
+- 阻碍原因：LOOP DEADLOCK: task gap-routine-architecture-analysis-file-scc-server-claude-resident-lifecycle-8 has been blocked by the SAME pre-existing red set for 3 consecutive fan-in rounds (signature unchanged across rounds). Blocked red points: src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts. Other tasks blocked by the identical red set: gap-ac309-real-runner-probe-stale-transport-path, gap-routine-architecture-analysis-file-scc-server-voice-realtime-connection-15, gap-routine-architecture-analysis-file-scc-src-architecture-render-9 — each of these tasks fixes a red point OUTSIDE the blocked set, so they are mutually landing gates (none can produce a green full suite while the others' reds remain). Suggested resolution: land ANY ONE of them first (each one's own fix is outside the blocked set, so the red set does not grow); the others' blocked sets then shrink by that red point and they land in turn. If a landing still makes it worse, a human must decide the order. ⛔ The gates were NOT relaxed: every new/changed red point still hard-fails this task (baseline-equivalence exemption never covers a red the task introduced). — 停止自动重派（电路断路器：同一既存红签名连续 3 轮未变）。⛔ 判据未放宽：本次新增 / 断言文本变化的红点仍然硬红（既存红等价豁免只覆盖「不变差」的方向）。
+- 失败步/判词：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：2a915b26-4423-4bb4-817f-feb6a97e9012
+- suite 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-suite-gap-routine-architecture-analysis-file-scc-server-claude-resident-lifecycle-8~wk-prod-anchor~1794999746752-ade0b8.log
+- fan-in 日志：/data/home/yale/work/claudecodeui/.quay/fan-in-gap-routine-architecture-analysis-file-scc-server-claude-resident-lifecycle-8-wk-prod-anchor.log

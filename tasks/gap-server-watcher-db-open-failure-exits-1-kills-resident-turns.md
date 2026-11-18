@@ -1,7 +1,7 @@
 ---
 id: gap-server-watcher-db-open-failure-exits-1-kills-resident-turns
 title: Cloudpit server crashes twice with exit code 1, killing resident session turns
-status: ready
+status: needs-human
 labels:
   - gap
   - defect
@@ -207,6 +207,51 @@ journal **未轮转**：上面窗口的两条 `code=exited, status=1/FAILURE` �
 
 该轴仍暗,理由:本任务只改服务端崩溃守卫、数据库指针写与历史读取，不改变模块依赖图的环/扇入扇出，L_D/L_G 无适用读数
 
+### 2026-11-18 续做轮 — suite 红归因与修复（ratchet 4 条 + 环境红 2 条）
+
+上一轮 fan-in 判 exited-not-landed 的首条红是 `ratchet: oversizeFiles server/index.ts 2905→2918`。本轮在 worktree 单跑 `server/shared/tests/architecture-ratchet.test.ts`，一次 red 含 **4 条**违规（suite 日志只留首行，与既有教训一致）：
+
+```
+ratchet: oversizeFiles server/index.ts 2905→2918
+ratchet: oversizeFiles server/modules/providers/list/claude/claude-sessions.provider.ts 1792→1838
+ratchet: oversizeFiles server/modules/providers/services/sessions-watcher.service.ts 865→934
+ratchet: smallHelperCopies <total> 6→7 — files: … server/shared/process-crash-guard.ts …
+```
+
+修复（全部来自本任务 delta）：
+
+- 三条 `oversizeFiles` 是**接线/新实现本身**（guard 安装、guarded watcher start、interrupted-turn 读取），不是顺手涨行：按基线文件自带的 RECORDED CHANGE 通道，在 `server/shared/tests/architecture-ratchet.baseline.json` 的 `note` 追加日期段（文件、旧→新读数、为什么这是诚实的形状），并把三条数值同步到实测值（2905→2918、1792→1838、865→934）。数值与 note 必须同时改：只写 note 不改数值照样红。
+- `smallHelperCopies` 的 +1 是 `process-crash-guard.ts` 自己声明了一份 `errorMessage`：改为从 `server/shared/utils/core.js` 导入既有实现（行为一致：非 Error 走 `String()`），副本数回到 6。
+
+复跑读数：
+
+```
+$ bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts
+✔ (AC1) the five dimensions are measured on the real tree and the committed ratchet holds
+✔ (AC2) … ✔ (AC3) … ✔ (AC4) … ✔ (AC5) … ✔ (duplicates) …
+ℹ tests 6  ℹ pass 6  ℹ fail 0
+```
+
+任务自身判据同轮复跑（`errorMessage` 改导入后）：
+
+```
+$ bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/sessions-watcher-failure-guard.test.ts
+✔ AC2(a): the pre-fix wiring exits 1 on a database-open failure (red baseline)
+✔ AC2(b)+AC3: the fixed wiring survives the same failure, still serves, and reports a complete stack
+✔ AC3: the fatal path writes the whole stack synchronously and exits 1 on a complete line
+✔ AC4: a crash-interrupted turn reads back as a machine-readable turnInterrupted marker
+ℹ tests 4  ℹ pass 4  ℹ fail 0
+```
+
+仓库门同轮复跑：`npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning）。
+
+#### 剩余 suite 红：两条都是 develop 既存的环境红，与 Touches 无交集
+
+1. `src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` — `AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it`。`/data/home/yale/work/tc-verify` 整个目录在本机不存在（repo 外工装；docs/experiments/README.md 记明语料不入库）。本任务对该文件与 develop 零差异（`git diff --stat develop..HEAD -- <file>` 为空）。`.quay/develop-red-set.json` 已登记同一文件为 develop 红（lastSignature 同一条 missing-corpus）。
+2. `server/modules/providers/tests/provider-models.service.test.ts` — `[codex-models] model/list discovery empty-or-failed visible=0`（本机单跑另有账号目录前进读数：curated 8 项 vs 期望 10 项）。本任务不触碰 providers 模型目录。
+
+自修不成立：重建语料＝伪造证据；provider 模型列表取决于本机 codex 账号/CLI 目录。fan-in 的 `changed-assertion` 判词是已记录的**签名解析工件**（全量日志里 `__PERFILE__` 标记行的 8 行窗口取不到 `AssertionError:` ⇒ 空签名；基线单文件复跑取到 ⇒ 非空），确定性出现、重退无用。同机同日已有 4 个无关任务因同一对红被判 needs-human。
+
 ## Touches
 
 - server/modules/providers/services/sessions-watcher.service.ts
@@ -218,12 +263,13 @@ journal **未轮转**：上面窗口的两条 `code=exited, status=1/FAILURE` �
 - server/modules/providers/index.ts
 - server/modules/providers/tests/sessions-watcher-failure-guard.test.ts (new)
 - server/shared/tests/quay-test-script.test.ts
+- server/shared/tests/architecture-ratchet.baseline.json
 - tasks/gap-server-watcher-db-open-failure-exits-1-kills-resident-turns.md
 
 ## Blocker
 
-**2026-11-18T10:01:33.780Z — worker 未落地（exited-not-landed）**
+**2026-11-18T11:18:56.142Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/shared/tests/architecture-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: ratchet: oversizeFiles server/index.ts 2905→2918 — 基线内读数不得上调（此基线只允许下降） [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/architecture-ratchet.test.ts,server/shared/tests/architecture-ratchet.test.ts changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
-- session_id：153f4a15-2d32-4c46-808c-802c95bdb4c2
+- session_id：ae3a4eb1-4a0f-4306-b01c-176d59bcbe01
