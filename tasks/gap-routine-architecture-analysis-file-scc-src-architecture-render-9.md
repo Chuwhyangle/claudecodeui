@@ -99,3 +99,11 @@ Move the panel model type into a leaf `architecturePanelModel.ts` (as src/shared
 - `server/shared/tests/frontend-import-cycle-budget.test.ts`
 - `server/shared/tests/frontend-import-cycle-budget.baseline.json`
 - `tasks/gap-routine-architecture-analysis-file-scc-src-architecture-render-9.md`
+
+## Blocker
+
+**2026-11-18T10:34:41.255Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：ba188ebe-f427-448c-a6a7-91639cfefb04
