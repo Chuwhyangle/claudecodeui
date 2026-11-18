@@ -101,14 +101,18 @@ depends_on:
 - server/modules/diagnostics/tests/diagnostics-bundle.test.ts (new)
 - server/index.ts
 - server/modules/reply-suggestions/index.ts
+- server/modules/reply-suggestions/reply-suggestions.module.ts
 - server/modules/reply-suggestions/reply-suggestions.service.ts
 - server/modules/reply-suggestions/reply-suggestions-failure-state.ts
+- server/modules/reply-suggestions/reply-suggestions-diagnostics.ts (new)
 - server/shared/tests/server-import-cycle-budget.test.ts
 - server/shared/tests/server-import-cycle-budget.baseline.json
 - server/shared/tests/cloudpit-goal-exit-gate.test.ts
 - server/shared/tests/cloudpit-goal-exit-gate.baseline.json
+- server/shared/tests/architecture-ratchet.baseline.json
 - server/shared/tests/quay-test-script.test.ts
 - src/shared/types.ts
+- src/shared/diagnosticsType.ts (new)
 - src/shared/api/clientTail.ts
 - src/shared/tests/replySuggestionsTypeSync.test.ts
 - src/modules/diagnostics/index.ts (new)
