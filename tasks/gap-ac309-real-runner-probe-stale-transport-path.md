@@ -181,6 +181,17 @@ $ npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/t
 
 - 该轴仍暗,理由:本任务只把判据 runner 的硬编码 probe 路径重指到被 god-package 分裂搬走的现存模块并补一条守用例，未改任何模块依赖边、未运行 archguard，L_D/L_G 没有本轮可记的量化读数。
 
+## 第二轮复查（2026-11-18，合并 develop 后）
+
+本轮在既有 worktree 上把全部 AC 逐条复跑，全部仍成立；预合并门全过。
+
+- AC1：`env -u TSX_TSCONFIG_PATH -u TSX_TS_CONFIG_PATH node experiments/voice-realtime-ambiguity/run-real.mjs` → **EXIT 0**，末行 `voice-realtime-ambiguity REAL paired reading: OK — n=24 × 2 arm(s) × 3 rep(s)`。
+- AC2：读数逐字不变 — `homophone-entity-ambiguity arm A 9/18 arm B 10/18`、`self-correction arm A 6/15 arm B 4/15`、`coreference arm A 0/15 arm B 7/15`、`world-model arm A 6/24 arm B 11/24`、`TOTAL arm A 21/72 arm B 32/72`、`7/7 control(s) moved in the predicted direction`、`real=7/7 moved  control=inverted=against  runs=straddle=red`。
+- AC5：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts` → tests 6 / pass 6 / fail 0（含 `✔ AC-309 guard … exits 0 under a washed tsx env`）。
+- AC6：`--corpus=empty` exit 1（`the corpus is EMPTY`）、`--control=inverted` exit 1（`朝预测的**反方向**移动`）、`--runs=straddle` exit 1（`the readings come from 2 different runs`）。
+- AC7：`npm run typecheck` exit 0；`npm run lint` exit 0（仅仓库既有 warning）。
+- 预合并门：`git merge --no-edit develop` 无冲突；`anti-drift-touches-check` → `ANTI-DRIFT OK … 2 actual file(s), all within declared Touches (5 glob(s))`，exit 0。
+
 ## Blocker
 
 **2026-11-18T10:06:42.504Z — worker 未落地（exited-not-landed）**
@@ -188,3 +199,9 @@ $ npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/t
 - 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
 - session_id：bbcba56e-6346-4f1e-9b18-a4e47884ea90
+
+**2026-11-18（第二轮 worker）— 真因：环境缺料 + fan-in A/B 空签名工件；不在本任务 delta**
+
+1. `src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` 是 **develop 上的既存红**，与本分支逐字节相同（`git diff --stat develop...HEAD -- <file>` 为空）。本轮直接单跑该文件：`5 failed | 24 passed`，五条失败全部是**外部语料缺失**——`/data/home/yale/work/tc-verify/` 整个目录在本机已不存在（`corpus/long/L4-nonstop.wav`、`corpus/public/LibriSpeech/dev-clean`、long manifest 皆无；`find /data /home -name L4-nonstop.wav` 无命中）。该语料在仓库外、由已不在任何 commit 里的 `tc-verify/tools/long-corpus.mjs` 用 TTS 片段拼成（`git log --all -- tools/long-corpus.mjs` 为空），本机无法重建；自制音频会让文件内的实质读数（ceiling cut 位置、quiet frame、0.4s overlap）失真，故**不伪造**。
+2. 同一轮 suite 的基线复跑（`.quay/fan-in-suite-gap-ac309-real-runner-probe-stale-transport-path~wk-prod-anchor~baseline-1794996362412-63764c.log`）在同一文件上给出**逐字相同**的 `not ok` 行，机械 A/B 却判 `changed-assertion`。根因是签名解析的日志形状差：`__PERFILE__` 标记行向后 **8 行**窗口内找 `AssertionError:`——全量日志里该窗口只有 `__PERFILE_KIND__`/其他 per-file 行 ⇒ 任务侧记下 `file\0`（空文本）；基线单文件复跑里 `not ok` 行就在标记行下第 3 行 ⇒ 基线侧记下 `file\0<assertion-text>`。任务侧因此多出一条 `{file, text:""}`，`compareFailureSignatures` 判 changed。**确定性**，重退一轮必然原样复现（同族已记入 `~/.claude/shared-lessons/baseline-a-b-changed-assertion-can-be-empty-marker-artifact.md`）。
+3. 因此本任务在当前 host 上**无法**靠再实现变绿；该红不属本任务 delta，且无在飞任务认领语料（`tasks/*.md` 的 todo/ready/needs-human 中，除本任务与同阻塞姊妹 `gap-server-watcher-db-open-failure-exits-1-kills-resident-turns` 外无 Touches 命中）。⛔ 未改 `voiceLiveSegmenter.test.ts`、未放宽其断言、未把缺料改成 skip：那会越过本任务交付面（DoD 只允许三处）并无授权地放宽仓库证据面。恢复 `/data/home/yale/work/tc-verify/corpus/`（或由项目决定外部语料缺失时该文件的降级形态）需要人类/管理层的决定。
