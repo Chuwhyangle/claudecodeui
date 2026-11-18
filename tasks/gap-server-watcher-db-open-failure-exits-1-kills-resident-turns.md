@@ -268,18 +268,8 @@ $ bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test
 
 ## Blocker
 
-**2026-11-18T10:01:33.780Z — worker 未落地（exited-not-landed）**
+**2026-11-18T11:18:56.142Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/shared/tests/architecture-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: ratchet: oversizeFiles server/index.ts 2905→2918 — 基线内读数不得上调（此基线只允许下降） [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/architecture-ratchet.test.ts,server/shared/tests/architecture-ratchet.test.ts changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
-- session_id：153f4a15-2d32-4c46-808c-802c95bdb4c2
-
-**2026-11-18（续做轮）— 主动 park needs-human：剩余红是 develop 既存环境红，同签名连续判 changed-assertion**
-
-- 本轮已修完任务侧唯一新增红（architecture-ratchet 4 条，见 Evidence「2026-11-18 续做轮」）：复跑 6/6 绿；守卫判据 4/4 绿；typecheck/lint 绿。
-- 剩余两条红均不在本任务 delta 内、且在 develop 上同样红：
-  - `src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts`：缺外部语料 `/data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav`（`/data/home/yale/work/tc-verify` 整目录不存在）。本机单文件实跑 exit 1，断言逐字 `AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at … — the criterion cannot run without it`；与 develop 对该文件零差异。
-  - `server/modules/providers/tests/provider-models.service.test.ts`：`[codex-models] model/list discovery empty-or-failed visible=0`；本任务不触碰 providers 模型目录。
-- 归因：fan-in 的 `HARD RED (changed-assertion)` 是已记录的签名解析工件（空签名 vs 非空签名），确定性复现，重退只会再烧一轮全量 suite；同机同日另有 4 个无关任务因同一对红被迫 needs-human（gap-ac309-real-runner-probe-stale-transport-path、…-server-claude-resident-lifecycle-8、…-server-voice-realtime-connection-15、…-src-architecture-render-9）。
-- 需要人：在本机恢复 `/data/home/yale/work/tc-verify` 语料（或给 fan-in 一条既存红等价豁免），或裁定 `voiceLiveSegmenter` 缺语料红如何处置。
-- 解除条件：语料可用 / provider 模型目录与判据对齐 ⇒ 本任务只剩「重新 fan-in」，代码侧无需再改。
+- session_id：ae3a4eb1-4a0f-4306-b01c-176d59bcbe01
