@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-src-architecture-render-9
 title: "architecture-analysis: 9 files of src/modules/architecture/render form a
   file-level SCC (ArchitecturePanel.tsx:48 → architecturePanelShell.tsx:24 →
   ArchitecturePanel.tsx); the fron"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
