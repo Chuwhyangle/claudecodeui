@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/shared/utils';
@@ -86,8 +87,10 @@ export function SuggestionFailureNotice({
       role="status"
       aria-live="polite"
       // It shares the textarea's grid cell, like the chip strip, so the empty box
-      // grows by one line instead of pushing the transcript away.
-      className="relative z-10 w-full"
+      // grows by one line instead of pushing the transcript away. The high z-index
+      // keeps the popover above the transcript's own scroll/markdown layer, which
+      // otherwise intercepts presses on its actions.
+      className="relative z-30 w-full"
       style={{ gridArea: '1 / 1' }}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && open) {
@@ -110,7 +113,7 @@ export function SuggestionFailureNotice({
           {line}
         </button>
 
-        {open && (
+        {open && createPortal(
           <div
             data-slot="reply-suggestions-failure-popover"
             role="dialog"
@@ -118,11 +121,13 @@ export function SuggestionFailureNotice({
               defaultValue: 'Reply suggestions unavailable',
             })}
             className={cn(
-              // Wide: a floating panel above the box. Narrow or touch-only: a
-              // bottom sheet (both variants are classes so Tailwind emits them).
-              'absolute bottom-full left-4 z-20 mb-2 w-72 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-lg',
-              'max-[480px]:fixed max-[480px]:inset-x-0 max-[480px]:bottom-0 max-[480px]:left-0 max-[480px]:mb-0 max-[480px]:w-full max-[480px]:rounded-b-none',
-              'pointer-coarse:fixed pointer-coarse:inset-x-0 pointer-coarse:bottom-0 pointer-coarse:left-0 pointer-coarse:mb-0 pointer-coarse:w-full pointer-coarse:rounded-b-none',
+              // Portalled to <body> and fixed: the transcript's own scroll/markdown
+              // layer paints above the composer's stacking context, so an anchored
+              // panel would have its actions intercepted. Wide: a floating panel
+              // above the box. Narrow or touch-only: a bottom sheet.
+              'fixed bottom-24 left-4 z-[100] w-72 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-lg',
+              'max-[480px]:inset-x-0 max-[480px]:bottom-0 max-[480px]:left-0 max-[480px]:w-full max-[480px]:rounded-b-none',
+              'pointer-coarse:inset-x-0 pointer-coarse:bottom-0 pointer-coarse:left-0 pointer-coarse:w-full pointer-coarse:rounded-b-none',
             )}
           >
             <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
@@ -165,7 +170,8 @@ export function SuggestionFailureNotice({
                 {t('input.suggestions.failure.close', { defaultValue: 'Close' })}
               </button>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     </div>

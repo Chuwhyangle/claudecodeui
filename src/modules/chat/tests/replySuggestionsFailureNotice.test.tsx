@@ -127,7 +127,7 @@ describe('SuggestionFailureNotice', () => {
     // Compared as a boolean: an assertion diff that inspects a jsdom node is
     // pathologically slow when the RED path is exercised (the negative control).
     assert.ok(
-      view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null,
+      document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null,
       'the popover must NOT be in the DOM before a click',
     );
   });
@@ -136,7 +136,7 @@ describe('SuggestionFailureNotice', () => {
     const { view } = renderNotice();
     fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
 
-    const popover = view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]');
+    const popover = document.querySelector('[data-slot="reply-suggestions-failure-popover"]');
     assert.ok(popover, 'the popover is mounted after activation');
     assert.equal(popover.getAttribute('role'), 'dialog');
     assert.equal(popover.querySelector('[data-field="code"]')?.textContent, failure.code);
@@ -152,16 +152,15 @@ describe('SuggestionFailureNotice', () => {
     const trigger = view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element;
 
     fireEvent.click(trigger);
-    assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
     fireEvent.click(trigger);
-    assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
 
     fireEvent.click(trigger);
-    assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
     fireEvent.keyDown(trigger, { key: 'Escape' });
-    assert.equal(
-      view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'),
-      null,
+    assert.ok(
+      document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null,
       'Escape closes the detail popover',
     );
   });
@@ -169,7 +168,7 @@ describe('SuggestionFailureNotice', () => {
   it('(d) Retry calls the injected draw command and keeps the notice on screen', () => {
     const { view, props } = renderNotice();
     fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    fireEvent.click(view.container.querySelector('[data-action="retry"]') as Element);
+    fireEvent.click(document.querySelector('[data-action="retry"]') as Element);
 
     assert.equal((props.onRetry as ReturnType<typeof vi.fn>).mock.calls.length, 1);
     assert.ok(
@@ -182,12 +181,12 @@ describe('SuggestionFailureNotice', () => {
     const { view, props } = renderNotice();
     fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
 
-    fireEvent.click(view.container.querySelector('[data-action="close"]') as Element);
-    assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
+    fireEvent.click(document.querySelector('[data-action="close"]') as Element);
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
     assert.equal((props.onDismiss as ReturnType<typeof vi.fn>).mock.calls.length, 0);
 
     fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    fireEvent.click(view.container.querySelector('[data-action="dismiss"]') as Element);
+    fireEvent.click(document.querySelector('[data-action="dismiss"]') as Element);
     assert.equal((props.onDismiss as ReturnType<typeof vi.fn>).mock.calls.length, 1);
   });
 
@@ -309,20 +308,20 @@ describe('composer failure notice integration', () => {
   it('(g) draws the notice in the empty box and no popover until the line is clicked', () => {
     const { container } = renderComposer(chipStripProps());
     assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-notice"]'));
-    assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
 
     fireEvent.click(container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
   });
 
   it('(h) retry routes to the strip command and dismiss to the strip dismissal', () => {
     const strip = chipStripProps();
     const { container } = renderComposer(strip);
     fireEvent.click(container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    fireEvent.click(container.querySelector('[data-action="retry"]') as Element);
+    fireEvent.click(document.querySelector('[data-action="retry"]') as Element);
     assert.equal((strip.onRequestSuggestions as ReturnType<typeof vi.fn>).mock.calls.length, 1);
 
-    fireEvent.click(container.querySelector('[data-action="dismiss"]') as Element);
+    fireEvent.click(document.querySelector('[data-action="dismiss"]') as Element);
     assert.equal((strip.onDismissSuggestionFailure as ReturnType<typeof vi.fn>).mock.calls.length, 1);
   });
 
