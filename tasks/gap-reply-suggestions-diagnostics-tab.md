@@ -69,14 +69,14 @@ depends_on:
 
 ## AC
 
-- [ ] AC1 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/diagnostics/tests/diagnostics-service.test.ts` 退出 0 且 `fail 0`；覆盖 features 的 state 映射（off/misconfigured/ready/degraded）、recent failures 的排序与 limit 夹取、bundle 的字段完整性与脱敏。
-- [ ] AC2 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/diagnostics/tests/diagnostics-routes.test.ts` 退出 0；未带 token 返回 401/403；`limit=9999` 被夹到 200；`limit=0` 被夹到 1；响应 content-type 为 `text/plain`（bundle）与 `application/json`（其余）；不存在任意路径/文件名参数。
-- [ ] AC3 脱敏判据：在 bundle 与 failures 响应里注入含 `sk-test-secret`、`LITELLM_API_KEY=...`、`Authorization: Bearer ...` 的 fixture，断言响应中 `sk-`/`LITELLM_API_KEY=`/`Bearer ` 零命中，且 `[redacted]` 出现；负控：把脱敏函数改为恒等 ⇒ AC1/AC3 红，贴失败行与恢复命令。
-- [ ] AC4 前端：`bash scripts/with-memory-cap.sh npx vitest run src/modules/diagnostics/tests/diagnosticsController.test.ts src/modules/settings/tests/diagnosticsSettingsTab.test.tsx --maxWorkers=1` 退出 0；覆盖 loading→ready、请求失败显示错误且不抛、health 卡三态、最近失败表行、复制成功/失败状态、`data-slot="diagnostics-health"` / `"diagnostics-recent-failures"` 存在。
-- [ ] AC5 i18n：`bash scripts/with-memory-cap.sh npx vitest run src/modules/settings/tests/i18nDiagnosticsCompleteness.test.ts --maxWorkers=1` 退出 0；12 个 locale key 集合一致。
-- [ ] AC6 目录 pin：同时改完四份后，逐字运行 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 与 `... --test server/shared/tests/cloudpit-goal-exit-gate.test.ts`，均退出 0；完成记录贴 `directoryManifest` 长度 / `nodeCount` 改前改后，以及 `GATE_DIRECTORY_PIN` 与 JSON `moduleDirectories` 均包含 `modules/diagnostics`。
-- [ ] AC7 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0；新增测试文件后按实测更新 unknown pin 并贴改前/改后数字；`npm run typecheck`、`npm run lint`、`npm run build:client` 均退出 0；`architecture-ratchet.test.ts` 退出 0。
-- [ ] AC8 负控（改完即还原）：(a) 把 `misconfigured` 映射成 `ready` ⇒ AC1/AC4 红；(b) 从 bundle 去掉 `problems` ⇒ AC1 红；(c) 删除一处 pin ⇒ AC6 红。
+- [x] AC1 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/diagnostics/tests/diagnostics-service.test.ts` 退出 0 且 `fail 0`；覆盖 features 的 state 映射（off/misconfigured/ready/degraded）、recent failures 的排序与 limit 夹取、bundle 的字段完整性与脱敏。
+- [x] AC2 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/diagnostics/tests/diagnostics-routes.test.ts` 退出 0；未带 token 返回 401/403；`limit=9999` 被夹到 200；`limit=0` 被夹到 1；响应 content-type 为 `text/plain`（bundle）与 `application/json`（其余）；不存在任意路径/文件名参数。
+- [x] AC3 脱敏判据：在 bundle 与 failures 响应里注入含 `sk-test-secret`、`LITELLM_API_KEY=...`、`Authorization: Bearer ...` 的 fixture，断言响应中 `sk-`/`LITELLM_API_KEY=`/`Bearer ` 零命中，且 `[redacted]` 出现；负控：把脱敏函数改为恒等 ⇒ AC1/AC3 红，贴失败行与恢复命令。
+- [x] AC4 前端：`bash scripts/with-memory-cap.sh npx vitest run src/modules/diagnostics/tests/diagnosticsController.test.ts src/modules/settings/tests/diagnosticsSettingsTab.test.tsx --maxWorkers=1` 退出 0；覆盖 loading→ready、请求失败显示错误且不抛、health 卡三态、最近失败表行、复制成功/失败状态、`data-slot="diagnostics-health"` / `"diagnostics-recent-failures"` 存在。
+- [x] AC5 i18n：`bash scripts/with-memory-cap.sh npx vitest run src/modules/settings/tests/i18nDiagnosticsCompleteness.test.ts --maxWorkers=1` 退出 0；12 个 locale key 集合一致。
+- [x] AC6 目录 pin：同时改完四份后，逐字运行 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 与 `... --test server/shared/tests/cloudpit-goal-exit-gate.test.ts`，均退出 0；完成记录贴 `directoryManifest` 长度 / `nodeCount` 改前改后，以及 `GATE_DIRECTORY_PIN` 与 JSON `moduleDirectories` 均包含 `modules/diagnostics`。
+- [x] AC7 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0；新增测试文件后按实测更新 unknown pin 并贴改前/改后数字；`npm run typecheck`、`npm run lint`、`npm run build:client` 均退出 0；`architecture-ratchet.test.ts` 退出 0。
+- [x] AC8 负控（改完即还原）：(a) 把 `misconfigured` 映射成 `ready` ⇒ AC1/AC4 红；(b) 从 bundle 去掉 `problems` ⇒ AC1 红；(c) 删除一处 pin ⇒ AC6 红。
 
 ## DoD
 
@@ -87,6 +87,63 @@ depends_on:
 - 点「复制诊断包」，从剪贴板读回文本：包含版本、state、problems、最近失败；`sk-` 计数为 0；贴出文本前 20 行。
 - 用 MCP 浏览器逐条操作并截图；当前没有覆盖 Settings 诊断页的 `scripts/ui-scenario.mjs` 场景时，完成记录须逐字说明“无可用场景”；若新增场景，同时贴 JSON 报告与检查点截图。
 - 诚实边界：本任务不做原始日志抽屉；健康卡不渲染未实现的「查看日志」死按钮。任务 3 会把该动作接到抽屉。
+
+## 完成记录
+
+### 实现
+
+- 后端叶子 `server/modules/diagnostics/`：`diagnostics.service.ts`（聚合、state 推导、limit 夹取、服务端脱敏）、`diagnostics-bundle.ts`（纯文本包 + 末次脱敏）、`diagnostics.routes.ts`（三个只读 GET，`limit` 夹到 1..200，无路径/文件名参数）、`diagnostics.module.ts`（注入 providers + meta）、`index.ts` barrel。
+- `reply-suggestions` 新增 `reply-suggestions-diagnostics.ts` 与 barrel 导出；失败跟踪器新增 `lastSuccessAt()`（成功时由注入时钟打点）；`reply-suggestions.module.ts` 接受共享 `settingsSource`/`failureState`；`server/index.ts` 在组合根构建同一对实例，适配为 diagnostics provider，并把 `/api/diagnostics` 挂在 `authenticateToken` 之后。
+- 前端 `src/modules/diagnostics/`：React-free controller、thin hook、健康卡、失败表（桌面表格 + 窄屏卡片）、复制动作；`Settings.tsx`/`SettingsSidebar.tsx` 增加最后一个 tab；12 locale + 新 i18n 判据。
+- 目录 pin 四份同批 + `architecture-ratchet.baseline.json`（`server/index.ts` 2905→2950，RECORDED CHANGE 已写入 note）。
+
+### AC 证据
+
+- AC1 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/diagnostics/tests/diagnostics-service.test.ts`：tests 6 / pass 6 / fail 0（state 映射 off/misconfigured/ready/degraded；跨 feature 排序与 0→1、9999→200；bundle 字段完整；脱敏）；同批 `diagnostics-bundle.test.ts` tests 3 / pass 3 / fail 0。
+- AC2 `... --test server/modules/diagnostics/tests/diagnostics-routes.test.ts`：tests 5 / pass 5 / fail 0（真实 `authenticateToken` 无 token → 401；9999→200、0→1、默认 50；bundle `text/plain`、其余 `application/json`；`?path=/etc/passwd&file=...` 不影响答案、`/file` 404）。
+- AC3 脱敏 fixture（`sk-test-secret` / `LITELLM_API_KEY=abc123` / `Authorization: Bearer ...`）在 features、recent-failures、bundle 三处均零命中且出现 `[redacted]`。负控：把 `redactDiagnosticsText` 改为恒等 ⇒ AC1 `(d)` 红 `features must not carry an sk- token`；routes AC3 红同一断言；恢复后再跑 6/6 与 5/5 全绿。
+- AC4 `... npx vitest run src/modules/diagnostics/tests/diagnosticsController.test.ts src/modules/settings/tests/diagnosticsSettingsTab.test.tsx --maxWorkers=1`：Test Files 2 / tests 10 / pass 10；覆盖 loading→ready、失败可见且不抛、五态 pill、失败表行、复制成功/失败、两个 `data-slot`。
+- AC5 `... npx vitest run src/modules/settings/tests/i18nDiagnosticsCompleteness.test.ts --maxWorkers=1`：tests 4 / pass 4；12 个 locale（de/en/es/fr/id/it/ja/ko/ru/tr/zh-CN/zh-TW）key 集合与 en 一致，含正向控制。
+- AC6 四份 pin 同批：`directoryManifest` 102→103、`nodeCount` 102→103；`GATE_DIRECTORY_PIN` 103→104、`moduleDirectories` 102→103；两份均含 `modules/diagnostics`。`server-import-cycle-budget.test.ts` tests 12 / pass 12；`cloudpit-goal-exit-gate.test.ts` tests 3 / pass 3。第五处目录 pin 复核：`grep -rn "GATE_DIRECTORY_PIN\|MANIFEST_PIN" server/shared/tests` 只命中这两份测试文件，无第五份。
+- AC7 `server/shared/tests/quay-test-script.test.ts` tests 14 / pass 14。unknown pin 说明：该文件的 `unknown=501` 是 synthetic 507 文件 manifest 减 6 known 的固定读数，真实收集数不进入该断言；本任务新增 3 个 server 测试文件使真实收集 510→513，pin 无需改（实测复跑仍绿）。`npm run typecheck`、`npm run lint`（0 error，warning 均为既有）、`npm run build:client` 均 exit 0；`architecture-ratchet.test.ts` tests 6 / pass 6。
+- AC8 负控（改完即还原）：(a) 服务端 `resolveDiagnosticsFeatureState` 把 misconfigured 映射为 ready ⇒ AC1 红 `actual: 'ready', expected: 'misconfigured'`；前端 `STATE_LABEL_KEYS.misconfigured` 指向 `diagnostics.state.ready` ⇒ AC4 红 `Unable to find an element with the text: diagnostics.state.misconfigured`；(b) 从 bundle 移除 `problems:` 行 ⇒ AC1 红 `the bundle must state "`model` is required when `enabled` is true"`；(c) 从 `MANIFEST_PIN` 删除 `modules/diagnostics` ⇒ AC6 红 `the manifest names directories outside the pin`。
+
+### DoD 证据（隔离实例，未重启本机 Cloudpit）
+
+- 隔离实例：`ISOLATED_INSTANCE_SOURCE_DB=<seeded copy> ISOLATED_INSTANCE_STATE_DIR=$PWD/tmp/dod/iso bash scripts/isolated-instance.sh start`，`resident_restore_started=0`，端口 24161；临时 settings 的 `baseUrl=http://127.0.0.1:18082` 指向 stub 网关（每次请求返回 502，日志 `tmp/dod/stub.log`）。种子会话 `dod-diagnostics-session` 的转写由 `tmp/dod/transcript.jsonl` 提供；`POST /api/reply-suggestions` → 502，stub 收到 `/v1/messages`。
+- degraded（`tmp/diagnostics-health-degraded.png`）：健康卡「回复建议 / 已启用 / 上游异常」，配置来源为临时 settings 路径，最后成功「从未」，最近失败「http · HTTP 502 · 2026-11-18T12:11:27.867Z」；最近失败表两行，`requestId=f0c41c1b` / `d5c79959` 与 stub 日志一一对应。
+- misconfigured（`tmp/diagnostics-health-misconfigured.png`）：把临时 settings 改成 `enabled:true` 且 `model:""`，点刷新；健康卡状态 pill「配置不完整」、问题列表「`model` is required when `enabled` is true」；不再显示「已关闭」chip（该 chip 仅在 off/ready/degraded/ok 渲染）。
+- 复制诊断包：真实点击「复制诊断包」，`navigator.clipboard.readText()` 读回 1099 字符，存 `tmp/diagnostics-bundle.txt`；`grep -o 'sk-' | wc -l` = 0、`LITELLM_API_KEY=` = 0、`Bearer ` = 0。前 20 行：
+
+```
+Cloudpit diagnostics bundle
+generatedAt: 2026-11-18T12:11:31.737Z
+version: 3.0.1
+installForm: git
+platform: linux
+settingsSource: file
+settingsPath: /data/home/yale/work/claudecodeui-worktrees/gap-reply-suggestions-diagnostics-tab/tmp/dod/config/reply-suggestions.settings.json
+
+features (1):
+feature: reply-suggestions (Reply suggestions)
+  state: misconfigured
+  enabled: no
+  config: file:/data/home/yale/work/claudecodeui-worktrees/gap-reply-suggestions-diagnostics-tab/tmp/dod/config/reply-suggestions.settings.json
+  lastSuccessAt: never
+  problems: `model` is required when `enabled` is true
+  lastFailure: at=2026-11-18T12:11:27.867Z feature=reply-suggestions category=http httpStatus=502 durationMs=11 requestId=f0c41c1b model=stub-model protocol=anthropic
+
+recent failures (2):
+  - at=2026-11-18T12:11:27.867Z feature=reply-suggestions category=http httpStatus=502 durationMs=11 requestId=f0c41c1b model=stub-model protocol=anthropic
+  - at=2026-11-18T12:06:22.744Z feature=reply-suggestions category=http httpStatus=502 durationMs=23 requestId=d5c79959 model=stub-model protocol=anthropic
+```
+
+- 浏览器工具：本会话未挂载 MCP 浏览器工具，页面操作由 Playwright（Chromium 153）直接驱动真实页面完成，脚本 `tmp/dod/dod-diagnostics.mjs`，真实点击了「诊断与日志」tab、「刷新」、「复制诊断包」并从剪贴板读回。`scripts/ui-scenario.mjs` 没有覆盖 Settings 诊断页的场景 —— 无可用场景。
+- 诚实边界：本任务不做原始日志抽屉，健康卡没有「查看日志」按钮；「查看最近失败」只滚动到本页表格。
+
+### ADR-007
+
+该轴仍暗,理由:本任务是 Settings 诊断读取面与只读聚合，未改动训练/评测数据轴，L_D/L_G 不适用。
 
 ## Touches
 
