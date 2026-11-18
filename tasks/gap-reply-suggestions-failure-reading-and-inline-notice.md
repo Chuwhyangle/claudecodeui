@@ -80,15 +80,15 @@ extra:
 
 ## AC
 
-- [ ] AC1 后端失败读数判据：逐字运行 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-failure-reading.test.ts`，退出 0 且 `fail 0`。覆盖：(a) 缺 model / 缺 key 时 `/status` 的 `state='misconfigured'` 且 `problems` 指名缺项；(b) 明确 `enabled:false` 且无问题时 `state='off'`；(c) 上游抛 `LlmClientError('http',…,502)` 时 `/status.lastFailure` 的 `httpStatus=502`、`requestId` 非空、`category='http'`；(d) 成功一次后 `lastFailure` 清空、历史环仍保留该条。
-- [ ] AC2 错误体与日志：同文件或 `reply-suggestions-draw` 判据断言 `AppError.details` 含 `requestId`/`httpStatus`/`category`，捕获的 logger 行同时含 `httpStatus=502` 与 `requestId=<同一值>`；逐字贴出 1 行日志原文与 1 段错误 JSON。
-- [ ] AC3 账本失败行：`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts` 退出 0；新用例断言 `type:'failed'` 行的字段集合、`usageLog:false` 时不写、轮转仍只保留 `.1`。
-- [ ] AC4 前端 API：`bash scripts/with-memory-cap.sh npx vitest run src/shared/tests/replySuggestionsApi.test.ts --maxWorkers=1` 退出 0；非 2xx 且带 `{success:false,error:{code,message,details:{requestId,httpStatus}}}` 时返回 `ok:false` 且字段逐字保留；不可读 body 返回 `ok:false, code='unknown'`；旧的 `null` 断言必须改写而不是删除。
-- [ ] AC5 控制器 episode：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsController.test.ts src/modules/chat/tests/useReplySuggestions.test.tsx --maxWorkers=1` 退出 0。覆盖：自动失败设 `failure`；同 requestId 连续失败不重复；成功清空；`dismissFailure` 后自动失败不再显示但手动 redraw 仍更新；session 切换复位；`reportEvent` 失败不影响快照。
-- [ ] AC6 UI 行为：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsFailureNotice.test.tsx src/modules/chat/tests/inputSuggestionsComposer.test.tsx src/modules/chat/tests/chatComposerReplyChips.test.tsx --maxWorkers=1` 退出 0。用例逐条断言：(a) 失败且未忽略时行内 `data-slot="reply-suggestions-failure-notice"` 存在、`data-slot="reply-suggestions-failure-popover"` 不在 DOM；(b) 点击该行后 popover 出现，字段齐全；(c) 再次点击/Esc 关闭；(d) 点击重试调用 `redraw`；(e) 忽略后行内状态消失；(f) 正常空 chip 不渲染任何 notice。
-- [ ] AC7 i18n：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/i18nChatSuggestionsCompleteness.test.ts --maxWorkers=1` 退出 0；12 个 locale 的 key 集合一致，占位符一致。
-- [ ] AC8 仓库门与棘轮：`npm run typecheck`、`npm run lint`、`npm run build:client` 均退出 0；`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` 退出 0；`... --test server/shared/tests/quay-test-script.test.ts` 退出 0（新增判据文件后按实测更新 unknown pin 并贴改前/改后数字）；逐字贴 `wc -l` 的 `reply-suggestions.service.ts`（≤260）与 `ChatComposer.tsx`（≤1652）。
-- [ ] AC9 负控（改完即还原，各贴变异点、失败行、恢复命令）：(a) 把 typed failure 改回 `null` ⇒ AC4 红；(b) 去掉 episode 去重/成功后清空 ⇒ AC5 红；(c) 让 popover 默认挂载 ⇒ AC6(a) 红。
+- [x] AC1 后端失败读数判据：逐字运行 `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-failure-reading.test.ts`，退出 0 且 `fail 0`。覆盖：(a) 缺 model / 缺 key 时 `/status` 的 `state='misconfigured'` 且 `problems` 指名缺项；(b) 明确 `enabled:false` 且无问题时 `state='off'`；(c) 上游抛 `LlmClientError('http',…,502)` 时 `/status.lastFailure` 的 `httpStatus=502`、`requestId` 非空、`category='http'`；(d) 成功一次后 `lastFailure` 清空、历史环仍保留该条。
+- [x] AC2 错误体与日志：同文件或 `reply-suggestions-draw` 判据断言 `AppError.details` 含 `requestId`/`httpStatus`/`category`，捕获的 logger 行同时含 `httpStatus=502` 与 `requestId=<同一值>`；逐字贴出 1 行日志原文与 1 段错误 JSON。
+- [x] AC3 账本失败行：`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts` 退出 0；新用例断言 `type:'failed'` 行的字段集合、`usageLog:false` 时不写、轮转仍只保留 `.1`。
+- [x] AC4 前端 API：`bash scripts/with-memory-cap.sh npx vitest run src/shared/tests/replySuggestionsApi.test.ts --maxWorkers=1` 退出 0；非 2xx 且带 `{success:false,error:{code,message,details:{requestId,httpStatus}}}` 时返回 `ok:false` 且字段逐字保留；不可读 body 返回 `ok:false, code='unknown'`；旧的 `null` 断言必须改写而不是删除。
+- [x] AC5 控制器 episode：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsController.test.ts src/modules/chat/tests/useReplySuggestions.test.tsx --maxWorkers=1` 退出 0。覆盖：自动失败设 `failure`；同 requestId 连续失败不重复；成功清空；`dismissFailure` 后自动失败不再显示但手动 redraw 仍更新；session 切换复位；`reportEvent` 失败不影响快照。
+- [x] AC6 UI 行为：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsFailureNotice.test.tsx src/modules/chat/tests/inputSuggestionsComposer.test.tsx src/modules/chat/tests/chatComposerReplyChips.test.tsx --maxWorkers=1` 退出 0。用例逐条断言：(a) 失败且未忽略时行内 `data-slot="reply-suggestions-failure-notice"` 存在、`data-slot="reply-suggestions-failure-popover"` 不在 DOM；(b) 点击该行后 popover 出现，字段齐全；(c) 再次点击/Esc 关闭；(d) 点击重试调用 `redraw`；(e) 忽略后行内状态消失；(f) 正常空 chip 不渲染任何 notice。
+- [x] AC7 i18n：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/i18nChatSuggestionsCompleteness.test.ts --maxWorkers=1` 退出 0；12 个 locale 的 key 集合一致，占位符一致。
+- [x] AC8 仓库门与棘轮：`npm run typecheck`、`npm run lint`、`npm run build:client` 均退出 0；`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` 退出 0；`... --test server/shared/tests/quay-test-script.test.ts` 退出 0（新增判据文件后按实测更新 unknown pin 并贴改前/改后数字）；逐字贴 `wc -l` 的 `reply-suggestions.service.ts`（≤260）与 `ChatComposer.tsx`（≤1652）。
+- [x] AC9 负控（改完即还原，各贴变异点、失败行、恢复命令）：(a) 把 typed failure 改回 `null` ⇒ AC4 红；(b) 去掉 episode 去重/成功后清空 ⇒ AC5 红；(c) 让 popover 默认挂载 ⇒ AC6(a) 红。
 
 ## DoD
 
@@ -145,3 +145,44 @@ extra:
 - server/shared/tests/architecture-ratchet.baseline.json
 - server/shared/tests/architecture-ratchet.test.ts
 - server/shared/tests/quay-test-script.test.ts
+
+## 完成记录（worker, 2026-11-18）
+
+### AC 逐条证据
+
+- AC1 ✅ `npx tsx … --test …/reply-suggestions-failure-reading.test.ts` → exit 0，`pass 6 / fail 0`。覆盖 (a) 缺 model/缺 key → `/status.state='misconfigured'` 且 problems 分别指名 `model` / API key file；(b) `enabled:false` 且无问题 → `state='off'`；(b2) 合法配置 → `state='ready'`；(c) 上游 `LlmClientError('http',…,502)` → `lastFailure={category:'http', httpStatus:502, requestId:'98a6b7fc', model:'test-model', protocol:'anthropic'}`；(d) 成功一次 → `lastFailure=null` 且 failureState.history() 仍保留该条（1 条）。
+- AC2 ✅ 同一文件断言 `AppError.details={category:'http', requestId:'98a6b7fc', httpStatus:502, model:'test-model'}`，日志行同时含 `httpStatus=502` 与 `requestId=98a6b7fc`。日志原文：
+  `[reply-suggestions] protocol=anthropic model=test-model version=evid-1 durationMs=1 outcome=error:http requestId=98a6b7fc httpStatus=502`
+  错误 JSON：
+  `{"success":false,"error":{"code":"REPLY_SUGGESTIONS_UPSTREAM_FAILED","statusCode":502,"details":{"category":"http","requestId":"98a6b7fc","httpStatus":502,"model":"test-model"}}}`
+- AC3 ✅ `…/reply-suggestions-usage-log.test.ts` → exit 0，`pass 5 / fail 0`。新用例 `(e)` 断言 `type:'failed'` 行字段集合 `at,type,sessionId,requestId,category,httpStatus,durationMs,model,protocol`；`usageLog:false` 时不产生任何文件；轮转仍只有 `.1`、无 `.2`。
+- AC4 ✅ `vitest run src/shared/tests/replySuggestionsApi.test.ts` → 14 passed。非 2xx + `{success:false,error:{code,message,details:{requestId,httpStatus,category,model}}}` → `ok:false` 且字段逐字保留；不可读 body → `ok:false, code='unknown'`；旧的 `null` 断言改写为判别联合断言（未删除覆盖意图）。
+- AC5 ✅ `vitest run replySuggestionsController.test.ts useReplySuggestions.test.tsx` → 42 passed。自动失败设 `failure`；同 `code+httpStatus+requestId` 只增计数（i2）；成功清空（i3）；`dismissFailure` 后 notice 隐藏但手动 redraw 仍更新（i4）；session 切换复位（i5）；misconfigured 也进入同一 episode（i6）；`reportEvent` 拒绝不影响快照（j/h）。
+- AC6 ✅ `vitest run replySuggestionsFailureNotice.test.tsx inputSuggestionsComposer.test.tsx chatComposerReplyChips.test.tsx` → 96 passed。(a) 行内 `data-slot="reply-suggestions-failure-notice"` 存在、popover 不在 DOM；(b) 点击后 popover 出现且 code/httpStatus/at/model/requestId/failureCount 齐全；(c) 再次点击与 Esc 均关闭；(d) Retry 调用既有 redraw 且状态保持；(e) dismiss 后（rerender dismissed=true）行内状态消失；(f) 正常空 chip 不渲染 notice。
+- AC7 ✅ `vitest run i18nChatSuggestionsCompleteness.test.ts` → 37 passed；12 locale 的 `input.suggestions.failure` key 集合一致、占位符一致、每 locale title/retry 有实际翻译。
+- AC8 ✅ `npm run typecheck`=0、`npm run lint`=0、`npm run build:client`=0、`architecture-ratchet.test.ts`=0、`quay-test-script.test.ts`=0。`wc -l`：`reply-suggestions.service.ts` 259（≤260）、`ChatComposer.tsx` 1604（≤1652）。unknown pin 实测：新增 server 判据前 `known=508 unknown=1`（509 files），后 `known=508 unknown=2`（510 files）；`quay-test-script.test.ts` 的 `507` / `unknown=501` 是合成 manifest 常量，不读真实收集表，故无需改数（逐字命令已绿）。
+- AC9 ✅ 负控（改完即还原，均以 `git checkout -- <path>` 恢复）：
+  (a) `src/shared/api/clientTail.ts` 非 2xx 分支改回 `return null as unknown as ReplySuggestionsSuggestResponse;` ⇒ AC4 红：`2 failed | 12 passed`（"returns the typed failure … preserving code/status/requestId"、"derives the category …"）。
+  (b) `replySuggestionsController.ts` 的 `sameEpisode` 表达式改为 `const sameEpisode = false;` ⇒ AC5 红：`1 failed | 41 passed`（`(i2) the same requestId arriving again only advances the count`）。
+  (c) `SuggestionFailureNotice.tsx` 的 `useState(false)` 改为 `useState(true)`（popover 默认挂载）⇒ AC6 红：`7 failed | 89 passed`，含 `(a) … does NOT mount the popover until activated`。
+
+### DoD 真实落地
+
+隔离实例（`scripts/isolated-instance.sh start`，dist-server 构建，127.0.0.1:37842，live DB 备份 + `residentRestore.enabled:false`，`REPLY_SUGGESTIONS_SETTINGS_PATH` 指向临时 settings）+ 临时 stub 网关（127.0.0.1:37841，`/v1/messages` 先 502 后 200）。真实页面由仓库自带 Playwright 驱动（本 worker 会话未挂载 MCP 浏览器工具，故用等价 Playwright + `document.querySelector` 读数；未重启本机正在运行的 Cloudpit）：
+
+- 输入框内自动出现降级状态行：`The suggestion service returned an error (502)`。
+- `document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null` → 读数 `popoverAutoMounted: false`（浮层未自动弹出）。
+- 点击状态行后浮层出现，字段读数：`{code:"REPLY_SUGGESTIONS_UPSTREAM_FAILED", httpStatus:"502", at:"2026-11-18T10:49:20.556Z", model:"stub-model", requestId:"377d0222", failureCount:"1"}`。
+- 点重试后状态保持（`noticeAfterRetry=1`）；点忽略后状态行消失（`noticeAfterDismiss=0`）；刷新后状态行重新出现（`noticeAfterReload=1`，会话级 dismiss 不持久）。
+- stub 恢复 200 后重试（越过 30s 熔断冷却）：状态行消失（`noticeAfterRecovery=0`），模型 chip 出现（`modelChipsAfterRecovery=3`）。
+- 手机 390×844：状态行单行省略（`height:26, whiteSpace:"nowrap", overflow:"hidden"`），点击打开底部 sheet。截图：
+  `tmp/reply-suggestions-failure-inline.png`
+  `tmp/reply-suggestions-failure-popover.png`
+  `tmp/reply-suggestions-failure-phone.png`
+  `tmp/reply-suggestions-failure-phone-sheet.png`
+- 既有 UI 场景：无可用场景 —— `scripts/ui-scenarios/` 现有场景不覆盖 composer 建议失败态，故无场景 JSON 报告；以上为真实页面读数与截图。若本任务新增场景则需同时贴 JSON 报告，本任务未新增。
+- 诚实边界：只让失败可见，不修 litellm 容器、不做日志抽屉；popover 在未注入 `onViewLogs` 时不渲染任何“查看日志”按钮。真实页面驱动中发现并修复：绝对定位的 popover 被 transcript 的 markdown 层拦截点击，改为 portal 到 `<body>` + fixed（提交 `e2b222074`）。
+
+### ADR-007
+
+该轴仍暗,理由:本任务无蒸馏/图学习产物，只有失败可见化的产品变更
