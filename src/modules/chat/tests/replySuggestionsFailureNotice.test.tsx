@@ -124,9 +124,10 @@ describe('SuggestionFailureNotice', () => {
         ?.includes('returned an error'),
       'the line names the upstream failure',
     );
-    assert.equal(
-      view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'),
-      null,
+    // Compared as a boolean: an assertion diff that inspects a jsdom node is
+    // pathologically slow when the RED path is exercised (the negative control).
+    assert.ok(
+      view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null,
       'the popover must NOT be in the DOM before a click',
     );
   });
@@ -153,7 +154,7 @@ describe('SuggestionFailureNotice', () => {
     fireEvent.click(trigger);
     assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
     fireEvent.click(trigger);
-    assert.equal(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'), null);
+    assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
 
     fireEvent.click(trigger);
     assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
@@ -182,7 +183,7 @@ describe('SuggestionFailureNotice', () => {
     fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
 
     fireEvent.click(view.container.querySelector('[data-action="close"]') as Element);
-    assert.equal(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]'), null);
+    assert.ok(view.container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
     assert.equal((props.onDismiss as ReturnType<typeof vi.fn>).mock.calls.length, 0);
 
     fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
@@ -308,7 +309,7 @@ describe('composer failure notice integration', () => {
   it('(g) draws the notice in the empty box and no popover until the line is clicked', () => {
     const { container } = renderComposer(chipStripProps());
     assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-notice"]'));
-    assert.equal(container.querySelector('[data-slot="reply-suggestions-failure-popover"]'), null);
+    assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
 
     fireEvent.click(container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
     assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
@@ -327,10 +328,10 @@ describe('composer failure notice integration', () => {
 
   it('(i) a dismissed failure and a healthy empty box both render no notice', () => {
     const dismissed = renderComposer(chipStripProps({ suggestionFailureDismissed: true }));
-    assert.equal(dismissed.container.querySelector('[data-slot="reply-suggestions-failure-notice"]'), null);
+    assert.ok(dismissed.container.querySelector('[data-slot="reply-suggestions-failure-notice"]') === null);
     dismissed.unmount();
 
     const healthy = renderComposer(chipStripProps({ suggestionFailure: null }));
-    assert.equal(healthy.container.querySelector('[data-slot="reply-suggestions-failure-notice"]'), null);
+    assert.ok(healthy.container.querySelector('[data-slot="reply-suggestions-failure-notice"]') === null);
   });
 });
