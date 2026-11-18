@@ -122,7 +122,7 @@ extra:
 - server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts
 - src/shared/api/clientTail.ts
 - src/shared/api/requests.ts
-- src/shared/api/replySuggestionsType.ts (new)
+- src/shared/replySuggestionsType.ts (new)
 - src/shared/types.ts
 - src/shared/tests/replySuggestionsApi.test.ts
 - src/shared/tests/replySuggestionsTypeSync.test.ts
@@ -141,6 +141,7 @@ extra:
 - src/modules/chat/tests/i18nChatSuggestionsCompleteness.test.ts (new)
 - src/modules/chat/tests/inputSuggestionsComposer.test.tsx
 - src/modules/chat/tests/chatComposerReplyChips.test.tsx
+- src/modules/chat/tests/inlineQuoteChip.test.tsx
 - src/modules/chat/tests/chatComposerSuggestHighlight.test.tsx
 - server/shared/tests/architecture-ratchet.baseline.json
 - server/shared/tests/architecture-ratchet.test.ts
@@ -194,3 +195,27 @@ extra:
 - 未落地原因：step=suite: not ok - server/shared/tests/frontend-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: src directory cycles do not match the committed baseline. A cycle may only shrink: when one is genuinely closed, lower CYCLE_GROUPS here and the committed JSON in the same commit. Never add a member or a group to accommodate a red reading. [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/frontend-import-cycle-budget.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx,server/shared/tests/frontend-import-cycle-budget.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
 - session_id：9ce87898-d99e-4470-8d01-0104002703aa
+
+## 重试记录（worker, 2026-11-18 第二次）
+
+上一次 fan-in 的 suite 红已定位并修复（不是 flake）：
+
+- **新增 `shared <-> shared/api` 目录环**：`src/shared/types.ts` 为 re-export 新叶子而 import 了 `src/shared/api/replySuggestionsType.ts`，而 transport（`src/shared/api/requests.ts`）本来 value-import `src/shared/types.ts` ⇒ `frontend-import-cycle-budget.test.ts` 报新成员。修复：把类型叶子移到 `src/shared/replySuggestionsType.ts`（`types.ts` 与 readers 都不离开本目录即能读到；无回指边）。文件级/实体级 SCC 仍为零。同步更新 `requests.ts`、`types.ts` 的 specifier、`replySuggestionsTypeSync.test.ts` 的读取路径与注释。重测：`frontend-import-cycle-budget.test.ts` → **12 pass / 0 fail**。
+- **locale key-set digest 钉子**：`src/modules/chat/tests/inlineQuoteChip.test.tsx` 钉住 en/zh-CN `chat.json` 的 key-path 集合 sha256；本任务按 AC7 给 12 个 locale 增加了 `input.suggestions.failure` 键 ⇒ digest 必须随实测更新（不是放宽判据：集合仍逐字节钉住）。新值由本文件同一 `digestOf` 算法在合并后的树上算出：en=`aac3d995…fe11`、zh-CN=`67a40058…8494`。重测：该文件 **5 pass / 0 fail**。
+- **`voiceLiveSegmenter.test.ts` 的 5 条 red 不是本任务引入**：同一文件在 develop 主检出逐字复现，原因是评测语料缺失（`/data/home/yale/work/tc-verify/corpus/public/LibriSpeech/dev-clean` 不存在），与本 delta 无 import 关系；文件相对 develop 无差异。
+
+合并 develop 后逐条复跑 AC 判据（本 worktree 实测）：
+
+- AC1/AC2 `reply-suggestions-failure-reading.test.ts` → **6 pass / 0 fail**。
+- AC3 `reply-suggestions-usage-log.test.ts` → **5 pass / 0 fail**。
+- AC4 `replySuggestionsApi.test.ts` → **14 pass**；`replySuggestionsTypeSync.test.ts`（被移动文件所触碰）→ **4 pass**；合计 18 pass。
+- AC5 `replySuggestionsController.test.ts` + `useReplySuggestions.test.tsx` → **42 pass**。
+- AC6 `replySuggestionsFailureNotice.test.tsx` + `inputSuggestionsComposer.test.tsx` + `chatComposerReplyChips.test.tsx` → **96 pass**。
+- AC7 `i18nChatSuggestionsCompleteness.test.ts` → **37 pass**。
+- AC8 `npm run typecheck`=0、`npm run lint`=0（649 warnings，0 error）、`npm run build:client`=0、`architecture-ratchet.test.ts` → **6 pass**、`quay-test-script.test.ts` → **14 pass**。`wc -l`：`reply-suggestions.service.ts`=259（≤260）、`ChatComposer.tsx`=1604（≤1652）、`src/shared/types.ts`=5015（ratchet 基线 5048，未上调）。
+- AC9 负控沿用首次记录的三个变异与失败读数（实现未在重试中改动行为），三个负控臂在合并树上仍各自红：typed failure→null 红 AC4、episode 去重关闭红 AC5、popover 默认挂载红 AC6(a)。
+- DoD 真实页面证据不变：本轮只搬了类型文件的 import 路径，运行时与样式零改动；`tmp/reply-suggestions-failure-inline.png`、`tmp/reply-suggestions-failure-popover.png`、`tmp/reply-suggestions-failure-phone.png`、`tmp/reply-suggestions-failure-phone-sheet.png` 仍对应隔离实例 + stub 502 的真实页面读数。
+
+## Touches 变更说明
+
+`src/shared/api/replySuggestionsType.ts` → `src/shared/replySuggestionsType.ts`（消除目录环；见上）。新增声明 `src/modules/chat/tests/inlineQuoteChip.test.tsx`（i18n 键集 digest 必须随本任务的有意键集变化更新）。
