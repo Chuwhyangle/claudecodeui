@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-src-architecture-render-9
 title: "architecture-analysis: 9 files of src/modules/architecture/render form a
   file-level SCC (ArchitecturePanel.tsx:48 → architecturePanelShell.tsx:24 →
   ArchitecturePanel.tsx); the fron"
-status: ready
+status: needs-human
 labels:
   - gap
   - routine-filed
@@ -99,3 +99,22 @@ Move the panel model type into a leaf `architecturePanelModel.ts` (as src/shared
 - `server/shared/tests/frontend-import-cycle-budget.test.ts`
 - `server/shared/tests/frontend-import-cycle-budget.baseline.json`
 - `tasks/gap-routine-architecture-analysis-file-scc-src-architecture-render-9.md`
+
+## Blocker
+
+**2026-11-18T10:34:41.255Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：ba188ebe-f427-448c-a6a7-91639cfefb04
+
+**2026-11-18T10:46Z — 第二轮复核：两个红都在 develop 侧且本任务不可解，park needs-human**
+
+- 本轮实跑（worktree 已再 merge develop 至 `75ff8f5cd`，工作树干净）：
+  - `npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` → **5 failed / 24 passed**，5 条全是同一类「不可评估」红：`the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav`、`.../L3-sparse.wav`、`.../manifest.json`、`the LibriSpeech corpus is missing at .../corpus/public/LibriSpeech/dev-clean`。整个仓库外工作台 `/data/home/yale/work/tc-verify` 在本机已不存在（`ls` ENOENT；`find /data /home /tmp -name L4-nonstop.wav` 无结果，无同名备份/归档）。
+  - `npx tsx --test server/modules/providers/tests/provider-models.service.test.ts` → 1 failed：`the predefined Codex catalog equals the packaged CLI account catalog`。线上账号目录已前进（visible 10 项，新增 `gpt-6.2-astra`、`gpt-6.2-sol`），`CODEX_PREDEFINED_MODELS` 仍 8 项。
+  - 两个失败文件对本任务树都是逐字节 develop 版本：`git diff --stat develop -- <file>` 为空；delta 与本任务无关（driver 自己的一跳判定也是 UNRELATED）。
+- `baseline A/B: changed-assertion` 是**签名解析工件，不是行为差异**：全量 suite 日志里 `__PERFILE__` 标记行与末尾的 `not ok -` 汇总行相隔数百行 ⇒ driver 的 8 行窗口取到空签名；基线单文件复跑日志里 `not ok` 紧邻标记行 ⇒ 取到非空签名。`provider-models` 的 `not ok` 文案不含 `AssertionError`，两侧都取空 ⇒ 恰好判过；`voiceLiveSegmenter` 的文案含 `AssertionError` ⇒ 一侧空一侧非空 ⇒ 判 changed。对照 `.quay/fan-in-suite-…~1794997732167-eedf22.log`（任务侧）与 `.quay/fan-in-suite-…~baseline-1794998020801-b0864d.log`（基线侧）可逐字复现；develop 的 `reds[].lastSignature` 与任务侧也一致。
+- 为什么 park 而不是再退一轮：这两个红都不在本任务 `## Touches`，修它们会撞 anti-drift；语料是仓库外真人语音（e2e 注释原文「real human speech outside the repo」），无法在仓库内重建；`provider-models` 目录红即便修掉，`voiceLiveSegmenter` 仍会因上面的空签名工件判 hard-red ⇒ 恢复语料前本任务机械不可落地。纯 exit 只会被同样的签名无限重派（跨任务 fileRecurrence 会跳过重试上限）。
+- 恢复落地所需的最小外部条件：把 `/data/home/yale/work/tc-verify`（至少 `corpus/long/{L1-dense,L2-mixed,L3-sparse,L4-nonstop,manifest.json}` 与 `corpus/public/LibriSpeech/dev-clean`）恢复到本机，或在租约环境里用 `VAD_LONG` / `VAD_CORPUS` 指向一份等价语料。恢复后 fan-in 可直接落地：`provider-models` 红与 develop 基线逐字相同 ⇒ baseline-exempt，本任务的 delta 判据（frontend-import-cycle-budget 13/13、architecture panel 691 项，上一轮记录）本来就是绿的。
+- 实现未回退：AC 2/2、DoD 2/2 仍勾；本轮 `anti-drift-touches-check` 复跑 OK（12 个实际文件全部落在 13 条声明内），`task_check` 报 `acTotal=2 acChecked=2 dodTotal=2 dodChecked=2`。
