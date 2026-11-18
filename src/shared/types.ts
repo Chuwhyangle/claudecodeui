@@ -4159,7 +4159,7 @@ export type ServerFeatures = {
 //----------------- REPLY SUGGESTIONS ------------
 // Wire types live in a type-only leaf beside the API readers (see that file); this barrel
 // re-exports them so existing `@/shared/types` imports are unchanged.
-import type { ReplySuggestionsFailure } from '@/shared/api/replySuggestionsType';
+import type { ReplySuggestionsFailure } from '@/shared/replySuggestionsType';
 
 export type {
   ReplySuggestionsEventInput,
@@ -4173,7 +4173,7 @@ export type {
   ReplySuggestionsState,
   ReplySuggestionsStatus,
   ReplySuggestionsSuggestResponse,
-} from '@/shared/api/replySuggestionsType';
+} from '@/shared/replySuggestionsType';
 
 // ---------------------------
 

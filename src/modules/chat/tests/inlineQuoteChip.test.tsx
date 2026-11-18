@@ -302,9 +302,12 @@ describe('locale key sets', () => {
   // Digests taken from the locale files after the selection-aware suggest
   // highlight added `input.suggestions.suggestForSelection` to every locale. The
   // transcript action REUSES that key; retiring the inline chip must not add a
-  // key either.
-  const EN_KEY_SET_DIGEST = '74b1d5b0f88d59c4b82e9edfdc18527bea06f768963a86418b167308393d2333';
-  const ZH_KEY_SET_DIGEST = 'efaf4779ab829a00412a51cb966a7036a767f8eeaed82219ecc838b799041626';
+  // key either. Re-measured 2026-11-18 when the failure notice deliberately added
+  // the `input.suggestions.failure` block to every locale (task
+  // gap-reply-suggestions-failure-reading-and-inline-notice): this is the only
+  // intended key-set change, and the pin still catches any later accidental add.
+  const EN_KEY_SET_DIGEST = 'aac3d9951e2f8f3b9d4e2c5fd583e71f2aa173cf433c23df2652f81af357fe11';
+  const ZH_KEY_SET_DIGEST = '67a400586cfb08f872a391ad7720bd60d28c5da482f59a601f874f1dd02b8494';
 
   it('keeps the en and zh-CN key sets unchanged', () => {
     assert.equal(digestOf(enChat), EN_KEY_SET_DIGEST, 'en key set unchanged');

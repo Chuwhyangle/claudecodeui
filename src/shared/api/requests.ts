@@ -31,7 +31,7 @@ import type {
   ReplySuggestionsResult,
   ReplySuggestionsState,
   ReplySuggestionsStatus,
-} from '@/shared/api/replySuggestionsType';
+} from '@/shared/replySuggestionsType';
 import { IS_PLATFORM } from '@/shared/utils';
 
 // Headers are a plain record rather than the full `HeadersInit` union so the

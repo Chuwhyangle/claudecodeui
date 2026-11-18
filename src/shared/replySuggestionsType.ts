@@ -1,12 +1,17 @@
 /**
- * The reply-suggestions wire types, kept beside the API readers.
+ * The reply-suggestions wire types, a type-only leaf directly under `src/shared`.
  *
  * WHY NOT `src/shared/types.ts`: that file is an oversize-ratchet baseline entry
  * that may only shrink, and the reply-suggestions surface grew enough to move it
- * up. A type-only leaf beside the readers (the same shape as `voiceConfigType.ts`)
- * keeps the shared barrel falling while both the endpoint map and the composer
- * import one declaration. `src/shared/types.ts` re-exports these names, so every
- * existing `@/shared/types` import keeps working.
+ * up. `src/shared/types.ts` re-exports these names, so every existing
+ * `@/shared/types` import keeps working.
+ *
+ * WHY THE SHARED ROOT, NOT `src/shared/api`: the transport in `src/shared/api`
+ * already value-imports `src/shared/types.ts`, so having `types.ts` import a leaf
+ * under `src/shared/api` closed the `shared <-> shared/api` DIRECTORY cycle that
+ * `server/shared/tests/frontend-import-cycle-budget.test.ts` pins to its baseline.
+ * Here both readers and the barrel reach the leaf without leaving their own
+ * directory, and no new edge points back up.
  *
  * Consumers: `src/shared/api/clientTail.ts` and `src/shared/api/requests.ts`
  * (the transport), the reply controller, the composer hook and its notice, and

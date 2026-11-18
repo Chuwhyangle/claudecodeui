@@ -20,7 +20,7 @@ import { describe, it } from 'vitest';
 const repoRoot = process.cwd();
 // The frontend wire declarations moved to a type-only leaf beside the API readers
 // (the shared barrel's oversize baseline may only shrink); the two-end pin follows them.
-const frontendTypesFile = path.join(repoRoot, 'src', 'shared', 'api', 'replySuggestionsType.ts');
+const frontendTypesFile = path.join(repoRoot, 'src', 'shared', 'replySuggestionsType.ts');
 const serverTypesFile = path.join(
   repoRoot,
   'server',
