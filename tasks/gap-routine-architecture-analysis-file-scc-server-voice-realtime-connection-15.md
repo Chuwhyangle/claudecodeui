@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-server-voice-realtime-connection-
 title: "architecture-analysis: All 15 files of
   server/modules/voice-realtime/connection form ONE file-level SCC (shortest
   cycle: connection-frames.ts:33 → ws-proxy.service.ts:385 → connect"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
