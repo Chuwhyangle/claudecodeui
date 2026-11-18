@@ -93,3 +93,11 @@ Extract a leaf contract module for the VoiceRealtimeConnection shape that frames
 ### 未做 / 边界
 - 未下调 `architecture-ratchet.baseline.json` 的 contract 条目（1176）：现读数已低于 800 直接不计数，ratchet 判绿并提示可下调；本任务不改共享基线，避免与并行 SCC 任务争同一文件。
 - 目录级 AC-394 读数未变（单目录本来 0 环），`GATE_DIRECTORY_PIN` 无新目录，故未改。
+
+## Blocker
+
+**2026-11-18T10:39:59.229Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：7624f979-42d8-45d6-9473-33dc0093e6e9
