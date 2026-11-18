@@ -187,8 +187,8 @@ recent failures (2):
 
 ## Blocker
 
-**2026-11-18T12:34:13.649Z — worker 未落地（exited-not-landed）**
+**2026-11-18T16:00:05.169Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- 未落地原因：step=suite: not ok - src/shared/tests/voiceEndpoint.test.ts: AssertionError [ERR_ASSERTION]: L1-dense: 1137760 samples, the pre-extraction reading was 1082720 [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/shared/tests/voiceEndpoint.test.ts]
 - run_id：wk-prod-anchor
-- session_id：fcac3897-15da-4e1e-b07e-7ed00bb045fd
+- session_id：e3646020-a731-4368-abda-1439f1957a08
