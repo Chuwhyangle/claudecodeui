@@ -1192,5 +1192,39 @@
     "viaTasks": "经由 {{count}} 个任务",
     "mentionedInMessage": "在消息中提及",
     "mentionedAt": "{{when}}提及"
+  },
+  "logDrawer": {
+    "title": "日志",
+    "viewLogs": "查看日志",
+    "retentionNote": "日志仅保留在当前进程内（最近 {{count}} 行），重启后清空；持久日志见 journalctl。",
+    "truncatedNote": "更早的行已被丢弃，仅显示最近 {{count}} 行。",
+    "sourcesLabel": "来源",
+    "levelLabel": "级别",
+    "sources": {
+      "all": "全部",
+      "server": "服务端",
+      "replySuggestions": "回复建议",
+      "sessions": "会话",
+      "voice": "语音",
+      "other": "其他"
+    },
+    "levels": {
+      "all": "全部级别",
+      "info": "信息",
+      "warn": "警告",
+      "error": "错误"
+    },
+    "searchPlaceholder": "按 requestId 或关键字过滤",
+    "follow": "跟随",
+    "followPaused": "已暂停跟随",
+    "refresh": "刷新",
+    "loadEarlier": "加载更早",
+    "copyBundle": "复制诊断包",
+    "copying": "正在复制…",
+    "copied": "已复制",
+    "copyFailed": "复制失败",
+    "close": "关闭",
+    "empty": "最近 15 分钟没有日志",
+    "error": "无法读取日志窗口"
   }
 }

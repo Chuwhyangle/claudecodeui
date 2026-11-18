@@ -1194,5 +1194,39 @@
     "viaTasks": "mediante {{count}} tarea(s)",
     "mentionedInMessage": "mencionada en un mensaje",
     "mentionedAt": "Mencionada {{when}}"
+  },
+  "logDrawer": {
+    "title": "Registros",
+    "viewLogs": "Ver registros",
+    "retentionNote": "Los registros solo se conservan en el proceso actual (últimas {{count}} líneas) y se borran al reiniciar; los persistentes están en journalctl.",
+    "truncatedNote": "Se descartaron líneas antiguas; solo se muestran las últimas {{count}} líneas.",
+    "sourcesLabel": "Fuentes",
+    "levelLabel": "Nivel",
+    "sources": {
+      "all": "Todas",
+      "server": "Servidor",
+      "replySuggestions": "Sugerencias de respuesta",
+      "sessions": "Sesiones",
+      "voice": "Voz",
+      "other": "Otras"
+    },
+    "levels": {
+      "all": "Todos los niveles",
+      "info": "Info",
+      "warn": "Aviso",
+      "error": "Error"
+    },
+    "searchPlaceholder": "Filtrar por requestId o palabra clave",
+    "follow": "Seguir",
+    "followPaused": "Seguimiento en pausa",
+    "refresh": "Actualizar",
+    "loadEarlier": "Cargar anteriores",
+    "copyBundle": "Copiar paquete de diagnóstico",
+    "copying": "Copiando…",
+    "copied": "Copiado",
+    "copyFailed": "Error al copiar",
+    "close": "Cerrar",
+    "empty": "No hay registros en los últimos 15 minutos",
+    "error": "No se pudo leer la ventana de registros"
   }
 }

@@ -1163,5 +1163,39 @@
     "viaTasks": "über {{count}} Aufgabe(n)",
     "mentionedInMessage": "in einer Nachricht erwähnt",
     "mentionedAt": "{{when}} erwähnt"
+  },
+  "logDrawer": {
+    "title": "Protokolle",
+    "viewLogs": "Protokolle anzeigen",
+    "retentionNote": "Protokolle werden nur im aktuellen Prozess gehalten (letzte {{count}} Zeilen) und beim Neustart gelöscht; dauerhafte Protokolle stehen in journalctl.",
+    "truncatedNote": "Ältere Zeilen wurden verworfen; es werden nur die letzten {{count}} Zeilen angezeigt.",
+    "sourcesLabel": "Quellen",
+    "levelLabel": "Stufe",
+    "sources": {
+      "all": "Alle",
+      "server": "Server",
+      "replySuggestions": "Antwortvorschläge",
+      "sessions": "Sitzungen",
+      "voice": "Sprache",
+      "other": "Andere"
+    },
+    "levels": {
+      "all": "Alle Stufen",
+      "info": "Info",
+      "warn": "Warnung",
+      "error": "Fehler"
+    },
+    "searchPlaceholder": "Nach requestId oder Stichwort filtern",
+    "follow": "Folgen",
+    "followPaused": "Folgen pausiert",
+    "refresh": "Aktualisieren",
+    "loadEarlier": "Frühere laden",
+    "copyBundle": "Diagnosepaket kopieren",
+    "copying": "Wird kopiert…",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "close": "Schließen",
+    "empty": "Keine Protokolle in den letzten 15 Minuten",
+    "error": "Das Protokollfenster konnte nicht gelesen werden"
   }
 }

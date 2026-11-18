@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { DiagnosticsFeature, DiagnosticsFeatureState } from '@/shared/types';
+import { isLogDrawerAvailable, openLogDrawer } from '@/shared/ports/log-drawer.port';
 import { cn } from '@/shared/utils';
 
 /**
@@ -37,6 +38,9 @@ const STATE_TONE: Record<DiagnosticsFeatureState, string> = {
   ok: 'bg-green-500/10 text-green-600 dark:text-green-400',
 };
 
+/** The feature ids the log window publishes as source tabs. */
+const KNOWN_LOG_SOURCES: readonly string[] = ['server', 'reply-suggestions', 'sessions', 'voice', 'other'];
+
 type DiagnosticsHealthListProps = {
   features: DiagnosticsFeature[];
 };
@@ -49,6 +53,10 @@ function failureSummary(failure: NonNullable<DiagnosticsFeature['lastFailure']>)
 
 export default function DiagnosticsHealthList({ features }: DiagnosticsHealthListProps) {
   const { t } = useTranslation('settings');
+  const { t: tCommon } = useTranslation('common');
+  // A card may open the log drawer only when the page mounted one. The reading
+  // is taken per render; the root host mounts before any card can be clicked.
+  const canViewLogs = isLogDrawerAvailable();
 
   return (
     <section data-slot="diagnostics-health" className="space-y-3">
@@ -111,6 +119,29 @@ export default function DiagnosticsHealthList({ features }: DiagnosticsHealthLis
                       {feature.problems.map((problem) => <li key={problem}>{problem}</li>)}
                     </ul>
                   </div>
+                )}
+                {canViewLogs && (
+                  <button
+                    type="button"
+                    data-action="view-logs"
+                    onClick={() => {
+                      const failure = feature.lastFailure;
+                      const failureAt = failure === null ? Number.NaN : Date.parse(failure.at);
+                      openLogDrawer({
+                        ...(KNOWN_LOG_SOURCES.includes(feature.id) ? { source: feature.id } : {}),
+                        feature: feature.id,
+                        ...(failure !== null && failure.requestId !== ''
+                          ? { requestId: failure.requestId }
+                          : {}),
+                        ...(Number.isNaN(failureAt)
+                          ? {}
+                          : { since: new Date(failureAt - 60_000).toISOString() }),
+                      });
+                    }}
+                    className="mt-3 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-accent"
+                  >
+                    {tCommon('logDrawer.viewLogs')}
+                  </button>
                 )}
               </li>
             );

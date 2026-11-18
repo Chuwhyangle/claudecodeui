@@ -13,6 +13,7 @@ import { ProjectWorkspaceRoute, useProjectsState } from '@/modules/project-works
 import { OAuthConsentRoute } from '@/modules/oauth-consent';
 import { CockpitOverlayHost, CockpitRoute } from '@/modules/cockpit';
 import { ArchitecturePanel, requestArchitectureSessionFocus } from '@/modules/architecture';
+import { LogDrawerHost } from '@/modules/diagnostics';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { useServerFeatures } from '@/shared/hooks/useServerFeatures';
@@ -238,6 +239,12 @@ export default function App() {  const routerBasename = detectRouterBasename();
               <TasksSettingsProvider>
                 <TaskMasterProvider>
                 <ProtectedRoute>
+                  {/* The one global log drawer. Mounted at the root (and installed
+                      before the routes' children mount) so the failure notice, the
+                      diagnostics health cards and the Settings tab all reach the
+                      same drawer through the shared port instead of importing
+                      this module. Renders nothing until a producer opens it. */}
+                  <LogDrawerHost />
                   <Router basename={routerBasename}>
                     <ViewEventInstrumentation />
                     <Routes>

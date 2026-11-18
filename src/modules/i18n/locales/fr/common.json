@@ -1194,5 +1194,39 @@
     "viaTasks": "via {{count}} tâche(s)",
     "mentionedInMessage": "mentionnée dans un message",
     "mentionedAt": "Mentionnée {{when}}"
+  },
+  "logDrawer": {
+    "title": "Journaux",
+    "viewLogs": "Voir les journaux",
+    "retentionNote": "Les journaux ne sont conservés que dans le processus actuel (dernières {{count}} lignes) et sont effacés au redémarrage ; les journaux persistants sont dans journalctl.",
+    "truncatedNote": "Les lignes plus anciennes ont été supprimées ; seules les {{count}} dernières lignes sont affichées.",
+    "sourcesLabel": "Sources",
+    "levelLabel": "Niveau",
+    "sources": {
+      "all": "Toutes",
+      "server": "Serveur",
+      "replySuggestions": "Suggestions de réponse",
+      "sessions": "Sessions",
+      "voice": "Voix",
+      "other": "Autres"
+    },
+    "levels": {
+      "all": "Tous les niveaux",
+      "info": "Info",
+      "warn": "Avertissement",
+      "error": "Erreur"
+    },
+    "searchPlaceholder": "Filtrer par requestId ou mot-clé",
+    "follow": "Suivre",
+    "followPaused": "Suivi en pause",
+    "refresh": "Actualiser",
+    "loadEarlier": "Charger plus tôt",
+    "copyBundle": "Copier le diagnostic",
+    "copying": "Copie…",
+    "copied": "Copié",
+    "copyFailed": "Échec de la copie",
+    "close": "Fermer",
+    "empty": "Aucun journal dans les 15 dernières minutes",
+    "error": "Impossible de lire la fenêtre des journaux"
   }
 }

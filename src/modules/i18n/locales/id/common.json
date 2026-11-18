@@ -1275,5 +1275,39 @@
     "viaTasks": "melalui {{count}} tugas",
     "mentionedInMessage": "disebut dalam pesan",
     "mentionedAt": "Disebut {{when}}"
+  },
+  "logDrawer": {
+    "title": "Log",
+    "viewLogs": "Lihat log",
+    "retentionNote": "Log hanya disimpan di proses saat ini ({{count}} baris terakhir) dan dihapus saat mulai ulang; log persisten ada di journalctl.",
+    "truncatedNote": "Baris lama dibuang; hanya {{count}} baris terakhir yang ditampilkan.",
+    "sourcesLabel": "Sumber",
+    "levelLabel": "Tingkat",
+    "sources": {
+      "all": "Semua",
+      "server": "Server",
+      "replySuggestions": "Saran balasan",
+      "sessions": "Sesi",
+      "voice": "Suara",
+      "other": "Lainnya"
+    },
+    "levels": {
+      "all": "Semua tingkat",
+      "info": "Info",
+      "warn": "Peringatan",
+      "error": "Galat"
+    },
+    "searchPlaceholder": "Saring berdasarkan requestId atau kata kunci",
+    "follow": "Ikuti",
+    "followPaused": "Ikuti dijeda",
+    "refresh": "Segarkan",
+    "loadEarlier": "Muat lebih awal",
+    "copyBundle": "Salin bundel diagnostik",
+    "copying": "Menyalin…",
+    "copied": "Disalin",
+    "copyFailed": "Gagal menyalin",
+    "close": "Tutup",
+    "empty": "Tidak ada log dalam 15 menit terakhir",
+    "error": "Jendela log tidak dapat dibaca"
   }
 }

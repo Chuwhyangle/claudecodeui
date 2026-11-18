@@ -1284,5 +1284,39 @@
     "viaTasks": "via {{count}} task(s)",
     "mentionedInMessage": "mentioned in a message",
     "mentionedAt": "Mentioned {{when}}"
+  },
+  "logDrawer": {
+    "title": "Logs",
+    "viewLogs": "View logs",
+    "retentionNote": "Logs are kept only in the current process (most recent {{count}} lines) and are cleared on restart; persistent logs are in journalctl.",
+    "truncatedNote": "Older lines were dropped; only the most recent {{count}} lines are shown.",
+    "sourcesLabel": "Sources",
+    "levelLabel": "Level",
+    "sources": {
+      "all": "All",
+      "server": "Server",
+      "replySuggestions": "Reply suggestions",
+      "sessions": "Sessions",
+      "voice": "Voice",
+      "other": "Other"
+    },
+    "levels": {
+      "all": "All levels",
+      "info": "Info",
+      "warn": "Warn",
+      "error": "Error"
+    },
+    "searchPlaceholder": "Filter by requestId or keyword",
+    "follow": "Follow",
+    "followPaused": "Follow paused",
+    "refresh": "Refresh",
+    "loadEarlier": "Load earlier",
+    "copyBundle": "Copy diagnostics bundle",
+    "copying": "Copying…",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "close": "Close",
+    "empty": "No logs in the last 15 minutes",
+    "error": "The log window could not be read"
   }
 }

@@ -1192,5 +1192,39 @@
     "viaTasks": "{{count}}개 작업 경유",
     "mentionedInMessage": "메시지에서 언급됨",
     "mentionedAt": "{{when}}에 언급됨"
+  },
+  "logDrawer": {
+    "title": "로그",
+    "viewLogs": "로그 보기",
+    "retentionNote": "로그는 현재 프로세스에만 보관되며(최근 {{count}}줄) 다시 시작하면 지워집니다. 영구 로그는 journalctl에 있습니다.",
+    "truncatedNote": "오래된 줄은 삭제되었으며 최근 {{count}}줄만 표시됩니다.",
+    "sourcesLabel": "소스",
+    "levelLabel": "수준",
+    "sources": {
+      "all": "전체",
+      "server": "서버",
+      "replySuggestions": "답장 제안",
+      "sessions": "세션",
+      "voice": "음성",
+      "other": "기타"
+    },
+    "levels": {
+      "all": "모든 수준",
+      "info": "정보",
+      "warn": "경고",
+      "error": "오류"
+    },
+    "searchPlaceholder": "requestId 또는 키워드로 필터",
+    "follow": "따라가기",
+    "followPaused": "따라가기 일시중지",
+    "refresh": "새로고침",
+    "loadEarlier": "이전 불러오기",
+    "copyBundle": "진단 번들 복사",
+    "copying": "복사 중…",
+    "copied": "복사됨",
+    "copyFailed": "복사 실패",
+    "close": "닫기",
+    "empty": "최근 15분 동안 로그가 없습니다",
+    "error": "로그 창을 읽을 수 없습니다"
   }
 }

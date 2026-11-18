@@ -10,6 +10,11 @@ import type {
   DiagnosticsFailuresResponse,
   DiagnosticsFeature,
   DiagnosticsFeaturesResponse,
+  LogLine,
+  LogLineLevel,
+  LogSource,
+  LogSourcesResponse,
+  LogsResponse,
 } from '@/shared/types';
 import type {
   ReplySuggestionsEventInput,
@@ -94,6 +99,70 @@ function readDiagnosticsFailures(body: unknown): DiagnosticsFailuresResponse {
     ? record.failures.map(readDiagnosticsFailure).filter((failure): failure is DiagnosticsFailure => failure !== null)
     : [];
   return { failures };
+}
+
+/** The three severities the window stores; anything else reads as `info`. */
+const LOG_LINE_LEVELS: readonly string[] = ['info', 'warn', 'error'];
+
+/** Reads one log line, or null when the shape is unusable. */
+function readLogLine(value: unknown): LogLine | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.at !== 'string' || typeof record.text !== 'string') return null;
+  const level = typeof record.level === 'string' && LOG_LINE_LEVELS.includes(record.level)
+    ? record.level as LogLineLevel
+    : 'info';
+  return {
+    at: record.at,
+    level,
+    source: typeof record.source === 'string' ? record.source : 'other',
+    text: record.text,
+  };
+}
+
+/** Reads one source tab, or null when the shape is unusable. */
+function readLogSource(value: unknown): LogSource | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.id !== 'string') return null;
+  return {
+    id: record.id,
+    label: typeof record.label === 'string' ? record.label : record.id,
+    count: typeof record.count === 'number' ? record.count : 0,
+    lastAt: typeof record.lastAt === 'string' ? record.lastAt : null,
+  };
+}
+
+/** Reads the `/logs/sources` answer, dropping unusable rows. */
+function readLogSources(body: unknown): LogSourcesResponse {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return { sources: [] };
+  const record = body as Record<string, unknown>;
+  const sources = Array.isArray(record.sources)
+    ? record.sources.map(readLogSource).filter((source): source is LogSource => source !== null)
+    : [];
+  return { sources };
+}
+
+/** Reads the `/logs` answer; a malformed body reads as an empty, untruncated window. */
+function readLogs(body: unknown): LogsResponse {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return { lines: [], truncated: false, window: { maxLines: 0, maxBytes: 0 } };
+  }
+  const record = body as Record<string, unknown>;
+  const lines = Array.isArray(record.lines)
+    ? record.lines.map(readLogLine).filter((line): line is LogLine => line !== null)
+    : [];
+  const windowRecord = record.window !== null && typeof record.window === 'object'
+    ? record.window as Record<string, unknown>
+    : {};
+  return {
+    lines,
+    truncated: record.truncated === true,
+    window: {
+      maxLines: typeof windowRecord.maxLines === 'number' ? windowRecord.maxLines : 0,
+      maxBytes: typeof windowRecord.maxBytes === 'number' ? windowRecord.maxBytes : 0,
+    },
+  };
 }
 
 export const apiTail = {
@@ -270,6 +339,25 @@ export const apiTail = {
       const response = await get('/api/diagnostics/bundle');
       if (!response.ok) throw new Error(`diagnostics bundle request failed with HTTP ${response.status}`);
       return response.text();
+    },
+    // The process-local window. Both reads are already redacted on the server;
+    // the client only validates and displays. A refusal throws, which the drawer
+    // controller turns into its visible error state.
+    logSources: async (): Promise<LogSourcesResponse> => {
+      const response = await get('/api/diagnostics/logs/sources');
+      if (!response.ok) throw new Error(`diagnostics log sources request failed with HTTP ${response.status}`);
+      return readLogSources(await response.json().catch(() => null) as unknown);
+    },
+    logs: async (filter: {
+      source?: string;
+      level?: LogLineLevel;
+      since?: string;
+      limit?: number;
+    } = {}): Promise<LogsResponse> => {
+      const search = query({ source: filter.source, level: filter.level, since: filter.since, limit: filter.limit });
+      const response = await get(`/api/diagnostics/logs${search}`);
+      if (!response.ok) throw new Error(`diagnostics logs request failed with HTTP ${response.status}`);
+      return readLogs(await response.json().catch(() => null) as unknown);
     },
   },
 

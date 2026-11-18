@@ -1193,5 +1193,39 @@
     "viaTasks": "{{count}} görev aracılığıyla",
     "mentionedInMessage": "bir mesajda bahsedildi",
     "mentionedAt": "{{when}} bahsedildi"
+  },
+  "logDrawer": {
+    "title": "Günlükler",
+    "viewLogs": "Günlükleri görüntüle",
+    "retentionNote": "Günlükler yalnızca geçerli süreçte tutulur (son {{count}} satır) ve yeniden başlatmada silinir; kalıcı günlükler journalctl içindedir.",
+    "truncatedNote": "Daha eski satırlar atıldı; yalnızca son {{count}} satır gösteriliyor.",
+    "sourcesLabel": "Kaynaklar",
+    "levelLabel": "Düzey",
+    "sources": {
+      "all": "Tümü",
+      "server": "Sunucu",
+      "replySuggestions": "Yanıt önerileri",
+      "sessions": "Oturumlar",
+      "voice": "Ses",
+      "other": "Diğer"
+    },
+    "levels": {
+      "all": "Tüm düzeyler",
+      "info": "Bilgi",
+      "warn": "Uyarı",
+      "error": "Hata"
+    },
+    "searchPlaceholder": "requestId veya anahtar kelimeyle filtrele",
+    "follow": "İzle",
+    "followPaused": "İzleme duraklatıldı",
+    "refresh": "Yenile",
+    "loadEarlier": "Daha eskileri yükle",
+    "copyBundle": "Tanılama paketini kopyala",
+    "copying": "Kopyalanıyor…",
+    "copied": "Kopyalandı",
+    "copyFailed": "Kopyalama başarısız",
+    "close": "Kapat",
+    "empty": "Son 15 dakikada günlük yok",
+    "error": "Günlük penceresi okunamadı"
   }
 }

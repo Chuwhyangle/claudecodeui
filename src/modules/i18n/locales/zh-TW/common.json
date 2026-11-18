@@ -1192,5 +1192,39 @@
     "viaTasks": "經由 {{count}} 個任務",
     "mentionedInMessage": "在訊息中提及",
     "mentionedAt": "{{when}}提及"
+  },
+  "logDrawer": {
+    "title": "日誌",
+    "viewLogs": "檢視日誌",
+    "retentionNote": "日誌僅保留在目前程序內（最近 {{count}} 行），重新啟動後清空；持久日誌見 journalctl。",
+    "truncatedNote": "較早的行已被捨棄，僅顯示最近 {{count}} 行。",
+    "sourcesLabel": "來源",
+    "levelLabel": "等級",
+    "sources": {
+      "all": "全部",
+      "server": "伺服器",
+      "replySuggestions": "回覆建議",
+      "sessions": "工作階段",
+      "voice": "語音",
+      "other": "其他"
+    },
+    "levels": {
+      "all": "全部等級",
+      "info": "資訊",
+      "warn": "警告",
+      "error": "錯誤"
+    },
+    "searchPlaceholder": "依 requestId 或關鍵字篩選",
+    "follow": "跟隨",
+    "followPaused": "已暫停跟隨",
+    "refresh": "重新整理",
+    "loadEarlier": "載入較早",
+    "copyBundle": "複製診斷包",
+    "copying": "正在複製…",
+    "copied": "已複製",
+    "copyFailed": "複製失敗",
+    "close": "關閉",
+    "empty": "最近 15 分鐘沒有日誌",
+    "error": "無法讀取日誌視窗"
   }
 }

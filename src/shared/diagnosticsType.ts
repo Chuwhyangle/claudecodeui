@@ -8,8 +8,9 @@
  * imports keep working while the read model has one owner.
  *
  * Consumers: `src/shared/api/clientTail.ts` (the transport), the diagnostics
- * controller and hook, the health list and recent-failures table, and the
- * diagnostics controller criterion.
+ * controller and hook, the health list and recent-failures table, the log
+ * drawer's controller and host, the port criterion, and the diagnostics/log
+ * drawer criteria.
  */
 //----------------- DIAGNOSTICS ------------
 
@@ -61,4 +62,43 @@ export type DiagnosticsFeaturesResponse = {
 /** The `/recent-failures` answer, newest first. */
 export type DiagnosticsFailuresResponse = {
   failures: DiagnosticsFailure[];
+};
+
+//----------------- PROCESS-LOCAL LOG WINDOW ------------
+
+/** The severity a stored log line carries. */
+export type LogLineLevel = 'info' | 'warn' | 'error';
+
+/** One already-redacted line from the process-local window. */
+export type LogLine = {
+  at: string;
+  level: LogLineLevel;
+  source: string;
+  text: string;
+};
+
+/** One source tab: its live count and newest line time. */
+export type LogSource = {
+  id: string;
+  label: string;
+  count: number;
+  lastAt: string | null;
+};
+
+/** The `/logs/sources` answer. */
+export type LogSourcesResponse = {
+  sources: LogSource[];
+};
+
+/** The caps the drawer shows ("only the most recent N lines"). */
+export type LogWindow = {
+  maxLines: number;
+  maxBytes: number;
+};
+
+/** The `/logs` answer: the retained, already-redacted window. */
+export type LogsResponse = {
+  lines: LogLine[];
+  truncated: boolean;
+  window: LogWindow;
 };

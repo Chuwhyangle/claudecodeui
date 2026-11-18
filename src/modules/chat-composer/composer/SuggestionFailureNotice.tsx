@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/shared/utils';
+import { isLogDrawerAvailable, openLogDrawer } from '@/shared/ports/log-drawer.port';
 import type { ReplySuggestionsFailure, ReplySuggestionsFailureCategory } from '@/shared/types';
 
 /**
@@ -70,6 +71,8 @@ export function SuggestionFailureNotice({
   onDismiss,
 }: SuggestionFailureNoticeProps) {
   const { t } = useTranslation('chat');
+  // The drawer's own copy is shared across producers, so it lives in `common`.
+  const { t: tCommon } = useTranslation('common');
   // Whether the detail popover is mounted. Presentation state only: it starts
   // closed on every failure render, which is what keeps the popover from popping
   // up without a click.
@@ -80,6 +83,20 @@ export function SuggestionFailureNotice({
     defaultValue: failure.message,
     status: failure.httpStatus ?? '',
   });
+
+  // Only render the entry when a host is mounted; an absent drawer must stay an
+  // absent entry, not a button that does nothing.
+  const canViewLogs = isLogDrawerAvailable();
+  const viewLogs = (): void => {
+    const failureAt = Date.parse(failure.at);
+    const since = Number.isNaN(failureAt) ? undefined : new Date(failureAt - 60_000).toISOString();
+    openLogDrawer({
+      source: 'reply-suggestions',
+      feature: 'reply-suggestions',
+      ...(failure.requestId === null ? {} : { requestId: failure.requestId }),
+      ...(since === undefined ? {} : { since }),
+    });
+  };
 
   return (
     <div
@@ -161,6 +178,16 @@ export function SuggestionFailureNotice({
               >
                 {t('input.suggestions.failure.dismiss', { defaultValue: 'Ignore for now' })}
               </button>
+              {canViewLogs && (
+                <button
+                  type="button"
+                  data-action="view-logs"
+                  onClick={viewLogs}
+                  className="rounded-md border px-2 py-1 transition-colors hover:bg-accent"
+                >
+                  {tCommon('logDrawer.viewLogs')}
+                </button>
+              )}
               <button
                 type="button"
                 data-action="close"

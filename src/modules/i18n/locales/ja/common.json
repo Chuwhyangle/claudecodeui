@@ -1192,5 +1192,39 @@
     "viaTasks": "{{count}} 件のタスク経由",
     "mentionedInMessage": "メッセージで言及",
     "mentionedAt": "{{when}}に言及"
+  },
+  "logDrawer": {
+    "title": "ログ",
+    "viewLogs": "ログを表示",
+    "retentionNote": "ログは現在のプロセス内にのみ保持され（最新 {{count}} 行）、再起動で消去されます。永続ログは journalctl にあります。",
+    "truncatedNote": "古い行は破棄され、最新 {{count}} 行のみ表示しています。",
+    "sourcesLabel": "ソース",
+    "levelLabel": "レベル",
+    "sources": {
+      "all": "すべて",
+      "server": "サーバー",
+      "replySuggestions": "返信候補",
+      "sessions": "セッション",
+      "voice": "音声",
+      "other": "その他"
+    },
+    "levels": {
+      "all": "すべてのレベル",
+      "info": "情報",
+      "warn": "警告",
+      "error": "エラー"
+    },
+    "searchPlaceholder": "requestId またはキーワードで絞り込む",
+    "follow": "追従",
+    "followPaused": "追従を一時停止",
+    "refresh": "更新",
+    "loadEarlier": "以前を読み込む",
+    "copyBundle": "診断バンドルをコピー",
+    "copying": "コピー中…",
+    "copied": "コピーしました",
+    "copyFailed": "コピーに失敗しました",
+    "close": "閉じる",
+    "empty": "直近 15 分間のログはありません",
+    "error": "ログウィンドウを読み取れませんでした"
   }
 }

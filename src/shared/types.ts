@@ -4184,6 +4184,12 @@ export type {
   DiagnosticsFailuresResponse,
   DiagnosticsFeaturesResponse,
   DiagnosticsFeatureState,
+  LogLine,
+  LogLineLevel,
+  LogSource,
+  LogSourcesResponse,
+  LogsResponse,
+  LogWindow,
 } from '@/shared/diagnosticsType';
 
 // ---------------------------

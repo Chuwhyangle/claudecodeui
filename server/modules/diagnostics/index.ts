@@ -2,7 +2,8 @@
  * Diagnostics module — barrel.
  *
  * The Settings → Diagnostics & Logs surface's read-only backend: feature health,
- * the recent failure list and the redacted plain-text bundle. The module is a
+ * the recent failure list, the redacted plain-text bundle, and the process-local
+ * log window (sources roster + bounded, already-redacted lines). The module is a
  * leaf (it imports only `server/shared/**` and itself); `server/index.ts` builds
  * one provider per feature and injects them, so this module never imports a
  * sibling feature module.
@@ -36,5 +37,20 @@ export type {
   DiagnosticsService,
   DiagnosticsServiceDeps,
 } from './diagnostics.service.js';
-// consumer: the route criterion, which pins `?limit=` clamping without HTTP.
+// consumer: the route criterion, which pins `?limit=` clamping and the log
+// query parsing without HTTP.
 export { readRecentFailuresLimit } from './diagnostics.routes.js';
+export {
+  createDiagnosticsLogsReader,
+  readLogsLevel,
+  readLogsLimit,
+  readLogsQuery,
+  readLogsSince,
+  readLogsSource,
+} from './diagnostics-logs.js';
+export type {
+  DiagnosticsLogSource,
+  DiagnosticsLogsQuery,
+  DiagnosticsLogsReader,
+  DiagnosticsLogsReading,
+} from './diagnostics-logs.js';

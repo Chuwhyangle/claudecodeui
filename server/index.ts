@@ -116,6 +116,7 @@ import { createReplySuggestionsDiagnostics, createReplySuggestionsFailureState, 
 // The Settings → Diagnostics & Logs read surface. A leaf module: every feature
 // reading is adapted HERE and injected, so the module imports no sibling.
 import { createDiagnosticsModule } from './modules/diagnostics/index.js';
+import { createLogRing, installConsoleLogTee } from '@/shared/log-ring.js';
 // The host-level context event stream (context-event-stream-and-shadow-predictor). ONE process
 // instance: chat control, the cockpit and the reply-suggestions observer all record through it,
 // and the shadow predictor inside it writes to the same stream and to nothing else.
@@ -287,6 +288,13 @@ const noticeRegistry = createNoticeRegistry({
     ],
     dismissals: noticeDismissalsDb,
 });
+// The ONE process-local log window. It exists only in this process's memory (a
+// restart starts fresh), and every line is redacted before it is stored. The tee
+// is installed here, before the routes are mounted, so the lines the operator
+// needs while recovering an incident are already in the window; the ring itself
+// never prints, so there is no recursion. `installConsoleLogTee` is idempotent.
+const logRing = createLogRing();
+installConsoleLogTee(logRing);
 console.log('SERVER_PORT from env:', process.env.SERVER_PORT);
 
 const app = express();
@@ -2026,6 +2034,7 @@ app.use(
     authenticateToken,
     createDiagnosticsModule({
         providers: [replySuggestionsDiagnosticsProvider],
+        logRing,
         meta: () => {
             const observed = replySuggestionsSettings.read().diagnostics;
             return {

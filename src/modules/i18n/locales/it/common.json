@@ -1194,5 +1194,39 @@
     "viaTasks": "tramite {{count}} attività",
     "mentionedInMessage": "menzionata in un messaggio",
     "mentionedAt": "Menzionata {{when}}"
+  },
+  "logDrawer": {
+    "title": "Log",
+    "viewLogs": "Visualizza log",
+    "retentionNote": "I log sono mantenuti solo nel processo corrente (ultime {{count}} righe) e vengono cancellati al riavvio; i log persistenti sono in journalctl.",
+    "truncatedNote": "Le righe più vecchie sono state scartate; sono mostrate solo le ultime {{count}} righe.",
+    "sourcesLabel": "Origini",
+    "levelLabel": "Livello",
+    "sources": {
+      "all": "Tutte",
+      "server": "Server",
+      "replySuggestions": "Suggerimenti di risposta",
+      "sessions": "Sessioni",
+      "voice": "Voce",
+      "other": "Altre"
+    },
+    "levels": {
+      "all": "Tutti i livelli",
+      "info": "Info",
+      "warn": "Avviso",
+      "error": "Errore"
+    },
+    "searchPlaceholder": "Filtra per requestId o parola chiave",
+    "follow": "Segui",
+    "followPaused": "Segui in pausa",
+    "refresh": "Aggiorna",
+    "loadEarlier": "Carica precedenti",
+    "copyBundle": "Copia pacchetto diagnostico",
+    "copying": "Copia…",
+    "copied": "Copiato",
+    "copyFailed": "Copia non riuscita",
+    "close": "Chiudi",
+    "empty": "Nessun log negli ultimi 15 minuti",
+    "error": "Impossibile leggere la finestra dei log"
   }
 }

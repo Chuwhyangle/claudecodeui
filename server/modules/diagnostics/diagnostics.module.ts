@@ -16,6 +16,9 @@
  */
 import type { Router } from 'express';
 
+import { createLogRing, type LogRing } from '@/shared/log-ring.js';
+
+import { createDiagnosticsLogsReader } from './diagnostics-logs.js';
 import { renderDiagnosticsBundle } from './diagnostics-bundle.js';
 import { createDiagnosticsRoutes } from './diagnostics.routes.js';
 import {
@@ -29,14 +32,18 @@ import {
  * The seams the process composition root binds.
  *
  * `providers` and `meta` are required: a diagnostics page with no provider
- * cannot report anything, and the process facts have no safe default. `now` and
- * `recentFailuresLimit` exist for criteria.
+ * cannot report anything, and the process facts have no safe default. `logRing`
+ * is the process-local window `server/index.ts` also feeds through its console
+ * tee; a module built without one (a focused criterion) reads an empty window
+ * rather than inventing a second ring. `now` and `recentFailuresLimit` exist for
+ * criteria.
  *
  * Consumers: `server/index.ts` (through the barrel) and the route criterion.
  */
 export type DiagnosticsModuleDeps = {
   providers: DiagnosticsFeatureProvider[];
   meta: () => DiagnosticsMeta;
+  logRing?: LogRing;
   recentFailuresLimit?: number;
   now?: () => number;
 };
@@ -53,10 +60,14 @@ export function createDiagnosticsModule(deps: DiagnosticsModuleDeps): Router {
     ...(deps.now === undefined ? {} : { now: deps.now }),
   });
   const bundleLimit = deps.recentFailuresLimit ?? DEFAULT_RECENT_FAILURES_LIMIT;
+  // One ring per module instance. The composition root passes the process ring;
+  // a criterion that builds the module alone gets a private, empty window.
+  const logs = createDiagnosticsLogsReader(deps.logRing ?? createLogRing());
 
   return createDiagnosticsRoutes({
     features: service.features,
     recentFailures: service.recentFailures,
     bundle: () => renderDiagnosticsBundle(service.bundleInput(bundleLimit)),
+    logs,
   });
 }

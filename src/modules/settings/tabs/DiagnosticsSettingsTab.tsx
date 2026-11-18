@@ -7,6 +7,7 @@ import {
   useDiagnostics,
   type DiagnosticsApi,
 } from '@/modules/diagnostics';
+import { isLogDrawerAvailable, openLogDrawer } from '@/shared/ports/log-drawer.port';
 import { Button } from '@/shared/ui';
 
 /**
@@ -37,12 +38,16 @@ export default function DiagnosticsSettingsTab({
   recentFailuresLimit,
 }: DiagnosticsSettingsTabProps) {
   const { t } = useTranslation('settings');
+  const { t: tCommon } = useTranslation('common');
   const { snapshot, refresh, copyBundle } = useDiagnostics({
     ...(api === undefined ? {} : { api }),
     ...(writeClipboard === undefined ? {} : { writeClipboard }),
     ...(recentFailuresLimit === undefined ? {} : { recentFailuresLimit }),
   });
   const failuresRef = useRef<HTMLDivElement | null>(null);
+  // The page-level entry opens every source; each health card can open its own
+  // feature pre-filtered. Both hide when no drawer host is mounted.
+  const canViewLogs = isLogDrawerAvailable();
 
   const copyLabel = snapshot.copyState === 'copying'
     ? t('diagnostics.copy.copying')
@@ -67,6 +72,11 @@ export default function DiagnosticsSettingsTab({
         >
           {copyLabel}
         </Button>
+        {canViewLogs && (
+          <Button variant="outline" size="sm" data-action="view-logs" onClick={() => openLogDrawer({})}>
+            {tCommon('logDrawer.viewLogs')}
+          </Button>
+        )}
         <span className="text-xs text-muted-foreground">{t('diagnostics.copy.hint')}</span>
       </div>
 
