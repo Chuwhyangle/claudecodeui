@@ -162,7 +162,8 @@
     "notifications": "通知",
     "plugins": "插件",
     "about": "关于",
-    "cockpit": "驾驶舱"
+    "cockpit": "驾驶舱",
+    "diagnostics": "诊断与日志"
   },
   "notifications": {
     "title": "通知",
@@ -805,5 +806,52 @@
     "saveFailed": "无法保存 cockpit 设置",
     "save": "保存",
     "reload": "重新加载"
+  },
+  "diagnostics": {
+    "title": "诊断与日志",
+    "description": "功能健康、最近失败，以及可复制的脱敏诊断包。",
+    "refresh": "刷新",
+    "loading": "正在加载诊断…",
+    "error": "无法加载诊断。",
+    "retry": "重试",
+    "featuresTitle": "功能健康",
+    "featuresEmpty": "没有已注册的诊断提供方。",
+    "features": {
+      "replySuggestions": "回复建议"
+    },
+    "state": {
+      "off": "已关闭",
+      "misconfigured": "配置不完整",
+      "ready": "正常",
+      "degraded": "上游异常",
+      "ok": "正常"
+    },
+    "enabled": "已启用",
+    "disabled": "已关闭",
+    "configLabel": "配置来源",
+    "defaultSource": "默认",
+    "lastSuccessLabel": "最后成功",
+    "lastFailureLabel": "最近失败",
+    "never": "从未",
+    "none": "无",
+    "problemsLabel": "问题",
+    "failuresTitle": "最近失败",
+    "failuresEmpty": "最近没有失败。",
+    "viewRecentFailures": "查看最近失败",
+    "table": {
+      "time": "时间",
+      "feature": "功能",
+      "category": "错误码",
+      "httpStatus": "上游状态",
+      "duration": "耗时",
+      "requestId": "请求 ID"
+    },
+    "copy": {
+      "button": "复制诊断包",
+      "copying": "正在复制…",
+      "copied": "诊断已复制到剪贴板",
+      "failed": "复制失败 — 请手动选择文本",
+      "hint": "诊断包在服务端脱敏：不含密钥或消息正文。"
+    }
   }
 }

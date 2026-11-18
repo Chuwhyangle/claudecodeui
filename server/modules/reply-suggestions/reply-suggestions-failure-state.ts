@@ -177,18 +177,21 @@ export function replySuggestionsStatus(
 
 /**
  * The tracker seam the service depends on: record one failed draw, read the
- * current failure, clear it on success, or read the bounded history.
+ * current failure, mark a success, or read the bounded history.
  *
- * Consumers: `reply-suggestions.service.ts` (its injected `failureState`) and the
+ * Consumers: `reply-suggestions.service.ts` (its injected `failureState`), the
+ * diagnostics reading (`createReplySuggestionsDiagnostics`) and the
  * failure-reading criterion (which reads `history()`).
  */
 export type ReplySuggestionsFailureState = {
   lastFailure: () => ReplySuggestionsFailure | null;
+  /** When a draw last succeeded, ISO-8601; null until the first success. */
+  lastSuccessAt: () => string | null;
   /** A copy, oldest first; writing to it cannot rewrite the ring. */
   history: () => readonly ReplySuggestionsFailure[];
   /** Records one failure as the current reading and appends it to the ring. */
   record: (failure: ReplySuggestionsFailure) => ReplySuggestionsFailure;
-  /** Forgets the current failure; the ring is deliberately kept. */
+  /** Forgets the current failure and stamps the success time; the ring is deliberately kept. */
   clear: () => void;
 };
 
@@ -196,16 +199,25 @@ export type ReplySuggestionsFailureState = {
  * Builds one tracker. The size is injectable for criteria; production keeps the
  * default 20. The state lives in this closure, never at module scope.
  *
- * Consumers: `reply-suggestions.service.ts` (the default) and criteria.
+ * `now` is injectable so a criterion can pin the success timestamp; production
+ * passes the service's clock. A success does not erase the failure ring — it
+ * only moves `lastSuccessAt` past the current failure, which is what lets a
+ * health reading tell "degraded now" apart from "failed earlier, since fixed".
+ *
+ * Consumers: `reply-suggestions.service.ts`, `server/index.ts` (the one shared
+ * instance the diagnostics reader also reads), and criteria.
  */
 export function createReplySuggestionsFailureState(
   size: number = REPLY_SUGGESTIONS_FAILURE_HISTORY_SIZE,
+  now: () => number = Date.now,
 ): ReplySuggestionsFailureState {
   let current: ReplySuggestionsFailure | null = null;
+  let lastSuccessAt: string | null = null;
   const ring: ReplySuggestionsFailure[] = [];
 
   return {
     lastFailure: () => current,
+    lastSuccessAt: () => lastSuccessAt,
     history: () => [...ring],
     record: (failure) => {
       const entry = { ...failure };
@@ -216,6 +228,7 @@ export function createReplySuggestionsFailureState(
     },
     clear: () => {
       current = null;
+      lastSuccessAt = new Date(now()).toISOString();
     },
   };
 }

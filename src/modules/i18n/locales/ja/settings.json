@@ -92,7 +92,8 @@
     "notifications": "通知",
     "plugins": "プラグイン",
     "about": "概要",
-    "cockpit": "コックピット"
+    "cockpit": "コックピット",
+    "diagnostics": "診断"
   },
   "notifications": {
     "title": "通知",
@@ -685,5 +686,52 @@
     "saveFailed": "コックピット設定を保存できませんでした",
     "save": "保存",
     "reload": "再読み込み"
+  },
+  "diagnostics": {
+    "title": "診断とログ",
+    "description": "機能の状態、最近の失敗、コピーできる秘匿化済みの診断パッケージです。",
+    "refresh": "更新",
+    "loading": "診断を読み込み中…",
+    "error": "診断を読み込めませんでした。",
+    "retry": "再試行",
+    "featuresTitle": "機能の状態",
+    "featuresEmpty": "診断プロバイダーが登録されていません。",
+    "features": {
+      "replySuggestions": "返信候補"
+    },
+    "state": {
+      "off": "オフ",
+      "misconfigured": "設定不足",
+      "ready": "準備完了",
+      "degraded": "異常",
+      "ok": "正常"
+    },
+    "enabled": "有効",
+    "disabled": "無効",
+    "configLabel": "設定",
+    "defaultSource": "デフォルト",
+    "lastSuccessLabel": "最終成功",
+    "lastFailureLabel": "最終失敗",
+    "never": "なし",
+    "none": "なし",
+    "problemsLabel": "問題",
+    "failuresTitle": "最近の失敗",
+    "failuresEmpty": "最近の失敗はありません。",
+    "viewRecentFailures": "最近の失敗を表示",
+    "table": {
+      "time": "時刻",
+      "feature": "機能",
+      "category": "エラーコード",
+      "httpStatus": "上流のステータス",
+      "duration": "所要時間",
+      "requestId": "リクエスト ID"
+    },
+    "copy": {
+      "button": "診断パッケージをコピー",
+      "copying": "コピー中…",
+      "copied": "診断をクリップボードにコピーしました",
+      "failed": "コピーに失敗しました — テキストを手動で選択してください",
+      "hint": "パッケージはサーバー側で秘匿化されています: キーやメッセージ本文は含まれません。"
+    }
   }
 }

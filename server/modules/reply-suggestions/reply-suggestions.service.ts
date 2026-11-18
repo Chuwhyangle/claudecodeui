@@ -99,8 +99,7 @@ export type ReplySuggestionsServiceDeps = {
 };
 
 /** The AppError for each non-2xx path; messages never carry the key or a payload. */
-function disabledError(): AppError {
-  return new AppError('reply suggestions are disabled', { code: 'REPLY_SUGGESTIONS_DISABLED', statusCode: 503 });
+function disabledError(): AppError {  return new AppError('reply suggestions are disabled', { code: 'REPLY_SUGGESTIONS_DISABLED', statusCode: 503 });
 }
 
 /** `expand: true` while the settings say `expansion: "off"`; refused before any upstream call. */
@@ -140,7 +139,7 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
   const complete = deps.complete ?? ((request: ReplySuggestionsCompletionRequest) => completeLlm(request));
   const usageLog = deps.usageLog ?? createReplySuggestionsUsageLog();
   const ledger = createReplySuggestionsLedger(usageLog, logger, now);
-  const failures = deps.failureState ?? createReplySuggestionsFailureState();
+  const failures = deps.failureState ?? createReplySuggestionsFailureState(undefined, now);
   const runner = createDrawRunner({ complete, now, logger });
   const store = createDrawStore();
 

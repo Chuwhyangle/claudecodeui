@@ -92,7 +92,8 @@
     "notifications": "Notifiche",
     "plugins": "Plugin",
     "about": "Informazioni",
-    "cockpit": "Cockpit"
+    "cockpit": "Cockpit",
+    "diagnostics": "Diagnostica"
   },
   "notifications": {
     "title": "Notifiche",
@@ -691,5 +692,52 @@
     "saveFailed": "Impossibile salvare le impostazioni del cockpit",
     "save": "Salva",
     "reload": "Ricarica"
+  },
+  "diagnostics": {
+    "title": "Diagnostica e log",
+    "description": "Stato delle funzionalità, errori recenti e un pacchetto di diagnostica oscurato da copiare.",
+    "refresh": "Aggiorna",
+    "loading": "Caricamento diagnostica…",
+    "error": "Impossibile caricare la diagnostica.",
+    "retry": "Riprova",
+    "featuresTitle": "Stato delle funzionalità",
+    "featuresEmpty": "Nessun provider di diagnostica registrato.",
+    "features": {
+      "replySuggestions": "Suggerimenti di risposta"
+    },
+    "state": {
+      "off": "Disattivato",
+      "misconfigured": "Configurazione errata",
+      "ready": "Pronto",
+      "degraded": "Degradato",
+      "ok": "OK"
+    },
+    "enabled": "Abilitato",
+    "disabled": "Disabilitato",
+    "configLabel": "Configurazione",
+    "defaultSource": "Predefinito",
+    "lastSuccessLabel": "Ultimo successo",
+    "lastFailureLabel": "Ultimo errore",
+    "never": "Mai",
+    "none": "Nessuno",
+    "problemsLabel": "Problemi",
+    "failuresTitle": "Errori recenti",
+    "failuresEmpty": "Nessun errore recente.",
+    "viewRecentFailures": "Visualizza errori recenti",
+    "table": {
+      "time": "Ora",
+      "feature": "Funzionalità",
+      "category": "Codice errore",
+      "httpStatus": "Stato upstream",
+      "duration": "Durata",
+      "requestId": "ID richiesta"
+    },
+    "copy": {
+      "button": "Copia pacchetto di diagnostica",
+      "copying": "Copia…",
+      "copied": "Diagnostica copiata negli appunti",
+      "failed": "Copia non riuscita — seleziona il testo manualmente",
+      "hint": "Il pacchetto è oscurato sul server: nessuna chiave o corpo dei messaggi."
+    }
   }
 }

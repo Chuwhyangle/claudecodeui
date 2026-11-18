@@ -1,4 +1,4 @@
-import { Bell, Bot, GitBranch, Info, Key, ListChecks, Mic, MonitorPlay, Palette, Puzzle, Rocket } from 'lucide-react';
+import { Activity, Bell, Bot, GitBranch, Info, Key, ListChecks, Mic, MonitorPlay, Palette, Puzzle, Rocket } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/shared/utils';
@@ -28,6 +28,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'plugins', labelKey: 'mainTabs.plugins', icon: Puzzle },
   { id: 'notifications', labelKey: 'mainTabs.notifications', icon: Bell },
   { id: 'about', labelKey: 'mainTabs.about', icon: Info },
+  // Low-frequency operator entry, kept last: feature health and recent failures.
+  { id: 'diagnostics', labelKey: 'mainTabs.diagnostics', icon: Activity },
 ];
 
 /** Rendered by Settings to switch between the settings dialog's main sections. */

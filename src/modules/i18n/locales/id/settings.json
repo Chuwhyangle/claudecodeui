@@ -129,7 +129,8 @@
     "notifications": "Notifikasi",
     "plugins": "Plugin",
     "about": "Tentang",
-    "cockpit": "Cockpit"
+    "cockpit": "Cockpit",
+    "diagnostics": "Diagnostik"
   },
   "notifications": {
     "title": "Notifikasi",
@@ -985,5 +986,52 @@
     "saveFailed": "Tidak dapat menyimpan pengaturan cockpit",
     "save": "Simpan",
     "reload": "Muat ulang"
+  },
+  "diagnostics": {
+    "title": "Diagnostik & Log",
+    "description": "Kesehatan fitur, kegagalan terbaru, dan paket diagnostik tersunting yang bisa disalin.",
+    "refresh": "Muat ulang",
+    "loading": "Memuat diagnostik…",
+    "error": "Tidak dapat memuat diagnostik.",
+    "retry": "Coba lagi",
+    "featuresTitle": "Kesehatan fitur",
+    "featuresEmpty": "Tidak ada penyedia diagnostik yang terdaftar.",
+    "features": {
+      "replySuggestions": "Saran balasan"
+    },
+    "state": {
+      "off": "Mati",
+      "misconfigured": "Salah konfigurasi",
+      "ready": "Siap",
+      "degraded": "Menurun",
+      "ok": "OK"
+    },
+    "enabled": "Diaktifkan",
+    "disabled": "Dinonaktifkan",
+    "configLabel": "Konfigurasi",
+    "defaultSource": "Bawaan",
+    "lastSuccessLabel": "Keberhasilan terakhir",
+    "lastFailureLabel": "Kegagalan terakhir",
+    "never": "Tidak pernah",
+    "none": "Tidak ada",
+    "problemsLabel": "Masalah",
+    "failuresTitle": "Kegagalan terbaru",
+    "failuresEmpty": "Tidak ada kegagalan terbaru.",
+    "viewRecentFailures": "Lihat kegagalan terbaru",
+    "table": {
+      "time": "Waktu",
+      "feature": "Fitur",
+      "category": "Kode kesalahan",
+      "httpStatus": "Status upstream",
+      "duration": "Durasi",
+      "requestId": "ID permintaan"
+    },
+    "copy": {
+      "button": "Salin paket diagnostik",
+      "copying": "Menyalin…",
+      "copied": "Diagnostik disalin ke papan klip",
+      "failed": "Gagal menyalin — pilih teks secara manual",
+      "hint": "Paket disunting di server: tanpa kunci atau isi pesan."
+    }
   }
 }

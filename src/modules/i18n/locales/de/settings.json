@@ -92,7 +92,8 @@
     "notifications": "Benachrichtigungen",
     "plugins": "Plugins",
     "about": "Info",
-    "cockpit": "Cockpit"
+    "cockpit": "Cockpit",
+    "diagnostics": "Diagnose"
   },
   "notifications": {
     "title": "Benachrichtigungen",
@@ -685,5 +686,52 @@
     "saveFailed": "Die Cockpit-Einstellungen konnten nicht gespeichert werden",
     "save": "Speichern",
     "reload": "Neu laden"
+  },
+  "diagnostics": {
+    "title": "Diagnose & Protokolle",
+    "description": "Funktionszustand, letzte Fehler und ein geschwärztes Diagnosepaket zum Kopieren.",
+    "refresh": "Aktualisieren",
+    "loading": "Diagnose wird geladen…",
+    "error": "Diagnose konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "featuresTitle": "Funktionszustand",
+    "featuresEmpty": "Keine Diagnoseanbieter registriert.",
+    "features": {
+      "replySuggestions": "Antwortvorschläge"
+    },
+    "state": {
+      "off": "Aus",
+      "misconfigured": "Fehlkonfiguriert",
+      "ready": "Bereit",
+      "degraded": "Beeinträchtigt",
+      "ok": "OK"
+    },
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "configLabel": "Konfiguration",
+    "defaultSource": "Standard",
+    "lastSuccessLabel": "Letzter Erfolg",
+    "lastFailureLabel": "Letzter Fehler",
+    "never": "Nie",
+    "none": "Keine",
+    "problemsLabel": "Probleme",
+    "failuresTitle": "Letzte Fehler",
+    "failuresEmpty": "Keine aktuellen Fehler.",
+    "viewRecentFailures": "Letzte Fehler anzeigen",
+    "table": {
+      "time": "Zeit",
+      "feature": "Funktion",
+      "category": "Fehlercode",
+      "httpStatus": "Upstream-Status",
+      "duration": "Dauer",
+      "requestId": "Anfrage-ID"
+    },
+    "copy": {
+      "button": "Diagnosepaket kopieren",
+      "copying": "Wird kopiert…",
+      "copied": "Diagnose in die Zwischenablage kopiert",
+      "failed": "Kopieren fehlgeschlagen — Pakettext manuell markieren",
+      "hint": "Das Paket wird auf dem Server geschwärzt: keine Schlüssel oder Nachrichtentexte."
+    }
   }
 }

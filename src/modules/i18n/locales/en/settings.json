@@ -172,7 +172,8 @@
     "notifications": "Notifications",
     "plugins": "Plugins",
     "about": "About",
-    "cockpit": "Cockpit"
+    "cockpit": "Cockpit",
+    "diagnostics": "Diagnostics"
   },
   "notifications": {
     "title": "Notifications",
@@ -1034,5 +1035,52 @@
     "saveFailed": "Could not save the cockpit settings",
     "save": "Save",
     "reload": "Reload"
+  },
+  "diagnostics": {
+    "title": "Diagnostics & Logs",
+    "description": "Feature health, recent failures, and a redacted diagnostics bundle you can copy.",
+    "refresh": "Refresh",
+    "loading": "Loading diagnostics…",
+    "error": "Could not load diagnostics.",
+    "retry": "Retry",
+    "featuresTitle": "Feature health",
+    "featuresEmpty": "No diagnostic providers are registered.",
+    "features": {
+      "replySuggestions": "Reply suggestions"
+    },
+    "state": {
+      "off": "Off",
+      "misconfigured": "Misconfigured",
+      "ready": "Ready",
+      "degraded": "Degraded",
+      "ok": "OK"
+    },
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "configLabel": "Configuration",
+    "defaultSource": "Default",
+    "lastSuccessLabel": "Last success",
+    "lastFailureLabel": "Last failure",
+    "never": "Never",
+    "none": "None",
+    "problemsLabel": "Problems",
+    "failuresTitle": "Recent failures",
+    "failuresEmpty": "No recent failures.",
+    "viewRecentFailures": "View recent failures",
+    "table": {
+      "time": "Time",
+      "feature": "Feature",
+      "category": "Error code",
+      "httpStatus": "Upstream status",
+      "duration": "Duration",
+      "requestId": "Request ID"
+    },
+    "copy": {
+      "button": "Copy diagnostics bundle",
+      "copying": "Copying…",
+      "copied": "Diagnostics copied to clipboard",
+      "failed": "Copy failed — select the bundle text manually",
+      "hint": "The bundle is redacted on the server: no keys or message bodies."
+    }
   }
 }

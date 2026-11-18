@@ -92,7 +92,8 @@
     "notifications": "Notifications",
     "plugins": "Plugins",
     "about": "À propos",
-    "cockpit": "Cockpit"
+    "cockpit": "Cockpit",
+    "diagnostics": "Diagnostic"
   },
   "notifications": {
     "title": "Notifications",
@@ -743,5 +744,52 @@
     "saveFailed": "Impossible d'enregistrer les paramètres du cockpit",
     "save": "Enregistrer",
     "reload": "Recharger"
+  },
+  "diagnostics": {
+    "title": "Diagnostic et journaux",
+    "description": "État des fonctionnalités, échecs récents et un paquet de diagnostic expurgé à copier.",
+    "refresh": "Actualiser",
+    "loading": "Chargement du diagnostic…",
+    "error": "Impossible de charger le diagnostic.",
+    "retry": "Réessayer",
+    "featuresTitle": "État des fonctionnalités",
+    "featuresEmpty": "Aucun fournisseur de diagnostic enregistré.",
+    "features": {
+      "replySuggestions": "Suggestions de réponse"
+    },
+    "state": {
+      "off": "Désactivé",
+      "misconfigured": "Mal configuré",
+      "ready": "Prêt",
+      "degraded": "Dégradé",
+      "ok": "OK"
+    },
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "configLabel": "Configuration",
+    "defaultSource": "Par défaut",
+    "lastSuccessLabel": "Dernier succès",
+    "lastFailureLabel": "Dernier échec",
+    "never": "Jamais",
+    "none": "Aucun",
+    "problemsLabel": "Problèmes",
+    "failuresTitle": "Échecs récents",
+    "failuresEmpty": "Aucun échec récent.",
+    "viewRecentFailures": "Voir les échecs récents",
+    "table": {
+      "time": "Heure",
+      "feature": "Fonctionnalité",
+      "category": "Code d’erreur",
+      "httpStatus": "Statut amont",
+      "duration": "Durée",
+      "requestId": "ID de requête"
+    },
+    "copy": {
+      "button": "Copier le paquet de diagnostic",
+      "copying": "Copie…",
+      "copied": "Diagnostic copié dans le presse-papiers",
+      "failed": "Échec de la copie — sélectionnez le texte manuellement",
+      "hint": "Le paquet est expurgé sur le serveur : aucune clé ni corps de message."
+    }
   }
 }

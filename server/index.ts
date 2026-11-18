@@ -112,7 +112,10 @@ import { assetsRoutes } from './modules/assets/index.js';
 import { createArchitectureModule } from './modules/architecture/index.js';
 import { createObservationModule, sessionAskSweeper, sessionDigestProducer } from './modules/observation/index.js';
 import { createLiaisonModule, createFileLiaisonStore, createQuayFleetRunner } from './modules/liaison/index.js';
-import { createReplySuggestionsModule, setReplySuggestionsUsageObserver } from './modules/reply-suggestions/index.js';
+import { createReplySuggestionsDiagnostics, createReplySuggestionsFailureState, createReplySuggestionsModule, createReplySuggestionsSettingsSource, setReplySuggestionsUsageObserver } from './modules/reply-suggestions/index.js';
+// The Settings → Diagnostics & Logs read surface. A leaf module: every feature
+// reading is adapted HERE and injected, so the module imports no sibling.
+import { createDiagnosticsModule } from './modules/diagnostics/index.js';
 // The host-level context event stream (context-event-stream-and-shadow-predictor). ONE process
 // instance: chat control, the cockpit and the reply-suggestions observer all record through it,
 // and the shadow predictor inside it writes to the same stream and to nothing else.
@@ -1974,6 +1977,25 @@ app.use(
 // module's full-history read reduced to the last text-bearing assistant row.
 // A session that does not exist throws the reader's own 404 `AppError`, which
 // the process error middleware translates unchanged.
+//
+// The settings source and the failure tracker are built ONCE, here, because the
+// diagnostics surface must observe the SAME instances the mounted router uses:
+// the page then reports the failures the composer actually recorded and names
+// the same settings file the draws read, instead of a second reading path.
+const replySuggestionsSettings = createReplySuggestionsSettingsSource();
+const replySuggestionsFailures = createReplySuggestionsFailureState();
+const replySuggestionsDiagnostics = createReplySuggestionsDiagnostics({
+    readSettings: () => replySuggestionsSettings.read(),
+    failureState: replySuggestionsFailures,
+});
+// The one diagnostics provider today: the reply-suggestions reading, adapted to
+// the module's injected seam. `RUNNING_VERSION` and `installMode` were captured
+// at startup above, so the bundle names the code this process actually runs.
+const replySuggestionsDiagnosticsProvider = {
+    id: 'reply-suggestions',
+    label: 'Reply suggestions',
+    read: () => replySuggestionsDiagnostics.read(),
+};
 app.use(
     '/api/reply-suggestions',
     authenticateToken,
@@ -1990,6 +2012,29 @@ app.use(
                 }
             }
             return null;
+        },
+        settingsSource: replySuggestionsSettings,
+        failureState: replySuggestionsFailures,
+    }),
+);
+// Diagnostics & logs: the Settings page's low-frequency operator entry. A leaf
+// module over injected feature readings, mounted behind the same auth as every
+// other API surface. The bundle's settings source/path re-reads the same file,
+// so a fixed configuration is reflected without a restart.
+app.use(
+    '/api/diagnostics',
+    authenticateToken,
+    createDiagnosticsModule({
+        providers: [replySuggestionsDiagnosticsProvider],
+        meta: () => {
+            const observed = replySuggestionsSettings.read().diagnostics;
+            return {
+                version: RUNNING_VERSION,
+                installForm: installMode,
+                platform: process.platform,
+                settingsSource: observed.source,
+                settingsPath: observed.path,
+            };
         },
     }),
 );

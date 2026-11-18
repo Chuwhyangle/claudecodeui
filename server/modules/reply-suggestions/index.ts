@@ -12,6 +12,18 @@
 // consumer: server/index.ts (mounts the router under /api/reply-suggestions)
 export { createReplySuggestionsModule } from './reply-suggestions.module.js';
 export type { ReplySuggestionsModuleDeps } from './reply-suggestions.module.js';
+// consumer: server/index.ts (adapts the shared reading into the diagnostics module's
+// feature provider) and the diagnostics service criterion. The reader observes the
+// SAME settings source and failure tracker the mounted module uses.
+export { createReplySuggestionsDiagnostics } from './reply-suggestions-diagnostics.js';
+export type {
+  ReplySuggestionsDiagnostics,
+  ReplySuggestionsDiagnosticsReading,
+} from './reply-suggestions-diagnostics.js';
+// consumer: server/index.ts (the one shared failure tracker the mounted module and the
+// diagnostics reader both use) and the failure-reading criterion.
+export { createReplySuggestionsFailureState } from './reply-suggestions-failure-state.js';
+export type { ReplySuggestionsFailureState } from './reply-suggestions-failure-state.js';
 // consumer: server/index.ts (types the injected reader's return value)
 export type { LastAssistantMessage } from './reply-suggestions.service.js';
 // consumer: tests and features that borrow the completion vocabulary — the

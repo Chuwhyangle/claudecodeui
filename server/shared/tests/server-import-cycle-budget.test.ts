@@ -320,6 +320,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/database/repositories/providers',
   'modules/database/repositories/sessions',
   'modules/debug-agent',
+  'modules/diagnostics',
   'modules/file-tree',
   'modules/git',
   'modules/liaison',

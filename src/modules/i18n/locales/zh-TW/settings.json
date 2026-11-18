@@ -93,7 +93,8 @@
     "notifications": "通知",
     "plugins": "外掛",
     "about": "關於",
-    "cockpit": "駕駛艙"
+    "cockpit": "駕駛艙",
+    "diagnostics": "診斷與日誌"
   },
   "notifications": {
     "title": "通知",
@@ -686,5 +687,52 @@
     "saveFailed": "無法儲存 cockpit 設定",
     "save": "儲存",
     "reload": "重新載入"
+  },
+  "diagnostics": {
+    "title": "診斷與日誌",
+    "description": "功能健康、最近失敗，以及可複製的脫敏診斷包。",
+    "refresh": "重新整理",
+    "loading": "正在載入診斷…",
+    "error": "無法載入診斷。",
+    "retry": "重試",
+    "featuresTitle": "功能健康",
+    "featuresEmpty": "沒有已註冊的診斷提供者。",
+    "features": {
+      "replySuggestions": "回覆建議"
+    },
+    "state": {
+      "off": "已關閉",
+      "misconfigured": "設定不完整",
+      "ready": "正常",
+      "degraded": "上游異常",
+      "ok": "正常"
+    },
+    "enabled": "已啟用",
+    "disabled": "已關閉",
+    "configLabel": "設定來源",
+    "defaultSource": "預設",
+    "lastSuccessLabel": "最後成功",
+    "lastFailureLabel": "最近失敗",
+    "never": "從未",
+    "none": "無",
+    "problemsLabel": "問題",
+    "failuresTitle": "最近失敗",
+    "failuresEmpty": "最近沒有失敗。",
+    "viewRecentFailures": "查看最近失敗",
+    "table": {
+      "time": "時間",
+      "feature": "功能",
+      "category": "錯誤碼",
+      "httpStatus": "上游狀態",
+      "duration": "耗時",
+      "requestId": "請求 ID"
+    },
+    "copy": {
+      "button": "複製診斷包",
+      "copying": "正在複製…",
+      "copied": "診斷已複製到剪貼簿",
+      "failed": "複製失敗 — 請手動選取文字",
+      "hint": "診斷包在伺服端脫敏：不含密鑰或訊息內文。"
+    }
   }
 }

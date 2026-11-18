@@ -18,11 +18,15 @@ import type { Router } from 'express';
 import type { LlmCompletion, LlmCompletionRequest } from '@/modules/llm-gateway/index.js';
 
 import { createReplySuggestionsRoutes } from './reply-suggestions.routes.js';
+import type { ReplySuggestionsFailureState } from './reply-suggestions-failure-state.js';
 import {
   createReplySuggestionsService,
   type LastAssistantMessage,
 } from './reply-suggestions.service.js';
-import { createReplySuggestionsSettingsSource } from './reply-suggestions-settings.js';
+import {
+  createReplySuggestionsSettingsSource,
+  type ReplySuggestionsSettingsSource,
+} from './reply-suggestions-settings.js';
 import { createReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js';
 
 /**
@@ -45,6 +49,14 @@ export type ReplySuggestionsModuleDeps = {
   complete?: (request: LlmCompletionRequest) => Promise<LlmCompletion>;
   usageLogPath?: string;
   usageLogMaxBytes?: number;
+  /**
+   * The settings reader and the failure tracker to share with the diagnostics
+   * reader. `server/index.ts` builds one of each and hands the same instances to
+   * `createReplySuggestionsDiagnostics`, so the Settings page observes exactly
+   * the draws the composer made. Criteria leave them out and get private ones.
+   */
+  settingsSource?: ReplySuggestionsSettingsSource;
+  failureState?: ReplySuggestionsFailureState;
 };
 
 /**
@@ -56,7 +68,7 @@ export type ReplySuggestionsModuleDeps = {
  * Consumers: `server/index.ts` only.
  */
 export function createReplySuggestionsModule(deps: ReplySuggestionsModuleDeps): Router {
-  const settings = createReplySuggestionsSettingsSource({
+  const settings = deps.settingsSource ?? createReplySuggestionsSettingsSource({
     ...(deps.settingsPath === undefined ? {} : { settingsPath: deps.settingsPath }),
     ...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
   });
@@ -74,6 +86,7 @@ export function createReplySuggestionsModule(deps: ReplySuggestionsModuleDeps): 
       ...(deps.now === undefined ? {} : { now: deps.now }),
       ...(deps.logger === undefined ? {} : { logger: deps.logger }),
       ...(deps.complete === undefined ? {} : { complete: deps.complete }),
+      ...(deps.failureState === undefined ? {} : { failureState: deps.failureState }),
     }),
   );
 }

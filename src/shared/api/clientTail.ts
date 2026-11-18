@@ -6,6 +6,12 @@
 import type { VoiceEditLabel } from '@/shared/voice/labels/voiceEditLabels';
 import type { VoiceConfig } from '@/shared/api/voiceConfigType';
 import type {
+  DiagnosticsFailure,
+  DiagnosticsFailuresResponse,
+  DiagnosticsFeature,
+  DiagnosticsFeaturesResponse,
+} from '@/shared/types';
+import type {
   ReplySuggestionsEventInput,
   ReplySuggestionsRequest,
   ReplySuggestionsStatus,
@@ -26,6 +32,69 @@ import {
   readReplySuggestionsStatus,
 } from '@/shared/api/requests';
 import type { ApiRequestOptions } from '@/shared/api/requests';
+
+/** The failure states the health card knows; anything else reads as `unknown`-like `degraded`. */
+const DIAGNOSTICS_FEATURE_STATES: readonly string[] = ['off', 'misconfigured', 'ready', 'degraded', 'ok'];
+
+/** Reads one failure row, or null when the shape is unusable. */
+function readDiagnosticsFailure(value: unknown): DiagnosticsFailure | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.at !== 'string' || typeof record.featureId !== 'string') return null;
+  return {
+    at: record.at,
+    featureId: record.featureId,
+    feature: typeof record.feature === 'string' ? record.feature : record.featureId,
+    requestId: typeof record.requestId === 'string' ? record.requestId : '',
+    category: typeof record.category === 'string' ? record.category : 'unknown',
+    httpStatus: typeof record.httpStatus === 'number' ? record.httpStatus : null,
+    durationMs: typeof record.durationMs === 'number' ? record.durationMs : 0,
+    model: typeof record.model === 'string' ? record.model : '',
+    protocol: typeof record.protocol === 'string' ? record.protocol : '',
+  };
+}
+
+/** Reads one feature row, or null when the shape is unusable. */
+function readDiagnosticsFeature(value: unknown): DiagnosticsFeature | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.id !== 'string') return null;
+  const state = typeof record.state === 'string' && DIAGNOSTICS_FEATURE_STATES.includes(record.state)
+    ? record.state as DiagnosticsFeature['state']
+    : 'degraded';
+  return {
+    id: record.id,
+    label: typeof record.label === 'string' ? record.label : record.id,
+    state,
+    enabled: record.enabled === true,
+    problems: Array.isArray(record.problems)
+      ? record.problems.filter((problem): problem is string => typeof problem === 'string')
+      : [],
+    lastSuccessAt: typeof record.lastSuccessAt === 'string' ? record.lastSuccessAt : null,
+    lastFailure: readDiagnosticsFailure(record.lastFailure),
+    configSource: typeof record.configSource === 'string' ? record.configSource : null,
+  };
+}
+
+/** Reads the `/features` answer, dropping unusable rows rather than failing the whole read. */
+function readDiagnosticsFeatures(body: unknown): DiagnosticsFeaturesResponse {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return { features: [] };
+  const record = body as Record<string, unknown>;
+  const features = Array.isArray(record.features)
+    ? record.features.map(readDiagnosticsFeature).filter((feature): feature is DiagnosticsFeature => feature !== null)
+    : [];
+  return { features };
+}
+
+/** Reads the `/recent-failures` answer, dropping unusable rows. */
+function readDiagnosticsFailures(body: unknown): DiagnosticsFailuresResponse {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return { failures: [] };
+  const record = body as Record<string, unknown>;
+  const failures = Array.isArray(record.failures)
+    ? record.failures.map(readDiagnosticsFailure).filter((failure): failure is DiagnosticsFailure => failure !== null)
+    : [];
+  return { failures };
+}
 
 export const apiTail = {
   user: {
@@ -179,6 +248,28 @@ export const apiTail = {
     event: async (event: ReplySuggestionsEventInput): Promise<boolean> => {
       const response = await post('/api/reply-suggestions/events', event);
       return response.ok;
+    },
+  },
+
+  // Diagnostics & logs: the Settings page's low-frequency operator entry. Three
+  // read-only GETs; every value is redacted on the server, so the client only
+  // validates and displays. A refusal throws, which the diagnostics controller
+  // turns into its visible error state rather than an empty "all healthy" page.
+  diagnostics: {
+    features: async (): Promise<DiagnosticsFeaturesResponse> => {
+      const response = await get('/api/diagnostics/features');
+      if (!response.ok) throw new Error(`diagnostics features request failed with HTTP ${response.status}`);
+      return readDiagnosticsFeatures(await response.json().catch(() => null) as unknown);
+    },
+    recentFailures: async (limit = 50): Promise<DiagnosticsFailuresResponse> => {
+      const response = await get(`/api/diagnostics/recent-failures${query({ limit })}`);
+      if (!response.ok) throw new Error(`diagnostics recent-failures request failed with HTTP ${response.status}`);
+      return readDiagnosticsFailures(await response.json().catch(() => null) as unknown);
+    },
+    bundle: async (): Promise<string> => {
+      const response = await get('/api/diagnostics/bundle');
+      if (!response.ok) throw new Error(`diagnostics bundle request failed with HTTP ${response.status}`);
+      return response.text();
     },
   },
 

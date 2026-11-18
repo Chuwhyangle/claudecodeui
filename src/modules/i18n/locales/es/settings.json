@@ -129,7 +129,8 @@
     "notifications": "Notificaciones",
     "plugins": "Plugins",
     "about": "Acerca de",
-    "cockpit": "Cockpit"
+    "cockpit": "Cockpit",
+    "diagnostics": "Diagnóstico"
   },
   "notifications": {
     "title": "Notificaciones",
@@ -778,5 +779,52 @@
     "saveFailed": "No se pudo guardar la configuración del cockpit",
     "save": "Guardar",
     "reload": "Recargar"
+  },
+  "diagnostics": {
+    "title": "Diagnóstico y registros",
+    "description": "Estado de las funciones, fallos recientes y un paquete de diagnóstico censurado para copiar.",
+    "refresh": "Actualizar",
+    "loading": "Cargando diagnóstico…",
+    "error": "No se pudo cargar el diagnóstico.",
+    "retry": "Reintentar",
+    "featuresTitle": "Estado de las funciones",
+    "featuresEmpty": "No hay proveedores de diagnóstico registrados.",
+    "features": {
+      "replySuggestions": "Sugerencias de respuesta"
+    },
+    "state": {
+      "off": "Desactivado",
+      "misconfigured": "Mal configurado",
+      "ready": "Listo",
+      "degraded": "Degradado",
+      "ok": "Correcto"
+    },
+    "enabled": "Activado",
+    "disabled": "Desactivado",
+    "configLabel": "Configuración",
+    "defaultSource": "Predeterminado",
+    "lastSuccessLabel": "Último éxito",
+    "lastFailureLabel": "Último fallo",
+    "never": "Nunca",
+    "none": "Ninguno",
+    "problemsLabel": "Problemas",
+    "failuresTitle": "Fallos recientes",
+    "failuresEmpty": "No hay fallos recientes.",
+    "viewRecentFailures": "Ver fallos recientes",
+    "table": {
+      "time": "Hora",
+      "feature": "Función",
+      "category": "Código de error",
+      "httpStatus": "Estado del origen",
+      "duration": "Duración",
+      "requestId": "ID de solicitud"
+    },
+    "copy": {
+      "button": "Copiar paquete de diagnóstico",
+      "copying": "Copiando…",
+      "copied": "Diagnóstico copiado al portapapeles",
+      "failed": "Error al copiar — selecciona el texto manualmente",
+      "hint": "El paquete se censura en el servidor: sin claves ni cuerpos de mensajes."
+    }
   }
 }

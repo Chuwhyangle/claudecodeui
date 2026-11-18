@@ -16,6 +16,7 @@ import TasksSettingsTab from '@/modules/settings/tabs/tasks-settings/TasksSettin
 import CockpitSessionStartSettingsTab from '@/modules/settings/tabs/CockpitSessionStartSettingsTab';
 import { PluginSettingsTab } from '@/modules/plugins';
 import AboutTab from '@/modules/settings/tabs/AboutTab';
+import DiagnosticsSettingsTab from '@/modules/settings/tabs/DiagnosticsSettingsTab';
 import { useSettingsController } from '@/modules/settings/hooks/useSettingsController';
 import { useWebPush } from '@/modules/settings/hooks/useWebPush';
 import type { AgentSettingsProject } from '@/shared/types';
@@ -272,6 +273,10 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
               {activeTab === 'plugins' && <PluginSettingsTab />}
 
               {activeTab === 'about' && <AboutTab />}
+
+              {/* Operator entry: feature health, recent failures and the copyable
+                  diagnostics bundle. Deliberately the last tab, not first-level navigation. */}
+              {activeTab === 'diagnostics' && <DiagnosticsSettingsTab />}
             </div>
           </main>
         </div>

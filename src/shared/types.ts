@@ -3272,7 +3272,7 @@ export type CockpitSessionStartSettingsReading = {
   restartRequired: boolean;
 };
 
-export type SettingsMainTab = 'agents' | 'appearance' | 'git' | 'api' | 'voice' | 'tasks' | 'browser' | 'notifications' | 'plugins' | 'about' | 'cockpit';
+export type SettingsMainTab = 'agents' | 'appearance' | 'git' | 'api' | 'voice' | 'tasks' | 'browser' | 'notifications' | 'plugins' | 'about' | 'cockpit' | 'diagnostics';
 
 /** The coding-agent CLI a settings screen is configuring, aliasing LLMProvider so agent-scoped settings read as being about an agent rather than a chat model. */
 export type AgentProvider = LLMProvider;
@@ -4174,6 +4174,17 @@ export type {
   ReplySuggestionsStatus,
   ReplySuggestionsSuggestResponse,
 } from '@/shared/replySuggestionsType';
+
+//----------------- DIAGNOSTICS ------------
+// The Settings diagnostics read model lives in its own type-only leaf for the same
+// reason the reply-suggestions wire does; this barrel re-exports it unchanged.
+export type {
+  DiagnosticsFailure,
+  DiagnosticsFeature,
+  DiagnosticsFailuresResponse,
+  DiagnosticsFeaturesResponse,
+  DiagnosticsFeatureState,
+} from '@/shared/diagnosticsType';
 
 // ---------------------------
 

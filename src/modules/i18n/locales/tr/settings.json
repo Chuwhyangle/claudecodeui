@@ -93,7 +93,8 @@
     "notifications": "Bildirimler",
     "plugins": "Eklentiler",
     "about": "Hakkında",
-    "cockpit": "Kokpit"
+    "cockpit": "Kokpit",
+    "diagnostics": "Tanılama"
   },
   "notifications": {
     "title": "Bildirimler",
@@ -692,5 +693,52 @@
     "saveFailed": "Kokpit ayarları kaydedilemedi",
     "save": "Kaydet",
     "reload": "Yeniden yükle"
+  },
+  "diagnostics": {
+    "title": "Tanılama ve Günlükler",
+    "description": "Özellik durumu, son hatalar ve kopyalanabilir, gizlenmiş bir tanılama paketi.",
+    "refresh": "Yenile",
+    "loading": "Tanılama yükleniyor…",
+    "error": "Tanılama yüklenemedi.",
+    "retry": "Yeniden dene",
+    "featuresTitle": "Özellik durumu",
+    "featuresEmpty": "Kayıtlı tanılama sağlayıcısı yok.",
+    "features": {
+      "replySuggestions": "Yanıt önerileri"
+    },
+    "state": {
+      "off": "Kapalı",
+      "misconfigured": "Yanlış yapılandırılmış",
+      "ready": "Hazır",
+      "degraded": "Bozuk",
+      "ok": "Tamam"
+    },
+    "enabled": "Etkin",
+    "disabled": "Devre dışı",
+    "configLabel": "Yapılandırma",
+    "defaultSource": "Varsayılan",
+    "lastSuccessLabel": "Son başarı",
+    "lastFailureLabel": "Son hata",
+    "never": "Hiç",
+    "none": "Yok",
+    "problemsLabel": "Sorunlar",
+    "failuresTitle": "Son hatalar",
+    "failuresEmpty": "Son hata yok.",
+    "viewRecentFailures": "Son hataları görüntüle",
+    "table": {
+      "time": "Zaman",
+      "feature": "Özellik",
+      "category": "Hata kodu",
+      "httpStatus": "Kaynak durumu",
+      "duration": "Süre",
+      "requestId": "İstek kimliği"
+    },
+    "copy": {
+      "button": "Tanılama paketini kopyala",
+      "copying": "Kopyalanıyor…",
+      "copied": "Tanılama panoya kopyalandı",
+      "failed": "Kopyalama başarısız — metni elle seçin",
+      "hint": "Paket sunucuda gizlenir: anahtar veya mesaj gövdesi yok."
+    }
   }
 }
