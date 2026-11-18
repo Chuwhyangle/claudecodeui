@@ -303,7 +303,15 @@ export function installConsoleLogTee(ring: LogRing, label = 'console'): ConsoleL
         try {
           const text = args.map(stringifyArgument).join(' ');
           const source = label === 'console' ? deriveLogSource(text) : label;
-          ring.append({ level, source, text });
+          // A feature that reports a failed outcome through `console.log` (the
+          // reply-suggestions draw does) still deserves the error filter. The
+          // method decides the level; only a line whose own text names a failure
+          // is escalated from info, and warn/error are never downgraded.
+          const resolved: LogLevel = level === 'info'
+            && /(?:^|\s)outcome=error|\berror:|\bERROR\b|\bfailed\b/i.test(text)
+            ? 'error'
+            : level;
+          ring.append({ level: resolved, source, text });
         } catch {
           // A log line must never break the process.
         } finally {

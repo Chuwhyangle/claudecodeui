@@ -173,3 +173,24 @@ test('AC1-h: the console tee is installed once, feeds the ring, and uninstalls',
     console.error = original.error;
   }
 });
+
+test('AC1-i: a console.log line whose text names a failed outcome reads as error', () => {
+  const ring = createLogRing();
+  const original = { log: console.log, warn: console.warn, error: console.error };
+  console.log = () => {};
+  try {
+    const tee = installConsoleLogTee(ring);
+    console.log('[reply-suggestions] outcome=error:http requestId=req-9 httpStatus=502');
+    console.log('[reply-suggestions] outcome=ok requestId=req-10');
+    console.warn('[server] degraded');
+    tee.uninstall();
+    const lines = ring.read({ limit: 10 });
+    assert.equal(lines[0]?.level, 'error', 'a failed outcome printed through console.log is an error line');
+    assert.equal(lines[1]?.level, 'info', 'a successful outcome stays info');
+    assert.equal(lines[2]?.level, 'warn');
+  } finally {
+    console.log = original.log;
+    console.warn = original.warn;
+    console.error = original.error;
+  }
+});
