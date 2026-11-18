@@ -14,7 +14,7 @@
  * Consumers: `reply-suggestions.service.ts` (its only caller) and the service
  * criterion in `tests/reply-suggestions-service.test.ts`.
  */
-import { AppError } from '@/shared/utils.js';
+import { AppError, isRecord } from '@/shared/utils.js';
 
 import { parseSuggestionChips, selectChips } from './reply-suggestions-chips.js';
 import {
@@ -45,6 +45,8 @@ type ReplySuggestionsDrawContext = {
   seed: string;
   expansionSource: ReplySuggestionsExpansionSource | null;
   redraw: boolean;
+  /** The POST's correlation id, minted once by the service and kept across the supplement. */
+  requestId: string;
 };
 
 /** The one method the service needs: produce the selected chips for a draw. */
@@ -81,13 +83,26 @@ function composeRequest(
 }
 
 /** Parse one answer, mapping a malformed answer to the same 502 as a failed request. */
-function parseChipsOrUpstreamFailure(text: string): string[] {
+function parseChipsOrUpstreamFailure(text: string, requestId: string, model: string): string[] {
   try {
     return parseSuggestionChips(text);
   } catch (failure) {
     const category = failure instanceof ReplySuggestionsClientError ? failure.category : 'shape';
-    throw replySuggestionsUpstreamError(category);
+    throw replySuggestionsUpstreamError(category, { requestId, model });
   }
+}
+
+/** The category and upstream status one failed attempt reports, whichever layer refused it. */
+function describeAttempt(failure: unknown): { category: string; httpStatus: number | null } {
+  if (failure instanceof ReplySuggestionsClientError) {
+    return { category: failure.category, httpStatus: failure.httpStatus };
+  }
+  if (failure instanceof AppError) {
+    const message = failure.message.toLowerCase();
+    if (message.includes('circuit-open')) return { category: 'circuit-open', httpStatus: null };
+    if (failure.code === 'REPLY_SUGGESTIONS_RATE_LIMITED') return { category: 'rate-limit', httpStatus: null };
+  }
+  return { category: 'unknown', httpStatus: null };
 }
 
 /**
@@ -110,15 +125,17 @@ export function createDrawRunner(options: {
     durationMs: number,
     outcome: string,
     completion: ReplySuggestionsCompletion | null,
+    requestId: string,
+    httpStatus: number | null = null,
   ): void {
     const tokens: string[] = [];
     if (completion?.inputTokens != null) tokens.push(`inputTokens=${completion.inputTokens}`);
     if (completion?.outputTokens != null) tokens.push(`outputTokens=${completion.outputTokens}`);
-    // Only protocol/model/version/duration/outcome/token counts — never text or the key.
+    // Only protocol/model/version/duration/outcome/token counts/correlation — never text or the key.
     logger(
       `[reply-suggestions] protocol=${settings.upstream.protocol} model=${settings.upstream.model} ` +
         `version=${settings.version} durationMs=${durationMs}${tokens.length === 0 ? '' : ` ${tokens.join(' ')}`} ` +
-        `outcome=${outcome}`,
+        `outcome=${outcome} requestId=${requestId}${httpStatus === null ? '' : ` httpStatus=${httpStatus}`}`,
     );
   }
 
@@ -126,20 +143,26 @@ export function createDrawRunner(options: {
   async function callUpstream(
     request: ReplySuggestionsCompletionRequest,
     settings: ReplySuggestionsSettings,
+    requestId: string,
   ): Promise<ReplySuggestionsCompletion> {
-    return guard.run(settings.limits, async () => {
-      const startedAt = now();
-      try {
-        const completion = await complete(request);
-        logCompletion(settings, now() - startedAt, 'ok', completion);
-        return completion;
-      } catch (failure) {
-        const category = failure instanceof ReplySuggestionsClientError ? failure.category : 'unknown';
-        logCompletion(settings, now() - startedAt, `error:${category}`, null);
-        if (failure instanceof AppError) throw failure;
-        throw replySuggestionsUpstreamError(category);
+    const startedAt = now();
+    try {
+      const completion = await guard.run(settings.limits, () => complete(request));
+      logCompletion(settings, now() - startedAt, 'ok', completion, requestId);
+      return completion;
+    } catch (failure) {
+      const { category, httpStatus } = describeAttempt(failure);
+      logCompletion(settings, now() - startedAt, `error:${category}`, null, requestId, httpStatus);
+      const details = { requestId, httpStatus, model: settings.upstream.model, category };
+      if (failure instanceof AppError) {
+        throw new AppError(failure.message, {
+          code: failure.code,
+          statusCode: failure.statusCode,
+          details: { ...(isRecord(failure.details) ? failure.details : {}), ...details },
+        });
       }
-    });
+      throw replySuggestionsUpstreamError(category, details);
+    }
   }
 
   return {
@@ -147,8 +170,8 @@ export function createDrawRunner(options: {
       const generation = context.settings.generation;
       // `avoid` only lists what a redraw was asked to steer away from.
       const avoid: readonly string[] = context.redraw ? shown.slice(-REPLY_SUGGESTIONS_REDRAW_MEMORY) : [];
-      const first = await callUpstream(composeRequest(context, avoid, context.redraw), context.settings);
-      const firstChips = parseChipsOrUpstreamFailure(first.text);
+      const first = await callUpstream(composeRequest(context, avoid, context.redraw), context.settings, context.requestId);
+      const firstChips = parseChipsOrUpstreamFailure(first.text, context.requestId, context.settings.upstream.model);
       // The seed is "already shown" by definition: an identical variant is no variant.
       const seenBefore = context.expansionSource === 'seed' ? [...shown, context.seed] : shown;
       let selected = selectChips(firstChips, seenBefore, generation);
@@ -157,8 +180,16 @@ export function createDrawRunner(options: {
         const supplement = await callUpstream(
           composeRequest(context, [...avoid, ...firstChips], true),
           context.settings,
+          context.requestId,
         );
-        selected = selectChips([...firstChips, ...parseChipsOrUpstreamFailure(supplement.text)], seenBefore, generation);
+        selected = selectChips(
+          [
+            ...firstChips,
+            ...parseChipsOrUpstreamFailure(supplement.text, context.requestId, context.settings.upstream.model),
+          ],
+          seenBefore,
+          generation,
+        );
       }
       return selected;
     },

@@ -3,9 +3,11 @@ import type {
   ReplySuggestionsEventInput,
   ReplySuggestionsEventName,
   ReplySuggestionsExpansionSource,
+  ReplySuggestionsFailure,
   ReplySuggestionsRequest,
   ReplySuggestionsResult,
   ReplySuggestionsStatus,
+  ReplySuggestionsSuggestResponse,
 } from '@/shared/types';
 import { createBoundedLru, createExternalStore, defaultClock } from '@/shared/utils';
 
@@ -29,10 +31,13 @@ import { createBoundedLru, createExternalStore, defaultClock } from '@/shared/ut
  * - A session change invalidates everything in flight: chips, the expansion chain
  *   and any held draw are dropped, and the request sequence is bumped so a late
  *   answer from the conversation that was left cannot repopulate the strip.
- * - Disabled is silent. A refused `/status` or a failed draw falls back to the
- *   habit chips: nothing here throws into the composer or publishes an error.
- *   `redraw` is the one command that reports failure, through its `false`, so a
- *   press with no answer is not mistaken for a press that did nothing.
+ * - A failed draw is visible, never thrown. A refused `/status` still falls back to
+ *   the habit chips, but a failed automatic draw becomes the snapshot's `failure`
+ *   episode (the inline notice); any later success clears it. The same
+ *   `code + httpStatus + requestId` only advances the count. `dismissFailure` hides
+ *   the notice for this session without erasing the episode; a conversation switch
+ *   resets both. `redraw` keeps returning `false` so the button can show its short
+ *   failure state.
  * - The experimental expansion (`expansion: "vary"`) is a second draw on the same
  *   message: a picked reply (`seed`) asks for variants of that reply. Its chips
  *   live beside the model batch because they answer the draft in the box, not the
@@ -76,8 +81,9 @@ const DEFAULT_MAX_CHIPS = 3;
 /** One remembered batch: the chips and the draw id they belong to. */
 type CachedBatch = { chips: string[]; draw: number };
 
-/** Starts and cancels the one settle timer; injectable so tests need no wall clock. */
-export type ReplySuggestionsClock = Pick<Clock, 'setTimeout' | 'clearTimeout'>;
+/** Starts and cancels the one settle timer, and stamps a failure's observation time;
+ * injectable so tests need no wall clock. */
+export type ReplySuggestionsClock = Pick<Clock, 'setTimeout' | 'clearTimeout'> & { now?: () => number };
 
 /**
  * The page-level table of remembered batches.
@@ -123,16 +129,17 @@ export function resetReplySuggestionsBatchCache(): void {
 }
 
 /**
- * The three endpoint calls the controller makes. `suggest` and `status` answer
- * `null` for a refused or unreadable response; the controller treats that as the
- * silent fallback and never touches a `Response` itself.
+ * The three endpoint calls the controller makes. `status` answers `null` for a
+ * refused or unreadable response (which reads as the feature being off);
+ * `suggest` answers the typed discriminated result, so a refusal is a failure
+ * episode rather than an ambiguous "nothing".
  */
 export type ReplySuggestionsApi = {
   status: () => Promise<ReplySuggestionsStatus | null>;
   suggest: (
     request: ReplySuggestionsRequest,
     options?: { maxChips?: number },
-  ) => Promise<ReplySuggestionsResult | null>;
+  ) => Promise<ReplySuggestionsSuggestResponse>;
   event: (event: ReplySuggestionsEventInput) => Promise<boolean>;
 };
 
@@ -172,6 +179,12 @@ export type ReplySuggestionsSnapshot = {
   expansionEnabled: boolean;
   /** Whether another expansion may be requested (enabled and under the depth cap). */
   canExpand: boolean;
+  /** The failure episode this session is showing, or null after a success. */
+  failure: ReplySuggestionsFailure | null;
+  /** True once the person dismissed the notice; auto-shown failures stay hidden for this session. */
+  failureDismissed: boolean;
+  /** How many consecutive failures the current episode has counted. */
+  failureCount: number;
 };
 
 /** The commands and subscription surface the hook drives. */
@@ -194,6 +207,8 @@ export type ReplySuggestionsController = {
     index?: number,
     source?: ReplySuggestionsExpansionSource,
   ) => void;
+  /** Hides the failure notice for the rest of this session; the episode is kept. */
+  dismissFailure: () => void;
   /** Stops timers and subscribers; a controller is not reusable afterwards. */
   dispose: () => void;
 };
@@ -223,6 +238,7 @@ export function createReplySuggestionsController(options: {
 }): ReplySuggestionsController {
   const { api } = options;
   const clock = options.clock ?? defaultClock;
+  const now = clock.now ?? defaultClock.now;
   const cache = options.cache ?? createReplySuggestionsBatchCache();
 
   let context: ReplySuggestionsContext = emptyContext;
@@ -237,6 +253,9 @@ export function createReplySuggestionsController(options: {
   let expansionSource: ReplySuggestionsExpansionSource | null = null;
   let expansionLoading = false;
   let expansionDepth = 0;
+  let failure: ReplySuggestionsFailure | null = null;
+  let failureCount = 0;
+  let failureDismissed = false;
 
   /** The `${session}:${message}` key this controller has already asked for (or restored). */
   let extractedKey: string | null = null;
@@ -258,6 +277,9 @@ export function createReplySuggestionsController(options: {
     expansionSource,
     expansionLoading,
     expansionDepth,
+    failure,
+    failureCount,
+    failureDismissed,
     // A conversation with no assistant message has nothing to suggest from: the
     // control is absent rather than a silent no-op, matching the disabled case.
     enabled: status?.enabled === true && context.lastAssistantMessageId !== null,
@@ -286,6 +308,9 @@ export function createReplySuggestionsController(options: {
       && previous.enabled === next.enabled
       && previous.expansionEnabled === next.expansionEnabled
       && previous.canExpand === next.canExpand
+      && previous.failure === next.failure
+      && previous.failureCount === next.failureCount
+      && previous.failureDismissed === next.failureDismissed
     ) {
       return;
     }
@@ -301,6 +326,41 @@ export function createReplySuggestionsController(options: {
   const applyResult = (result: ReplySuggestionsResult): void => {
     chips = result.chips;
     draw = result.draw;
+  };
+
+  /** The typed failure of a thrown call, which has no server body to read. */
+  const transportFailure = (reason: unknown): ReplySuggestionsFailure => ({
+    at: new Date(now()).toISOString(),
+    code: 'unknown',
+    category: 'network',
+    httpStatus: null,
+    requestId: null,
+    model: null,
+    message: reason instanceof Error ? reason.message : String(reason),
+  });
+
+  /**
+   * One failure episode. The same `code + httpStatus + requestId` is the same
+   * failure arriving again: it only advances the count and the timestamp instead
+   * of being announced as new. A different failure starts a new episode.
+   */
+  const applyFailure = (next: ReplySuggestionsFailure): void => {
+    const sameEpisode = failure !== null
+      && failure.code === next.code
+      && failure.httpStatus === next.httpStatus
+      && next.requestId !== null
+      && failure.requestId === next.requestId;
+    failureCount = sameEpisode ? failureCount + 1 : 1;
+    failure = next;
+    publish();
+  };
+
+  /** A success means the feature works again; the notice goes, the dismissal stands. */
+  const clearFailure = (): void => {
+    if (failure === null && failureCount === 0) return;
+    failure = null;
+    failureCount = 0;
+    publish();
   };
 
   /** Drops the expansion chips and resets the chain depth. A late answer is ignored. */
@@ -378,16 +438,22 @@ export function createReplySuggestionsController(options: {
       const requestId = ++extractionSeq;
       void (async () => {
         try {
-          const result = await api.suggest({ sessionId }, { maxChips: maxChips() });
+          const response = await api.suggest({ sessionId }, { maxChips: maxChips() });
           if (disposed || requestId !== extractionSeq || context.sessionId !== sessionId) {
             return;
           }
-          if (result === null) return;
-          applyResult(result);
-          cache.write(key, result);
+          if (!response.ok) {
+            // A refused draw is a visible episode now, not a silent fallback.
+            applyFailure(response.failure);
+            return;
+          }
+          clearFailure();
+          applyResult(response.result);
+          cache.write(key, response.result);
           publish();
-        } catch {
-          // Silent fallback: the habit chips are already drawn by `useInputSuggestions`.
+        } catch (reason) {
+          if (disposed || requestId !== extractionSeq || context.sessionId !== sessionId) return;
+          applyFailure(transportFailure(reason));
         }
       })();
     };
@@ -405,6 +471,34 @@ export function createReplySuggestionsController(options: {
   };
 
   /**
+   * A misconfigured settings file is the one non-draw failure the composer can
+   * name: the feature is asked for but a required item is missing. It becomes the
+   * same episode a failed draw produces, so the inline notice explains it instead
+   * of the surface staying blank; a fixed configuration clears it again.
+   */
+  const applyStatusFailure = (reading: ReplySuggestionsStatus | null): void => {
+    if (reading?.state === 'misconfigured') {
+      if (failure === null || failure.category !== 'misconfigured') {
+        failure = {
+          at: new Date(now()).toISOString(),
+          code: 'REPLY_SUGGESTIONS_MISCONFIGURED',
+          category: 'misconfigured',
+          httpStatus: null,
+          requestId: null,
+          model: null,
+          message: reading.problems.join('; ') || 'reply suggestions are not fully configured',
+        };
+        failureCount = 1;
+      }
+      return;
+    }
+    if (failure?.category === 'misconfigured') {
+      failure = null;
+      failureCount = 0;
+    }
+  };
+
+  /**
    * The first reading. A refused or failed `/status` leaves the feature off: the
    * composer then draws only its habit chips.
    */
@@ -414,6 +508,7 @@ export function createReplySuggestionsController(options: {
         const reading = await api.status();
         if (disposed) return;
         status = reading;
+        applyStatusFailure(reading);
         publish();
         maybeDraw();
       } catch {
@@ -452,6 +547,11 @@ export function createReplySuggestionsController(options: {
       expansionDepth = 0;
       expansionSource = null;
       if (expansionChips.length > 0) expansionChips = [];
+      // A failure episode and its dismissal belong to the conversation that saw
+      // it; another conversation starts visible again.
+      failure = null;
+      failureCount = 0;
+      failureDismissed = false;
       publish();
     }
     maybeDraw();
@@ -470,7 +570,7 @@ export function createReplySuggestionsController(options: {
     const requestId = ++redrawSeq;
     const trimmedFocus = (context.focus ?? '').trim();
     try {
-      const result = await api.suggest({
+      const response = await api.suggest({
         sessionId,
         redraw: true,
         ...(trimmedFocus ? { focus: trimmedFocus } : {}),
@@ -478,19 +578,26 @@ export function createReplySuggestionsController(options: {
       if (disposed || requestId !== redrawSeq || context.sessionId !== sessionId) {
         return false;
       }
-      if (result === null) return false;
-      applyResult(result);
+      if (!response.ok) {
+        // A manual retry that fails updates the episode too; the button keeps its
+        // own short `failed` reading from the `false` returned here.
+        applyFailure(response.failure);
+        return false;
+      }
+      clearFailure();
+      applyResult(response.result);
       // The new batch replaces the remembered one for this message, so a switch
       // away and back restores what the person is looking at now.
       const messageId = context.lastAssistantMessageId;
       if (messageId !== null) {
-        cache.write(batchKey(sessionId, messageId), result);
+        cache.write(batchKey(sessionId, messageId), response.result);
       }
       reportEvent('redrawn');
       return true;
-    } catch {
-      // A failed redraw keeps the previous batch on screen; the button shows its
-      // short failure state on the `false` this returns.
+    } catch (reason) {
+      if (!disposed && requestId === redrawSeq && context.sessionId === sessionId) {
+        applyFailure(transportFailure(reason));
+      }
       return false;
     } finally {
       if (requestId === redrawSeq) {
@@ -526,7 +633,7 @@ export function createReplySuggestionsController(options: {
     publish();
     void (async () => {
       try {
-        const result = await api.suggest({
+        const response = await api.suggest({
           sessionId,
           expand: true,
           seed,
@@ -534,16 +641,23 @@ export function createReplySuggestionsController(options: {
         if (disposed || expansionSeq !== requestId || context.sessionId !== sessionId) {
           return;
         }
-        if (result === null) return;
+        if (!response.ok) {
+          // An expansion draw answers the draft in the box; a refusal is the same
+          // visible episode as a failed model draw.
+          applyFailure(response.failure);
+          return;
+        }
         // The expansion batch is its own draw id: the `picked` event for one of
         // its chips must name this draw, not the model batch it grew from.
-        draw = result.draw;
-        expansionChips = result.chips;
-        expansionSource = result.chips.length > 0 ? source : null;
+        draw = response.result.draw;
+        expansionChips = response.result.chips;
+        expansionSource = response.result.chips.length > 0 ? source : null;
         expansionDepth = depth;
-      } catch {
+        clearFailure();
+      } catch (reason) {
         // A failed expansion leaves the draft and the chain depth as they were;
         // the person can still send what is in the box.
+        if (!disposed && expansionSeq === requestId) applyFailure(transportFailure(reason));
       } finally {
         if (!disposed && expansionSeq === requestId) {
           expansionLoading = false;
@@ -561,6 +675,11 @@ export function createReplySuggestionsController(options: {
     requestExpansion,
     clearExpansion,
     reportEvent,
+    dismissFailure: () => {
+      if (failureDismissed) return;
+      failureDismissed = true;
+      publish();
+    },
     dispose: () => {
       disposed = true;
       clearSettleTimer();

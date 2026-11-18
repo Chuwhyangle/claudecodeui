@@ -51,6 +51,7 @@ import ComposerModelMenu from '@/modules/chat-composer/composer/ComposerModelMen
 import ComposerPermissionMenu from '@/modules/chat-composer/composer/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat-composer/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat-composer/composer/InputSuggestionChips';
+import { SuggestionFailureNotice } from '@/modules/chat-composer/composer/SuggestionFailureNotice';
 import ReplyReferencePreview from '@/modules/chat-composer/composer/ReplyReferencePreview';
 import { suggestionOptionId, truncateSuggestionLabel } from '@/modules/chat-support';
 import type { ReplyItem, ReplyReference } from '@/modules/chat-transcript';
@@ -557,6 +558,11 @@ export default function ChatComposer({
   const requestSuggestionBatch = chipStrip?.onRequestSuggestions;
   const expansionChips = chipStrip?.expansionChips ?? [];
   const acceptExpansionChip = chipStrip?.onAcceptExpansionChip;
+  // A failed model draw is the empty box's content when it has no chips: the
+  // inline notice shares the cell instead of adding a second row.
+  const showSuggestionFailure = input === ''
+    && chipStrip?.suggestionFailure != null
+    && chipStrip.suggestionFailureDismissed !== true;
 
   // The Suggest control advertises a selected transcript passage: with the box
   // empty, a press will re-draw the chips around exactly that passage. This is an
@@ -673,7 +679,7 @@ export default function ChatComposer({
   // the shared cell two rows tall, because the placeholder is blank in this mode. Anything else —
   // typed text or no chips at all — returns to the normal flow layout and the auto-growth path in
   // `useTextareaInteractionState`.
-  const suggestionChipsShareEmptyLine = showSuggestionChips && input === '';
+  const suggestionChipsShareEmptyLine = (showSuggestionChips || showSuggestionFailure) && input === '';
   // Starting the next recording is the user answering the last failure, so it dismisses the notice.
   // Wrapped here rather than inside the button because the failing attempt's message is the
   // composer's state: the button renders what it is handed and owns no memory of the last failure.
@@ -1120,7 +1126,7 @@ export default function ChatComposer({
               onFocus={() => onInputFocusChange?.(true)}
               onBlur={() => onInputFocusChange?.(false)}
               onInput={onTextareaInput}
-              placeholder={showSuggestionChips ? '' : placeholder}
+              placeholder={showSuggestionChips || showSuggestionFailure ? '' : placeholder}
               // One line while the strip shares this empty box's cell: the two blank rows the
               // `rows=2` default would reserve would make the shared cell two rows taller than the
               // chip row. The map back to the default is `undefined` (not 2) so the browser default
@@ -1164,6 +1170,16 @@ export default function ChatComposer({
                 chips={chipStrip.chips}
                 selectedIndex={chipStripSelectedIndex}
                 onAccept={chipStrip.onAccept}
+              />
+            )}
+            {showSuggestionFailure && chipStrip?.suggestionFailure && (
+              <SuggestionFailureNotice
+                failure={chipStrip.suggestionFailure}
+                failureCount={chipStrip.suggestionFailureCount ?? 1}
+                onRetry={() => {
+                  void chipStrip.onRequestSuggestions?.();
+                }}
+                onDismiss={chipStrip.onDismissSuggestionFailure ?? (() => undefined)}
               />
             )}
             {/*

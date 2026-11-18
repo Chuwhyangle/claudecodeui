@@ -145,7 +145,25 @@
       "suggesting": "Suggestion…",
       "suggestHint": "Suggérer des réponses d'après la conversation",
       "suggestForSelection": "Suggérer à partir de la sélection",
-      "quoteChip": "Citation : {{text}}"
+      "quoteChip": "Citation : {{text}}",
+      "failure": {
+        "title": "Suggestions de réponse indisponibles",
+        "misconfigured": "Les suggestions sont activées mais un réglage requis manque",
+        "upstream": "Le service de suggestions a renvoyé une erreur ({{status}})",
+        "rateLimited": "Trop de demandes de suggestions — réessayez dans une minute",
+        "circuitOpen": "Les suggestions sont en pause après des échecs répétés",
+        "network": "Impossible de joindre le service de suggestions",
+        "unknown": "Impossible de générer des suggestions de réponse",
+        "retry": "Réessayer",
+        "dismiss": "Ignorer pour l'instant",
+        "close": "Fermer",
+        "fieldCode": "Code",
+        "fieldStatus": "Statut amont",
+        "fieldTime": "Heure",
+        "fieldModel": "Modèle",
+        "fieldRequestId": "ID de requête",
+        "fieldAttempts": "Échecs consécutifs"
+      }
     },
     "placeholder": "Tapez / pour les commandes, @ pour les fichiers, ou posez une question à {{provider}}...",
     "placeholderDefault": "Tapez votre message...",

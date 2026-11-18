@@ -6,6 +6,7 @@ export type { UseSuggestionChipsResult } from '@/modules/chat-composer/hooks/use
 export { COMPACT_TIER_WIDTH_PX } from '@/modules/chat-composer/hooks/useComposerCompactTier';
 export { INLINE_TOOLS_MIN_BOX_PX } from '@/modules/chat-composer/hooks/useComposerCompactTier';
 export { InputSuggestionChips } from '@/modules/chat-composer/composer/InputSuggestionChips';
+export { SuggestionFailureNotice } from '@/modules/chat-composer/composer/SuggestionFailureNotice';
 export { PromptInput } from '@/modules/chat-composer/composer/PromptInput';
 export { PromptInputBody } from '@/modules/chat-composer/composer/PromptInput';
 export { PromptInputFooter } from '@/modules/chat-composer/composer/PromptInput';

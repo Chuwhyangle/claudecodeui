@@ -20,9 +20,13 @@ import test from 'node:test';
 import {
   createReplySuggestionsUsageLog,
   eventRecord,
+  failedRecord,
   shownRecord,
   type ReplySuggestionsUsageRecord,
 } from '../reply-suggestions-usage-log.js';
+import { createReplySuggestionsService } from '../reply-suggestions.service.js';
+import { ApiCredential, type ReplySuggestionsSettings } from '../reply-suggestions-settings.js';
+import { ReplySuggestionsClientError } from '../reply-suggestions-client.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const BENCH = path.join(REPO_ROOT, 'experiments/reply-suggestions-bench/bench.py');
@@ -143,6 +147,106 @@ test('(c) the writer appends JSONL and rotates once past the size cap', (t) => {
   assert.ok(existsSync(`${rotatedPath}.1`), 'the previous ledger was rotated');
   assert.equal(existsSync(`${rotatedPath}.2`), false, 'there is never a growing .2');
   assert.equal(parseLedger(rotatedPath).length, 1, 'the active ledger holds only the new row');
+});
+
+test('(e) a failed record carries the failure reading and the service writes it only when usageLog is on', async (t) => {
+  const failed = failedRecord({
+    at: '2026-10-24T00:00:06.000Z',
+    sessionId: 'session-a',
+    requestId: 'a1b2c3d4',
+    category: 'http',
+    httpStatus: 502,
+    durationMs: 41,
+    model: 'gateway-model',
+    protocol: 'anthropic',
+  });
+  assert.deepEqual(Object.keys(failed), [
+    'at', 'type', 'sessionId', 'requestId', 'category', 'httpStatus', 'durationMs', 'model', 'protocol',
+  ]);
+  assert.equal(failed.type, 'failed');
+  assert.equal(failed.requestId, 'a1b2c3d4');
+  assert.equal(failed.httpStatus, 502);
+  assert.equal(failed.category, 'http');
+
+  const settings = (usageLog: boolean, filePath: string): ReplySuggestionsSettings => ({
+    version: 'v1',
+    enabled: true,
+    upstream: {
+      protocol: 'anthropic',
+      baseUrl: 'http://gateway.invalid',
+      model: 'gateway-model',
+      authScheme: '',
+      credential: new ApiCredential('sk-usage-secret'),
+      disableThinking: true,
+      timeoutMs: 5000,
+    },
+    generation: {
+      temperature: 0.3,
+      redrawTemperature: 1.0,
+      maxOutputTokens: 400,
+      maxChips: 3,
+      maxChipChars: 120,
+      maxTailChars: 1500,
+      maxFocusChars: 600,
+      systemPrompt: '',
+      expansion: 'off',
+    },
+    limits: { maxCallsPerMinute: 30, maxCallsPerDay: 3000 },
+    usageLog,
+    diagnostics: {
+      source: 'file', path: filePath, problems: [], configuredEnabled: true, apiKeyFile: '', apiKeyVar: '',
+    },
+  });
+
+  const directory = temporaryDirectory(t, 'reply-usage-failed-');
+  const ledger = path.join(directory, 'usage.jsonl');
+
+  // usageLog: false — the failed draw leaves no row at all.
+  const offPath = path.join(directory, 'off.jsonl');
+  const offSettings = settings(false, offPath);
+  const off = createReplySuggestionsService({
+    readSettings: () => offSettings,
+    readLastAssistantMessage: async () => ({ id: 'assistant-1', text: '问题？' }),
+    complete: async () => {
+      throw new ReplySuggestionsClientError('http', 'upstream returned HTTP 502', 502);
+    },
+    usageLog: createReplySuggestionsUsageLog({ filePath: offPath }),
+  });
+  await assert.rejects(() => off.suggest({ sessionId: 's-off' }));
+  assert.equal(existsSync(offPath), false, 'usageLog:false writes no failed row');
+
+  // usageLog: true — exactly one failed row with the correlation facts.
+  const onSettings = settings(true, ledger);
+  const on = createReplySuggestionsService({
+    readSettings: () => onSettings,
+    readLastAssistantMessage: async () => ({ id: 'assistant-1', text: '问题？' }),
+    complete: async () => {
+      throw new ReplySuggestionsClientError('http', 'upstream returned HTTP 502', 502);
+    },
+    usageLog: createReplySuggestionsUsageLog({ filePath: ledger }),
+  });
+  await assert.rejects(() => on.suggest({ sessionId: 's-on' }));
+
+  const rows = parseLedger(ledger);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].type, 'failed');
+  assert.equal(rows[0].sessionId, 's-on');
+  assert.equal(rows[0].httpStatus, 502);
+  assert.equal(rows[0].category, 'http');
+  assert.equal(typeof rows[0].requestId, 'string');
+  assert.ok((rows[0].requestId as string).length >= 6);
+  assert.equal(typeof rows[0].durationMs, 'number');
+  assert.ok((rows[0].durationMs as number) >= 0);
+  assert.equal(rows[0].model, 'gateway-model');
+  assert.equal(rows[0].protocol, 'anthropic');
+  assert.ok(!readFileSync(ledger, 'utf8').includes('sk-usage-secret'), 'the ledger never carries the key');
+
+  // Rotation still keeps exactly one `.1` and never a growing `.2`.
+  const rotating = createReplySuggestionsUsageLog({ filePath: path.join(directory, 'rot.jsonl'), maxBytes: 20 });
+  rotating.write(failed);
+  rotating.write(failed);
+  assert.ok(existsSync(path.join(directory, 'rot.jsonl.1')), 'the older ledger was rotated');
+  assert.equal(existsSync(path.join(directory, 'rot.jsonl.2')), false, 'there is never a growing .2');
 });
 
 test('(d) builder output written to a ledger is readable by the offline benchmark', (t) => {

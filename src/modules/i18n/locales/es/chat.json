@@ -155,7 +155,25 @@
       "suggesting": "Sugiriendo…",
       "suggestHint": "Sugerir respuestas según la conversación",
       "suggestForSelection": "Sugerir desde la selección",
-      "quoteChip": "Cita: {{text}}"
+      "quoteChip": "Cita: {{text}}",
+      "failure": {
+        "title": "Sugerencias de respuesta no disponibles",
+        "misconfigured": "Las sugerencias están activadas pero falta un ajuste obligatorio",
+        "upstream": "El servicio de sugerencias devolvió un error ({{status}})",
+        "rateLimited": "Demasiadas solicitudes de sugerencias: inténtalo de nuevo en un minuto",
+        "circuitOpen": "Las sugerencias están en pausa tras fallos repetidos",
+        "network": "No se pudo conectar con el servicio de sugerencias",
+        "unknown": "No se pudieron generar sugerencias de respuesta",
+        "retry": "Reintentar",
+        "dismiss": "Ignorar por ahora",
+        "close": "Cerrar",
+        "fieldCode": "Código",
+        "fieldStatus": "Estado del upstream",
+        "fieldTime": "Hora",
+        "fieldModel": "Modelo",
+        "fieldRequestId": "ID de solicitud",
+        "fieldAttempts": "Fallos consecutivos"
+      }
     },
     "placeholder": "Escribe / para comandos, @ para archivos, o pregúntale lo que quieras a {{provider}}...",
     "placeholderDefault": "Escribe tu mensaje...",

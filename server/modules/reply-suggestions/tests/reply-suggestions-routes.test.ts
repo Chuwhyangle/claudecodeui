@@ -122,13 +122,54 @@ async function post(
   return { status: response.status, body: text === '' ? null : JSON.parse(text), text };
 }
 
-test('GET /status is the four-field reading with no key and no path', async (t) => {
+test('GET /status is the visibility reading with no key and no settings path in the failure record', async (t) => {
   const harness = await start(t);
   const response = await get(harness.baseUrl, '/api/reply-suggestions/status');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120 });
+  assert.deepEqual(response.body, {
+    enabled: true,
+    state: 'ready',
+    problems: [],
+    lastFailure: null,
+    expansion: 'off',
+    maxChips: 3,
+    maxChipChars: 120,
+  });
   assert.ok(!response.text.includes(API_KEY), 'the status body must not carry the key');
-  assert.ok(!response.text.includes(harness.settingsPath), 'the status body must not carry the settings path');
+  assert.ok(!response.text.includes(harness.settingsPath), 'the ready reading has no paths to carry');
+});
+
+test('GET /status names a missing required setting instead of looking disabled', async (t) => {
+  const harness = await start(t, { settings: { model: '' } });
+  const response = await get(harness.baseUrl, '/api/reply-suggestions/status');
+  assert.equal(response.status, 200);
+  const body = response.body as {
+    enabled: boolean;
+    state: string;
+    problems: string[];
+  };
+  assert.equal(body.enabled, false);
+  assert.equal(body.state, 'misconfigured');
+  assert.ok(body.problems.some((problem) => problem.includes('`model`')));
+  assert.ok(!response.text.includes(API_KEY));
+});
+
+test('GET /status reports the last failed draw', async (t) => {
+  const harness = await start(t, {
+    completeThrows: new ReplySuggestionsClientError('http', 'upstream returned HTTP 502', 502),
+  });
+  const failed = await post(harness.baseUrl, '/api/reply-suggestions', { sessionId: 's-status-failure' });
+  assert.equal(failed.status, 502);
+
+  const response = await get(harness.baseUrl, '/api/reply-suggestions/status');
+  const body = response.body as {
+    state: string;
+    lastFailure: { category: string; httpStatus: number | null; requestId: string } | null;
+  };
+  assert.equal(body.state, 'ready', 'the configuration is fine; the upstream failed');
+  assert.equal(body.lastFailure?.category, 'http');
+  assert.equal(body.lastFailure?.httpStatus, 502);
+  assert.ok((body.lastFailure?.requestId ?? '').length >= 6);
 });
 
 test('POST / answers 400 when sessionId is missing or the field types are wrong', async (t) => {

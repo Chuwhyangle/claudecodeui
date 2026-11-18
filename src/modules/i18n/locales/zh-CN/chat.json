@@ -170,7 +170,25 @@
       "suggesting": "生成中…",
       "suggestHint": "根据上下文建议回复",
       "suggestForSelection": "用选段生成建议",
-      "quoteChip": "引用：{{text}}"
+      "quoteChip": "引用：{{text}}",
+      "failure": {
+        "title": "回复建议暂不可用",
+        "misconfigured": "回复建议已开启，但缺少必要配置",
+        "upstream": "建议服务返回错误（{{status}}）",
+        "rateLimited": "建议请求过于频繁，请稍后再试",
+        "circuitOpen": "建议服务在连续失败后已暂停",
+        "network": "无法连接建议服务",
+        "unknown": "无法生成回复建议",
+        "retry": "重试",
+        "dismiss": "本次会话忽略",
+        "close": "关闭",
+        "fieldCode": "错误码",
+        "fieldStatus": "上游状态",
+        "fieldTime": "发生时间",
+        "fieldModel": "模型",
+        "fieldRequestId": "请求 ID",
+        "fieldAttempts": "连续失败次数"
+      }
     },
     "showAllCommands": "显示所有命令",
     "moreTools": "更多工具",

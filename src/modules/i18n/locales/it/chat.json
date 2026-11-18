@@ -144,7 +144,25 @@
       "suggesting": "Suggerimento…",
       "suggestHint": "Suggerisci risposte dalla conversazione",
       "suggestForSelection": "Suggerisci dalla selezione",
-      "quoteChip": "Citazione: {{text}}"
+      "quoteChip": "Citazione: {{text}}",
+      "failure": {
+        "title": "Suggerimenti di risposta non disponibili",
+        "misconfigured": "I suggerimenti sono attivi ma manca un'impostazione obbligatoria",
+        "upstream": "Il servizio dei suggerimenti ha restituito un errore ({{status}})",
+        "rateLimited": "Troppe richieste di suggerimenti: riprova tra un minuto",
+        "circuitOpen": "I suggerimenti sono in pausa dopo errori ripetuti",
+        "network": "Impossibile raggiungere il servizio dei suggerimenti",
+        "unknown": "Impossibile generare suggerimenti di risposta",
+        "retry": "Riprova",
+        "dismiss": "Ignora per ora",
+        "close": "Chiudi",
+        "fieldCode": "Codice",
+        "fieldStatus": "Stato upstream",
+        "fieldTime": "Ora",
+        "fieldModel": "Modello",
+        "fieldRequestId": "ID richiesta",
+        "fieldAttempts": "Errori consecutivi"
+      }
     },
     "placeholder": "Digita / per i comandi, @ per i file, o chiedi qualcosa a {{provider}}...",
     "placeholderDefault": "Scrivi il tuo messaggio...",

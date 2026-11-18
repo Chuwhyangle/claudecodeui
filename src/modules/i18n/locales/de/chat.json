@@ -144,7 +144,25 @@
       "suggesting": "Wird vorgeschlagen…",
       "suggestHint": "Antworten aus dem bisherigen Gespräch vorschlagen",
       "suggestForSelection": "Aus Auswahl vorschlagen",
-      "quoteChip": "Zitat: {{text}}"
+      "quoteChip": "Zitat: {{text}}",
+      "failure": {
+        "title": "Antwortvorschläge nicht verfügbar",
+        "misconfigured": "Antwortvorschläge sind aktiv, aber eine erforderliche Einstellung fehlt",
+        "upstream": "Der Vorschlagsdienst hat einen Fehler zurückgegeben ({{status}})",
+        "rateLimited": "Zu viele Vorschlagsanfragen – bitte in einer Minute erneut versuchen",
+        "circuitOpen": "Antwortvorschläge sind nach wiederholten Fehlern pausiert",
+        "network": "Der Vorschlagsdienst ist nicht erreichbar",
+        "unknown": "Antwortvorschläge konnten nicht erzeugt werden",
+        "retry": "Erneut versuchen",
+        "dismiss": "Vorerst ignorieren",
+        "close": "Schließen",
+        "fieldCode": "Code",
+        "fieldStatus": "Upstream-Status",
+        "fieldTime": "Zeit",
+        "fieldModel": "Modell",
+        "fieldRequestId": "Anfrage-ID",
+        "fieldAttempts": "Aufeinanderfolgende Fehler"
+      }
     },
     "placeholder": "/ für Befehle, @ für Dateien eingeben oder {{provider}} etwas fragen...",
     "placeholderDefault": "Nachricht eingeben...",

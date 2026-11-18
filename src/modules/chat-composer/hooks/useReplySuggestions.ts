@@ -8,6 +8,7 @@ import {
 import type {
   ReplySuggestionsEventName,
   ReplySuggestionsExpansionSource,
+  ReplySuggestionsFailure,
   ReplySuggestionsStatus,
 } from '@/shared/types';
 
@@ -62,6 +63,14 @@ export type UseReplySuggestionsResult = {
      * only when one was applied, so the button can show a short failure state.
      */
     redraw: () => Promise<boolean>;
+    /** The failed draw this session is showing, or null after a success. */
+    failure: ReplySuggestionsFailure | null;
+    /** True once the person dismissed the notice for this session. */
+    failureDismissed: boolean;
+    /** How many consecutive failures the current episode has counted. */
+    failureCount: number;
+    /** Hides the failure notice for this session; the episode is kept. */
+    dismissFailure: () => void;
   };
   /** The experimental expansion chain anchored on the draft in the box. */
   expansion: {
@@ -127,6 +136,10 @@ export function useReplySuggestions({
       draw: snapshot.draw,
       loading: snapshot.loading,
       redraw: controller.redraw,
+      failure: snapshot.failure,
+      failureDismissed: snapshot.failureDismissed,
+      failureCount: snapshot.failureCount,
+      dismissFailure: controller.dismissFailure,
     },
     expansion: {
       enabled: snapshot.expansionEnabled,

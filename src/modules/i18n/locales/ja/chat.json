@@ -144,7 +144,25 @@
       "suggesting": "提案中…",
       "suggestHint": "これまでの会話から返信を提案",
       "suggestForSelection": "選択範囲から提案",
-      "quoteChip": "引用：{{text}}"
+      "quoteChip": "引用：{{text}}",
+      "failure": {
+        "title": "返信候補を利用できません",
+        "misconfigured": "返信候補は有効ですが、必須の設定が不足しています",
+        "upstream": "候補サービスがエラーを返しました（{{status}}）",
+        "rateLimited": "候補リクエストが多すぎます。1 分後にもう一度お試しください",
+        "circuitOpen": "度重なる失敗により返信候補は一時停止中です",
+        "network": "候補サービスに接続できませんでした",
+        "unknown": "返信候補を生成できませんでした",
+        "retry": "再試行",
+        "dismiss": "今回は無視",
+        "close": "閉じる",
+        "fieldCode": "コード",
+        "fieldStatus": "上流ステータス",
+        "fieldTime": "時刻",
+        "fieldModel": "モデル",
+        "fieldRequestId": "リクエスト ID",
+        "fieldAttempts": "連続失敗回数"
+      }
     },
     "placeholder": "/ でコマンド、@ でファイル指定、または {{provider}} に何でも聞いてください...",
     "placeholderDefault": "メッセージを入力...",

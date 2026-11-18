@@ -44,15 +44,21 @@ export const REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS = 30_000;
 /**
  * The 502 every failed upstream path answers with. `category` names the client
  * failure (`timeout`, `http`, `network`, `parse`, `shape`, `unknown`) or
- * `circuit-open`; the message never carries the key or a payload.
+ * `circuit-open`; the message never carries the key or a payload. `details`
+ * carries the correlation facts the failure reading and the composer need
+ * (`requestId`, `httpStatus`, `model`) — never the key or the request body.
  *
- * Consumers: this file (`circuit-open`) and `reply-suggestions.service.ts`
+ * Consumers: this file (`circuit-open`) and `reply-suggestions-draw.ts`
  * (parse and call failures).
  */
-export function replySuggestionsUpstreamError(category: string): AppError {
+export function replySuggestionsUpstreamError(
+  category: string,
+  details: Record<string, unknown> = {},
+): AppError {
   return new AppError(`reply-suggestions upstream request failed (${category})`, {
     code: 'REPLY_SUGGESTIONS_UPSTREAM_FAILED',
     statusCode: 502,
+    details: { category, ...details },
   });
 }
 
@@ -61,6 +67,7 @@ function rateLimitedError(): AppError {
   return new AppError('reply suggestions are over their call limit', {
     code: 'REPLY_SUGGESTIONS_RATE_LIMITED',
     statusCode: 429,
+    details: { category: 'rate-limit' },
   });
 }
 

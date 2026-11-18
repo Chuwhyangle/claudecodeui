@@ -177,7 +177,25 @@
       "suggesting": "Suggesting…",
       "suggestHint": "Suggest replies from the conversation so far",
       "suggestForSelection": "Suggest from selection",
-      "quoteChip": "Quote: {{text}}"
+      "quoteChip": "Quote: {{text}}",
+      "failure": {
+        "title": "Reply suggestions unavailable",
+        "misconfigured": "Reply suggestions are on but a required setting is missing",
+        "upstream": "The suggestion service returned an error ({{status}})",
+        "rateLimited": "Too many suggestion requests — try again in a minute",
+        "circuitOpen": "Reply suggestions are paused after repeated failures",
+        "network": "Could not reach the suggestion service",
+        "unknown": "Reply suggestions could not be generated",
+        "retry": "Retry",
+        "dismiss": "Ignore for now",
+        "close": "Close",
+        "fieldCode": "Code",
+        "fieldStatus": "Upstream status",
+        "fieldTime": "Time",
+        "fieldModel": "Model",
+        "fieldRequestId": "Request ID",
+        "fieldAttempts": "Consecutive failures"
+      }
     },
     "showAllCommands": "Show all commands",
     "moreTools": "More tools",

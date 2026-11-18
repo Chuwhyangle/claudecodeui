@@ -40,7 +40,8 @@ import type {
   ReplySuggestionsEventName,
   ReplySuggestionsExpansionSource,
 } from './reply-suggestions.service.js';
-import type { ReplySuggestionsProtocol } from './reply-suggestions-settings.js';
+import type { ReplySuggestionsFailureCategory } from './reply-suggestions-failure-state.js';
+import type { ReplySuggestionsProtocol, ReplySuggestionsSettings } from './reply-suggestions-settings.js';
 
 /** The default cap for one ledger file: 5 MB, as the task's protection clause says. */
 const REPLY_SUGGESTIONS_USAGE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -76,6 +77,27 @@ type ReplySuggestionsEventRecord = {
   source?: ReplySuggestionsExpansionSource;
 };
 
+/**
+ * One failed draw. It carries the same correlation facts as the failure reading
+ * (`requestId`/`category`/`httpStatus`/`durationMs`) so an offline replay can say
+ * when the feature started failing without reading journalctl. It NEVER carries
+ * the prompt, the answer body or the key.
+ *
+ * Consumers: `reply-suggestions.service.ts` (`failedRecord`) and the ledger
+ * criterion.
+ */
+export type ReplySuggestionsFailedRecord = {
+  at: string;
+  type: 'failed';
+  sessionId: string;
+  requestId: string;
+  category: ReplySuggestionsFailureCategory;
+  httpStatus: number | null;
+  durationMs: number;
+  model: string;
+  protocol: ReplySuggestionsProtocol;
+};
+
 /** One `/events` posting — the input half of the row above; `source` is present
  * only for an expansion chip.
  * Consumers: `reply-suggestions.routes.ts` (its parsed event shape) and
@@ -94,7 +116,10 @@ export type ReplySuggestionsEventInput = {
  * Consumers: `reply-suggestions.service.ts` (`writeUsage`) and the context-events
  * tap in `server/index.ts` (its `recordUsage` reads only a few fields).
  */
-export type ReplySuggestionsUsageRecord = ReplySuggestionsShownRecord | ReplySuggestionsEventRecord;
+export type ReplySuggestionsUsageRecord =
+  | ReplySuggestionsShownRecord
+  | ReplySuggestionsEventRecord
+  | ReplySuggestionsFailedRecord;
 
 /**
  * Build one `shown` row. `chips` is copied so a caller mutating its array cannot
@@ -147,6 +172,34 @@ export function eventRecord(options: {
     draw: options.draw,
     ...(options.index === undefined ? {} : { index: options.index }),
     ...(options.source === undefined ? {} : { source: options.source }),
+  };
+}
+
+/**
+ * Build one failed-draw row from the failure reading the service just recorded.
+ *
+ * Consumers: `reply-suggestions.service.ts` (`recordFailedDraw`).
+ */
+export function failedRecord(options: {
+  at: string;
+  sessionId: string;
+  requestId: string;
+  category: ReplySuggestionsFailureCategory;
+  httpStatus: number | null;
+  durationMs: number;
+  model: string;
+  protocol: ReplySuggestionsProtocol;
+}): ReplySuggestionsFailedRecord {
+  return {
+    at: options.at,
+    type: 'failed',
+    sessionId: options.sessionId,
+    requestId: options.requestId,
+    category: options.category,
+    httpStatus: options.httpStatus,
+    durationMs: options.durationMs,
+    model: options.model,
+    protocol: options.protocol,
   };
 }
 
@@ -229,6 +282,65 @@ export function createReplySuggestionsUsageLog(
       } catch {
         // The ledger is the durable record; the tap is best-effort.
       }
+    },
+  };
+}
+
+/**
+ * The service's ledger surface: one write path that contains a refused file write,
+ * plus the `shown` row's assembly (which needs the settings reading). Kept here —
+ * the ledger's owning file — so the orchestration service stays at its line
+ * ratchet and no row shape is assembled at a second site.
+ *
+ * Consumers: `reply-suggestions.service.ts` only.
+ */
+export type ReplySuggestionsLedger = {
+  write: (record: ReplySuggestionsUsageRecord) => void;
+  shown: (options: {
+    sessionId: string;
+    settings: ReplySuggestionsSettings;
+    chips: readonly string[];
+    draw: number;
+    served: ReplySuggestionsServed;
+    expansionSource: ReplySuggestionsExpansionSource | null;
+  }) => void;
+};
+
+/**
+ * Build the service's ledger surface over one writer. A refused write is logged
+ * and swallowed: the draw must never fail because its readout could not land.
+ *
+ * Consumers: `reply-suggestions.service.ts` only.
+ */
+export function createReplySuggestionsLedger(
+  usageLog: ReplySuggestionsUsageLog,
+  logger: (line: string) => void,
+  now: () => number,
+): ReplySuggestionsLedger {
+  const write = (record: ReplySuggestionsUsageRecord): void => {
+    try {
+      usageLog.write(record);
+    } catch (failure) {
+      const reason = failure instanceof Error ? failure.message : String(failure);
+      logger(`[reply-suggestions] usage log write failed: ${reason}`);
+    }
+  };
+
+  return {
+    write,
+    shown({ sessionId, settings, chips, draw, served, expansionSource }) {
+      if (!settings.usageLog) return;
+      write(shownRecord({
+        at: new Date(now()).toISOString(),
+        sessionId,
+        draw,
+        model: settings.upstream.model,
+        protocol: settings.upstream.protocol,
+        version: settings.version,
+        served,
+        ...(expansionSource === null ? {} : { expansion: expansionSource }),
+        chips,
+      }));
     },
   };
 }

@@ -8,8 +8,8 @@ import type { VoiceConfig } from '@/shared/api/voiceConfigType';
 import type {
   ReplySuggestionsEventInput,
   ReplySuggestionsRequest,
-  ReplySuggestionsResult,
   ReplySuggestionsStatus,
+  ReplySuggestionsSuggestResponse,
 } from '@/shared/types';
 import {
   DEFAULT_REPLY_SUGGESTIONS_MAX_CHIPS,
@@ -21,6 +21,7 @@ import {
   post,
   put,
   query,
+  readReplySuggestionsFailure,
   readReplySuggestionsResult,
   readReplySuggestionsStatus,
 } from '@/shared/api/requests';
@@ -144,7 +145,8 @@ export const apiTail = {
   // Reply suggestions: the LLM tier of the composer's empty-box chips. The three endpoints are
   // declared here and nowhere else — the composer's hooks call these and never assemble a URL.
   // `suggest` and `status` parse and validate before returning, so callers never touch a
-  // `Response`: a refused or unreadable answer is `null` and the controller falls back silently.
+  // `Response`: a refused or unreadable answer is the typed `ok:false` failure (carrying
+  // its code/status/requestId), never a `null` that hides which of the two happened.
   // `event` is the ledger's write path and answers whether the server accepted the row.
   replySuggestions: {
     status: async (): Promise<ReplySuggestionsStatus | null> => {
@@ -156,14 +158,23 @@ export const apiTail = {
     suggest: async (
       request: ReplySuggestionsRequest,
       options: { maxChips?: number } = {},
-    ): Promise<ReplySuggestionsResult | null> => {
+    ): Promise<ReplySuggestionsSuggestResponse> => {
       const response = await post('/api/reply-suggestions', request);
-      if (!response.ok) return null;
       const body = await response.json().catch(() => null) as unknown;
-      return readReplySuggestionsResult(
+      if (!response.ok) {
+        return { ok: false, failure: readReplySuggestionsFailure(response.status, body) };
+      }
+      const result = readReplySuggestionsResult(
         body,
         options.maxChips ?? DEFAULT_REPLY_SUGGESTIONS_MAX_CHIPS,
       );
+      if (result === null) {
+        return {
+          ok: false,
+          failure: readReplySuggestionsFailure(response.status, body, 'unreadable reply-suggestions response'),
+        };
+      }
+      return { ok: true, result };
     },
     event: async (event: ReplySuggestionsEventInput): Promise<boolean> => {
       const response = await post('/api/reply-suggestions/events', event);

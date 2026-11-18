@@ -162,7 +162,25 @@
       "suggesting": "Menyarankan…",
       "suggestHint": "Sarankan balasan dari percakapan sejauh ini",
       "suggestForSelection": "Saran dari pilihan",
-      "quoteChip": "Kutipan: {{text}}"
+      "quoteChip": "Kutipan: {{text}}",
+      "failure": {
+        "title": "Saran balasan tidak tersedia",
+        "misconfigured": "Saran balasan aktif tetapi ada pengaturan wajib yang hilang",
+        "upstream": "Layanan saran mengembalikan kesalahan ({{status}})",
+        "rateLimited": "Terlalu banyak permintaan saran — coba lagi dalam satu menit",
+        "circuitOpen": "Saran balasan dijeda setelah kegagalan berulang",
+        "network": "Tidak dapat menghubungi layanan saran",
+        "unknown": "Saran balasan tidak dapat dibuat",
+        "retry": "Coba lagi",
+        "dismiss": "Abaikan untuk sekarang",
+        "close": "Tutup",
+        "fieldCode": "Kode",
+        "fieldStatus": "Status upstream",
+        "fieldTime": "Waktu",
+        "fieldModel": "Model",
+        "fieldRequestId": "ID permintaan",
+        "fieldAttempts": "Kegagalan berturut-turut"
+      }
     },
     "placeholder": "Ketik / untuk perintah, @ untuk file, atau tanyakan apa saja kepada {{provider}}...",
     "placeholderDefault": "Ketik pesan...",

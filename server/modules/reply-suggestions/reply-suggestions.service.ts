@@ -1,18 +1,22 @@
 /**
  * Reply-suggestion generation: the orchestration between the injected transcript
- * reader, the one-draw runner, the draw store and the usage ledger.
+ * reader, the one-draw runner, the draw store, the failure reading and the usage
+ * ledger.
  *
  * THE SESSION IS READ, NEVER RECEIVED: the browser sends only an id, so a caller
  * cannot make the server echo arbitrary text to the gateway. This file owns the
  * request's shape, the per-session draw state and the ledger rows; the gateway
  * conversation is `reply-suggestions-draw.ts`, the state and cache are
  * `reply-suggestions-draw-store.ts`, prompts are `reply-suggestions-prompts.ts`,
- * chip parsing is `reply-suggestions-chips.ts` and the typed ledger rows are
- * `reply-suggestions-usage-log.ts`.
+ * chip parsing is `reply-suggestions-chips.ts`, the typed ledger rows are
+ * `reply-suggestions-usage-log.ts` and the failure reading/status projection is
+ * `reply-suggestions-failure-state.ts`.
  *
  * A failure or an empty batch is never cached; a redraw replaces the batch; an
  * expansion draw neither reads nor writes it; a cache hit still leaves a `shown`
- * row so the display is counted apart from the paid call.
+ * row so the display is counted apart from the paid call. The first failure of a
+ * draw becomes the `/status` reading (and a `failed` ledger row when the ledger is
+ * on); any later success clears that reading but keeps its history ring.
  *
  * Consumers: `reply-suggestions.routes.ts` and the service criterion.
  */
@@ -26,16 +30,25 @@ import type {
 } from './reply-suggestions-client.js';
 import { createDrawRunner } from './reply-suggestions-draw.js';
 import { createDrawStore } from './reply-suggestions-draw-store.js';
+import {
+  createReplySuggestionsFailureState,
+  createReplySuggestionsRequestId,
+  describeFailure,
+  replySuggestionsStatus,
+  type ReplySuggestionsFailureState,
+  type ReplySuggestionsStatus,
+} from './reply-suggestions-failure-state.js';
 import type { ReplySuggestionsSettings } from './reply-suggestions-settings.js';
 import {
+  createReplySuggestionsLedger,
   createReplySuggestionsUsageLog,
   eventRecord,
-  shownRecord,
+  failedRecord,
   type ReplySuggestionsEventInput,
-  type ReplySuggestionsServed,
   type ReplySuggestionsUsageLog,
-  type ReplySuggestionsUsageRecord,
 } from './reply-suggestions-usage-log.js';
+
+export type { ReplySuggestionsStatus } from './reply-suggestions-failure-state.js';
 
 /** The last assistant message, as the injected reader reports it.
  * Consumers: `reply-suggestions.module.ts` and `server/index.ts` (through the barrel). */
@@ -64,15 +77,6 @@ export type ReplySuggestionsExpansionSource = 'seed';
  * `reply-suggestions.routes.ts`. */
 export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
 
-/** The reading `GET /status` exposes — no paths and no key.
- * Consumers: `reply-suggestions.routes.ts` and the settings criterion. */
-export type ReplySuggestionsStatus = {
-  enabled: boolean;
-  expansion: ReplySuggestionsSettings['generation']['expansion'];
-  maxChips: number;
-  maxChipChars: number;
-};
-
 /** The public face of the service.
  * Consumers: `reply-suggestions.routes.ts` and the route criterion. */
 export type ReplySuggestionsService = {
@@ -90,6 +94,8 @@ export type ReplySuggestionsServiceDeps = {
   now?: () => number;
   logger?: (line: string) => void;
   usageLog?: ReplySuggestionsUsageLog;
+  /** The failure reading; one per process, injectable so a criterion can read the history ring. */
+  failureState?: ReplySuggestionsFailureState;
 };
 
 /** The AppError for each non-2xx path; messages never carry the key or a payload. */
@@ -133,39 +139,29 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
   const logger = deps.logger ?? ((line: string) => console.log(line));
   const complete = deps.complete ?? ((request: ReplySuggestionsCompletionRequest) => completeLlm(request));
   const usageLog = deps.usageLog ?? createReplySuggestionsUsageLog();
+  const ledger = createReplySuggestionsLedger(usageLog, logger, now);
+  const failures = deps.failureState ?? createReplySuggestionsFailureState();
   const runner = createDrawRunner({ complete, now, logger });
   const store = createDrawStore();
 
-  function writeUsage(record: ReplySuggestionsUsageRecord): void {
-    try {
-      usageLog.write(record);
-    } catch (failure) {
-      const reason = failure instanceof Error ? failure.message : String(failure);
-      logger(`[reply-suggestions] usage log write failed: ${reason}`);
-    }
-  }
-
-  /** Append one `shown` row; `served` separates a paid draw from a cache hit. */
-  function writeShownRow(
+  function recordFailedDraw(
     sessionId: string,
     settings: ReplySuggestionsSettings,
-    chips: readonly string[],
-    draw: number,
-    served: ReplySuggestionsServed,
-    expansionSource: ReplySuggestionsExpansionSource | null,
+    requestId: string,
+    startedAt: number,
+    failure: unknown,
   ): void {
-    if (!settings.usageLog) return;
-    writeUsage(shownRecord({
+    const facts = describeFailure(failure);
+    const recorded = failures.record({
       at: new Date(now()).toISOString(),
-      sessionId,
-      draw,
+      requestId,
+      category: facts.category,
+      httpStatus: facts.httpStatus,
+      durationMs: now() - startedAt,
       model: settings.upstream.model,
       protocol: settings.upstream.protocol,
-      version: settings.version,
-      served,
-      ...(expansionSource === null ? {} : { expansion: expansionSource }),
-      chips,
-    }));
+    });
+    if (settings.usageLog) ledger.write(failedRecord({ ...recorded, sessionId }));
   }
 
   async function generate(
@@ -189,43 +185,48 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
     if (!redraw && !expand) {
       const cached = store.readBatch(input.sessionId, message.id, settings.version);
       if (cached !== undefined) {
-        writeShownRow(input.sessionId, settings, cached.chips, cached.draw, 'cache', null);
+        ledger.shown({ sessionId: input.sessionId, settings, chips: cached.chips, draw: cached.draw, served: 'cache', expansionSource: null });
+        failures.clear();
         return cached;
       }
     }
 
     const key = inflightKey(input.sessionId, message.id, redraw, focus, expansionSource, seed);
-    return store.coalesce(key, async () => {
-      const shown = store.shownChips(input.sessionId, message.id);
-      const selected = await runner.draw({
-        settings,
-        tail: tailCodePoints(message.text, settings.generation.maxTailChars),
-        focus,
-        seed,
-        expansionSource,
-        redraw,
-      }, shown);
-      const draw = store.recordDraw(input.sessionId, message.id, selected);
-      // A redraw replaces the batch; an expansion leaves it untouched. An empty
-      // draw forgets it, so the next request tries upstream again.
-      if (!expand) {
-        if (selected.length > 0) store.recordBatch(input.sessionId, message.id, settings.version, selected, draw);
-        else store.forgetBatch(input.sessionId, message.id, settings.version);
-      }
-      writeShownRow(input.sessionId, settings, selected, draw, 'upstream', expansionSource);
-      return { chips: selected, draw };
-    });
+    const requestId = createReplySuggestionsRequestId();
+    const startedAt = now();
+    try {
+      const outcome = await store.coalesce(key, async () => {
+        const shown = store.shownChips(input.sessionId, message.id);
+        const selected = await runner.draw({
+          settings,
+          tail: tailCodePoints(message.text, settings.generation.maxTailChars),
+          focus,
+          seed,
+          expansionSource,
+          redraw,
+          requestId,
+        }, shown);
+        const draw = store.recordDraw(input.sessionId, message.id, selected);
+        // A redraw replaces the batch; an expansion leaves it untouched. An empty
+        // draw forgets it, so the next request tries upstream again.
+        if (!expand) {
+          if (selected.length > 0) store.recordBatch(input.sessionId, message.id, settings.version, selected, draw);
+          else store.forgetBatch(input.sessionId, message.id, settings.version);
+        }
+        ledger.shown({ sessionId: input.sessionId, settings, chips: selected, draw, served: 'upstream', expansionSource });
+        return { chips: selected, draw };
+      });
+      failures.clear();
+      return outcome;
+    } catch (failure) {
+      recordFailedDraw(input.sessionId, settings, requestId, startedAt, failure);
+      throw failure;
+    }
   }
 
   return {
     status(): ReplySuggestionsStatus {
-      const settings = deps.readSettings();
-      return {
-        enabled: settings.enabled,
-        expansion: settings.generation.expansion,
-        maxChips: settings.generation.maxChips,
-        maxChipChars: settings.generation.maxChipChars,
-      };
+      return replySuggestionsStatus(deps.readSettings(), failures.lastFailure());
     },
 
     async suggest(input: ReplySuggestionsInput): Promise<{ chips: string[]; draw: number }> {
@@ -245,7 +246,7 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
     recordEvent(input: ReplySuggestionsEventInput): void {
       const settings = deps.readSettings();
       if (!settings.usageLog) return;
-      writeUsage(eventRecord({
+      ledger.write(eventRecord({
         at: new Date(now()).toISOString(),
         sessionId: input.sessionId,
         draw: input.draw,

@@ -22,10 +22,16 @@ import {
 } from '@/shared/authToken';
 import type {
   ActivitySnapshotFrame,
-  ReplySuggestionsResult,
-  ReplySuggestionsStatus,
   SessionMessagesQuery,
 } from '@/shared/types';
+import type {
+  ReplySuggestionsFailure,
+  ReplySuggestionsFailureCategory,
+  ReplySuggestionsLastFailure,
+  ReplySuggestionsResult,
+  ReplySuggestionsState,
+  ReplySuggestionsStatus,
+} from '@/shared/api/replySuggestionsType';
 import { IS_PLATFORM } from '@/shared/utils';
 
 // Headers are a plain record rather than the full `HeadersInit` union so the
@@ -272,18 +278,105 @@ export function readReplySuggestionsResult(body: unknown, maxChips: number): Rep
 }
 
 /**
- * Reads the four-field `/status` answer. A missing or mistyped field falls back to
- * the disabled/default reading rather than propagating a malformed shape.
+ * Reads the `/status` answer: the four draw fields plus the three visibility
+ * fields (`state`, `problems`, `lastFailure`). A missing or mistyped field falls
+ * back to the disabled/default reading rather than propagating a malformed shape;
+ * an older server that predates `state` reads as enabled-implied-ready / off.
  */
 export function readReplySuggestionsStatus(body: unknown): ReplySuggestionsStatus | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return null;
   }
   const record = body as Record<string, unknown>;
+  const enabled = record.enabled === true;
   return {
-    enabled: record.enabled === true,
+    enabled,
+    state: readState(record.state, enabled),
+    problems: Array.isArray(record.problems)
+      ? record.problems.filter((problem): problem is string => typeof problem === 'string')
+      : [],
+    lastFailure: readLastFailure(record.lastFailure),
     expansion: record.expansion === 'vary' ? 'vary' : 'off',
     maxChips: typeof record.maxChips === 'number' ? record.maxChips : DEFAULT_REPLY_SUGGESTIONS_MAX_CHIPS,
     maxChipChars: typeof record.maxChipChars === 'number' ? record.maxChipChars : 120,
+  };
+}
+
+/** Validates one `/status` state; an older server's missing field derives from `enabled`. */
+function readState(value: unknown, enabled: boolean): ReplySuggestionsState {
+  if (value === 'ready' || value === 'misconfigured' || value === 'off') return value;
+  return enabled ? 'ready' : 'off';
+}
+
+/** The last-failure record, validated field by field; anything unusable reads as null. */
+function readLastFailure(value: unknown): ReplySuggestionsLastFailure | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.at !== 'string' || typeof record.requestId !== 'string') return null;
+  const category = readCategory(record.category);
+  if (category === null) return null;
+  return {
+    at: record.at,
+    requestId: record.requestId,
+    category,
+    httpStatus: typeof record.httpStatus === 'number' ? record.httpStatus : null,
+    durationMs: typeof record.durationMs === 'number' ? record.durationMs : 0,
+    model: typeof record.model === 'string' ? record.model : '',
+    protocol: record.protocol === 'openai' ? 'openai' : 'anthropic',
+  };
+}
+
+/** The literal category vocabulary, as data, so a wire value is checked before it is trusted. */
+const FAILURE_CATEGORIES: readonly ReplySuggestionsFailureCategory[] = [
+  'timeout', 'http', 'network', 'parse', 'shape', 'circuit-open', 'rate-limit', 'misconfigured', 'unknown',
+];
+
+/** Reads a category, or null when the value is not one of the declared members. */
+function readCategory(value: unknown): ReplySuggestionsFailureCategory | null {
+  return typeof value === 'string' && (FAILURE_CATEGORIES as readonly string[]).includes(value)
+    ? value as ReplySuggestionsFailureCategory
+    : null;
+}
+
+/** A coarse category for a refusal body that carried none: the code and the status are enough. */
+function inferCategory(code: string, httpStatus: number | null): ReplySuggestionsFailureCategory {
+  if (code === 'REPLY_SUGGESTIONS_RATE_LIMITED' || httpStatus === 429) return 'rate-limit';
+  if (code === 'REPLY_SUGGESTIONS_UPSTREAM_FAILED') return httpStatus === null ? 'unknown' : 'http';
+  if (httpStatus !== null) return 'http';
+  return 'unknown';
+}
+
+/**
+ * Reads one failed `POST /api/reply-suggestions` answer into the typed failure the
+ * controller shows. The error envelope's `code`/`message` and its
+ * `details.{requestId,httpStatus,category,model}` are preserved verbatim; an
+ * unreadable body reads as `code: 'unknown'` rather than as "no answer".
+ */
+export function readReplySuggestionsFailure(
+  status: number,
+  body: unknown,
+  fallbackMessage = `HTTP ${status}`,
+): ReplySuggestionsFailure {
+  const envelope = body && typeof body === 'object' && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : {};
+  const error = envelope.error && typeof envelope.error === 'object' && !Array.isArray(envelope.error)
+    ? envelope.error as Record<string, unknown>
+    : {};
+  const details = error.details && typeof error.details === 'object' && !Array.isArray(error.details)
+    ? error.details as Record<string, unknown>
+    : {};
+  const code = typeof error.code === 'string' && error.code !== '' ? error.code : 'unknown';
+  const httpStatus = typeof details.httpStatus === 'number' && Number.isInteger(details.httpStatus)
+    ? details.httpStatus
+    : null;
+  return {
+    at: new Date().toISOString(),
+    code,
+    category: readCategory(details.category) ?? inferCategory(code, httpStatus),
+    httpStatus,
+    requestId: typeof details.requestId === 'string' && details.requestId !== '' ? details.requestId : null,
+    model: typeof details.model === 'string' && details.model !== '' ? details.model : null,
+    message: typeof error.message === 'string' && error.message !== '' ? error.message : fallbackMessage,
   };
 }

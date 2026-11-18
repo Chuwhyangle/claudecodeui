@@ -15,9 +15,11 @@ import type {
 } from '@/modules/chat-support';
 import type {
   ReplySuggestionsEventInput,
+  ReplySuggestionsFailure,
   ReplySuggestionsRequest,
   ReplySuggestionsResult,
   ReplySuggestionsStatus,
+  ReplySuggestionsSuggestResponse,
 } from '@/shared/types';
 
 /**
@@ -29,14 +31,42 @@ import type {
  */
 
 const STATUS_ON: ReplySuggestionsStatus = {
-  enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120,
+  enabled: true, state: 'ready', problems: [], lastFailure: null,
+  expansion: 'off', maxChips: 3, maxChipChars: 120,
 };
 const STATUS_OFF: ReplySuggestionsStatus = {
-  enabled: false, expansion: 'off', maxChips: 3, maxChipChars: 120,
+  enabled: false, state: 'off', problems: [], lastFailure: null,
+  expansion: 'off', maxChips: 3, maxChipChars: 120,
 };
 const STATUS_VARY: ReplySuggestionsStatus = {
-  enabled: true, expansion: 'vary', maxChips: 3, maxChipChars: 120,
+  enabled: true, state: 'ready', problems: [], lastFailure: null,
+  expansion: 'vary', maxChips: 3, maxChipChars: 120,
 };
+const STATUS_MISCONFIGURED: ReplySuggestionsStatus = {
+  enabled: false, state: 'misconfigured', problems: ['`model` is required when `enabled` is true'],
+  lastFailure: null, expansion: 'off', maxChips: 3, maxChipChars: 120,
+};
+
+/** One typed failure the API layer would produce for a refused draw. */
+const failure = (overrides: Partial<ReplySuggestionsFailure> = {}): ReplySuggestionsFailure => ({
+  at: '2026-11-18T10:00:00.000Z',
+  code: 'REPLY_SUGGESTIONS_UPSTREAM_FAILED',
+  category: 'http',
+  httpStatus: 502,
+  requestId: 'req-1',
+  model: 'test-model',
+  message: 'reply-suggestions upstream request failed (http)',
+  ...overrides,
+});
+
+/** A successful draw answer in the typed shape the API layer returns. */
+const ok = (result: ReplySuggestionsResult): ReplySuggestionsSuggestResponse => ({ ok: true, result });
+
+/** A refused draw answer in the typed shape the API layer returns. */
+const refused = (value: Partial<ReplySuggestionsFailure> = {}): ReplySuggestionsSuggestResponse => ({
+  ok: false,
+  failure: failure(value),
+});
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -75,6 +105,7 @@ const makeClock = (): { clock: ReplySuggestionsClock; runAll: () => void; pendin
     clearTimeout: (handle) => {
       timers.delete(handle as number);
     },
+    now: () => 1_800_000_000_000,
   };
   return {
     clock,
@@ -95,7 +126,7 @@ type ApiStub = {
   eventCalls: () => ReplySuggestionsEventInput[];
   setStatus: (reading: ReplySuggestionsStatus | null) => void;
   setSuggest: (
-    impl: (request: ReplySuggestionsRequest) => Promise<ReplySuggestionsResult | null>,
+    impl: (request: ReplySuggestionsRequest) => Promise<ReplySuggestionsSuggestResponse>,
   ) => void;
   setEvent: (impl: (event: ReplySuggestionsEventInput) => Promise<boolean>) => void;
 };
@@ -108,9 +139,9 @@ const makeApi = (
     : initial.status;
   let suggestImpl: (
     request: ReplySuggestionsRequest,
-  ) => Promise<ReplySuggestionsResult | null> = async () => ({
-    chips: ['答复一', '答复二'],
-    draw: 7,
+  ) => Promise<ReplySuggestionsSuggestResponse> = async () => ({
+    ok: true,
+    result: { chips: ['答复一', '答复二'], draw: 7 },
   });
   let eventImpl: (event: ReplySuggestionsEventInput) => Promise<boolean> = async () => true;
   let statusCount = 0;
@@ -189,7 +220,7 @@ describe('replySuggestionsController', () => {
     await flush();
     assert.equal(api.suggestCalls().length, 1);
 
-    api.setSuggest(async () => ({ chips: ['新答复'], draw: 8 }));
+    api.setSuggest(async () => ok({ chips: ['新答复'], draw: 8 }));
     controller.setContext(context({ lastAssistantMessageId: 'assistant-2' }));
     assert.equal(clock.pending(), 1, 'a message-id change is held one beat for the session to settle');
     clock.runAll();
@@ -201,7 +232,7 @@ describe('replySuggestionsController', () => {
 
   it('(c) switching to another conversation and back restores the batch without a request', async () => {
     const { controller, api } = createHarness();
-    api.setSuggest(async (request) => ({
+    api.setSuggest(async (request) => ok({
       chips: [`${request.sessionId ?? ''}-一`, `${request.sessionId ?? ''}-二`],
       draw: 7,
     }));
@@ -223,7 +254,7 @@ describe('replySuggestionsController', () => {
 
   it('(d) drops a response whose session was left while the request was in flight', async () => {
     const { controller, api } = createHarness();
-    const draw = deferred<ReplySuggestionsResult | null>();
+    const draw = deferred<ReplySuggestionsSuggestResponse>();
     api.setSuggest(() => draw.promise);
 
     controller.setContext(context());
@@ -235,7 +266,7 @@ describe('replySuggestionsController', () => {
     await flush();
     assert.equal(controller.getSnapshot().enabled, false);
 
-    draw.resolve({ chips: ['旧会话的答复'], draw: 9 });
+    draw.resolve(ok({ chips: ['旧会话的答复'], draw: 9 }));
     await flush();
 
     assert.deepEqual(controller.getSnapshot().chips, [], 'the stale token must discard the answer');
@@ -244,7 +275,7 @@ describe('replySuggestionsController', () => {
 
   it('(e) redraw replaces the batch and the remembered one', async () => {
     const { controller, api } = createHarness();
-    api.setSuggest(async (request) => (request.redraw === true
+    api.setSuggest(async (request) => ok(request.redraw === true
       ? { chips: ['重抽一', '重抽二'], draw: 9 }
       : { chips: ['初抽一', '初抽二'], draw: 7 }));
 
@@ -269,7 +300,7 @@ describe('replySuggestionsController', () => {
 
   it('(f) evicts the oldest remembered key past the capacity', async () => {
     const { controller, api } = createHarness({ cache: createReplySuggestionsBatchCache(20) });
-    api.setSuggest(async (request) => ({ chips: [`chip-${request.sessionId ?? ''}`], draw: 1 }));
+    api.setSuggest(async (request) => ok({ chips: [`chip-${request.sessionId ?? ''}`], draw: 1 }));
 
     controller.setContext(context({ sessionId: 's-0', lastAssistantMessageId: 'm-0' }));
     await flush();
@@ -291,7 +322,7 @@ describe('replySuggestionsController', () => {
 
   it('(g) stops the expansion chain at the depth cap', async () => {
     const { controller, api } = createHarness({ status: STATUS_VARY });
-    api.setSuggest(async (request) => ({
+    api.setSuggest(async (request) => ok({
       chips: [`变体-${String(request.seed ?? '')}`, '另一条'],
       draw: 20,
     }));
@@ -314,11 +345,11 @@ describe('replySuggestionsController', () => {
 
   it('(h) drops an older expansion answer that lands after a newer one', async () => {
     const { controller, api } = createHarness({ status: STATUS_VARY });
-    const older = deferred<ReplySuggestionsResult | null>();
-    const newer = deferred<ReplySuggestionsResult | null>();
+    const older = deferred<ReplySuggestionsSuggestResponse>();
+    const newer = deferred<ReplySuggestionsSuggestResponse>();
     let expansionIndex = 0;
     api.setSuggest((request) => {
-      if (request.expand !== true) return Promise.resolve({ chips: ['模型'], draw: 1 });
+      if (request.expand !== true) return Promise.resolve(ok({ chips: ['模型'], draw: 1 }));
       expansionIndex += 1;
       return expansionIndex === 1 ? older.promise : newer.promise;
     });
@@ -331,12 +362,12 @@ describe('replySuggestionsController', () => {
     controller.clearExpansion();
     controller.requestExpansion({ seed: '第二条' });
 
-    newer.resolve({ chips: ['新的变体'], draw: 3 });
+    newer.resolve(ok({ chips: ['新的变体'], draw: 3 }));
     await flush();
     assert.deepEqual(controller.getSnapshot().expansionChips, ['新的变体']);
     assert.equal(controller.getSnapshot().draw, 3);
 
-    older.resolve({ chips: ['旧的变体'], draw: 2 });
+    older.resolve(ok({ chips: ['旧的变体'], draw: 2 }));
     await flush();
     assert.deepEqual(
       controller.getSnapshot().expansionChips,
@@ -346,9 +377,9 @@ describe('replySuggestionsController', () => {
     assert.equal(controller.getSnapshot().draw, 3);
   });
 
-  it('(i) falls back silently when a draw fails', async () => {
+  it('(i) a failed automatic draw becomes a visible failure episode, not a silent fallback', async () => {
     const { controller, api } = createHarness();
-    api.setSuggest(() => Promise.reject(new Error('gateway down')));
+    api.setSuggest(async () => refused());
 
     controller.setContext(context());
     await flush();
@@ -356,7 +387,118 @@ describe('replySuggestionsController', () => {
     const snapshot = controller.getSnapshot();
     assert.deepEqual(snapshot.chips, []);
     assert.equal(snapshot.enabled, true, 'the button stays available for a retry');
-    assert.equal('error' in snapshot, false, 'a failed draw publishes no error');
+    assert.equal(snapshot.failure?.code, 'REPLY_SUGGESTIONS_UPSTREAM_FAILED');
+    assert.equal(snapshot.failure?.httpStatus, 502);
+    assert.equal(snapshot.failure?.requestId, 'req-1');
+    assert.equal(snapshot.failureCount, 1);
+    assert.equal(snapshot.failureDismissed, false);
+    assert.equal('error' in snapshot, false, 'the episode is a reading, never a thrown error');
+  });
+
+  it('(i2) the same requestId arriving again only advances the count', async () => {
+    const { controller, api, clock } = createHarness();
+    api.setSuggest(async () => refused());
+
+    controller.setContext(context());
+    await flush();
+    assert.equal(controller.getSnapshot().failureCount, 1);
+
+    // A new assistant message draws again; the same correlation facts arrive.
+    controller.setContext(context({ lastAssistantMessageId: 'assistant-2' }));
+    clock.runAll();
+    await flush();
+
+    assert.equal(controller.getSnapshot().failureCount, 2, 'the same episode is counted, not re-announced');
+    assert.equal(controller.getSnapshot().failure?.requestId, 'req-1');
+
+    // A different requestId (another POST) starts a new episode at 1.
+    api.setSuggest(async () => refused({ requestId: 'req-2' }));
+    controller.setContext(context({ lastAssistantMessageId: 'assistant-3' }));
+    clock.runAll();
+    await flush();
+    assert.equal(controller.getSnapshot().failureCount, 1);
+    assert.equal(controller.getSnapshot().failure?.requestId, 'req-2');
+  });
+
+  it('(i3) any success clears the episode while the terminology stays stable', async () => {
+    const { controller, api, clock } = createHarness();
+    api.setSuggest(async () => refused());
+    controller.setContext(context());
+    await flush();
+    assert.ok(controller.getSnapshot().failure);
+
+    api.setSuggest(async () => ok({ chips: ['恢复一', '恢复二'], draw: 9 }));
+    controller.setContext(context({ lastAssistantMessageId: 'assistant-2' }));
+    clock.runAll();
+    await flush();
+
+    assert.equal(controller.getSnapshot().failure, null);
+    assert.equal(controller.getSnapshot().failureCount, 0);
+    assert.deepEqual(controller.getSnapshot().chips, ['恢复一', '恢复二']);
+  });
+
+  it('(i4) dismiss hides the notice for the session while a manual redraw still updates the episode', async () => {
+    const { controller, api } = createHarness();
+    api.setSuggest(async () => refused());
+    controller.setContext(context());
+    await flush();
+    assert.equal(controller.getSnapshot().failureDismissed, false);
+
+    controller.dismissFailure();
+    assert.equal(controller.getSnapshot().failureDismissed, true);
+    assert.ok(controller.getSnapshot().failure, 'dismissing hides the notice; it does not erase the episode');
+
+    api.setSuggest(async () => refused({ requestId: 'req-manual' }));
+    assert.equal(await controller.redraw(), false);
+    await flush();
+
+    assert.equal(controller.getSnapshot().failureDismissed, true, 'a manual retry does not un-dismiss');
+    assert.equal(controller.getSnapshot().failure?.requestId, 'req-manual', 'but the episode is updated');
+  });
+
+  it('(i5) a conversation switch resets the episode and its dismissal', async () => {
+    const { controller, api } = createHarness();
+    api.setSuggest(async () => refused());
+    controller.setContext(context());
+    await flush();
+    controller.dismissFailure();
+    assert.equal(controller.getSnapshot().failureDismissed, true);
+
+    // The next conversation draws successfully; the reset must not depend on it.
+    api.setSuggest(async () => ok({ chips: ['另一个会话'], draw: 1 }));
+    controller.setContext(context({ sessionId: 'session-b', lastAssistantMessageId: 'assistant-b' }));
+    await flush();
+
+    const snapshot = controller.getSnapshot();
+    assert.equal(snapshot.failure, null);
+    assert.equal(snapshot.failureCount, 0);
+    assert.equal(snapshot.failureDismissed, false, 'the next conversation may show its own failures');
+  });
+
+  it('(i6) a misconfigured /status is the same visible episode, naming the missing setting', async () => {
+    const { controller, api } = createHarness({ status: STATUS_MISCONFIGURED });
+    controller.setContext(context());
+    await flush();
+
+    const snapshot = controller.getSnapshot();
+    assert.equal(snapshot.failure?.category, 'misconfigured');
+    assert.equal(snapshot.failure?.code, 'REPLY_SUGGESTIONS_MISCONFIGURED');
+    assert.ok(snapshot.failure?.message.includes('`model`'), 'the missing item travels with the episode');
+    assert.equal(snapshot.chips.length, 0);
+    assert.equal(api.suggestCalls().length, 0, 'a misconfigured feature never asks upstream');
+  });
+
+  it('(i7) a thrown transport failure is also an episode, with the network category', async () => {
+    const { controller, api } = createHarness();
+    api.setSuggest(() => Promise.reject(new Error('fetch failed')));
+
+    controller.setContext(context());
+    await flush();
+
+    const snapshot = controller.getSnapshot();
+    assert.equal(snapshot.failure?.category, 'network');
+    assert.equal(snapshot.failure?.code, 'unknown');
+    assert.equal(snapshot.failure?.message, 'fetch failed');
   });
 
   it('(j) swallows a refused ledger write', async () => {

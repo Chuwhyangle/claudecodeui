@@ -4119,6 +4119,17 @@ export type ComposerChipStrip = {
   suggestionsLoading: boolean;
   /** Asks for a whole new batch; resolves false when the draw failed. */
   onRequestSuggestions: () => void | Promise<boolean>;
+  /**
+   * The failed model draw this session is showing, or null. The composer renders
+   * the inline notice from it; a success clears it in the controller.
+   */
+  suggestionFailure?: ReplySuggestionsFailure | null;
+  /** True once the person dismissed the notice for this session; the row hides. */
+  suggestionFailureDismissed?: boolean;
+  /** How many consecutive failures the current episode has seen. */
+  suggestionFailureCount?: number;
+  /** Hides the failure notice for the rest of this session (the episode is kept). */
+  onDismissSuggestionFailure?: () => void;
   /** The expansion experiment's variant/response chips for the draft in the box. */
   expansionChips: readonly string[];
   /** Accepts one variant/response chip: replaces the body, keeping a `> quote` prefix. */
@@ -4146,67 +4157,23 @@ export type ServerFeatures = {
 // ---------------------------
 
 //----------------- REPLY SUGGESTIONS ------------
+// Wire types live in a type-only leaf beside the API readers (see that file); this barrel
+// re-exports them so existing `@/shared/types` imports are unchanged.
+import type { ReplySuggestionsFailure } from '@/shared/api/replySuggestionsType';
 
-/**
- * The public reading of the reply-suggestions feature, from `GET /api/reply-suggestions/status`.
- *
- * Carries no key and no path on purpose: the composer only needs to know whether the feature is
- * on and how much text a chip may hold, and the server owns everything else.
- */
-export type ReplySuggestionsStatus = {
-  /** False means the composer neither extracts nor draws the Suggest button. */
-  enabled: boolean;
-  /** The experimental post-pick expansion switch: `vary` makes a picked chip expand into variants. */
-  expansion: 'off' | 'vary';
-  /** Most model chips one draw may return. */
-  maxChips: number;
-  /** Longest chip text one draw may return, before the client's own label truncation. */
-  maxChipChars: number;
-};
-
-/** One completed draw, from `POST /api/reply-suggestions`. `draw` names the batch later events refer to. */
-export type ReplySuggestionsResult = {
-  /** Complete reply texts, already deduplicated and capped by the server. */
-  chips: string[];
-  /** Local to this session; the ledger events refer to it. */
-  draw: number;
-};
-
-/**
- * The text an expansion draw is anchored on: `seed` is the reply the person
- * already picked (it asks for variants). Reported on a `picked` event so the
- * ledger can mark a chip that came from an expansion draw; the anchored text
- * itself is not stored.
- */
-export type ReplySuggestionsExpansionSource = 'seed';
-
-/** The pointer/outcome events the composer reports on `POST /api/reply-suggestions/events`. */
-export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
-
-/** One ledger event; `index` is present only when a specific chip was picked. */
-export type ReplySuggestionsEventInput = {
-  sessionId: string;
-  draw: number;
-  event: ReplySuggestionsEventName;
-  index?: number;
-  /** Present only when the picked chip came from an expansion draw. */
-  source?: ReplySuggestionsExpansionSource;
-};
-
-/**
- * One request for a draw; `redraw` asks for a fresh batch, `focus` is the transcript text to centre on.
- *
- * `expand: true` marks the experimental post-pick expansion: `seed` then asks for
- * variants of the picked reply and is required. The server refuses the shape
- * unless `expansion` is `vary`.
- */
-export type ReplySuggestionsRequest = {
-  sessionId: string;
-  redraw?: boolean;
-  focus?: string;
-  seed?: string;
-  expand?: boolean;
-};
+export type {
+  ReplySuggestionsEventInput,
+  ReplySuggestionsEventName,
+  ReplySuggestionsExpansionSource,
+  ReplySuggestionsFailure,
+  ReplySuggestionsFailureCategory,
+  ReplySuggestionsLastFailure,
+  ReplySuggestionsRequest,
+  ReplySuggestionsResult,
+  ReplySuggestionsState,
+  ReplySuggestionsStatus,
+  ReplySuggestionsSuggestResponse,
+} from '@/shared/api/replySuggestionsType';
 
 // ---------------------------
 

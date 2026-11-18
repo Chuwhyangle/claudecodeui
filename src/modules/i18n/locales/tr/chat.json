@@ -144,7 +144,25 @@
       "suggesting": "Öneriliyor…",
       "suggestHint": "Konuşmaya göre yanıt öner",
       "suggestForSelection": "Seçimden öner",
-      "quoteChip": "Alıntı: {{text}}"
+      "quoteChip": "Alıntı: {{text}}",
+      "failure": {
+        "title": "Yanıt önerileri kullanılamıyor",
+        "misconfigured": "Yanıt önerileri açık ancak zorunlu bir ayar eksik",
+        "upstream": "Öneri hizmeti bir hata döndürdü ({{status}})",
+        "rateLimited": "Çok fazla öneri isteği — bir dakika içinde tekrar deneyin",
+        "circuitOpen": "Yanıt önerileri tekrarlanan hatalardan sonra duraklatıldı",
+        "network": "Öneri hizmetine ulaşılamadı",
+        "unknown": "Yanıt önerileri oluşturulamadı",
+        "retry": "Tekrar dene",
+        "dismiss": "Şimdilik yoksay",
+        "close": "Kapat",
+        "fieldCode": "Kod",
+        "fieldStatus": "Üst kaynak durumu",
+        "fieldTime": "Saat",
+        "fieldModel": "Model",
+        "fieldRequestId": "İstek kimliği",
+        "fieldAttempts": "Ardışık hatalar"
+      }
     },
     "placeholder": "Komutlar için /, dosyalar için @ yaz ya da {{provider}}'a her şeyi sor...",
     "placeholderDefault": "Mesajını yaz...",

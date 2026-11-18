@@ -155,7 +155,25 @@
       "suggesting": "제안 중…",
       "suggestHint": "지금까지의 대화에서 답장을 제안",
       "suggestForSelection": "선택 영역에서 제안",
-      "quoteChip": "인용: {{text}}"
+      "quoteChip": "인용: {{text}}",
+      "failure": {
+        "title": "답장 제안을 사용할 수 없습니다",
+        "misconfigured": "답장 제안이 켜져 있지만 필수 설정이 없습니다",
+        "upstream": "제안 서비스가 오류를 반환했습니다({{status}})",
+        "rateLimited": "제안 요청이 너무 많습니다. 1분 후에 다시 시도하세요",
+        "circuitOpen": "반복된 실패로 답장 제안이 일시 중지되었습니다",
+        "network": "제안 서비스에 연결할 수 없습니다",
+        "unknown": "답장 제안을 생성할 수 없습니다",
+        "retry": "다시 시도",
+        "dismiss": "이번에는 무시",
+        "close": "닫기",
+        "fieldCode": "코드",
+        "fieldStatus": "업스트림 상태",
+        "fieldTime": "시간",
+        "fieldModel": "모델",
+        "fieldRequestId": "요청 ID",
+        "fieldAttempts": "연속 실패 횟수"
+      }
     },
     "placeholder": "/를 입력하여 명령어, @를 입력하여 파일, 또는 {{provider}}에게 무엇이든 물어보세요...",
     "placeholderDefault": "메시지를 입력하세요...",

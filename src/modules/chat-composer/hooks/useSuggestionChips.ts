@@ -162,6 +162,10 @@ export function useSuggestionChips({
       chips: replySuggestionChips,
       loading: suggestionsLoading,
       redraw: requestSuggestions,
+      failure: replySuggestionsFailure,
+      failureDismissed: replySuggestionsFailureDismissed,
+      failureCount: replySuggestionsFailureCount,
+      dismissFailure: dismissReplySuggestionsFailure,
     },
     expansion: {
       enabled: replyExpansionEnabled,
@@ -417,6 +421,10 @@ export function useSuggestionChips({
     hasTranscriptSelection: trimmedQuotedSelection !== null,
     suggestionsLoading,
     onRequestSuggestions: requestSuggestions,
+    suggestionFailure: replySuggestionsFailure,
+    suggestionFailureDismissed: replySuggestionsFailureDismissed,
+    suggestionFailureCount: replySuggestionsFailureCount,
+    onDismissSuggestionFailure: dismissReplySuggestionsFailure,
     expansionChips: replyExpansionChips,
     onAcceptExpansionChip: acceptExpansionChip,
   };

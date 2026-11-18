@@ -144,7 +144,25 @@
       "suggesting": "產生中…",
       "suggestHint": "根據上下文建議回覆",
       "suggestForSelection": "用選段生成建議",
-      "quoteChip": "引用：{{text}}"
+      "quoteChip": "引用：{{text}}",
+      "failure": {
+        "title": "回覆建議暫時無法使用",
+        "misconfigured": "回覆建議已開啟，但缺少必要設定",
+        "upstream": "建議服務傳回錯誤（{{status}}）",
+        "rateLimited": "建議請求過於頻繁，請稍後再試",
+        "circuitOpen": "建議服務在連續失敗後已暫停",
+        "network": "無法連線到建議服務",
+        "unknown": "無法產生回覆建議",
+        "retry": "重試",
+        "dismiss": "本次工作階段忽略",
+        "close": "關閉",
+        "fieldCode": "錯誤碼",
+        "fieldStatus": "上游狀態",
+        "fieldTime": "發生時間",
+        "fieldModel": "模型",
+        "fieldRequestId": "請求 ID",
+        "fieldAttempts": "連續失敗次數"
+      }
     },
     "placeholder": "輸入 / 叫用指令，@ 選取檔案，或向 {{provider}} 提問...",
     "placeholderDefault": "輸入您的訊息...",

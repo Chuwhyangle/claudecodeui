@@ -32,11 +32,36 @@ vi.mock('@/shared/api', () => ({
 }));
 
 /** The API layer owns parsing; these mocks hand the controller its typed readings. */
-const respond = (value: unknown) => Promise.resolve(value);
+/** A status reading as the API layer returns it. */
+const status = (overrides: Record<string, unknown> = {}) => ({
+  enabled: true, state: 'ready', problems: [], lastFailure: null,
+  expansion: 'off', maxChips: 3, maxChipChars: 120, ...overrides,
+});
 
-const STATUS_ON = { enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120 };
-const STATUS_OFF = { enabled: false, expansion: 'off', maxChips: 3, maxChipChars: 120 };
-const STATUS_VARY = { enabled: true, expansion: 'vary', maxChips: 3, maxChipChars: 120 };
+/** A successful draw answer in the typed shape the API layer returns. */
+const okResult = (result: { chips: string[]; draw: number }) => Promise.resolve({ ok: true, result });
+
+/** A refused draw answer in the typed shape the API layer returns. */
+const refusedResult = (overrides: Record<string, unknown> = {}) => Promise.resolve({
+  ok: false,
+  failure: {
+    at: '2026-11-18T10:00:00.000Z',
+    code: 'REPLY_SUGGESTIONS_UPSTREAM_FAILED',
+    category: 'http',
+    httpStatus: 502,
+    requestId: 'req-hook',
+    model: 'test-model',
+    message: 'reply-suggestions upstream request failed (http)',
+    ...overrides,
+  },
+});
+
+const STATUS_ON = status();
+const STATUS_OFF = status({ enabled: false, state: 'off' });
+const STATUS_VARY = status({ expansion: 'vary' });
+
+/** Hands one already-typed reading back as the mocked endpoint's promise. */
+const respond = (value: unknown) => Promise.resolve(value);
 
 type Args = {
   sessionId: string | null;
@@ -71,8 +96,8 @@ beforeEach(() => {
   // The batch table lives at module scope so it survives a remount; every test
   // must start with an empty page.
   resetReplySuggestionsBatchCache();
-  apiMocks.status.mockReset().mockImplementation(() => Promise.resolve(STATUS_ON));
-  apiMocks.suggest.mockReset().mockImplementation(() => Promise.resolve({
+  apiMocks.status.mockReset().mockImplementation(() => respond(STATUS_ON));
+  apiMocks.suggest.mockReset().mockImplementation(() => okResult({
     chips: ['答复一', '答复二'],
     draw: 7,
   }));
@@ -120,7 +145,7 @@ describe('useReplySuggestions', () => {
     await settle(result);
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
 
-    apiMocks.suggest.mockImplementation(() => respond({ chips: ['新答复'], draw: 8 }));
+    apiMocks.suggest.mockImplementation(() => okResult({ chips: ['新答复'], draw: 8 }));
     rerender(baseArgs({ lastAssistantMessageId: 'assistant-2' }));
     await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['新答复']));
     assert.equal(apiMocks.suggest.mock.calls.length, 2, 'a new answer is a new draw');
@@ -136,12 +161,30 @@ describe('useReplySuggestions', () => {
     assert.equal(result.current.enabled, true, 'the button stays available for a retry');
   });
 
+  it('(d2) exposes the failed draw as firstDraw.failure and lets the notice be dismissed', async () => {
+    apiMocks.suggest.mockImplementation(() => refusedResult());
+    const { result } = renderReply();
+    await settle(result);
+    await flush();
+
+    assert.equal(result.current.firstDraw.failure?.code, 'REPLY_SUGGESTIONS_UPSTREAM_FAILED');
+    assert.equal(result.current.firstDraw.failure?.httpStatus, 502);
+    assert.equal(result.current.firstDraw.failureCount, 1);
+    assert.equal(result.current.firstDraw.failureDismissed, false);
+
+    act(() => {
+      result.current.firstDraw.dismissFailure();
+    });
+    assert.equal(result.current.firstDraw.failureDismissed, true);
+    assert.ok(result.current.firstDraw.failure, 'the episode is kept; only the notice hides');
+  });
+
   it('(e) the Suggest action sends redraw:true and replaces the batch instead of appending', async () => {
     const { result } = renderReply();
     await settle(result);
     await waitFor(() => assert.deepEqual(result.current.firstDraw.chips, ['答复一', '答复二']));
 
-    apiMocks.suggest.mockImplementation(() => respond({ chips: ['新一', '新二', '新三'], draw: 9 }));
+    apiMocks.suggest.mockImplementation(() => okResult({ chips: ['新一', '新二', '新三'], draw: 9 }));
     act(() => {
       result.current.firstDraw.redraw();
     });
@@ -179,7 +222,7 @@ describe('useReplySuggestions', () => {
     assert.equal(result.current.firstDraw.loading, true, 'the button is disabled while the draw is in flight');
 
     await act(async () => {
-      resolveDraw?.(await respond({ chips: ['答复'], draw: 10 }));
+      resolveDraw?.(await okResult({ chips: ['答复'], draw: 10 }));
     });
     await waitFor(() => assert.equal(result.current.firstDraw.loading, false));
   });
@@ -226,7 +269,7 @@ describe('useReplySuggestions', () => {
     await settle(result);
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
 
-    apiMocks.suggest.mockImplementationOnce(() => Promise.resolve(null));
+    apiMocks.suggest.mockImplementationOnce(() => refusedResult());
     let refused: boolean | undefined;
     await act(async () => {
       refused = await result.current.firstDraw.redraw();
@@ -240,7 +283,7 @@ describe('useReplySuggestions', () => {
     });
     assert.equal(thrown, false, 'a thrown request is a failed draw');
 
-    apiMocks.suggest.mockImplementationOnce(() => respond({ chips: ['新答复'], draw: 11 }));
+    apiMocks.suggest.mockImplementationOnce(() => okResult({ chips: ['新答复'], draw: 11 }));
     let applied: boolean | undefined;
     await act(async () => {
       applied = await result.current.firstDraw.redraw();
@@ -283,7 +326,7 @@ describe('useReplySuggestions expansion', () => {
     await settle(result);
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 1));
 
-    apiMocks.suggest.mockImplementation(() => respond({ chips: ['变体一', '变体二'], draw: 12 }));
+    apiMocks.suggest.mockImplementation(() => okResult({ chips: ['变体一', '变体二'], draw: 12 }));
     act(() => {
       result.current.expansion.request({ seed: '  已选定的回复  ' });
     });
@@ -314,7 +357,7 @@ describe('useReplySuggestions expansion', () => {
   it('(d) stops at five expansion requests in one chain', async () => {
     const { result } = renderReply();
     await settle(result);
-    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => respond({
+    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => okResult({
       chips: [`变体-${String(body.seed ?? '')}`, '另一条'],
       draw: 20,
     }));
@@ -387,9 +430,9 @@ describe('useReplySuggestions batch cache', () => {
   const perSession = () => apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => {
     const session = String(body.sessionId);
     if (body.redraw === true) {
-      return respond({ chips: [`${session}-重抽一`, `${session}-重抽二`], draw: 9 });
+      return okResult({ chips: [`${session}-重抽一`, `${session}-重抽二`], draw: 9 });
     }
-    return respond({ chips: [`${session}-一`, `${session}-二`], draw: 7 });
+    return okResult({ chips: [`${session}-一`, `${session}-二`], draw: 7 });
   });
 
   it('(a) switching to another conversation and back restores the batch without a request', async () => {
@@ -456,7 +499,7 @@ describe('useReplySuggestions batch cache', () => {
   });
 
   it('(e) the table keeps 20 keys; the least-recently-used one is drawn again when returned to', async () => {
-    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => respond({
+    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => okResult({
       chips: [`chip-${String(body.sessionId)}`],
       draw: 1,
     }));

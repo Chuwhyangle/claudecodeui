@@ -91,7 +91,7 @@ beforeEach(() => {
     enabled: true, expansion: 'off', maxChips: 3, maxChipChars: 120,
   }));
   apiMocks.suggest.mockReset().mockImplementation(() => Promise.resolve({
-    chips: ['模型一'], draw: 3,
+    ok: true, result: { chips: ['模型一'], draw: 3 },
   }));
   apiMocks.event.mockReset().mockImplementation(() => Promise.resolve(true));
 });
