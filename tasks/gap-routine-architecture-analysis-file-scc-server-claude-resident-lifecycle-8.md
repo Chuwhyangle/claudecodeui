@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-server-claude-resident-lifecycle-
 title: "architecture-analysis: 8 of the 18 files in
   modules/providers/list/claude/lifecycle sit in one SCC (registry:49 imports
   handlers, handlers:56 imports registry; resident-host.types."
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
