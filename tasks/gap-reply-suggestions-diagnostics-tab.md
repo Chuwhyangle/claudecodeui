@@ -187,17 +187,8 @@ recent failures (2):
 
 ## Blocker
 
-**2026-11-18T12:32Z — park needs-human：全量 suite 的两个红都是仓库外环境缺料，且红在 develop 基线，与本任务 Touches 零交集**
+**2026-11-18T12:34:13.649Z — worker 未落地（exited-not-landed）**
 
-本轮已在 worktree 内 merge develop（`eb1e260c3`，develop `9a3476770` 为祖先，工作树干净），随后按共享教训 `baseline-a-b-changed-assertion-can-be-empty-marker-artifact` 对两条红做了单文件实跑复核：
-
-1. `src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts` —— `bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts --maxWorkers=1` → `Tests 5 failed | 24 passed (29)`。5 条失败全部因**外部语料整目录不在本机**：`/data/home/yale/work/tc-verify` 不存在（`ls -d` → `No such file or directory`）。缺文件：`corpus/long/L4-nonstop.wav`（L4 ceiling、WAV/10MB 预算两条）、`corpus/long/L3-sparse.wav`（L3-sparse）、`corpus/public/LibriSpeech/dev-clean`（relay DoD）、false-forms 依赖同一缺料。该文件与 develop **零差异**（`git diff --stat develop -- <file>` 为空）；`.quay/develop-red-set.json`（develop=29abfb81f，evaluatedAt=2026-11-18T12:24:47Z）已列同一 key 与同一签名 `the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it` ⇒ 红在 develop。
-2. `server/modules/providers/tests/provider-models.service.test.ts` —— `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/provider-models.service.test.ts` → `tests 33 / pass 32 / fail 1`，唯一红 `the predefined Codex catalog equals the packaged CLI account catalog`：actual = 打包 CLI 目录 8 项（`gpt-5.6-luna … gpt-6.1-terra`），expected = 账号目录已前进到 10 项（新增 `gpt-6.2-astra`、`gpt-6.2-sol`）。该文件与 develop **零差异**；`.quay/develop-red-set.json` 已列同一 key ⇒ 红在 develop。
-
-上一轮 fan-in 的 `HARD RED (changed-assertion)` 是已知签名工件，不是本任务改了行为：全量日志里 `__PERFILE__` 标记行的 8 行窗口内找不到 `AssertionError:` ⇒ 任务侧记空签名，而基线单文件复跑断言紧邻标记行 ⇒ 签名非空，`compareFailureSignatures` 判 changed；确定性复现，重跑同一 suite 不会改变判定。
-
-自修不成立：重建 `tc-verify` 语料＝伪造证据；Codex 账号目录前进需由 provider 目录 owner 裁决钉哪一侧。恢复条件：把语料整目录放回 `/data/home/yale/work/tc-verify`（或用 `VAD_LONG`/`VAD_CORPUS` 指向既有语料），并裁决 provider-models 的账号目录 pin；之后把本任务改回 `ready` 即可重新 fan-in。本轮未改动任何代码；AC 8/8 与 DoD 证据见上文完成记录。
-
-- worktree：`/data/home/yale/work/claudecodeui-worktrees/gap-reply-suggestions-diagnostics-tab`
-- branch：`task/gap-reply-suggestions-diagnostics-tab`（head `eb1e260c3`）
-- 本轮 anti-drift Touches 检查：`ANTI-DRIFT OK — 45 actual file(s), all within declared Touches (37 glob(s))`
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
+- run_id：wk-prod-anchor
+- session_id：fcac3897-15da-4e1e-b07e-7ed00bb045fd
