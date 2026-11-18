@@ -183,25 +183,8 @@ $ npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/t
 
 ## Blocker
 
-**2026-11-16T07:18:47.533Z — worker 未落地（exited-not-landed）**
+**2026-11-18T10:06:42.504Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=parse-mechanical-fan-in: unparseable fresh mechanical fan-in output: node:internal/modules/cjs/loader:1568
-  throw err;
-  ^
-
-Error: Cannot find module '/data/home/yale/.claude/plugins/cache/quay/quay/0.30.1/scripts/dist/worker-driver.ts'
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)
-    at wrapResolveFilename (node:internal/modules/cjs/loader:1118:27)
-    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1142:10)
-    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1169:12)
-    at Module._load (node:internal/modules/cjs/loader:1341:5)
-    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
-    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
-    at node:internal/main/run_main_module:33:47 {
-  code: 'MODULE_NOT_FOUND',
-  requireStack: []
-}
-
-Node.js v24.21.0
+- 未落地原因：step=suite: not ok - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts: AssertionError [ERR_ASSERTION]: the long-corpus sample is missing at /data/home/yale/work/tc-verify/corpus/long/L4-nonstop.wav — the criterion cannot run without it [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts]
 - run_id：wk-prod-anchor
-- session_id：2b834ae2-cc66-432a-88c1-8486a9d674af
+- session_id：bbcba56e-6346-4f1e-9b18-a4e47884ea90
