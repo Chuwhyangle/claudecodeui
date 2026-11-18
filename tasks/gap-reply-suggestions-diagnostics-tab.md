@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-diagnostics-tab
 title: 回复建议诊断页：Settings 新增诊断与日志，功能健康/最近失败/复制诊断包
-status: needs-human
+status: ready
 labels:
   - gap
 parent: null
