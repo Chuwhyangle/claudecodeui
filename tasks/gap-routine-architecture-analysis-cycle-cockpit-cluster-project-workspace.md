@@ -90,3 +90,15 @@ Extract the cluster's leaf contract modules (cockpitCardDescriptors, cockpitView
 - `server/shared/tests/frontend-import-cycle-budget.test.ts`
 - `server/shared/tests/frontend-import-cycle-budget.baseline.json`
 - `tasks/gap-routine-architecture-analysis-cycle-cockpit-cluster-project-workspace.md`
+
+## Blocker
+
+**2026-11-19T10:21:58.579Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/frontend-import-cycle-budget.baseline.json
+CONFLICT (content): Merge conflict in server/shared/tests/frontend-import-cycle-budget.baseline.json
+Auto-merging server/shared/tests/frontend-import-cycle-budget.test.ts
+CONFLICT (content): Merge conflict in server/shared/tests/frontend-import-cycle-budget.test.ts
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：05ee9bbd-93b5-430b-8f2b-ca8f4fc500ea
