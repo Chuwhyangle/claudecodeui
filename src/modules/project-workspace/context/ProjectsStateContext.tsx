@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 
 import { useProjectsState } from '@/modules/project-workspace/hooks/useProjectsState';
+import { OptimisticSessionProvider } from '@/shared/context/OptimisticSessionContext';
+import type { OptimisticSessionSeam } from '@/shared/context/OptimisticSessionContext';
 import type { IsSessionProcessing,ServerEvent } from '@/shared/types';
 
 type ProjectsState = ReturnType<typeof useProjectsState>;
@@ -150,18 +152,33 @@ export function ProjectsStateProvider({
     [sessionId, state.selectedSession?.id],
   );
 
+  // The narrow seam the cockpit's cards list reads: only the projects it can match a started
+  // session against and the write that registers it optimistically. Sharing this through
+  // `@/shared/context/OptimisticSessionContext` instead of the cockpit importing this module
+  // (and this module importing the cockpit barrel) breaks the cockpit ↔ project-workspace
+  // feature-level cycle the frontend import-cycle ratchet pins.
+  const optimisticSeam = useMemo<OptimisticSessionSeam>(
+    () => ({
+      projects: state.projects,
+      registerOptimisticSession: state.registerOptimisticSession,
+    }),
+    [state.projects, state.registerOptimisticSession],
+  );
+
   return (
-    <ProjectEffectsContext.Provider value={effectsState}>
-      <ProjectCommandContext.Provider value={commandState}>
-        <ProjectMainContext.Provider value={mainState}>
-          <ProjectSidebarContext.Provider value={sidebarState}>
-            <ProjectActiveSessionContext.Provider value={activeSessionState}>
-              {children}
-            </ProjectActiveSessionContext.Provider>
-          </ProjectSidebarContext.Provider>
-        </ProjectMainContext.Provider>
-      </ProjectCommandContext.Provider>
-    </ProjectEffectsContext.Provider>
+    <OptimisticSessionProvider seam={optimisticSeam}>
+      <ProjectEffectsContext.Provider value={effectsState}>
+        <ProjectCommandContext.Provider value={commandState}>
+          <ProjectMainContext.Provider value={mainState}>
+            <ProjectSidebarContext.Provider value={sidebarState}>
+              <ProjectActiveSessionContext.Provider value={activeSessionState}>
+                {children}
+              </ProjectActiveSessionContext.Provider>
+            </ProjectSidebarContext.Provider>
+          </ProjectMainContext.Provider>
+        </ProjectCommandContext.Provider>
+      </ProjectEffectsContext.Provider>
+    </OptimisticSessionProvider>
   );
 }
 
@@ -178,18 +195,6 @@ export function useProjectSidebarState(): ProjectSidebarState {
 
 export function useProjectMainState(): ProjectMainState {
   return useRequiredProjectContext(useContext(ProjectMainContext), 'useProjectMainState');
-}
-
-/**
- * The main project state when a `ProjectsStateProvider` is above this component, `null` otherwise.
- *
- * The cockpit column is mounted INSIDE the workspace's provider while the cockpit page and the
- * phone overlay are mounted ABOVE it. A component that must work on all three — the cards list's
- * start-conversation registration — reads this optional form: present means the created session
- * can also be registered optimistically, absent means the surface navigates only.
- */
-export function useOptionalProjectMainState(): ProjectMainState | null {
-  return useContext(ProjectMainContext);
 }
 
 export function useProjectCommandState(): ProjectCommandState {

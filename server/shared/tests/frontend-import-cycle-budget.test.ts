@@ -38,8 +38,11 @@
  * finer than the question the architecture review asks: "which FEATURES depend on each other?"
  * A node there is `modules/<name>` (the scope `.oxlintrc.json` calls `frontend-module`), and an
  * edge is any cross-module import, collapsed from the same walk and resolved with the same
- * resolver — no second scanner. The second reading must see at most a two-module cycle; today it
- * is exactly cockpit ↔ project-workspace, and the cockpit's leaf contract is its own top-level
+ * resolver — no second scanner. The second reading must see no feature cycle; re-read 2026-11-19
+ * (task gap-routine-architecture-analysis-cycle-cockpit-cluster-project-workspace) it now sees
+ * none: the cockpit reads the workspace's optimistic-session registration through the shared
+ * seam `@/shared/context/OptimisticSessionContext` rather than importing `@/modules/project-workspace`,
+ * so `project-workspace -> cockpit` is one-way. The cockpit's leaf contract is its own top-level
  * module so the chat/sidebar/ui-scenario edges into it cannot pull those modules back into the
  * cockpit's SCC. A new module cycle, or a leaf contract that grows an out-edge, reds this file.
  *
@@ -91,9 +94,13 @@ const BASELINE_PATH = path.join(TEST_DIR, 'frontend-import-cycle-budget.baseline
  */
 const CYCLE_GROUPS: readonly string[][] = [
   ['modules/chat/tools', 'modules/chat/tools/ContentRenderers', 'modules/chat/transcript'],
-  // Re-read after the cockpit god-package split (2026-11-02): the card, workspace and hooks
-  // directories share one dependency web with the root barrel and project-workspace.
-  ['modules/cockpit', 'modules/cockpit/cards', 'modules/cockpit/hooks', 'modules/cockpit/workspace', 'modules/project-workspace'],
+  // Re-read 2026-11-19 (task gap-routine-architecture-analysis-cycle-cockpit-cluster-project-workspace):
+  // the cockpit's card list now reads the optimistic-session registration seam from
+  // `@/shared/context/OptimisticSessionContext` instead of `@/modules/project-workspace`, so
+  // `project-workspace` no longer has an out-edge into the cockpit cluster and drops out of the
+  // directory group (5 -> 4 members). The residual root-barrel <-> subdirectory web is the
+  // cockpit module's own structure and may only shrink further.
+  ['modules/cockpit', 'modules/cockpit/cards', 'modules/cockpit/hooks', 'modules/cockpit/workspace'],
   ['modules/git-panel', 'modules/git-panel/changes', 'modules/git-panel/history'],
   // Lowered 2026-11-04 (architecture god-package split): the root <-> hooks edge now runs
   // through the leaves (root -> hooks -> dom), so this group no longer exists.
@@ -111,12 +118,14 @@ const MIN_STATIC_FILE_EDGES = 2000;
 
 /**
  * The module-level pin (finding `src-module-scc-cockpit-hub`): the ONLY non-trivial SCC in the
- * `modules/<name>` graph is cockpit ↔ project-workspace. The task's acceptance criterion is "at
- * most 2 members", but this pin spells the exact two so a shrink is a deliberate lowering (the
- * same ratchet rule as the directory groups above), and so a NEW module cycle cannot hide behind
- * the word "at most".
+ * `modules/<name>` graph was cockpit ↔ project-workspace. Re-read 2026-11-19 (task
+ * gap-routine-architecture-analysis-cycle-cockpit-cluster-project-workspace): the cockpit's cards
+ * list now reads the optimistic-session registration seam from
+ * `@/shared/context/OptimisticSessionContext`, so `project-workspace -> cockpit` is a one-way
+ * dependency and the module graph carries no non-trivial SCC. The pin is empty and may only
+ * shrink; a new module cycle reds this file.
  */
-const MODULE_SCC_GROUPS: readonly string[][] = [['modules/cockpit', 'modules/project-workspace']];
+const MODULE_SCC_GROUPS: readonly string[][] = [];
 
 /**
  * Non-vacuity for the module reading: the merged tree carries 29 module nodes and 53
@@ -287,7 +296,7 @@ test('negative control: a one-way import is a resolved edge, not a cycle', () =>
 
 // ── The module-level reading (finding `src-module-scc-cockpit-hub`) ─────────────
 
-test('the current src module graph carries exactly the pinned two-module cycle', () => {
+test('the current src module graph carries exactly the pinned module cycles', () => {
   const sources = collectTypeScriptSources(SRC_DIR);
   const graph = scanImportGraph(sources, { includeDynamic: false });
   const { nodes, adjacency, edges } = moduleGraph(graph);

@@ -13,8 +13,6 @@ export {
   isSessionHiddenByProjectFilter,
 } from '@/modules/project-workspace/hooks/useProjectSessionFilter';
 export { useProjectsState } from '@/modules/project-workspace/hooks/useProjectsState';
-// The optional project-state read, exported for the cockpit's cards list: the PC column mounts
-// inside the provider and can register a newly created session optimistically, while the cockpit
-// page and the phone overlay mount above it and simply navigate.
-export { useOptionalProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
-export type { ProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
+// The optional project-state read the cockpit's cards list needs lives in the shared seam
+// `@/shared/context/OptimisticSessionContext` (provided by ProjectsStateProvider), not here:
+// importing this module from the cockpit is the feature-level cycle the ratchet pins.

@@ -23,7 +23,7 @@ import type {
 import { useCockpitCards } from '@/modules/cockpit/hooks/useCockpitCards';
 import type { CockpitCardsBinding } from '@/modules/cockpit/hooks/useCockpitCards';
 import { useCockpitStartConversation } from '@/modules/cockpit/hooks/useCockpitStartConversation';
-import { useOptionalProjectMainState } from '@/modules/project-workspace';
+import { useOptionalOptimisticSession } from '@/shared/context/OptimisticSessionContext';
 
 /**
  * The cards view's container: filters and density at the top, the card list and the Details
@@ -124,10 +124,12 @@ function CockpitCardListBound({
   // column variant pushes its Details inside instead, so it never asks this question.
   const { isMobile } = useDeviceSettings({ trackPWA: false });
   const { snapshot, controller } = binding;
-  // The workspace's project state, when this list is mounted INSIDE it (the PC column is; the
-  // cockpit page and the phone overlay are above it). It is the seam that registers a started
-  // session optimistically; its absence only means this surface navigates without registering.
-  const projectState = useOptionalProjectMainState();
+  // The workspace's optimistic-session seam, when this list is mounted INSIDE its provider (the
+  // PC column is; the cockpit page and the phone overlay are above it). It is the seam that
+  // registers a started session optimistically; its absence only means this surface navigates
+  // without registering. It is read from the shared context rather than the workspace module so
+  // the cockpit does not import `@/modules/project-workspace` (the pinned feature-level cycle).
+  const projectState = useOptionalOptimisticSession();
   // The project drawer is open/closed state, not a filter: it is a transient overlay the person
   // dismisses, so it has no reason to outlive the visit (the selection itself is persisted).
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
