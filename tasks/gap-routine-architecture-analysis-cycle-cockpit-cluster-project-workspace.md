@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-cycle-cockpit-cluster-project-workspace
 title: "architecture-analysis: Package-level SCC of size 5 (modules/cockpit,
   modules/cockpit/cards, modules/cockpit/hooks, modules/cockpit/workspace,
   modules/project-workspace) with 90 cro"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
