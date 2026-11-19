@@ -53,17 +53,20 @@ Extract the cluster's leaf contract modules (cockpitCardDescriptors, cockpitView
 
 处置（修掉模块级环，目录组按收缩重钉）：
 - 把 `useOptionalProjectMainState` 这条**闭合边**的接缝搬到共享层 `src/shared/context/OptimisticSessionContext.tsx`：`ProjectsStateProvider` 提供 `{projects, registerOptimisticSession}`，cockpit 的 cards 列表用 `useOptionalOptimisticSession()` 可选读取。cockpit 不再 import `@/modules/project-workspace`，于是 `project-workspace → cockpit` 成为单向依赖。
-- 结果：模块 SCC `{cockpit, project-workspace}` **消失**（`moduleSccGroups` 置空）；目录 SCC 的 cockpit 组由 5 员收缩为 4 员（`project-workspace` 出组）。两个 pin 同一次改动同时下调（in-file 常量 + committed JSON），baseline 的 provenance 计数重测为 files 768 / staticFileEdges 2762 / nodeCount 144。
+- 结果：模块 SCC `{cockpit, project-workspace}` **消失**（`moduleSccGroups` 置空）；目录 SCC 的 cockpit 组由 5 员收缩为 4 员（`project-workspace` 出组）。两个 pin 同一次改动同时下调（in-file 常量 + committed JSON）。
+- 2026-11-19 合并 develop（已落地 `chat/ui` 叶子拆分的那一轮）后，在同一棵**合并树**上重测并据实改写 baseline（note 取两边并集，未手并计数）：目录 SCC 3 组（cockpit 4 员 / git-panel 3 员 / settings 2 员），模块 SCC 为空；provenance 计数 files 768 / staticFileEdges 2765 / nodeCount 145 / unresolvedInternal 100 / nonLiteralDynamic 2。合并冲突仅落在 `frontend-import-cycle-budget.baseline.json` 与 `.test.ts` 的 note/readings 与 `CYCLE_GROUPS`：两边都是「收缩」——develop 去掉 chat/tools 组、本分支去掉 cockpit 组里的 project-workspace——取语义并集后即为上述 3 组。
 - 对 requested action 中「把 `cockpitCardDescriptors`/`cockpitView`/`cockpitIntent`/`cockpitEntry`/`cockpitColumnController`/`cockpitCardController` 搬进 sink 子包」的有意取舍（理由可核）：这六个是 **cockpit 内部**的消费关系，搬动不改变任何一条跨模块边，也不参与闭合该模块环的那条边；盲搬只会扩大 diff，并把 `cockpitView → @/modules/quay`、`cockpitIntent → @/modules/chat`、`cockpitCardController → cards/*` 这些**特征模块出边**带进叶子契约，反而违反 `frontend-import-cycle-budget.test.ts` 对 `modules/cockpit-contract` 的零出边断言。真正闭合 `{cockpit, project-workspace}` 环的就是 `cards → project-workspace` 那一条，已切断。
 - 残余（已有机制在管，失败在哪一步）：收缩后的 4 员目录组 `{cockpit, cockpit/cards, cockpit/hooks, cockpit/workspace}` 是 cockpit 模块**自身**的 root-barrel ↔ 子目录 web（barrel 再导出子目录组件，子目录组件又 import 根目录组件）；要整体拆掉需要成对搬迁 React 组件（另一项更大的结构任务）。当前由 `frontend-import-cycle-budget.test.ts` 逐成员钉死、只许收缩——任何让该组新增成员、或让 `modules/cockpit-contract` 长出出边的 import，都会在 `assertCycleBudget` / `assertModuleSccBudget` / 叶子断言处红。
 
-实跑读数（本 worktree）：
-- `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/frontend-import-cycle-budget.test.ts` → tests 12 / pass 12 / fail 0（4 员目录 pin + 空模块 pin 绿）。
-- `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` → 6/6；`cloudpit-goal-exit-gate.test.ts` → 3/3。
-- `npx vitest run`（cockpit 卡片 6 文件 + project-workspace 15 文件）→ 40 + 94 全绿。
+实跑读数（本 worktree，2026-11-19 合并 develop 之后重跑）：
+- `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/frontend-import-cycle-budget.test.ts` → tests 12 / pass 12 / fail 0（3 组目录 pin + 空模块 pin 绿）。
+- `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts server/shared/tests/cloudpit-goal-exit-gate.test.ts` → tests 9 / pass 9 / fail 0。
+- `npx vitest run src/modules/cockpit src/modules/project-workspace` → 47 files / 665 tests 全绿。
 - `npx tsc --noEmit -p tsconfig.json` 与 `npx tsc --noEmit -p server/tsconfig.json` → 均 exit 0；`npx oxlint <changed files>` → exit 0（仅既有 warning）。
+- 独立读数复算（复刻测试的同一 `collectTypeScriptSources` + `scanImportGraph` + `strongComponents`）：目录 `nonTrivialSccs` = 3 组，模块 SCC = 0 组，与 pin 逐成员相等。
 
-- L_G archguard: directory_scc_groups=4 cockpit_directory_group_members=4 module_scc_groups=0
+- L_D archguard: directory_scc_groups=3 cockpit_directory_group_members=4 module_scc_groups=0
+- L_G archguard: directory_scc_groups=3 cockpit_directory_group_members=4 module_scc_groups=0
 
 ## AC
 - [x] `.quay/routine-findings.jsonl` 中 finding `cycle-cockpit-cluster-project-workspace`（routine `architecture-analysis`，runId `architecture-analysis-1795081962018`）所描述的问题被复核并处置
@@ -90,3 +93,17 @@ Extract the cluster's leaf contract modules (cockpitCardDescriptors, cockpitView
 - `server/shared/tests/frontend-import-cycle-budget.test.ts`
 - `server/shared/tests/frontend-import-cycle-budget.baseline.json`
 - `tasks/gap-routine-architecture-analysis-cycle-cockpit-cluster-project-workspace.md`
+
+## Blocker
+
+**2026-11-19T10:21:58.579Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/frontend-import-cycle-budget.baseline.json
+CONFLICT (content): Merge conflict in server/shared/tests/frontend-import-cycle-budget.baseline.json
+Auto-merging server/shared/tests/frontend-import-cycle-budget.test.ts
+CONFLICT (content): Merge conflict in server/shared/tests/frontend-import-cycle-budget.test.ts
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：05ee9bbd-93b5-430b-8f2b-ca8f4fc500ea
+
+**已解除（2026-11-19，续做轮）**：两处冲突按「note 取并集 + readings 在合并树重测 + CYCLE_GROUPS 取两次收缩的并集」解决，合并提交 `2f97e02e5`；合并后重跑 cycle-budget 12/12、architecture-ratchet + goal-exit-gate 9/9、cockpit + project-workspace vitest 47 files/665 tests、两侧 tsc exit 0，anti-drift Touches 检查 OK（6 个实际改动文件全在声明内）。
