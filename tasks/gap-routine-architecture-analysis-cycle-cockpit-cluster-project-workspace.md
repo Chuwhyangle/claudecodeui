@@ -44,13 +44,34 @@ Extract the cluster's leaf contract modules (cockpitCardDescriptors, cockpitView
 - statement: 修复后 `<none>` 不再以同一 subject 复发（同 concept_key 的后续记录数应为 0）
 - recorded_at: 2026-11-19T09:52:42.018Z
 
+## 处置（2026-11-19，派发链执行）
+
+复核（读数，不是转抄）：用 `server/shared/import-graph.ts` 的同一走查 / 解析器 / Tarjan（`strongComponents`）在合并树上对 `src/` 做两种粒度读数，finding 的两条都复现：
+- 目录粒度：5 员 SCC `{modules/cockpit, modules/cockpit/cards, modules/cockpit/hooks, modules/cockpit/workspace, modules/project-workspace}`。
+- 模块粒度：2 员 SCC `{modules/cockpit, modules/project-workspace}`。
+- 逐边复核：闭合该模块环的 cockpit 侧边**只有一条**——`cards → project-workspace`，即 `CockpitCardList.tsx` 里的 `useOptionalProjectMainState`；反方向 `project-workspace → cockpit` 是 3 条（`CockpitColumnProvider` / `CockpitHeaderButton` / `CockpitColumnRegion` 走 `@/modules/cockpit` barrel）。
+
+处置（修掉模块级环，目录组按收缩重钉）：
+- 把 `useOptionalProjectMainState` 这条**闭合边**的接缝搬到共享层 `src/shared/context/OptimisticSessionContext.tsx`：`ProjectsStateProvider` 提供 `{projects, registerOptimisticSession}`，cockpit 的 cards 列表用 `useOptionalOptimisticSession()` 可选读取。cockpit 不再 import `@/modules/project-workspace`，于是 `project-workspace → cockpit` 成为单向依赖。
+- 结果：模块 SCC `{cockpit, project-workspace}` **消失**（`moduleSccGroups` 置空）；目录 SCC 的 cockpit 组由 5 员收缩为 4 员（`project-workspace` 出组）。两个 pin 同一次改动同时下调（in-file 常量 + committed JSON），baseline 的 provenance 计数重测为 files 768 / staticFileEdges 2762 / nodeCount 144。
+- 对 requested action 中「把 `cockpitCardDescriptors`/`cockpitView`/`cockpitIntent`/`cockpitEntry`/`cockpitColumnController`/`cockpitCardController` 搬进 sink 子包」的有意取舍（理由可核）：这六个是 **cockpit 内部**的消费关系，搬动不改变任何一条跨模块边，也不参与闭合该模块环的那条边；盲搬只会扩大 diff，并把 `cockpitView → @/modules/quay`、`cockpitIntent → @/modules/chat`、`cockpitCardController → cards/*` 这些**特征模块出边**带进叶子契约，反而违反 `frontend-import-cycle-budget.test.ts` 对 `modules/cockpit-contract` 的零出边断言。真正闭合 `{cockpit, project-workspace}` 环的就是 `cards → project-workspace` 那一条，已切断。
+- 残余（已有机制在管，失败在哪一步）：收缩后的 4 员目录组 `{cockpit, cockpit/cards, cockpit/hooks, cockpit/workspace}` 是 cockpit 模块**自身**的 root-barrel ↔ 子目录 web（barrel 再导出子目录组件，子目录组件又 import 根目录组件）；要整体拆掉需要成对搬迁 React 组件（另一项更大的结构任务）。当前由 `frontend-import-cycle-budget.test.ts` 逐成员钉死、只许收缩——任何让该组新增成员、或让 `modules/cockpit-contract` 长出出边的 import，都会在 `assertCycleBudget` / `assertModuleSccBudget` / 叶子断言处红。
+
+实跑读数（本 worktree）：
+- `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/frontend-import-cycle-budget.test.ts` → tests 12 / pass 12 / fail 0（4 员目录 pin + 空模块 pin 绿）。
+- `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` → 6/6；`cloudpit-goal-exit-gate.test.ts` → 3/3。
+- `npx vitest run`（cockpit 卡片 6 文件 + project-workspace 15 文件）→ 40 + 94 全绿。
+- `npx tsc --noEmit -p tsconfig.json` 与 `npx tsc --noEmit -p server/tsconfig.json` → 均 exit 0；`npx oxlint <changed files>` → exit 0（仅既有 warning）。
+
+- L_G archguard: directory_scc_groups=4 cockpit_directory_group_members=4 module_scc_groups=0
+
 ## AC
-- [ ] `.quay/routine-findings.jsonl` 中 finding `cycle-cockpit-cluster-project-workspace`（routine `architecture-analysis`，runId `architecture-analysis-1795081962018`）所描述的问题被复核并处置
-- [ ] 处置结论可核：要么修掉，要么写明「已有机制在管、失败在哪一步」，⛔ 不以「已注意到」结案
+- [x] `.quay/routine-findings.jsonl` 中 finding `cycle-cockpit-cluster-project-workspace`（routine `architecture-analysis`，runId `architecture-analysis-1795081962018`）所描述的问题被复核并处置
+- [x] 处置结论可核：要么修掉，要么写明「已有机制在管、失败在哪一步」，⛔ 不以「已注意到」结案
 
 ## DoD
-- [ ] 上面的判据实跑通过
-- [ ] ⛔ 探针只立案不执行：本任务若需要跑产出者/修复，由派发链执行，⛔ 不由例程代跑
+- [x] 上面的判据实跑通过
+- [x] ⛔ 探针只立案不执行：本任务若需要跑产出者/修复，由派发链执行，⛔ 不由例程代跑
 
 ## Touches
 - `src/modules/cockpit/index.ts`
@@ -63,4 +84,9 @@ Extract the cluster's leaf contract modules (cockpitCardDescriptors, cockpitView
 - `src/modules/project-workspace/ProjectWorkspaceShell.tsx`
 - `src/modules/project-workspace/WorkspaceHeader.tsx`
 - `src/modules/project-workspace/WorkspaceMain.tsx`
+- `src/shared/context/OptimisticSessionContext.tsx` (new)
+- `src/modules/project-workspace/context/ProjectsStateContext.tsx`
+- `src/modules/project-workspace/index.ts`
+- `server/shared/tests/frontend-import-cycle-budget.test.ts`
+- `server/shared/tests/frontend-import-cycle-budget.baseline.json`
 - `tasks/gap-routine-architecture-analysis-cycle-cockpit-cluster-project-workspace.md`
