@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-dup-settings-source-factory-pair
 title: "architecture-analysis: archguard --duplicates (loose threshold) top
   group: 28-line, 162-token copy-paste factory; bodies are identical except the
   createSettingsBlockSource block st"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
