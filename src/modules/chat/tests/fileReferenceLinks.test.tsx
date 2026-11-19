@@ -18,7 +18,7 @@ vi.mock('@/modules/command-palette', () => ({
   usePaletteOps: () => ({ openFileInEditor, openDirectory }),
 }));
 
-const { Markdown } = await import('@/modules/chat/transcript/Markdown');
+const { Markdown } = await import('@/modules/chat/ui/Markdown');
 
 const clickReference = (markdown: string, linkText: string) => {
   openFileInEditor.mockReset();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { render } from '@testing-library/react';
 import { test, vi } from 'vitest';
 
-import { Markdown } from '@/modules/chat/transcript/Markdown';
+import { Markdown } from '@/modules/chat/ui/Markdown';
 import StreamingMarkdown from '@/modules/chat/transcript/StreamingMarkdown';
 // Type-only, so it is erased before vi.mock's hoisted factory runs.
 import type { StreamingMarkdownUtils } from '@/modules/chat-transcript';

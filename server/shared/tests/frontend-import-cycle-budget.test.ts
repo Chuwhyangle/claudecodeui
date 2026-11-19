@@ -17,6 +17,12 @@
  * into the `render/`, `layout/` and `dom/` leaves, leaving the root as the barrel. The former
  * `architecture <-> architecture/hooks` dependency now runs root -> hooks -> dom, so that group
  * was re-measured and LOWERED out of the pin; no new group or member appeared.
+ * RE-READ 2026-11-19 (task gap-routine-architecture-analysis-cycle-chat-tools-transcript): the
+ * Markdown and Queue primitives moved out of `chat/transcript` and `chat/tools` into the new
+ * `chat/ui` leaf package. `chat/tools` and `chat/tools/ContentRenderers` now import that leaf
+ * instead of reaching across to `chat/transcript` / `chat/tools`, so the
+ * tools <-> ContentRenderers <-> transcript group was measured again and LOWERED out; no new
+ * group or member appeared (the module-level reading is unchanged).
  * The backend already had AC-394's directory budget, but `src` had no cycle criterion and
  * `.oxlintrc.json` enables no `import/no-cycle`, so those five could widen unmeasured.
  *
@@ -90,7 +96,9 @@ const BASELINE_PATH = path.join(TEST_DIR, 'frontend-import-cycle-budget.baseline
  * one (a cycle closed by a port/leaf extraction) is a deliberate edit here and in the JSON.
  */
 const CYCLE_GROUPS: readonly string[][] = [
-  ['modules/chat/tools', 'modules/chat/tools/ContentRenderers', 'modules/chat/transcript'],
+  // Lowered 2026-11-19 (cycle-chat-tools-transcript): Markdown and Queue now live in the
+  // `chat/ui` leaf package, so tools/ContentRenderers no longer reach back into tools/ or
+  // transcript/ and this three-directory group no longer exists.
   // Re-read after the cockpit god-package split (2026-11-02): the card, workspace and hooks
   // directories share one dependency web with the root barrel and project-workspace.
   ['modules/cockpit', 'modules/cockpit/cards', 'modules/cockpit/hooks', 'modules/cockpit/workspace', 'modules/project-workspace'],
