@@ -26,21 +26,17 @@
  * Consumers: `session-digest-llm.ts` (through the process-wide source it builds) and the tier
  * criterion in `tests/session-digest-llm.test.ts`, which drives the reader over files it owns.
  */
-import os from 'node:os';
-
 import type { LlmAuthScheme, LlmProtocolName } from '@/modules/llm-gateway/index.js';
 import {
   createReplySuggestionsSettingsSource,
   type ReplySuggestionsSettingsSource,
 } from '@/modules/reply-suggestions/index.js';
 import {
-  createSettingsBlockSource,
-  defaultServerSettingsPath,
+  createServerSettingsSource,
   readBoolean,
   readInteger,
   readString,
   resolveApiKey,
-  resolveSettingsPath,
   type SettingsBlockContext,
 } from '@/shared/settings-file.js';
 
@@ -186,14 +182,24 @@ function buildReading(
   return settings;
 }
 
+/** The collaborators every reading merges underneath the block. */
+type SessionDigestLlmSourceDependencies = {
+  /** The home `~` in an `apiKeyFile` expands against. */
+  homeDir: string;
+  /** The reply-suggestions reader whose gateway and key this tier falls back to. */
+  replySource: ReplySuggestionsSettingsSource;
+};
+
 /**
  * Builds a stateful reader over the server settings file.
  *
  * `settingsPath` follows the same resolution order as the boot loader: an explicit path, then
- * `SERVER_SETTINGS_PATH`, then `~/.config/claudecodeui/server.settings.json`. `replySource` is
+ * `SERVER_SETTINGS_PATH`, then `~/.config/cloudpit/server.settings.json`. `replySource` is
  * injectable so a criterion can supply the gateway without touching the operator's files.
+ * The file mechanics and the block selection are shared (`createServerSettingsSource`); this
+ * declaration names only the two things that are this tier's own — the block and the gateway.
  *
- * Consumers: `session-digest-llm.ts` and the tier criterion.
+ * Consumers: `session-digest-llm.ts`, the session-ask decision readers and the tier criterion.
  */
 export function createSessionDigestLlmSettingsSource(
   options: {
@@ -204,22 +210,17 @@ export function createSessionDigestLlmSettingsSource(
     replySource?: ReplySuggestionsSettingsSource;
   } = {},
 ): SessionDigestLlmSettingsSource {
-  const env = options.env ?? process.env;
-  const homeDir = options.homeDir ?? os.homedir();
-  const replySource = options.replySource ?? createReplySuggestionsSettingsSource({ homeDir });
-  const { filePath, explicit } = resolveSettingsPath({
-    settingsPath: options.settingsPath,
-    env,
-    envVar: SERVER_SETTINGS_PATH_ENV,
-    homeDir,
-    defaultPath: defaultServerSettingsPath,
-  });
-
-  return createSettingsBlockSource({
-    settingsPath: filePath,
-    homeDir,
+  return createServerSettingsSource<SessionDigestLlmSettings, SessionDigestLlmSourceDependencies>({
     block: 'observation.sessionDigest',
-    explicit,
-    parse: (block, context) => buildReading(block, context, replySource.read(), homeDir),
+    envVar: SERVER_SETTINGS_PATH_ENV,
+    settingsPath: options.settingsPath,
+    env: options.env,
+    homeDir: options.homeDir,
+    dependencies: (homeDir) => ({
+      homeDir,
+      replySource: options.replySource ?? createReplySuggestionsSettingsSource({ homeDir }),
+    }),
+    parse: (block, context, dependencies) =>
+      buildReading(block, context, dependencies.replySource.read(), dependencies.homeDir),
   });
 }
