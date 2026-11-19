@@ -19,7 +19,7 @@ function useQueueItem() {
 
 /* ─── Queue ──────────────────────────────────────────────────────── */
 
-/** Renders a tool's todo list as a progress queue; used by TodoList. */
+/** Renders a tool's todo list as a progress queue; used by chat's TodoList. */
 export const Queue = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div

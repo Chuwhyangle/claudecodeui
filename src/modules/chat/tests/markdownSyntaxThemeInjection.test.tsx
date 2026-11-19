@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test, vi } from 'vitest';
 import { render } from '@testing-library/react';
 
-import { Markdown } from '@/modules/chat/transcript/Markdown';
+import { Markdown } from '@/modules/chat/ui/Markdown';
 
 /**
  * Regression coverage for the `<style id="cc-syntax-theme">` element that
@@ -95,7 +95,7 @@ test('rendering many times does not inject the stylesheet again', () => {
 
 test('re-evaluating the module reuses the stylesheet already in the document', async () => {
   vi.resetModules();
-  await import('@/modules/chat/transcript/Markdown');
+  await import('@/modules/chat/ui/Markdown');
 
   assert.equal(document.querySelectorAll(STYLE_ELEMENT_SELECTOR).length, 1);
 });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { render, waitFor } from '@testing-library/react';
 import { beforeEach, test, vi } from 'vitest';
 
-import { Markdown } from '@/modules/chat/transcript/Markdown';
+import { Markdown } from '@/modules/chat/ui/Markdown';
 import { MarkdownWorkspaceContext } from '@/modules/chat-session';
 
 const readFileBlob = vi.fn();

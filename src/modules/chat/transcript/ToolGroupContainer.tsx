@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, LLMProvider,DiffLine,DiffStats,Project,ToolGroupItem } from '@/shared/types';
-import { getToolConfig } from '@/modules/chat/tools';
+import { getToolConfig } from '@/modules/chat-tool-configs';
 import MessageComponent from '@/modules/chat/transcript/MessageComponent';
 import { useIsExportingTranscript } from '@/modules/chat-session';
 import { DiffStatsBadge } from '@/modules/chat/tools/DiffStatsBadge';

@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-cycle-chat-tools-transcript
 title: "architecture-analysis: Package-level SCC of size 3 (modules/chat/tools,
   modules/chat/tools/ContentRenderers, modules/chat/transcript) over 14 edges:
   tools imports 8 ContentRenderer"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed

@@ -8,7 +8,7 @@ import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/pris
 import { useTranslation } from 'react-i18next';
 
 import { MermaidDiagram } from '@/modules/code-editor';
-import { MarkdownImage } from '@/modules/chat/transcript/MarkdownImage';
+import { MarkdownImage } from '@/modules/chat/ui/MarkdownImage';
 import { normalizeInlineCodeFences } from '@/modules/chat-transcript';
 import { matchReplyItem } from '@/modules/chat-transcript';
 import { buildSyntaxTheme } from '@/modules/chat-transcript';

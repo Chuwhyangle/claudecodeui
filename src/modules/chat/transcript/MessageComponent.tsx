@@ -5,13 +5,20 @@ import type { TFunction } from 'i18next';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, LLMProvider,DiffLine,Project,MessageOrigin } from '@/shared/types';
 import { formatUsageLimitText, stripProposedPlanEnvelope } from '@/modules/chat-transcript';
-import { ToolRenderer, ToolErrorDisplay, SubagentPanel, shouldHideToolResult } from '@/modules/chat/tools';
+// Leaf imports, not the `@/modules/chat/tools` barrel: this file makes exactly
+// three tool widgets and names them individually, so the aggregator barrel (which
+// also re-exports ToolRenderer) is not what it means. `shouldHideToolResult` lives
+// in chat-tool-configs, which is where the barrel took it from.
+import { ToolRenderer } from '@/modules/chat/tools/ToolRenderer';
+import { ToolErrorDisplay } from '@/modules/chat/tools/ToolErrorDisplay';
+import { SubagentPanel } from '@/modules/chat/tools/SubagentPanel';
+import { shouldHideToolResult } from '@/modules/chat-tool-configs';
 import { useTaskByToolUseId } from '@/modules/chat-session';
 import { LLMProviderLogo } from '@/shared/ui';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/modules/chat/transcript/Reasoning';
 import ChatMessageImages from '@/modules/chat/transcript/ChatMessageImages';
 import ChatMessageFiles from '@/modules/chat/transcript/ChatMessageFiles';
-import { Markdown } from '@/modules/chat/transcript/Markdown';
+import { Markdown } from '@/modules/chat/ui/Markdown';
 import StreamingMarkdown from '@/modules/chat/transcript/StreamingMarkdown';
 import MessageCopyControl from '@/modules/chat/transcript/MessageCopyControl';
 import MessageSpeakControl from '@/modules/chat/transcript/MessageSpeakControl';
