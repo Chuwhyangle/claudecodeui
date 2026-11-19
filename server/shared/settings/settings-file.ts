@@ -652,3 +652,75 @@ export function createSettingsBlockSource<T>(
     },
   };
 }
+
+// ---------------------------- SERVER SETTINGS SOURCES ----------------------------
+
+/**
+ * What {@link createServerSettingsSource} needs.
+ *
+ * `T` is the reading the caller's `parse` callback returns; `D` is the bag of per-source
+ * collaborators the callback needs (for the reply-suggestions-backed blocks, the gateway
+ * reader and the home `~` expands against). The bag is built ONCE, against the effective
+ * home, and handed to every `read()`.
+ */
+export type ServerSettingsSourceOptions<T, D> = {
+  /** Dotted path of the block inside the server settings document (`cockpit.counterVoice`). */
+  block: string;
+  /** The environment variable naming the file (`SERVER_SETTINGS_PATH`). */
+  envVar: string;
+  /** `undefined` = env-or-default, `null` = no file at all, a string = explicitly named. */
+  settingsPath?: string | null;
+  /** The environment to read `envVar` from; defaults to `process.env`. */
+  env?: Record<string, string | undefined>;
+  /** The home `~` expands against; defaults to the process home. */
+  homeDir?: string;
+  /** The filesystem seam; defaults to `node:fs`. */
+  fsImpl?: SettingsFileFs;
+  /** Build the per-source collaborators once, against the effective home. */
+  dependencies: (homeDir: string) => D;
+  /** Build one reading from the block, the read context and the collaborators. */
+  parse: (block: Record<string, unknown> | null, context: SettingsBlockContext, dependencies: D) => T;
+};
+
+/**
+ * Build a stateful reader for ONE block of the server settings file.
+ *
+ * WHY THIS EXISTS. The observation digest and counter-voice readers carried the same
+ * 28-line factory: default `env`/`homeDir`, default the reply-suggestions source, resolve
+ * the file through {@link resolveSettingsPath}, then wrap it in
+ * {@link createSettingsBlockSource}. Only the block path, the reading type and the
+ * collaborators differed. The mechanics live here once; each module keeps its shipped
+ * defaults, its reading type, its `parse` and a thin declaration of the two things that
+ * are actually its own (block path and gateway dependency).
+ *
+ * The file resolution order is the boot loader's: an explicit path, then `envVar`, then
+ * `defaultServerSettingsPath`. A missing default file stays the ordinary "feature off"
+ * state; a missing explicitly named file is named in `problems` (see
+ * {@link createSettingsBlockSource}).
+ *
+ * Consumers: `modules/observation/core/session-digest-llm-settings.ts` and
+ * `modules/quay/counter-voice-settings.ts`.
+ */
+export function createServerSettingsSource<T, D>(
+  options: ServerSettingsSourceOptions<T, D>,
+): SettingsBlockSource<T> {
+  const env = options.env ?? process.env;
+  const homeDir = options.homeDir ?? os.homedir();
+  const dependencies = options.dependencies(homeDir);
+  const { filePath, explicit } = resolveSettingsPath({
+    settingsPath: options.settingsPath,
+    env,
+    envVar: options.envVar,
+    homeDir,
+    defaultPath: defaultServerSettingsPath,
+  });
+
+  return createSettingsBlockSource({
+    settingsPath: filePath,
+    homeDir,
+    block: options.block,
+    explicit,
+    fsImpl: options.fsImpl,
+    parse: (block, context) => options.parse(block, context, dependencies),
+  });
+}
