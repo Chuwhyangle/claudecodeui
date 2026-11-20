@@ -1,7 +1,7 @@
 ---
 id: gap-resident-pending-capped-text-not-retired
 title: resident 待发行 cap 文本永不退休：>400 字消息在会话开头重复一条截断 user 气泡（MCP 创建的 resident 会话）
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -151,12 +151,3 @@ cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run \
 ## 验证记录
 
 该轴仍暗,理由:本任务只改 resident 待发行的退休判据（严格相等→前缀）与判据用例，未新增模块/依赖、未改服务端 cap 或快照形状，未做架构度量。
-
-## Blocker
-
-**2026-11-20T12:17:27.515Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/shared/tests/architecture-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: ratchet: oversizeFiles src/modules/chat-session/hooks/useSessionStore.ts 2335→2358 — 基线内读数不得上调（此基线只允许下降） [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/architecture-ratchet.test.ts,server/shared/tests/architecture-ratchet.test.ts changed=src/modules/architecture/tests/architectureTab.test.tsx]
-- run_id：wk-prod-anchor
-- session_id：316b1ef7-3618-4cd9-b28a-7a52f40e4afa
-- 后续：本条两条红均已在续做轮处理——ratchet 压回 2335（单跑 6/6 绿）；architectureTab 夹具时间炸弹改为滚动值（129/129 绿）。见 Evidence「续做轮 2026-11-20」。
