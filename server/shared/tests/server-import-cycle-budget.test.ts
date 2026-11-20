@@ -969,22 +969,112 @@ test('(g) pulling a real out-of-cycle directory into a real cycle reds (b); the 
 });
 
 // ---------------------------------------------------------------------------
-// (j) the file-level companion reading: no cycle inside one package
+// (j) the file-level companion reading over the WHOLE server tree
 // ---------------------------------------------------------------------------
 
 /**
- * `cycle-mcp-gateway-intra-package-scc` (routine `architecture-analysis`): the
- * directory-level ratchet above cannot see a cycle whose members all live in ONE
- * package, and `server/modules/mcp-gateway` carried a 23-file one. Proposal
- * `docs/proposals/mcp-gateway-tool-architecture.md` stage 2 inverted the
- * aggregation edges; this case is the committed reading that keeps them
- * inverted, so the same cycle cannot return unobserved.
+ * `cycle-mcp-gateway-intra-package-scc` (routine `architecture-analysis`) was the
+ * first reason this reading existed: the directory-level ratchet above cannot see a
+ * cycle whose members all live in ONE package, and `server/modules/mcp-gateway`
+ * carried a 23-file one. Proposal `docs/proposals/mcp-gateway-tool-architecture.md`
+ * stage 2 inverted the aggregation edges; the package must stay cycle-free.
  *
- * The synthetic pair first proves the scanner DISCRIMINATES (a two-file cycle is
- * reported), then the real package must report no component larger than one
- * file, with a non-vacuity floor on the edges it actually resolved.
+ * THE PIN USED TO COVER ONLY THAT ONE PACKAGE. That is the gap finding
+ * `file-scc-pin-scope-covers-2-of-14-directories` (routine `architecture-analysis`,
+ * runId `architecture-analysis-1795175197228`) named: the shipped scanner reads 687
+ * server files / 2310 resolved edges / EIGHT non-trivial file SCCs on this tree, and
+ * the package-scoped pin saw NONE of them. The 15-file
+ * `modules/voice-realtime/connection` cluster, the 8-file
+ * `modules/providers/list/claude/lifecycle` cluster, the reply-suggestions trio, the
+ * `server/shared/types` trio and four two-file pairs were all read by no gate, so a
+ * NEW cycle anywhere outside `modules/mcp-gateway` red nothing.
+ *
+ * The reading is now the whole `server/` tree and the eight SCCs measured when the
+ * scope was widened are committed below as a SHRINK-ONLY baseline: every measured
+ * component must be CONTAINED IN ONE baseline group, so a new member, two merged
+ * groups or a brand-new cycle reds on the commit that introduces it, while closing a
+ * cycle (or removing a member) stays green and needs no edit. That containment check
+ * is the SAME one AC (b) applies to the directory groups — one mechanism, two
+ * granularities — so file and directory readings cannot drift apart. THE BASELINE IS
+ * NEVER RAISED to accommodate a red reading; find the import that closed the loop.
+ *
+ * A directory cycle and a file cycle are different questions: on this same tree the
+ * DIRECTORY graph reports `sccs=[]` (the (b) reading), so every component below is
+ * invisible to it — which is exactly why this second reading has to exist.
+ *
+ * Readings measured on this tree (2026-11-20, TypeScript compiler API, the scanner in
+ * `server/shared/imports/import-graph.ts`):
+ *
+ *   files=687 resolvedEdges=2310 nonTrivialFileSccs=8
+ *   component sizes: 15 / 8 / 3 / 3 / 2 / 2 / 2 / 2
  */
-test('(j) server/modules/mcp-gateway has no file-level import cycle', () => {
+const SERVER_FILE_SCC_BASELINE: readonly string[][] = [
+  [
+    'modules/voice-realtime/connection/voice-realtime-connection-frames.ts',
+    'modules/voice-realtime/connection/voice-realtime-connection-transport.ts',
+    'modules/voice-realtime/connection/voice-realtime-connection-turn.ts',
+    'modules/voice-realtime/connection/voice-realtime-contract.ts',
+    'modules/voice-realtime/connection/voice-realtime-exec-status.ts',
+    'modules/voice-realtime/connection/voice-realtime-frame-handlers.ts',
+    'modules/voice-realtime/connection/voice-realtime-frame-registry.ts',
+    'modules/voice-realtime/connection/voice-realtime-instructions.ts',
+    'modules/voice-realtime/connection/voice-realtime-narrator-queue.ts',
+    'modules/voice-realtime/connection/voice-realtime-narrator.ts',
+    'modules/voice-realtime/connection/voice-realtime-settings.ts',
+    'modules/voice-realtime/connection/voice-realtime-transport-errors.ts',
+    'modules/voice-realtime/connection/voice-realtime-trunk-step-handlers.ts',
+    'modules/voice-realtime/connection/voice-realtime-trunk-steps.ts',
+    'modules/voice-realtime/connection/voice-realtime-ws-proxy.service.ts',
+  ],
+  [
+    'modules/providers/list/claude/lifecycle/claude-resident-outcome-handlers.ts',
+    'modules/providers/list/claude/lifecycle/claude-resident-outcome-registry.ts',
+    'modules/providers/list/claude/lifecycle/resident-host.types.ts',
+    'modules/providers/list/claude/lifecycle/resident-launch.ts',
+    'modules/providers/list/claude/lifecycle/resident-ledger-runtime.ts',
+    'modules/providers/list/claude/lifecycle/resident-process.types.ts',
+    'modules/providers/list/claude/lifecycle/resident-settings.ts',
+    'modules/providers/list/claude/lifecycle/resident-turn.types.ts',
+  ],
+  [
+    'modules/reply-suggestions/reply-suggestions-draw.ts',
+    'modules/reply-suggestions/reply-suggestions-usage-log.ts',
+    'modules/reply-suggestions/reply-suggestions.service.ts',
+  ],
+  ['shared/types/claude-events.ts', 'shared/types/cli-session.ts', 'shared/types/provider-launch.ts'],
+  [
+    'modules/providers/list/claude/claude-host-driver.provider.ts',
+    'modules/providers/list/claude/claude-resident-lifecycle-outcome-handlers.ts',
+  ],
+  ['modules/session-hosts/resident-host.service.ts', 'modules/session-hosts/session-hosts.routes.ts'],
+  [
+    'modules/websocket/services/activity-heartbeat.service.ts',
+    'modules/websocket/services/activity-protocol.service.ts',
+  ],
+  [
+    'modules/websocket/services/chat-control.service.ts',
+    'modules/websocket/services/chat-websocket.service.ts',
+  ],
+];
+
+/**
+ * (j)'s non-vacuity floors. The merged tree carries 687 files and 2310 resolved
+ * file-level edges (2026-11-20); the floors sit far below so only a collapsed walk —
+ * which would satisfy a containment check for the wrong reason — trips them.
+ */
+const MIN_FILE_GRAPH_FILES = 600;
+const MIN_FILE_GRAPH_EDGES = 2_000;
+
+/**
+ * The reading (j) is about. The synthetic fixtures first prove the scanner
+ * DISCRIMINATES and that the WIDENING is load-bearing — a cycle planted outside the old
+ * `modules/mcp-gateway` slice is invisible to the package-scoped scan and reported by
+ * the whole-tree one — then the real tree must stay inside the committed baseline. The
+ * `modules/mcp-gateway` guarantee that motivated this reading is kept as a stronger
+ * sub-assertion: no baseline group names a gateway file, so ANY component containing
+ * one reds, whatever it is fenced with.
+ */
+test('(j) the whole server tree carries no file-level import cycle outside the committed baseline', () => {
   const cyclicFixture = scanFileImportGraph([
     { path: 'pkg/a.ts', text: "import { b } from './b.js';\nexport const a = 1;\n" },
     { path: 'pkg/b.ts', text: "import { a } from './a.js';\nexport const b = 2;\n" },
@@ -997,12 +1087,78 @@ test('(j) server/modules/mcp-gateway has no file-level import cycle', () => {
   ]);
   assert.deepEqual(acyclicFixture.nonTrivialSccs, [], 'a one-way import is not a cycle');
 
+  // ── the widening is load-bearing, proven on a synthetic tree ──────────────────
+  // The OLD pin scanned `modules/mcp-gateway/**` alone. A cycle planted in another
+  // package was invisible to it, which is the gap this case closes: the same planted
+  // tree must be MISSED by the slice and REPORTED by the whole-tree reading.
+  const plantedOutsideTheOldSlice: SourceFile[] = [
+    { path: 'modules/somewhere/a.ts', text: "import './b.js';\n" },
+    { path: 'modules/somewhere/b.ts', text: "import './a.js';\n" },
+  ];
+  const oldSlice = scanFileImportGraph(
+    plantedOutsideTheOldSlice.filter((source) => source.path.startsWith('modules/mcp-gateway/')),
+    { includeDynamic: true },
+  );
+  assert.deepEqual(
+    oldSlice.nonTrivialSccs,
+    [],
+    'the OLD package-scoped pin cannot see a cycle outside modules/mcp-gateway — that blindness is the gap this case closes',
+  );
+  const wholeFixture = scanFileImportGraph(plantedOutsideTheOldSlice, { includeDynamic: true });
+  console.log(`(j) whole-tree fixture sccs=${JSON.stringify(wholeFixture.nonTrivialSccs)}`);
+  assert.deepEqual(
+    wholeFixture.nonTrivialSccs,
+    [['modules/somewhere/a.ts', 'modules/somewhere/b.ts']],
+    'the whole-tree file reading must report the planted cycle the slice could not see',
+  );
+  const plantedViolations = cycleViolations(wholeFixture.nonTrivialSccs, SERVER_FILE_SCC_BASELINE, 'file-fixture');
+  console.log(`(j) planted-outside-old-slice violations: ${JSON.stringify(plantedViolations)}`);
+  assert.ok(plantedViolations.length > 0, 'a file cycle outside the baseline must red the containment check the real tree uses');
+  assert.ok(
+    plantedViolations.some((message) => message.includes('modules/somewhere')),
+    'the red must name the files that joined the cycle',
+  );
+
+  // The OTHER direction, which is what "shrink-only" means: a component that closed a cycle
+  // (here: the first two members of a baseline trio, still mutually cyclic) is a strict subset
+  // of its baseline group and must NOT red. The pin allows closing a cycle without editing it.
+  const shrunk = SERVER_FILE_SCC_BASELINE[2].slice(0, 2);
+  assert.deepEqual(
+    cycleViolations([shrunk], SERVER_FILE_SCC_BASELINE, 'shrink-control'),
+    [],
+    'a file SCC that shrank into a baseline group is the sanctioned direction and must stay green',
+  );
+
+  // ── the real tree ────────────────────────────────────────────────────────────
+  const sources = sourcesOnce();
+  const fileGraph = scanFileImportGraph(sources, { includeDynamic: true });
+  console.log(
+    `(j) server file graph files=${fileGraph.files} resolvedEdges=${fileGraph.fileEdges.length} ` +
+      `sccs=${JSON.stringify(fileGraph.nonTrivialSccs.map((component) => component.length))}`,
+  );
+  for (const component of fileGraph.nonTrivialSccs) {
+    console.log(`(j) file SCC[${component.length}] ${component.map(repoRelative).join(', ')}`);
+  }
+
+  // A walk that matched nothing would satisfy "nothing outside the baseline" vacuously.
+  assert.ok(fileGraph.files >= MIN_FILE_GRAPH_FILES, `the file scan read ${fileGraph.files} files (< ${MIN_FILE_GRAPH_FILES}) — a collapsed walk is not a clean one`);
+  assert.ok(
+    fileGraph.fileEdges.length >= MIN_FILE_GRAPH_EDGES,
+    `the file scan resolved ${fileGraph.fileEdges.length} edges (< ${MIN_FILE_GRAPH_EDGES}) — the graph is not being read`,
+  );
+
+  const violations = cycleViolations(fileGraph.nonTrivialSccs, SERVER_FILE_SCC_BASELINE, 'whole server tree');
+  assert.deepEqual(violations, [], violations.join('\n'));
+
+  // The guarantee the original package-scoped pin existed for. No baseline group names a
+  // gateway file, so a component containing one reds above as well; this assertion keeps
+  // the narrowed, actionable message for that package.
   const PACKAGE_PREFIX = 'modules/mcp-gateway/';
-  const packageSources = sourcesOnce().filter((source) => source.path.startsWith(PACKAGE_PREFIX));
+  const packageSources = sources.filter((source) => source.path.startsWith(PACKAGE_PREFIX));
   assert.ok(packageSources.length >= 40, `the scan must read the package's sources, found ${packageSources.length}`);
-  const fileGraph = scanFileImportGraph(packageSources, { includeDynamic: true });
   const intraPackageEdges = fileGraph.fileEdges.filter((edge) => edge.from.startsWith(PACKAGE_PREFIX) && edge.to.startsWith(PACKAGE_PREFIX));
-  console.log(`[file-scc] files=${fileGraph.files} intraPackageEdges=${intraPackageEdges.length} sccs=${JSON.stringify(fileGraph.nonTrivialSccs)}`);
+  console.log(`(j) mcp-gateway files=${packageSources.length} intraPackageEdges=${intraPackageEdges.length}`);
   assert.ok(intraPackageEdges.length >= 10, `non-vacuity: the package must really import its own files, saw ${intraPackageEdges.length}`);
-  assert.deepEqual(fileGraph.nonTrivialSccs, [], 'no file in server/modules/mcp-gateway may sit in an intra-package import cycle');
+  const gatewayComponents = fileGraph.nonTrivialSccs.filter((component) => component.some((member) => member.startsWith(PACKAGE_PREFIX)));
+  assert.deepEqual(gatewayComponents, [], 'no file in server/modules/mcp-gateway may sit in an import cycle');
 });
