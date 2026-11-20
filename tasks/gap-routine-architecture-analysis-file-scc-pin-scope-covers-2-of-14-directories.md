@@ -101,3 +101,11 @@ Widen both file-level pins from their two slices to the whole tree and commit th
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `server/shared/tests/frontend-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-file-scc-pin-scope-covers-2-of-14-directories.md`
+
+## Blocker
+
+**2026-11-20T12:07:12.301Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: the analysis time is a relative reading [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/architectureTab.test.tsx]
+- run_id：wk-prod-anchor
+- session_id：0b187f38-dce2-429b-aafa-daef6db6a05a
