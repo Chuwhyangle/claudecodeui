@@ -90,11 +90,3 @@ Extract the primitive types (ChatRunSource / CommandLifecycleState / HostMode) i
 ADR-007 暗轴记录：
 
 - L_G import-graph: sccs=0（server/shared/types files=18 intraPackageEdges=31；whole server files=688 staticEdges=2780）
-
-## Blocker
-
-**2026-11-20T12:12:19.947Z — worker 未落地（exited-not-landed）** —— 已解除，见上「本轮续跑」小节。
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: the analysis time is a relative reading [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/architectureTab.test.tsx]
-- run_id：wk-prod-anchor
-- session_id：9de8d21d-fcc2-4af2-ae8a-b919035407c7
