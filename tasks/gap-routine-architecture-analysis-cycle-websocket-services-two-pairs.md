@@ -57,13 +57,20 @@ Extract the frame/port types each side needs into a leaf `activity-protocol.cont
 - 图钉：`server/shared/tests/server-import-cycle-budget.test.ts` 新增 case `(k) server/modules/websocket has no file-level import cycle` —— 先跑合成双向/单向夹具证明判别力，再断言真实包 `nonTrivialSccs=[]`，并带包内边非真空下限。
 - 随代码搬家的兄弟判据：`server/shared/tests/resident-run-is-turn-single-reader.test.ts` 的第三个消费者改指 `chat-run-dispatch.service.ts`；`server/modules/voice/tests/voice-lexicon.test.ts` 的唯一录制调用点改为同一路径（仍恰好一处）。
 
-实跑验证：
+实跑验证（首轮）：
 
 - `tsc --noEmit -p server/tsconfig.json` → exit 0。
 - `server/modules/websocket/tests/*.test.ts` → 153 pass / 0 fail（含 activity-protocol、activity-deliveries-snapshot、activity-heartbeat.process、chat-control-*、chat-attachment-filter）。
 - `server-import-cycle-budget.test.ts` + `resident-run-is-turn-single-reader.test.ts` + `activity-protocol.test.ts` + `chat-control-wiring.test.ts` → 25 pass / 0 fail；case (k) 打印 `websocket files=25 intraPackageEdges=56 sccs=[]`。
 - `mcp-gateway-wiring` / `production-wiring` / `claude-resident-control-queue` / `scheduled-messages` → 24 pass / 0 fail（覆盖控制服务的真实 dispatch 路径）。
 - `voice-lexicon` + `mcp-english-only` + `resident-legacy-path-ratchet` + `architecture-ratchet` → 通过（architecture-ratchet 五维全绿；新文件均 <800 行，无模块级可变状态）。
+
+续做复核（2026-11-20，合入 develop 后）：
+
+- 上一轮 suite 的唯一非基线红 `src/modules/architecture/tests/architectureTab.test.tsx: the analysis time is a relative reading` **不是本任务的 delta**：该文件的固定夹具 `GENERATED_AT='2026-10-20…'` 在 2026-11-20 跨过格式化器的 30 天月界，相对读数变成 `last month`，属 develop 全域时间炸弹；develop 已在 `2ae15aa53`（20:31 +0800，晚于上一轮 suite）改为滚动夹具（`now - 2d`）。本轮 merge develop 后已带进来。
+- 合入后单跑：`architectureTab.test.tsx` → 129 pass / 0 fail。
+- 合入后复验本任务判据：`tsc --noEmit -p server/tsconfig.json` → exit 0；`server-import-cycle-budget.test.ts` + `resident-run-is-turn-single-reader.test.ts` + `voice-lexicon.test.ts` → 26 pass / 0 fail，case (k) 仍打印 `[file-scc] websocket files=25 intraPackageEdges=56 sccs=[]`；`server/modules/websocket/tests/*.test.ts` → 153 pass / 0 fail。
+- 同轮另一条红 `server/modules/providers/tests/provider-models.service.test.ts`（打包 CLI 账户模型目录 8 vs 预置 10）为 develop 既有红（`.quay/develop-red-set.json` 已列），不在本任务 delta 内。
 
 ADR-007 暗轴记录：
 
@@ -86,11 +93,3 @@ ADR-007 暗轴记录：
 - `server/shared/tests/resident-run-is-turn-single-reader.test.ts`
 - `server/modules/voice/tests/voice-lexicon.test.ts`
 - `tasks/gap-routine-architecture-analysis-cycle-websocket-services-two-pairs.md`
-
-## Blocker
-
-**2026-11-20T12:22:43.935Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: the analysis time is a relative reading [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/architectureTab.test.tsx]
-- run_id：wk-prod-anchor
-- session_id：a7c1f363-73ed-4a54-9bcf-fca662629859
