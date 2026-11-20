@@ -403,7 +403,10 @@ test('the recording hook is called from exactly one place outside the tests', ()
   const callSites = output.split('\n').filter((line) => line.trim() !== '');
   assert.deepEqual(
     callSites.map((line) => path.relative(REPO_ROOT, line.split(':')[0])),
-    ['server/modules/websocket/services/chat-websocket.service.ts'],
+    // The dispatch funnel moved out of the WebSocket transport into its own leaf
+    // (`cycle-websocket-services-two-pairs`); the recording hook still has exactly
+    // one production call site, now in that leaf.
+    ['server/modules/websocket/services/chat-run-dispatch.service.ts'],
     `the send hook must have one call site, got:\n${output}`,
   );
 });

@@ -1006,3 +1006,54 @@ test('(j) server/modules/mcp-gateway has no file-level import cycle', () => {
   assert.ok(intraPackageEdges.length >= 10, `non-vacuity: the package must really import its own files, saw ${intraPackageEdges.length}`);
   assert.deepEqual(fileGraph.nonTrivialSccs, [], 'no file in server/modules/mcp-gateway may sit in an intra-package import cycle');
 });
+
+// ---------------------------------------------------------------------------
+// (k) the websocket services package: its two 2-file SCCs stay broken
+// ---------------------------------------------------------------------------
+
+/**
+ * `cycle-websocket-services-two-pairs` (routine `architecture-analysis`, runId
+ * `architecture-analysis-1795175197228`): one 20-file package carried TWO
+ * independent two-file cycles —
+ *
+ *   - `activity-heartbeat.service.ts` ⇄ `activity-protocol.service.ts`
+ *     (`readActivityRevision` one way, `BOOT_ID` the other), and
+ *   - `chat-control.service.ts` ⇄ `chat-websocket.service.ts`
+ *     (`assertSessionAccess` / `dispatchRun` / `ProviderRuntimeGateway` into the
+ *     transport, `createChatControlService` back out).
+ *
+ * Both were broken by extracting the shared values and port types into leaf
+ * contracts (`activity-protocol.contract.ts`, `chat-control.contract.ts`) plus
+ * the behaviour leaves the control service needed
+ * (`chat-run-dispatch.service.ts`, `chat-attachment-filter.service.ts`,
+ * `websocket-protocol-error.ts`), so each direction is one-way. This case is
+ * the committed reading that keeps it that way.
+ *
+ * The synthetic pair proves the scanner DISCRIMINATES in this run (a two-file
+ * cycle is reported, a one-way import is not) before the real package is
+ * asserted cycle-free; the non-vacuity floor proves the package's own edges
+ * were really resolved.
+ */
+test('(k) server/modules/websocket has no file-level import cycle', () => {
+  const cyclicFixture = scanFileImportGraph([
+    { path: 'pkg/a.ts', text: "import { b } from './b.js';\nexport const a = 1;\n" },
+    { path: 'pkg/b.ts', text: "import { a } from './a.js';\nexport const b = 2;\n" },
+  ]);
+  assert.deepEqual(cyclicFixture.nonTrivialSccs, [['pkg/a.ts', 'pkg/b.ts']], 'the file-level scanner must report a two-file cycle');
+
+  const acyclicFixture = scanFileImportGraph([
+    { path: 'pkg/a.ts', text: "import { b } from './b.js';\nexport const a = 1;\n" },
+    { path: 'pkg/b.ts', text: 'export const b = 2;\n' },
+  ]);
+  assert.deepEqual(acyclicFixture.nonTrivialSccs, [], 'a one-way import is not a cycle');
+
+  const PACKAGE_PREFIX = 'modules/websocket/';
+  const packageSources = sourcesOnce().filter((source) => source.path.startsWith(PACKAGE_PREFIX));
+  assert.ok(packageSources.length >= 20, `the scan must read the package's sources, found ${packageSources.length}`);
+  const fileGraph = scanFileImportGraph(packageSources, { includeDynamic: true });
+  const intraPackageEdges = fileGraph.fileEdges.filter((edge) => edge.from.startsWith(PACKAGE_PREFIX) && edge.to.startsWith(PACKAGE_PREFIX));
+  console.log(`[file-scc] websocket files=${fileGraph.files} intraPackageEdges=${intraPackageEdges.length} sccs=${JSON.stringify(fileGraph.nonTrivialSccs)}`);
+  assert.ok(intraPackageEdges.length >= 10, `non-vacuity: the package must really import its own files, saw ${intraPackageEdges.length}`);
+  assert.deepEqual(fileGraph.nonTrivialSccs, [], 'no file in server/modules/websocket may sit in an intra-package import cycle');
+});
+

@@ -1,11 +1,10 @@
-import { randomUUID } from 'node:crypto';
-
 import type { WebSocket } from 'ws';
 
 import {
   readSessionTurn,
   type TurnPhase,
 } from '@/modules/providers/index.js';
+import { BOOT_ID } from '@/modules/websocket/services/activity-protocol.contract.js';
 import { readActivityRevision } from '@/modules/websocket/services/activity-protocol.service.js';
 import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 
@@ -28,21 +27,15 @@ export const ACTIVITY_HEARTBEAT_INTERVAL_MS = 5_000;
 export const ACTIVITY_UNREACHABLE_AFTER_MS = 15_000;
 
 /**
- * The identity of the running process, generated once when this module is
- * loaded.
+ * The process identity both this heartbeat and the activity protocol stamp.
  *
- * A client uses it as "which server am I talking to": the value is stable for
- * the whole life of the process, and a different value means the server was
- * restarted, so every local "in progress" assumption has to be discarded. It is
- * deliberately a module constant and not a per-frame or per-connection value —
- * an id that changed between two frames would report a restart that never
- * happened.
- *
- * Exported because the activity protocol's snapshot carries the same id: the
- * store reads this one constant rather than minting its own, so a heartbeat
- * frame and a snapshot can never disagree about which process produced them.
+ * It now lives in `activity-protocol.contract.ts` — the leaf the two modules
+ * share — so this module never has to read it back out of the protocol module
+ * (that import was half of the `cycle-websocket-services-two-pairs` SCC).
+ * Re-exported here because the run registry and the websocket barrel import it
+ * from this path.
  */
-export const BOOT_ID = randomUUID();
+export { BOOT_ID };
 
 /**
  * Reads the two shipped timings, applying the environment overrides a

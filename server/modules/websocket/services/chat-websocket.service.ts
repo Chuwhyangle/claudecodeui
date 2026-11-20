@@ -1,12 +1,8 @@
-import { randomUUID } from 'node:crypto';
-import path from 'node:path';
-
 import type { WebSocket } from 'ws';
 
 import { sessionsDb } from '@/modules/database/index.js';
 import {
   providerCapabilitiesService,
-  providerModelsService,
   readSessionForegroundToolUseId,
   readSessionTasks,
   sessionsService,
@@ -18,7 +14,6 @@ import type {
 } from '@/modules/providers/index.js';
 import { sessionHostManager } from '@/modules/session-hosts/index.js';
 import type { SessionHostManager } from '@/modules/session-hosts/index.js';
-import { voiceLexicon } from '@/modules/voice/index.js';
 import {
   activityAnnouncement,
   attachActivityHeartbeat,
@@ -29,6 +24,11 @@ import {
   type ChatEditPreparationService,
 } from '@/modules/websocket/services/chat-edit-preparation.service.js';
 import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
+import {
+  assertSessionAccess,
+  type ProviderRuntimeGateway,
+} from '@/modules/websocket/services/chat-control.contract.js';
+import { dispatchRun } from '@/modules/websocket/services/chat-run-dispatch.service.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import {
   uiClientRegistry,
@@ -43,74 +43,25 @@ import {
   type UiNavigationService,
 } from '@/modules/websocket/services/ui-navigation.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
-import {
-  getImageAssetsReadDirs,
-  isImageAttachmentDescriptor,
-  normalizeAttachmentDescriptors,
-  type ChatAttachmentDescriptor,
-} from '@/shared/image-attachments.js';
-import { CHAT_TURN_OPTION, DELIVERY_SOURCE_OPTION } from '@/shared/types.js';
+import { sendJson, sendProtocolError } from '@/modules/websocket/services/websocket-protocol-error.js';
 import type {
   AnyRecord,
-  ApprovalDecisionRecord,
   AuthenticatedWebSocketRequest,
-  ChatRunSource,
-  HostQueuedInputCancelResult,
-  MissingApprovalReason,
   LLMProvider,
-  ProviderPermissionDecision,
-  ProviderRuntimeWriter,
   RealtimeClientConnection,
 } from '@/shared/types.js';
-import { AppError, parseIncomingJsonObject, residentRunIsTurn } from '@/shared/utils.js';
+import { parseIncomingJsonObject } from '@/shared/utils.js';
 
 /**
- * Trust boundary for client-supplied image attachments: chat.send options come
- * straight from the browser, and the provider runtimes read the referenced
- * files off disk (Claude base64-encodes them). Only images directly inside an
- * upload store (`~/.cloudcli/assets`, or `<explicit>/assets` when a root is
- * configured — either place POST /api/assets/images writes) are allowed through;
- * anything else (absolute paths elsewhere, traversal, subdirectories) is dropped.
- * Exported for tests; without an override both dual roots are accepted (new root
- * first) so re-sending a historical attachment from either store survives.
+ * The attachment trust boundary moved to its own leaf because the run
+ * dispatcher enforces it too (`chat-attachment-filter.service.ts`). Re-exported
+ * here so the gateway's existing import face — tests, the websocket barrel —
+ * is unchanged.
  */
-export function filterAttachmentsToUploadStore(
-  attachments: unknown,
-  assetsRootOverride?: string,
-): ChatAttachmentDescriptor[] {
-  const assetsRoots =
-    assetsRootOverride === undefined
-      ? getImageAssetsReadDirs().map((root) => path.resolve(root))
-      : [path.resolve(assetsRootOverride)];
-
-  return normalizeAttachmentDescriptors(attachments).filter((descriptor) => {
-    // Relative paths are anchored in each store; absolute ones must already be in one.
-    const isDirectChild = assetsRoots.some((assetsRoot) => {
-      const resolved = path.resolve(assetsRoot, descriptor.path);
-      const relative = path.relative(assetsRoot, resolved);
-      return (
-        relative.length > 0 &&
-        !relative.startsWith('..') &&
-        !path.isAbsolute(relative) &&
-        !relative.includes(path.sep) &&
-        !relative.includes('/')
-      );
-    });
-
-    if (!isDirectChild) {
-      console.warn(`[Chat] Dropping attachment outside the upload store: ${descriptor.path}`);
-    }
-    return isDirectChild;
-  });
-}
-
-/** Backward-compatible image filter consumed by existing websocket tests. */
-export function filterImagesToUploadStore(
-  images: unknown,
-  assetsRootOverride?: string,
-): ChatAttachmentDescriptor[] {
-  return filterAttachmentsToUploadStore(images, assetsRootOverride);
-}
+export {
+  filterAttachmentsToUploadStore,
+  filterImagesToUploadStore,
+} from '@/modules/websocket/services/chat-attachment-filter.service.js';
 
 /**
  * The full verdict set one `chat.stop-task` receipt can carry: everything the
@@ -133,128 +84,13 @@ type ControlStopTaskResult = ControlStopTaskOutcome | 'forbidden' | 'unknown-tas
  */
 type ControlBackgroundTaskResult = ControlBackgroundTaskOutcome | 'forbidden';
 
-/** Application boundary for dispatching provider runs and approvals. */
-export type ProviderRuntimeGateway = {
-  hasRuntime(provider: string): boolean;
-  run(
-    provider: LLMProvider,
-    command: string,
-    options: AnyRecord,
-    writer: ProviderRuntimeWriter,
-  ): Promise<unknown>;
-  abort(provider: LLMProvider, sessionId: string): Promise<boolean>;
-  /**
-   * Whether a turn dispatched right now would be written into a process the
-   * session's provider is already holding, rather than run as a process of its
-   * own.
-   *
-   * Optional, and read as `false` when absent, because the absent case is the
-   * behaviour every session had before busy input existed: the duplicate-send
-   * refusal is the default, and only a gateway that can answer for a live
-   * process may lift it. A gateway assembled without this verb therefore
-   * degrades to the refusal rather than losing it.
-   */
-  acceptsBusyInput?(provider: LLMProvider, sessionId: string): boolean;
-  /**
-   * Withdraws a message a busy send queued, if the provider's process has not
-   * started running it yet.
-   *
-   * Optional for the same reason, and read as `unknown` when absent: the one
-   * answer a caller must never receive is "withdrawn" from a seam that never
-   * wrote anything.
-   */
-  cancelQueuedInput?(
-    provider: LLMProvider,
-    sessionId: string,
-    messageUuid: string,
-  ): Promise<HostQueuedInputCancelResult>;
-  /**
-   * The uuid of the message the session's provider most recently took into its
-   * own queue — the same uuid `cancelQueuedInput` would withdraw.
-   *
-   * This is how the uuid the provider stamped a queued turn with reaches the
-   * caller that asked for it. The provider's queue is the only thing that knows
-   * the uuid (a busy send is written into the running process; the process
-   * names the message), so a control caller cannot mint one and expect a later
-   * withdrawal to match. The promise resolves once the message has been written
-   * — never with a placeholder — and resolves `null` when the gateway has no
-   * live process to read a queue from.
-   *
-   * Optional, and read as `null` when absent, because the conservative
-   * degradation is "queued, but no uuid to withdraw". A missing seam must never
-   * be read as a queued message with an empty uuid: the caller would then hold
-   * an id that no withdrawal can match. Only the resident drivers can answer
-   * this — a process-per-turn provider has no queue to name a message in.
-   */
-  queuedInputUuid?(provider: LLMProvider, sessionId: string): Promise<string | null>;
-  /**
-   * Stops one named background task through the provider's own process.
-   *
-   * Returns `requested` when the driver was called and its call settled, and a
-   * failure value otherwise. It deliberately does **not** wait for the task to
-   * stop and does not touch the task table: whether the task really stopped is
-   * the approval the reducer writes from the `task_notification(stopped)` frame,
-   * which the handler waits on with its own bound.
-   *
-   * Optional, and read as `unsupported` when absent, because a gateway that
-   * cannot carry the request must never be read as having placed one.
-   */
-  controlStopTask?(
-    provider: LLMProvider,
-    sessionId: string,
-    taskId: string,
-  ): Promise<ControlStopTaskOutcome>;
-  /**
-   * Promotes one named *foreground* tool to a background task through the
-   * provider's own process.
-   *
-   * Returns `requested` when the driver was called and its call settled `true`,
-   * and a failure value otherwise. Like its stop-task sibling it deliberately
-   * does **not** wait for the task to appear and does not touch the task table:
-   * the task becomes a row only when the reducer consumes the
-   * `task_started` + `task_updated{is_backgrounded:true}` frames the CLI emits,
-   * which is a later step than this call.
-   *
-   * Optional, and read as `unsupported` when absent, because a gateway that
-   * cannot carry the request must never be read as having placed one.
-   */
-  controlBackgroundTask?(
-    provider: LLMProvider,
-    sessionId: string,
-    toolUseId: string,
-  ): Promise<ControlBackgroundTaskOutcome>;
-  resolveToolApproval(
-    requestId: string,
-    payload: ProviderPermissionDecision,
-    decidedBy?: string | null,
-  ): void;
-  getPendingApprovalsForSession(sessionId: string): unknown[];
-  /**
-   * Why an approval `requestId` is absent from the pending registry: it was
-   * held and is gone (`expired`), or nothing here ever minted it
-   * (`never_issued`).
-   *
-   * Optional, and read through the control service's own `??` default
-   * (`'expired'`) when absent, because a gateway that cannot classify must not
-   * have `never_issued` invented for it: the conservative reading is the one
-   * that never claims a request was never issued. `provider-runtime.service.ts`
-   * forwards it from the first provider whose permission facet answers.
-   */
-  classifyMissingApproval?(requestId: string): MissingApprovalReason | null;
-  /**
-   * The decision the runtime recorded for `requestId`, or `null` when it never
-   * decided one. The counterpart to `classifyMissingApproval`: that one says
-   * where a missing id went, this one says whether it was already decided, which
-   * is what lets `chat-control.service.ts` report a lost race as
-   * `ALREADY_DECIDED` instead of `APPROVAL_EXPIRED_OR_NOT_FOUND`.
-   *
-   * Optional, and read as `null` when absent, because a gateway with no ledger
-   * simply cannot distinguish a lost race and must fall back to the
-   * missing-approval classification. `provider-runtime.service.ts` forwards it
-   * from the first provider whose permission facet answers.
-   */
-  readApprovalDecision?(requestId: string): ApprovalDecisionRecord | null;
-};
+/**
+ * The provider runtime port moved to the control contract leaf
+ * (`chat-control.contract.ts`) so the control service can name it without
+ * importing this transport module. Re-exported here so every existing importer
+ * (the barrel, tests, other modules) keeps its path.
+ */
+export type { ProviderRuntimeGateway };
 
 /**
  * The slice of the shared chat control service the WebSocket gateway uses.
@@ -491,12 +327,13 @@ function defaultGetTask(sessionId: string, taskId: string): { state: ActivityTas
  * called. `session` is taken as a parameter so the shape of the check does not
  * change when the row grows an owner: only this function has to move.
  */
-export function assertSessionAccess(
-  userId: string | number | null,
-  _session: ReturnType<typeof sessionsDb.getSessionById>,
-): boolean {
-  return userId !== null && userId !== undefined && `${userId}`.trim().length > 0;
-}
+/**
+ * The shared access entry moved to the control contract leaf
+ * (`chat-control.contract.ts`) so the control service can use it without
+ * importing this transport module. Re-exported here so every existing importer
+ * — the `chat-control-access` criterion reads it from this path — is unchanged.
+ */
+export { assertSessionAccess };
 
 /**
  * The access entry a control handler must call: the injected seam when one was
@@ -632,12 +469,6 @@ function resolveEditPreparation(
 }
 
 
-/** The wire protocol carries the model selection; a client-supplied `options.env` is discarded. */
-function withoutClientEnv(options: AnyRecord): AnyRecord {
-  const { env: _ignoredClientEnv, ...rest } = options;
-  return rest;
-}
-
 /**
  * Extracts the authenticated request user id in the formats currently produced
  * by platform and OSS auth code paths.
@@ -659,34 +490,6 @@ function readRequestUserId(
   }
 
   return null;
-}
-
-function sendJson(ws: WebSocket, payload: unknown): void {
-  if (ws.readyState === WS_OPEN_STATE) {
-    ws.send(JSON.stringify(payload));
-  }
-}
-
-/**
- * Reports a protocol-level failure to the requesting client.
- *
- * Protocol errors deliberately use their own `kind` (instead of the provider
- * `error` message kind) so the frontend can distinguish "your request was
- * invalid" from "the model run produced an error" without inspecting text.
- */
-function sendProtocolError(
-  ws: WebSocket,
-  code: string,
-  error: string,
-  sessionId?: string
-): void {
-  sendJson(ws, {
-    kind: 'protocol_error',
-    code,
-    error,
-    sessionId: sessionId ?? null,
-    timestamp: new Date().toISOString(),
-  });
 }
 
 function readRequiredSessionId(data: AnyRecord): string | null {
@@ -795,302 +598,11 @@ function resolveSendTarget(
 }
 
 /**
- * Registers the run and hands the turn to the provider runtime.
- *
- * `extraRuntimeOptions` is how an edited message asks the provider to resume
- * partway instead of continuing from the tip; a normal send passes nothing.
- *
- * Exported for this module's transport-agnostic control service
- * (`chat-control.service.ts`): its `send` calls this with `ws = null` and a
- * `beforeRun` hook, so a run opened by MCP or a timer is registered and
- * dispatched through the exact same path `chat.send` uses rather than a second
- * copy of the registry logic.
- *
- * `beforeRun`'s second argument states whether this dispatch took the
- * resident-session busy path — the registry refused the first `startRun`,
- * `acceptsBusyInput` answered yes, and the turn was admitted as a superseding
- * run. It is reported here, through the same hook that reports the run, because
- * the fact belongs to this function's own control flow: a caller that wants to
- * know "was this turn queued into a running process" must not re-derive it by
- * probing the registry, and existing callers (a plain `chat.send`, an edit)
- * simply ignore the extra argument.
- *
- * `connectionOverride` separates "who this run streams to" from "who a refusal
- * is written to". The transport-agnostic control service dispatches with
- * `ws = null` (it reports refusals as its own result, so `dispatchRun` must not
- * also write a `RUN_IN_PROGRESS` frame) but still binds the requesting socket as
- * the run's connection, so a `chat.send` driven through the control service
- * reaches the same audience as before. Left `undefined` by callers that only
- * ever have one socket, in which case `ws` is used.
- *
- * `source` is the run's recorded origin, when the caller knows one the
- * connection cannot state. The control service passes it explicitly because it
- * always dispatches with `ws = null` (and, for a WebSocket send, with a
- * connection override that is also null): without it, `startRun`'s
- * connection-derived default would file every run the service opens as
- * `scheduled`, including a `chat.send` that arrived over a socket and an MCP
- * tool call. Left `undefined` by callers that want `startRun`'s existing
- * default (a run with a connection is `user`, one without is `scheduled`).
+ * The run dispatcher moved to its own leaf (`chat-run-dispatch.service.ts`) so
+ * the transport-agnostic control service can import it without importing this
+ * module back. Re-exported here so every existing importer is unchanged.
  */
-export async function dispatchRun(
-  ws: WebSocket | null,
-  userId: string | number | null,
-  sessionId: string,
-  session: NonNullable<ReturnType<typeof sessionsDb.getSessionById>>,
-  data: AnyRecord,
-  dependencies: ChatWebSocketDependencies,
-  extraRuntimeOptions: AnyRecord = {},
-  beforeRun?: (
-    run: NonNullable<ReturnType<typeof chatRunRegistry.startRun>>,
-    info: { busyAccepted: boolean },
-  ) => void | Promise<void>,
-  connectionOverride?: RealtimeClientConnection | null,
-  /**
-   * A synchronous notification that this dispatch was refused because the
-   * session already has a run in progress.
-   *
-   * The refusal is decided before this function's first `await` (`startRun`
-   * returning null and the provider not accepting busy input are both
-   * synchronous), so a caller that never passes a socket — the shared control
-   * service passes `ws = null` and translates the verdict itself — can still
-   * report the refusal on the same tick `chat.send` arrived. Passed by the
-   * control service alone; every other caller leaves it undefined.
-   */
-  onRefuse?: (refusal: { code: string; message: string }) => void,
-  source?: ChatRunSource,
-): Promise<{ started: boolean; error: string | null }> {
-  const provider = session.provider as LLMProvider;
-
-  // A session's upstream provider is part of what the provider started its
-  // thread with, and it cannot be moved to another one in place (Codex answers
-  // `modelProviderMismatch` on the turn; the thread is already bound). The
-  // switch is therefore refused HERE — before the run is reserved — because the
-  // recording write below (`setSessionModel`) refuses the same selection and
-  // runs after `startRun`: a throw there would leave a `running` run with no
-  // process behind it. Every send funnels through this function (`chat.send`
-  // and `chat.edit-send` alike), so this is the one admission gate. A session
-  // with no recorded binding — every session's first send — passes.
-  const requestedModel = (data.options as AnyRecord | undefined)?.model;
-  const requestedModelProviderId = (data.options as AnyRecord | undefined)?.modelProviderId;
-  if (typeof requestedModel === 'string' && requestedModel.trim()) {
-    try {
-      providerModelsService.assertSessionProviderSwitch(
-        provider,
-        sessionId,
-        requestedModel,
-        typeof requestedModelProviderId === 'string' ? requestedModelProviderId : undefined,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const code = error instanceof AppError ? error.code : 'SESSION_PROVIDER_MISMATCH';
-      if (ws) {
-        sendProtocolError(ws, code, message, sessionId);
-      }
-      onRefuse?.({ code, message });
-      return { started: false, error: message };
-    }
-  }
-
-  const runIsTurn = residentRunIsTurn();
-  // Whether a busy send from this provider would be taken by a process that is
-  // already running. Read once, before the probe, because run=turn makes two
-  // decisions out of one answer: a busy send that IS accepted must not open a run
-  // of its own, and a send that cannot be busy-accepted keeps the per-run shape,
-  // where the delivery and the run are born together (SPEC §6.1) — so the run is
-  // labelled with the delivery this send itself is (SPEC §4.1: a non-resident
-  // delivery id is the uuid minted at send time).
-  const busyInputAccepted = dependencies.runtime.acceptsBusyInput?.(provider, sessionId) === true;
-
-  const startInput = {
-    appSessionId: sessionId,
-    provider,
-    providerSessionId: session.provider_session_id,
-    connection: connectionOverride ?? ws,
-    userId,
-    source,
-    // A run=turn run's deliveries are what the CLI's ledger binds to the turn; the
-    // per-run shape has no ledger, so the only delivery such a run will ever hold
-    // is this send's. Off the flag the field is not stated at all.
-    ...(runIsTurn && !busyInputAccepted ? { deliveryIds: [randomUUID()] } : {}),
-  };
-
-  /** The run this dispatch is admitted under, or `null`/`undefined` when refused. */
-  let run: ReturnType<typeof chatRunRegistry.startRun> | undefined;
-  let busyAccepted = false;
-  if (runIsTurn) {
-    // RUN=TURN RETIRES THE SUPERSEDING RUN (SPEC §6.1). A resident session's run IS
-    // its turn, so an accepted busy send is a DELIVERY of the turn already in
-    // flight rather than a second run: the session keeps the run it has, this
-    // command's frames are written through that run's writer, and the CLI's own
-    // queue runs the command later. The answer to "can this session take the
-    // send" is unchanged; only what it buys changes, from a run to a delivery.
-    // Opening a run here was the shape that left the newest run `running` forever,
-    // because the CLI folds the command into the turn already in flight and emits
-    // only one `RESULT` for it (SPEC §1.2).
-    //
-    // The probe is not made on this path at all, and that is deliberate: a
-    // `startRun` that returns null because the session is busy is a call that
-    // mints nothing, so the reading "every startRun call minted a run" (what the
-    // S2 criterion takes as evidence that no run is opened behind a turn) holds
-    // only when the busy branch is decided by a READ rather than by a refused
-    // write. `getRun` is that read; it changes nothing.
-    const current = chatRunRegistry.getRun(sessionId);
-    if (current && current.status === 'running') {
-      // A busy session whose provider cannot take busy input keeps the refusal
-      // below — `run` stays undefined, the duplicate-send answer, byte for byte
-      // what a per-run session answers today. The provider is never entered.
-      if (busyInputAccepted) {
-        run = current;
-        busyAccepted = true;
-      }
-    } else {
-      run = chatRunRegistry.startRun(startInput);
-    }
-  } else {
-    run = chatRunRegistry.startRun(startInput);
-
-    // The refusal is asked first, and only then is the session asked whether it
-    // can take this turn anyway. That order is what keeps the answer correct for
-    // every provider that runs a process per turn: it never reaches the second
-    // question, so its behaviour is byte-for-byte what it was. A provider that
-    // holds one process across turns answers yes, and the turn gets a run of its
-    // own — the registry holds one run per session, so `supersedeRunning` is how
-    // the newer turn becomes the session's current one instead of being refused.
-    // Note that the first call is a pure probe: it returns null precisely when it
-    // has changed nothing, which is what makes the retry safe.
-    if (!run && busyInputAccepted) {
-      run = chatRunRegistry.startRun({ ...startInput, supersedeRunning: true });
-      busyAccepted = run !== null;
-    }
-  }
-
-  if (!run) {
-    const message = `Session "${sessionId}" already has a run in progress.`;
-    if (ws) {
-      sendProtocolError(ws, 'RUN_IN_PROGRESS', message, sessionId);
-    }
-    // Reported synchronously, before this function's first `await` below, so a
-    // socket front end that translated the verdict itself (the control
-    // service's `chat.send` adapter) lands the frame on the same tick the old
-    // inline handler did.
-    onRefuse?.({ code: 'RUN_IN_PROGRESS', message });
-    return { started: false, error: 'A run is already in progress for this session.' };
-  }
-
-  const rawClientOptions = (data.options ?? {}) as AnyRecord;
-  const clientOptions = (dependencies.dropClientEnv ?? withoutClientEnv)(rawClientOptions);
-  const command = typeof data.content === 'string' ? data.content : '';
-
-  // THE ONE PLACE a message the person composed is recorded into the U-source
-  // lexicon. `dispatchRun` is the single funnel every accepted human turn passes
-  // through — the control service's `chat.send` and the inline `chat.edit-send`
-  // both land here — so this is the whole auto-record path, not one of several.
-  // A second hook anywhere else would count a message twice, which is exactly the
-  // number this index exists to report.
-  //
-  // It is deliberately AFTER the `!run` refusal above: a turn that was refused
-  // because the session was busy was never sent, so its words are not something
-  // the user said yet. `command` is what the comment below already calls "a
-  // message somebody composed"; the injected prompts and credential-style
-  // messages are filtered inside the lexicon, so no caller has to know the rules.
-  voiceLexicon.observeSentText(command, session.project_path ?? '');
-
-  // Record what this turn runs with so reopening the session later restores the
-  // same model and reasoning effort, and so the resume path has a
-  // session-scoped model answer to use.
-  if (typeof clientOptions.model === 'string' && clientOptions.model.trim()) {
-    providerModelsService.setSessionModel(
-      provider,
-      sessionId,
-      clientOptions.model,
-      typeof clientOptions.modelProviderId === 'string' ? clientOptions.modelProviderId : undefined,
-    );
-  }
-  if (typeof clientOptions.effort === 'string' && clientOptions.effort.trim()) {
-    providerModelsService.setSessionEffort(provider, sessionId, clientOptions.effort);
-  }
-  // The permission mode is a session attribute the client no longer persists
-  // anywhere, so this send is the only place it can be recorded. Only a mode
-  // the provider's capability matrix lists is stored; an unsupported one is
-  // ignored rather than rejected, because the run still has to go out and the
-  // client would otherwise be told its message failed over a display detail.
-  if (typeof clientOptions.permissionMode === 'string' && clientOptions.permissionMode.trim()) {
-    providerModelsService.setSessionPermissionMode(provider, sessionId, clientOptions.permissionMode);
-  }
-
-  const attachmentCandidates = [
-    ...normalizeAttachmentDescriptors(clientOptions.images),
-    ...normalizeAttachmentDescriptors(clientOptions.files),
-    ...normalizeAttachmentDescriptors(clientOptions.attachments),
-  ];
-  const verifiedAttachments = filterAttachmentsToUploadStore(attachmentCandidates);
-  const uniqueAttachments = verifiedAttachments.filter(
-    (descriptor, index, all) => all.findIndex((candidate) => candidate.path === descriptor.path) === index,
-  );
-
-  // The provider runtimes receive the stable app session id. When their
-  // CLI/SDK needs the provider-native id for resume, they resolve it from the
-  // session row themselves (sessionsService.resolveProviderSessionId).
-  // Brand-new sessions have no provider id yet, so the runtime starts fresh
-  // and announces one, which the gateway writer captures and maps back to the
-  // app session id.
-  const runtimeOptions: AnyRecord = {
-    ...clientOptions,
-    ...extraRuntimeOptions,
-    // Attachments are re-validated server-side: only direct children of the
-    // global upload store may reach provider runtimes or their file tools.
-    attachments: uniqueAttachments,
-    images: uniqueAttachments.filter(isImageAttachmentDescriptor),
-    files: uniqueAttachments.filter((descriptor) => !isImageAttachmentDescriptor(descriptor)),
-    sessionId,
-    cwd: clientOptions.cwd ?? session.project_path ?? undefined,
-    projectPath: session.project_path ?? clientOptions.projectPath,
-    // This dispatch's `command` is a message somebody composed — typed now, or
-    // scheduled earlier and fired by the timer below. Marked here and not left
-    // to the runtime to infer, because the runtime cannot: an internal driver
-    // reaching the same entry passes the same option keys with a *label* in
-    // `command`, and a provider that records the prompt it was handed (the
-    // debug agent, whose "process" runs a scenario instead of a CLI that would
-    // write the row itself) has no other way to tell the two apart.
-    [CHAT_TURN_OPTION]: true,
-    // The DELIVERY's origin (SPEC §4.1, §6.1). The run record already carries the
-    // source, but a resident delivery is built inside the host driver — the far
-    // side of a module edge this file's own options bag is the only thing to
-    // cross — so the run=turn path states it here too, and the delivery's snapshot
-    // entry can say who asked. The default mirrors `startRun`'s own reading
-    // (`source ?? connection ? 'user' : 'scheduled'`) so the two cannot disagree
-    // about a send that stated nothing.
-    //
-    // Flag-gated on purpose: with run=turn off nothing projects a delivery, and the
-    // options bag keeps the exact shape every existing provider and criterion
-    // expects to see.
-    ...(runIsTurn
-      ? { [DELIVERY_SOURCE_OPTION]: source ?? ((connectionOverride ?? ws) ? 'user' : 'scheduled') }
-      : {}),
-  };
-
-  let failure: string | null = null;
-  try {
-    // Runs only now that the session is reserved, because an edit rewinds the
-    // conversation here and a rewind for a run that was never admitted cannot
-    // be taken back. Inside the try so a rewind that throws still releases the
-    // run instead of leaving the session processing forever.
-    await beforeRun?.(run, { busyAccepted });
-    await dependencies.runtime.run(provider, command, runtimeOptions, run.writer);
-  } catch (error) {
-    failure = error instanceof Error ? error.message : String(error);
-    console.error(`[Chat] Provider runtime "${provider}" failed`, { sessionId, error: failure });
-  } finally {
-    // Safety net: a runtime that crashed (or resolved) without emitting its
-    // terminal `complete` would otherwise leave the session stuck in
-    // "processing" forever on every connected client. Scoped to THIS run —
-    // a queued message can start the session's next run before this promise
-    // settles, and the session-keyed completeRun would kill that new run.
-    chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
-  }
-
-  return { started: true, error: failure };
-}
+export { dispatchRun };
 
 /**
  * Handles `chat.edit-send`: replaces an already-sent message and everything

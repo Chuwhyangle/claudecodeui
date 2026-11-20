@@ -7,9 +7,9 @@ import { readSessionDeliveries, readSessionTurnRun } from '@/modules/providers/i
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import {
   assertSessionAccess,
-  dispatchRun,
-} from '@/modules/websocket/services/chat-websocket.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+  type ProviderRuntimeGateway,
+} from '@/modules/websocket/services/chat-control.contract.js';
+import { dispatchRun } from '@/modules/websocket/services/chat-run-dispatch.service.js';
 import { isRunIdCompatWindowOpen } from '@/shared/types.js';
 import { readSessionUserTurnPort } from '@/shared/ports/session-user-turn.port.js';
 import type {

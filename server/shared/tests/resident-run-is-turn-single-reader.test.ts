@@ -26,9 +26,11 @@
  *       read as a value, across every non-test `server/` source. Expect `1`, at
  *       `server/shared/utils.ts`.
  *   (b) import face — the predicate is `export`ed from `server/shared/utils.ts`
- *       with a consumer comment, the driver / registry / chat-websocket each have
+ *       with a consumer comment, the driver / registry / run dispatcher each have
  *       an import of it from `@/shared/utils.js`, and the registry no longer
- *       re-exports it.
+ *       re-exports it. (The dispatcher is `chat-run-dispatch.service.ts`: the
+ *       flag is read where a turn is admitted, which moved out of the WebSocket
+ *       transport in `cycle-websocket-services-two-pairs`.)
  *   (c) call-time read — with the predicate imported, `'1'` answers true and every
  *       other value (or a deleted variable) answers false.
  *   (d) negative control — the same scanner over in-memory sources: names that live
@@ -57,7 +59,7 @@ const LEAF_REL = 'server/shared/utils.ts';
 /** The other three files whose import face this criterion pins. */
 const DRIVER_REL = 'server/modules/providers/list/claude/claude-host-driver.provider.ts';
 const REGISTRY_REL = 'server/modules/websocket/services/chat-run-registry.service.ts';
-const WEBSOCKET_REL = 'server/modules/websocket/services/chat-websocket.service.ts';
+const DISPATCH_REL = 'server/modules/websocket/services/chat-run-dispatch.service.ts';
 /** The module specifier every consumer must import the predicate from. */
 const LEAF_SPECIFIER = '@/shared/utils.js';
 
@@ -290,11 +292,11 @@ test('(a) the flag is read exactly once in non-test server code, in the shared l
 // (b) the import face — one export, three imports, no registry re-export
 // ---------------------------------------------------------------------------
 
-test('(b) the predicate is exported by the leaf, imported by driver/registry/websocket, and not re-exported by the registry', () => {
+test('(b) the predicate is exported by the leaf, imported by driver/registry/dispatcher, and not re-exported by the registry', () => {
   const leaf: SourceFile = { path: LEAF_REL, text: fs.readFileSync(path.join(REPO_ROOT, LEAF_REL), 'utf8') };
   const driver: SourceFile = { path: DRIVER_REL, text: fs.readFileSync(path.join(REPO_ROOT, DRIVER_REL), 'utf8') };
   const registry: SourceFile = { path: REGISTRY_REL, text: fs.readFileSync(path.join(REPO_ROOT, REGISTRY_REL), 'utf8') };
-  const websocket: SourceFile = { path: WEBSOCKET_REL, text: fs.readFileSync(path.join(REPO_ROOT, WEBSOCKET_REL), 'utf8') };
+  const dispatch: SourceFile = { path: DISPATCH_REL, text: fs.readFileSync(path.join(REPO_ROOT, DISPATCH_REL), 'utf8') };
 
   const leafFile = parse(leaf);
   let predicateNode: ts.FunctionDeclaration | undefined;
@@ -309,7 +311,7 @@ test('(b) the predicate is exported by the leaf, imported by driver/registry/web
   const predicateAtUtils = declaresExportedPredicate(leaf);
   const importDriver = importsPredicateFrom(driver, LEAF_SPECIFIER);
   const importRegistry = importsPredicateFrom(registry, LEAF_SPECIFIER);
-  const importWebsocket = importsPredicateFrom(websocket, LEAF_SPECIFIER);
+  const importDispatch = importsPredicateFrom(dispatch, LEAF_SPECIFIER);
   const registryNoReexport = !declaresExportedPredicate(registry) && !reexportsPredicate(registry);
 
   // The consumer comment travels with the export: the standard requires it, and it
@@ -319,7 +321,7 @@ test('(b) the predicate is exported by the leaf, imported by driver/registry/web
 
   console.log(
     `predicateAtUtils=${predicateAtUtils} importDriver=${importDriver} importRegistry=${importRegistry} ` +
-      `importWebsocket=${importWebsocket} registryNoReexport=${registryNoReexport}`,
+      `importDispatch=${importDispatch} registryNoReexport=${registryNoReexport}`,
   );
   console.log(`(b) leafCommentNamesDriver=${commentNamesDriver} leafCommentNamesRegistry=${commentNamesRegistry}`);
 
@@ -328,7 +330,7 @@ test('(b) the predicate is exported by the leaf, imported by driver/registry/web
   assert.ok(commentNamesRegistry, 'the leaf export must name its registry consumer in a doc comment');
   assert.ok(importDriver, `claude-host-driver.provider.ts must import the predicate from ${LEAF_SPECIFIER}`);
   assert.ok(importRegistry, `chat-run-registry.service.ts must import the predicate from ${LEAF_SPECIFIER}`);
-  assert.ok(importWebsocket, `chat-websocket.service.ts must import the predicate from ${LEAF_SPECIFIER}`);
+  assert.ok(importDispatch, `chat-run-dispatch.service.ts must import the predicate from ${LEAF_SPECIFIER}`);
   assert.ok(registryNoReexport, 'chat-run-registry.service.ts must not export or re-export the predicate');
 
   // The export declaration is the leaf's alone: no other non-test file may declare it.

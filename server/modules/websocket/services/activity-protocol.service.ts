@@ -8,30 +8,22 @@ import {
 } from '@/modules/providers/index.js';
 import type { ActivityProtocolSnapshot, ActivitySnapshotTurn, DeliveryEntry } from '@/shared/types.js';
 
-import { BOOT_ID } from './activity-heartbeat.service.js';
+import {
+  BOOT_ID,
+  type ActivityFrameListener,
+  type ActivityProtocolFrame,
+  type ActivityProtocolFrameKind,
+} from './activity-protocol.contract.js';
 export type { ActivityProtocolSnapshot, ActivitySnapshotTurn };
-
-
-
-/** The two frame kinds the protocol puts on the wire. */
-export type ActivityProtocolFrameKind = 'activity.snapshot' | 'activity.upsert';
-
-/**
- * One frame on the activity socket: a snapshot, or an upsert carrying a *whole*
- * new snapshot.
- *
- * The frame is the snapshot plus a `kind`, deliberately the same fields rather
- * than a delta. "Upsert" here means "this is the session's activity now" — a
- * receiver replaces its picture with the frame's body instead of applying a
- * change to it, which is what makes a missed frame harmless as long as the
- * revision is watched (see the client behaviour in the criterion).
- */
-export type ActivityProtocolFrame = ActivityProtocolSnapshot & {
-  kind: ActivityProtocolFrameKind;
+// The frame vocabulary lives in the shared leaf (`activity-protocol.contract.ts`)
+// so the heartbeat can stamp the same boot id without importing this module
+// back. Re-exported here because the websocket barrel and the criteria import it
+// from this path.
+export type {
+  ActivityFrameListener,
+  ActivityProtocolFrame,
+  ActivityProtocolFrameKind,
 };
-
-/** One connection's delivery callback, handed every frame for its session. */
-export type ActivityFrameListener = (frame: ActivityProtocolFrame) => void;
 
 /**
  * The injections a store accepts. Every one of them exists so a criterion can
@@ -149,10 +141,10 @@ function createStore(options: ActivityStoreOptions): ActivityStoreWithRevisions 
     return created;
   }
 
-  // The boot id is resolved per read rather than captured at construction so this
-  // module can sit inside an import cycle with the heartbeat (each reads the
-  // other's single value) without touching a binding before the other module has
-  // initialised it.
+  // The boot id is resolved per read rather than captured at construction so a
+  // criterion can inject one and still read the process-wide default. The shared
+  // constant now lives in the contract leaf, so reading it here never touches the
+  // heartbeat module — the pair is one-way (heartbeat → this module → the leaf).
   function bootId(): string {
     return bootIdOption ?? BOOT_ID;
   }
@@ -161,7 +153,8 @@ function createStore(options: ActivityStoreOptions): ActivityStoreWithRevisions 
   // change to a task or schedule is visible the next time either path asks — which
   // is exactly why a frame body and a REST body read at one revision agree. The
   // default turn reader is called inside this function body, never at module
-  // evaluation, for the same cycle reason as `bootId()`.
+  // evaluation, so this module's evaluation order stays independent of the
+  // providers barrel's.
   function readTurnState(sessionId: string): TurnState {
     return readTurn ? readTurn(sessionId) : readSessionTurn(sessionId);
   }
@@ -289,9 +282,9 @@ export function createActivityStore(options: ActivityStoreOptions = {}): Activit
  * It is a single instance because "the revision the heartbeat announces" and "the
  * revision a snapshot carries" have to be one number; a second store would be a
  * second counter, which is precisely the defect this module exists to avoid. It
- * is created eagerly here, but every default that crosses an import edge (the boot
- * id and the turn reader) is resolved lazily at read time, so the cycle between
- * this module and the heartbeat is safe to evaluate in either order.
+ * is created eagerly here, but the turn reader crosses an import edge lazily at
+ * read time, and the boot id comes from the contract leaf, so this module no
+ * longer shares an import cycle with the heartbeat.
  */
 const defaultStore = createStore({});
 
