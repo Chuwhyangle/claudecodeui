@@ -89,6 +89,20 @@ Widen both file-level pins from their two slices to the whole tree and commit th
 - `git merge --no-edit develop` → Already up to date（develop 仍为 841796fab，读数与 develop 同树）
 - `anti-drift-touches-check --merge-target develop` → ANTI-DRIFT OK：2 actual files 全在 Touches 内
 
+### Collateral：清掉阻塞 baseline-equivalence 的日期边界红（2026-11-20 续轮）
+
+- 现象：suite 红在 `src/modules/architecture/tests/architectureTab.test.tsx`，签名
+  `AssertionError [ERR_ASSERTION]: the analysis time is a relative reading`；baseline A/B 判
+  `HARD RED (changed-assertion)`（同文件 tap 文本两侧逐字相同，差异只在 marker 的空串/非空串 —— 即
+  `fan-in-changed-assertion-is-a-log-layout-artifact` 的版式 artifact）。
+- 真因（在**本分支树与 develop 上都单跑复现**，与本任务 delta 无关）：fixture
+  `GENERATED_AT = '2026-10-20T15:52:34.427Z'` 今天恰满一个月；shipped `formatRelativeTime` 用
+  `Intl.RelativeTimeFormat(numeric:'auto')`，30–45 天带内渲染 `"last month"`，旧钉 `/ago|now/i` 因此过期。
+- 处置：两处断言改为读 shipped formatter 的逐字输出（`formatRelativeTime(GENERATED_AT, 'en')`），并保留独立的
+  ISO 形状负臂（`doesNotMatch(/\d{4}-\d{2}-\d{2}T/)`）与原 `notEqual(GENERATED_AT)`，component 若退回打印原始
+  instant 仍会红。⛔ 未改产品代码，未放宽为「任意文本」。
+- 复验：`npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → 129/129 pass。
+
 ## AC
 - [x] `.quay/routine-findings.jsonl` 中 finding `file-scc-pin-scope-covers-2-of-14-directories`（routine `architecture-analysis`，runId `architecture-analysis-1795175197228`）所描述的问题被复核并处置
 - [x] 处置结论可核：要么修掉，要么写明「已有机制在管、失败在哪一步」，⛔ 不以「已注意到」结案
@@ -100,4 +114,14 @@ Widen both file-level pins from their two slices to the whole tree and commit th
 ## Touches
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `server/shared/tests/frontend-import-cycle-budget.test.ts`
+- `src/modules/architecture/tests/architectureTab.test.tsx` (collateral: 日期边界红 "last month" 阻塞 baseline-equivalence；改两处断言读 shipped formatter + ISO 形状负臂，未改产品代码)
 - `tasks/gap-routine-architecture-analysis-file-scc-pin-scope-covers-2-of-14-directories.md`
+
+## Blocker
+
+**2026-11-20T12:07:12.301Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: the analysis time is a relative reading [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/architectureTab.test.tsx]
+- run_id：wk-prod-anchor
+- session_id：0b187f38-dce2-429b-aafa-daef6db6a05a
+- 续轮处置：见上方「Collateral」段 —— 该红已在本作业树修绿（129/129），并把文件以 collateral 声明进 Touches。
