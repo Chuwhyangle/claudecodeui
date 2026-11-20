@@ -66,6 +66,7 @@ MCP 浏览器打开 `https://cloudpit.lrfz.com/session/10d533ec-8b33-4acf-acfc-a
 
 - src/modules/chat-session/hooks/useSessionStore.ts
 - src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx
+- src/modules/architecture/tests/architectureTab.test.tsx
 - tasks/gap-resident-pending-capped-text-not-retired.md
 
 ## Evidence
@@ -105,7 +106,7 @@ cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run src/modules/chat
  Test Files 1 failed (1) / Tests 1 failed | 14 passed (15)
 ```
 
-AC2 的两条（400 字边界与短消息）在还原态仍绿。恢复：从备份 `cp` 回（等价 `git checkout -- src/modules/chat-session/hooks/useSessionStore.ts`），恢复后 `grep -n "startsWith(text)"` 命中第 928 行。
+AC2 的两条（400 字边界与短消息）在还原态仍绿。恢复：从备份 `cp` 回（等价 `git checkout -- src/modules/chat-session/hooks/useSessionStore.ts`）。压缩注释后 `grep -n "startsWith(text)"` 现命中第 905 行（原记录为 928 行，语义未变）。
 
 ### AC4 — 既有客户端判据不回退
 
@@ -127,6 +128,26 @@ cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run \
 - 用真实 store + 真实组件的读数补足（AC1）：真实 `useSessionStore` 合并后 `pendingRowsAfterMerge=0`、`userRowsAfterMerge=1` 且内容是持久化全文 440 字；真实 `PendingResidentMessage` 不渲染任何 pending 行。
 - 清理：两个会话已 `session_close`；observer token 已 `revoke`（row absent，`GET /api/auth/user` → 401）；vite 已停止。
 
+### 续做轮 2026-11-20 — ratchet 压回基线 + 一个 develop 全局时间炸弹
+
+**1) oversize 棘轮（本轮 suite 的真红，已修）。** 上一轮 fan-in 红在 `ratchet: oversizeFiles src/modules/chat-session/hooks/useSessionStore.ts 2335→2358 — 基线内读数不得上调`。修法按等量删行的既有先例：把新增说明压回原 doc 注释的同段行数（保留前缀匹配的理由、cap 与 MCP 无 `local_` 行两点），并把拆开的两个 `if` 合回单条 `if (claimed.has(candidate) || !(candidate.content || '').trim().startsWith(text))`。读数：
+
+- `wc -l src/modules/chat-session/hooks/useSessionStore.ts` → **2335**（= 基线，净 0 增行）。
+- `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` → `tests 6 / pass 6 / fail 0`，exit 0。
+- 行为未变：AC1/AC2/AC4 的命令在本轮压缩后重跑仍绿（见下）。
+
+**2) `src/modules/architecture/tests/architectureTab.test.tsx` 的 `the analysis time is a relative reading`（delta 外、develop 全局红，已修）。** 该文件与本任务 delta 无交集（`git diff --stat develop -- <file>` 为空），红因是夹具时间炸弹：`GENERATED_AT = '2026-10-20T15:52:34.427Z'` 固定值；`formatRelativeTime` 用 `numeric:'auto'`，跨过 30 天月界后读数从 “… ago” 变成 “last month”，`/ago|now/i` 必红。2026-11-20 恰好第 31 天 ⇒ **任何树都红**（两个同类 ready 任务 `gap-routine-architecture-analysis-cycle-shared-types-type-only-3`、`gap-routine-architecture-analysis-file-scc-pin-scope-covers-2-of-14-directories` 的 blocker 是逐字同一条，`added=- changed=architectureTab`，即 develop 侧同红、仅签名形状不同）。修法：夹具改为滚动值 `new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()`，判据（相对读数、`dateTime` 保留 ISO、`title` 是本地精确时间）原样不动。读数：
+
+- `bash scripts/with-memory-cap.sh npx vitest run src/modules/architecture/tests/architectureTab.test.tsx --maxWorkers=1` → `Test Files 1 passed (1) / Tests 129 passed (129)`，exit 0（修前：`2 failed | 127 passed`，`Expected /ago|now/i, Received "last month"`）。
+- 该文件按 DoD 的“新增/改动其它文件先经 task_write 补 Touches”已写入 `## Touches`。
+
+**3) 本轮复核读数（压缩后重跑）。**
+
+- AC4 三文件：`Test Files 3 passed (3) / Tests 29 passed (29)`，exit 0。
+- `npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning）。
+
+**4) 仍在 develop 侧的 delta 外红（未自修，供 fan-in A/B 判读）。** `server/modules/providers/tests/provider-models.service.test.ts`：单跑 `AssertionError ... [gpt-6.2-astra, gpt-6.2-sol]`（curated 目录 8 项 vs 打包 CLI 目录 10 项），suite 日志里该文件首红是 `[codex-models] model/list discovery empty-or-failed visible=0`；本任务 Touches 无交集，属机器上 codex CLI 目录前进，未改动。
+
 ## 验证记录
 
 该轴仍暗,理由:本任务只改 resident 待发行的退休判据（严格相等→前缀）与判据用例，未新增模块/依赖、未改服务端 cap 或快照形状，未做架构度量。
@@ -138,3 +159,4 @@ cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run \
 - 未落地原因：step=suite: not ok - server/shared/tests/architecture-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: ratchet: oversizeFiles src/modules/chat-session/hooks/useSessionStore.ts 2335→2358 — 基线内读数不得上调（此基线只允许下降） [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/architecture-ratchet.test.ts,server/shared/tests/architecture-ratchet.test.ts changed=src/modules/architecture/tests/architectureTab.test.tsx]
 - run_id：wk-prod-anchor
 - session_id：316b1ef7-3618-4cd9-b28a-7a52f40e4afa
+- 后续：本条两条红均已在续做轮处理——ratchet 压回 2335（单跑 6/6 绿）；architectureTab 夹具时间炸弹改为滚动值（129/129 绿）。见 Evidence「续做轮 2026-11-20」。
