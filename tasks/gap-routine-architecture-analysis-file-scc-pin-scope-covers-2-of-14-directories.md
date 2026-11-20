@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-pin-scope-covers-2-of-14-director
 title: "architecture-analysis: The only file-level pins read two slices — server
   (j) scans modules/mcp-gateway alone and the frontend pin filters
   path.startsWith('shared/') — while the shi"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
