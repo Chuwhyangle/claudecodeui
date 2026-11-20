@@ -1,5 +1,4 @@
-import type { CommandLifecycleState } from './claude-events.js';
-import type { HostMode } from './cli-session.js';
+import type { CommandLifecycleState, HostMode } from './primitives.js';
 import type { LLMProvider, ProviderModelsDefinition } from './provider-message.js';
 import type { AnyRecord } from './ui.js';
 

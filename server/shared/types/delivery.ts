@@ -1,4 +1,4 @@
-import type { ChatRunSource } from './cli-session.js';
+import type { ChatRunSource } from './primitives.js';
 
 // ---------------------------
 //--------------- BUSY INPUT: PRIORITY, LIFECYCLE, WITHDRAWAL ----------

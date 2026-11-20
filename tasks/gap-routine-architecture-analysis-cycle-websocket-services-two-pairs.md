@@ -86,3 +86,11 @@ ADR-007 暗轴记录：
 - `server/shared/tests/resident-run-is-turn-single-reader.test.ts`
 - `server/modules/voice/tests/voice-lexicon.test.ts`
 - `tasks/gap-routine-architecture-analysis-cycle-websocket-services-two-pairs.md`
+
+## Blocker
+
+**2026-11-20T12:22:43.935Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: the analysis time is a relative reading [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/architectureTab.test.tsx]
+- run_id：wk-prod-anchor
+- session_id：a7c1f363-73ed-4a54-9bcf-fca662629859

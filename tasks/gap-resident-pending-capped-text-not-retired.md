@@ -1,7 +1,7 @@
 ---
 id: gap-resident-pending-capped-text-not-retired
 title: resident 待发行 cap 文本永不退休：>400 字消息在会话开头重复一条截断 user 气泡（MCP 创建的 resident 会话）
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -66,6 +66,7 @@ MCP 浏览器打开 `https://cloudpit.lrfz.com/session/10d533ec-8b33-4acf-acfc-a
 
 - src/modules/chat-session/hooks/useSessionStore.ts
 - src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx
+- src/modules/architecture/tests/architectureTab.test.tsx
 - tasks/gap-resident-pending-capped-text-not-retired.md
 
 ## Evidence
@@ -105,7 +106,7 @@ cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run src/modules/chat
  Test Files 1 failed (1) / Tests 1 failed | 14 passed (15)
 ```
 
-AC2 的两条（400 字边界与短消息）在还原态仍绿。恢复：从备份 `cp` 回（等价 `git checkout -- src/modules/chat-session/hooks/useSessionStore.ts`），恢复后 `grep -n "startsWith(text)"` 命中第 928 行。
+AC2 的两条（400 字边界与短消息）在还原态仍绿。恢复：从备份 `cp` 回（等价 `git checkout -- src/modules/chat-session/hooks/useSessionStore.ts`）。压缩注释后 `grep -n "startsWith(text)"` 现命中第 905 行（原记录为 928 行，语义未变）。
 
 ### AC4 — 既有客户端判据不回退
 
@@ -126,6 +127,26 @@ cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run \
 - 因此**没有截到“两条连续 user 气泡”的真实页面截图**。`tmp/resident-capped-pending.png` / `tmp/resident-capped-final.png` 是上述认证失败会话（两条 454 字 user 行 + 两条已撤回 delivery 行），**不作为修复证据**。
 - 用真实 store + 真实组件的读数补足（AC1）：真实 `useSessionStore` 合并后 `pendingRowsAfterMerge=0`、`userRowsAfterMerge=1` 且内容是持久化全文 440 字；真实 `PendingResidentMessage` 不渲染任何 pending 行。
 - 清理：两个会话已 `session_close`；observer token 已 `revoke`（row absent，`GET /api/auth/user` → 401）；vite 已停止。
+
+### 续做轮 2026-11-20 — ratchet 压回基线 + 一个 develop 全局时间炸弹
+
+**1) oversize 棘轮（本轮 suite 的真红，已修）。** 上一轮 fan-in 红在 `ratchet: oversizeFiles src/modules/chat-session/hooks/useSessionStore.ts 2335→2358 — 基线内读数不得上调`。修法按等量删行的既有先例：把新增说明压回原 doc 注释的同段行数（保留前缀匹配的理由、cap 与 MCP 无 `local_` 行两点），并把拆开的两个 `if` 合回单条 `if (claimed.has(candidate) || !(candidate.content || '').trim().startsWith(text))`。读数：
+
+- `wc -l src/modules/chat-session/hooks/useSessionStore.ts` → **2335**（= 基线，净 0 增行）。
+- `bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` → `tests 6 / pass 6 / fail 0`，exit 0。
+- 行为未变：AC1/AC2/AC4 的命令在本轮压缩后重跑仍绿（见下）。
+
+**2) `src/modules/architecture/tests/architectureTab.test.tsx` 的 `the analysis time is a relative reading`（delta 外、develop 全局红，已修）。** 该文件与本任务 delta 无交集（`git diff --stat develop -- <file>` 为空），红因是夹具时间炸弹：`GENERATED_AT = '2026-10-20T15:52:34.427Z'` 固定值；`formatRelativeTime` 用 `numeric:'auto'`，跨过 30 天月界后读数从 “… ago” 变成 “last month”，`/ago|now/i` 必红。2026-11-20 恰好第 31 天 ⇒ **任何树都红**（两个同类 ready 任务 `gap-routine-architecture-analysis-cycle-shared-types-type-only-3`、`gap-routine-architecture-analysis-file-scc-pin-scope-covers-2-of-14-directories` 的 blocker 是逐字同一条，`added=- changed=architectureTab`，即 develop 侧同红、仅签名形状不同）。修法：夹具改为滚动值 `new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()`，判据（相对读数、`dateTime` 保留 ISO、`title` 是本地精确时间）原样不动。读数：
+
+- `bash scripts/with-memory-cap.sh npx vitest run src/modules/architecture/tests/architectureTab.test.tsx --maxWorkers=1` → `Test Files 1 passed (1) / Tests 129 passed (129)`，exit 0（修前：`2 failed | 127 passed`，`Expected /ago|now/i, Received "last month"`）。
+- 该文件按 DoD 的“新增/改动其它文件先经 task_write 补 Touches”已写入 `## Touches`。
+
+**3) 本轮复核读数（压缩后重跑）。**
+
+- AC4 三文件：`Test Files 3 passed (3) / Tests 29 passed (29)`，exit 0。
+- `npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning）。
+
+**4) 仍在 develop 侧的 delta 外红（未自修，供 fan-in A/B 判读）。** `server/modules/providers/tests/provider-models.service.test.ts`：单跑 `AssertionError ... [gpt-6.2-astra, gpt-6.2-sol]`（curated 目录 8 项 vs 打包 CLI 目录 10 项），suite 日志里该文件首红是 `[codex-models] model/list discovery empty-or-failed visible=0`；本任务 Touches 无交集，属机器上 codex CLI 目录前进，未改动。
 
 ## 验证记录
 

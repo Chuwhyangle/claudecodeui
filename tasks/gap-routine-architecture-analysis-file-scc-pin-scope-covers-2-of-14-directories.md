@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-file-scc-pin-scope-covers-2-of-14-director
 title: "architecture-analysis: The only file-level pins read two slices — server
   (j) scans modules/mcp-gateway alone and the frontend pin filters
   path.startsWith('shared/') — while the shi"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
@@ -89,6 +89,23 @@ Widen both file-level pins from their two slices to the whole tree and commit th
 - `git merge --no-edit develop` → Already up to date（develop 仍为 841796fab，读数与 develop 同树）
 - `anti-drift-touches-check --merge-target develop` → ANTI-DRIFT OK：2 actual files 全在 Touches 内
 
+### Collateral：清掉阻塞 baseline-equivalence 的日期边界红（2026-11-20 续轮）
+
+- 现象：suite 红在 `src/modules/architecture/tests/architectureTab.test.tsx`，签名
+  `AssertionError [ERR_ASSERTION]: the analysis time is a relative reading`；baseline A/B 判
+  `HARD RED (changed-assertion)`（同文件 tap 文本两侧逐字相同，差异只在 marker 的空串/非空串 ——
+  `fan-in-changed-assertion-is-a-log-layout-artifact` 的版式 artifact）。
+- 真因（在本分支树与 develop 上都单跑复现，与本任务 delta 无关）：fixture
+  `GENERATED_AT = '2026-10-20T15:52:34.427Z'` 今天恰满一个月；shipped `formatRelativeTime` 用
+  `Intl.RelativeTimeFormat(numeric:'auto')`，30–45 天带内渲染 `"last month"`，旧钉 `/ago|now/i` 因此过期。
+- 处置：**逐字复用兄弟分支的修复** `task/gap-resident-pending-capped-text-not-retired`（commit `5d164e59d`
+  `test(architecture): make the analysis-time fixture a rolling instant`）——
+  `git checkout task/gap-resident-pending-capped-text-not-retired -- src/modules/architecture/tests/architectureTab.test.tsx`，
+  `git diff <该分支> -- <file>` 为空（逐字节相同）。夹具改为 `new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)`：
+  ⛔ 未放宽 `/ago|now/i` 判据，只让夹具滚动，保持「相对读数」的原意；两条分支携带同一改动 ⇒ 谁后合都无冲突。
+- 复验：`npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → 129/129 pass；
+  `tsc --noEmit -p tsconfig.json` → exit 0；`oxlint <file>` → exit 0。
+
 ## AC
 - [x] `.quay/routine-findings.jsonl` 中 finding `file-scc-pin-scope-covers-2-of-14-directories`（routine `architecture-analysis`，runId `architecture-analysis-1795175197228`）所描述的问题被复核并处置
 - [x] 处置结论可核：要么修掉，要么写明「已有机制在管、失败在哪一步」，⛔ 不以「已注意到」结案
@@ -100,12 +117,5 @@ Widen both file-level pins from their two slices to the whole tree and commit th
 ## Touches
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `server/shared/tests/frontend-import-cycle-budget.test.ts`
+- `src/modules/architecture/tests/architectureTab.test.tsx` (collateral: 逐字取自 task/gap-resident-pending-capped-text-not-retired 的 5d164e59d —— 日期边界红 "last month" 阻塞 baseline-equivalence；只滚动夹具，未改判据)
 - `tasks/gap-routine-architecture-analysis-file-scc-pin-scope-covers-2-of-14-directories.md`
-
-## Blocker
-
-**2026-11-20T12:07:12.301Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: the analysis time is a relative reading [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/architectureTab.test.tsx]
-- run_id：wk-prod-anchor
-- session_id：0b187f38-dce2-429b-aafa-daef6db6a05a

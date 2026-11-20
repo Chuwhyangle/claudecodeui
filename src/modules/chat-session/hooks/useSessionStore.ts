@@ -872,9 +872,9 @@ const RESIDENT_PENDING_ECHO_FLOOR_SKEW_MS = 10_000;
  * existed, which is exactly the disappearance this fixes.
  *
  * So the key is the one the voice side uses for a delivered caption: the
- * replacement is *visible*. A persisted user row whose text matches and whose
- * clock is not before the send retires the pending row — one-to-one, so two
- * sends of the same words retire two rows rather than one row twice.
+ * replacement is *visible*. A persisted user row whose text the pending text
+ * *prefixes* (capped delivery; MCP sends have no `local_` row), clock not
+ * before the send, retires it one-to-one; an older same-prefix turn cannot.
  */
 function retireDeliveredResidentPending(
   serverMessages: NormalizedMessage[],
@@ -902,7 +902,7 @@ function retireDeliveredResidentPending(
     }
 
     const echo = echoCandidates.find((candidate) => {
-      if (claimed.has(candidate) || (candidate.content || '').trim() !== text) {
+      if (claimed.has(candidate) || !(candidate.content || '').trim().startsWith(text)) {
         return false;
       }
       const echoTime = readMessageTime(candidate);
