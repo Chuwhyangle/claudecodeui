@@ -12,6 +12,7 @@ import { beforeAll, beforeEach, test, vi } from 'vitest';
 
 import type { AppTab, Project } from '@/shared/types';
 import type * as SharedApiModule from '@/shared/api';
+import { formatRelativeTime } from '@/shared/utils';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import deCommon from '@/modules/i18n/locales/de/common.json';
 import esCommon from '@/modules/i18n/locales/es/common.json';
@@ -3619,7 +3620,13 @@ test('the truncation reading follows the current granularity and appends the omi
   // `title` — the raw UTC ISO string is no longer the visible reading.
   const generatedAt = document.querySelector('[data-architecture-generated-at]');
   assert.ok(generatedAt instanceof HTMLTimeElement);
-  assert.match(generatedAt.textContent ?? '', /ago|now/i, 'the analysis time is a relative reading');
+  // The shipped formatter uses `Intl.RelativeTimeFormat` with `numeric: 'auto'`, so a
+  // reading in the 30–45 day band renders "last month" — relative, but without the
+  // literal "ago"/"now" token. Read the shipped formatter's exact wording instead of
+  // enumerating its vocabulary; the ISO-shape guard below still reds if the component
+  // ever goes back to printing the raw instant.
+  assert.equal(generatedAt.textContent, formatRelativeTime(GENERATED_AT, 'en'), 'the analysis time is a relative reading');
+  assert.doesNotMatch(generatedAt.textContent ?? '', /\d{4}-\d{2}-\d{2}T/, 'the raw UTC ISO shape must not be shown');
   assert.notEqual(generatedAt.textContent, GENERATED_AT, 'the raw UTC ISO string must not be shown');
   assert.equal(generatedAt.getAttribute('dateTime'), GENERATED_AT, 'the machine-readable instant is kept');
   assert.ok(
@@ -4276,7 +4283,8 @@ test('unresolved names expand into a list, and the analysis time is relative wit
 
   const time = document.querySelector('[data-architecture-generated-at]');
   assert.ok(time instanceof HTMLTimeElement);
-  assert.match(time.textContent ?? '', /ago|now/i);
+  assert.equal(time.textContent, formatRelativeTime(GENERATED_AT, 'en'), 'the analysis time is a relative reading');
+  assert.doesNotMatch(time.textContent ?? '', /\d{4}-\d{2}-\d{2}T/, 'the raw UTC ISO shape must not be shown');
   assert.ok((time.getAttribute('title') ?? '').length > 0);
   assert.notEqual(time.getAttribute('title'), GENERATED_AT, 'the title is local, not the UTC ISO string');
 
