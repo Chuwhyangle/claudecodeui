@@ -1,7 +1,7 @@
 ---
 id: gap-resident-pending-capped-text-not-retired
 title: resident 待发行 cap 文本永不退休：>400 字消息在会话开头重复一条截断 user 气泡（MCP 创建的 resident 会话）
-status: ready
+status: done
 labels:
   - gap
   - defect
