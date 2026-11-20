@@ -60,6 +60,17 @@
  * value SCC, invisible to every committed ratchet. The third reading below is the same walk,
  * resolver and Tarjan core at file nodes over `src/shared`, pinned to ZERO non-trivial SCCs.
  *
+ * FILE GRANULARITY, WHOLE TREE (finding `file-scc-pin-scope-covers-2-of-14-directories`,
+ * 2026-11-20). That `src/shared` pin, like the server criterion's `modules/mcp-gateway` pin,
+ * read one SLICE of its tree. The shipped scanner reads 768 `src` files / 2372 resolved file
+ * edges / THREE non-trivial file SCCs on the merged tree, and NONE of the three is under
+ * `src/shared` — the pin was green while a cycle in any of the other `src/` areas red nothing.
+ * The fifth reading below is the same scanner over the whole `src` tree, with the three SCCs
+ * measured at the widening committed as a SHRINK-ONLY baseline: a measured component must be
+ * contained in one baseline group, so a new member, two merged groups or a new cycle reds on
+ * the commit that introduces it, while closing a cycle stays green. The `src/shared` pin is
+ * kept: it is strictly stronger (zero, always) and carries the finding-specific message.
+ *
  * ENTITY GRANULARITY (finding `cycle-voice-asr-factory-singleton`, 2026-11-14). All three
  * readings above collapse their nodes to files or directories, so a cycle between two ENTITIES OF
  * ONE FILE is invisible to every one of them. That is how `createVoiceClientAsrEngine` (the
@@ -444,6 +455,147 @@ test('negative control: a one-way file import is not a cycle', () => {
     'the edge must resolve — an unresolved import would make the empty SCC list vacuous',
   );
   assert.doesNotThrow(() => assertNoFileSccs(graph.nonTrivialSccs), 'an acyclic reading matches the empty pin');
+});
+
+// ── The FILE-level reading of the WHOLE `src` tree (finding `file-scc-pin-scope-covers-2-of-14-directories`) ──
+//
+// The `src/shared` reading above is a SLICE: it was green because `src/shared` held no cycle,
+// not because `src` held none. Three file SCCs live outside it (measured 2026-11-20 on 768 files /
+// 2372 resolved edges), so a new cycle anywhere else landed unread. This reading is the same
+// scanner over the whole tree, and the SCCs measured at the widening are committed below as a
+// SHRINK-ONLY baseline.
+
+/**
+ * The measured file SCCs at the moment the pin was widened (2026-11-20, `scanFileImportGraph`
+ * over `collectTypeScriptSources(src)`, literal dynamic imports included). The ratchet is
+ * CONTAINMENT, not equality: a measured component may shrink into one of these groups (closing a
+ * cycle is the sanctioned direction and needs no edit here), but a new member, two merged groups
+ * or a brand-new cycle is a red on the commit that introduces it. The baseline is never raised.
+ */
+const FILE_SCC_BASELINE: readonly string[][] = [
+  [
+    'modules/architecture/render/ArchitecturePanel.tsx',
+    'modules/architecture/render/architecturePanelCanvas.tsx',
+    'modules/architecture/render/architecturePanelFilters.tsx',
+    'modules/architecture/render/architecturePanelGroups.tsx',
+    'modules/architecture/render/architecturePanelMobileChrome.tsx',
+    'modules/architecture/render/architecturePanelReadout.tsx',
+    'modules/architecture/render/architecturePanelReadyView.tsx',
+    'modules/architecture/render/architecturePanelShell.tsx',
+    'modules/architecture/render/architecturePanelToolbar.tsx',
+  ],
+  [
+    'modules/chat-voice/voice-realtime/captionOrdering.ts',
+    'modules/chat-voice/voice-realtime/placeCaptions.ts',
+    'modules/chat-voice/voice-realtime/useVoiceRealtimeSession.ts',
+  ],
+  ['modules/architecture/layout/engine/readableZoom.ts', 'modules/architecture/layout/engine/svgViewport.ts'],
+];
+
+/** (whole-tree) non-vacuity floor: the tree carries 2372 resolved file edges (2026-11-20). */
+const MIN_FILE_GRAPH_EDGES = 2_000;
+
+/**
+ * The containment ratchet for the whole-tree file reading. Shrink-only, matching the server
+ * criterion's file SCC pin: every measured component must fit inside ONE baseline group.
+ */
+function fileSccViolations(measured: readonly string[][], pinned: readonly string[][]): string[] {
+  const violations: string[] = [];
+  for (const component of measured) {
+    if (component.length < 2) continue;
+    const hosts = pinned.filter((group) => {
+      const members = new Set(group);
+      return component.every((member) => members.has(member));
+    });
+    if (hosts.length === 0) {
+      violations.push(
+        `[${component.join(', ')}] is not contained in any committed file-SCC group — a new file joined a cycle, ` +
+          `two groups merged, or a brand-new cycle appeared. Do NOT raise the baseline: find the import that closed the loop.`,
+      );
+    } else if (hosts.length > 1) {
+      violations.push(`[${component.join(', ')}] matches more than one baseline group — the groups must stay disjoint`);
+    }
+  }
+  return violations;
+}
+
+/** The assertion the real tree and the controls share, so a control exercises the production pin. */
+function assertFileSccBudget(measured: readonly string[][], pinned: readonly string[][]): void {
+  const violations = fileSccViolations(measured, pinned);
+  assert.deepEqual(
+    violations,
+    [],
+    'the src FILE-level cycle budget changed. A file SCC may only shrink: when one is genuinely ' +
+      'closed, no edit is needed (containment allows it). Never add a member or a group to ' +
+      'accommodate a red reading.',
+  );
+}
+
+test('the current src tree carries no file cycle outside the committed baseline', () => {
+  const sources = collectTypeScriptSources(SRC_DIR);
+  const graph = scanFileImportGraph(sources, { includeDynamic: true });
+
+  assert.ok(graph.files >= MIN_FILES, `src file scan read ${graph.files} files (< ${MIN_FILES}) — a collapsed walk is not a clean one`);
+  assert.ok(
+    graph.fileEdges.length >= MIN_FILE_GRAPH_EDGES,
+    `src file scan resolved ${graph.fileEdges.length} edges (< ${MIN_FILE_GRAPH_EDGES}) — the graph is not being read`,
+  );
+  assert.ok(
+    !sources.some((source) => /\.(test|spec)\.(ts|tsx)$/.test(source.path)),
+    'the whole-tree file reading reads the shipping tree; test/spec files must be dropped by the walk',
+  );
+
+  console.log(
+    `(file-tree) src files=${graph.files} edges=${graph.fileEdges.length} ` +
+      `sccs=${JSON.stringify(graph.nonTrivialSccs.map((component) => component.length))}`,
+  );
+  for (const component of graph.nonTrivialSccs) console.log(`(file-tree) SCC[${component.length}] ${component.join(', ')}`);
+
+  assertFileSccBudget(graph.nonTrivialSccs, FILE_SCC_BASELINE);
+});
+
+test('positive control: a planted file cycle outside src/shared reds the widened pin', () => {
+  // The OLD pin filtered `path.startsWith('shared/')`. A cycle between two files of one
+  // feature package is invisible to that slice — the blindness this reading closes.
+  const planted = {
+    'modules/demo/a.ts': "import './b.js';\n",
+    'modules/demo/b.ts': "import './a.js';\n",
+  };
+  const oldSlice = scanFileFixture(
+    Object.fromEntries(Object.entries(planted).filter(([filePath]) => filePath.startsWith('shared/'))),
+  );
+  assert.deepEqual(oldSlice.nonTrivialSccs, [], 'the OLD src/shared slice cannot see a cycle outside src/shared');
+
+  const whole = scanFileFixture(planted);
+  assert.deepEqual(
+    whole.nonTrivialSccs,
+    [['modules/demo/a.ts', 'modules/demo/b.ts']],
+    'the whole-tree file reading must report the planted cycle the slice could not see',
+  );
+  assert.throws(
+    () => assertFileSccBudget(whole.nonTrivialSccs, FILE_SCC_BASELINE),
+    /FILE-level cycle budget changed/,
+    'a file cycle outside the baseline must red the same assertion the real tree uses',
+  );
+
+  // The OTHER direction, which is what "shrink-only" means: the same component after one file
+  // left the cycle is a strict subset of its baseline group and must stay green — closing a
+  // cycle is the sanctioned direction and needs no baseline edit.
+  assert.deepEqual(
+    fileSccViolations([FILE_SCC_BASELINE[0].slice(0, 3)], FILE_SCC_BASELINE),
+    [],
+    'a file SCC that shrank into a baseline group must stay green',
+  );
+});
+
+test('negative control: a one-way file import across packages is not a cycle', () => {
+  const graph = scanFileFixture({
+    'modules/alpha/a.ts': "import '@/modules/beta/b.js';\n",
+    'modules/beta/b.ts': 'export const b = 1;\n',
+  });
+  assert.deepEqual(graph.nonTrivialSccs, [], 'a one-way import cannot close a file-level cycle');
+  assert.equal(graph.fileEdges.length, 1, 'the edge must resolve — an unresolved import would make the reading vacuous');
+  assertFileSccBudget(graph.nonTrivialSccs, FILE_SCC_BASELINE);
 });
 
 // ── The ENTITY-level reading of `src/shared` (finding `cycle-voice-asr-factory-singleton`) ──────

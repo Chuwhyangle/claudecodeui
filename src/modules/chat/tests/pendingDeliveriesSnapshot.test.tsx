@@ -609,3 +609,146 @@ describe('(f) a delivery whose source is voice draws no pending command row', ()
     assert.equal(typed[0]?.id, 'local_typed', 'the survivor is the person’s own turn, not a delivery row');
   });
 });
+
+/* ─── (g) a capped delivery is retired by the full persisted turn ─────────── */
+
+/**
+ * THE LIVE READING (2026-11-19). A resident send's pending row carries the
+ * delivery's `text`, which the transport caps at `DELIVERY_TEXT_MAX_CHARS`
+ * (400). When nothing in this browser minted an optimistic `local_…` turn for
+ * that send — an MCP `session_create` / `session_send`, or another client — the
+ * delivery row is the only thing carrying the message until the turn's own
+ * persisted row arrives, and that persisted row is the user's FULL text (440 and
+ * 3319 characters in the live readings).
+ *
+ * Retirement matched the two by strict equality, so a 400-character prefix could
+ * never equal its 440-character turn: the pending row stayed beside it, and the
+ * session opened with two consecutive user bubbles, the first cut off mid-word.
+ * The relation that actually holds is `persisted.startsWith(capped)` — the same
+ * prefix relation the browser's own optimistic-turn suppression already uses.
+ *
+ * WHAT IS *NOT* RELAXED. The one-to-one claim (one persisted turn retires one
+ * pending row) and the one-sided clock floor (a same-prefix turn from earlier in
+ * the conversation is a different send) are both still enforced; the negative
+ * controls below red if either is dropped.
+ */
+describe('(g) a capped delivery row is retired by the persisted turn it is a prefix of', () => {
+  /** A turn row as the server wrote it into the transcript. */
+  const persistedTurn = (id: string, text: string, at: number): NormalizedMessage => ({
+    id,
+    sessionId: SESSION_ID,
+    timestamp: new Date(at).toISOString(),
+    provider: 'claude',
+    kind: 'text',
+    role: 'user',
+    content: text,
+  } as NormalizedMessage);
+
+  /** The readings the criterion pins, printed before the assertions. */
+  const reading = (capped: string, persisted: string, pending: number, users: number): string =>
+    `deliveryTextLen=${capped.length} persistedLen=${persisted.length} `
+      + `pendingRowsAfterMerge=${pending} userRowsAfterMerge=${users}`;
+
+  const userRows = (store: SessionStore): ChatMessage[] =>
+    normalizedToChatMessages(store.getMessages(SESSION_ID))
+      .filter((message) => message.type === 'user');
+
+  it('draws the persisted full message once and no pending row (a 440-char send)', () => {
+    const { store, dispatch } = mountChat();
+    // Distinct characters, so a wrong slice is visible in the failure rather
+    // than hidden by a run of identical words.
+    const fullText = '从TF主动SSH发起push到Cloudpit的会话开场消息'.repeat(40).slice(0, 440);
+    const cappedText = fullText.slice(0, 400);
+    assert.equal(cappedText.length, 400);
+    assert.equal(fullText.length, 440);
+
+    // The process dequeued the command: the snapshot's row is the only one
+    // carrying these words until the turn's persisted row is read back.
+    dispatch(activityFrame([
+      delivery({ deliveryId: 'd-capped', state: 'started', text: cappedText, enqueuedAt: ENQUEUED_AT }),
+    ]));
+
+    // The turn's own row, as the transcript writes it — full text, not the cap.
+    store.appendRealtime(SESSION_ID, persistedTurn('srv-capped', fullText, ENQUEUED_AT + 2_000));
+
+    const pending = pendingRows(store);
+    const drawnUsers = userRows(store);
+    console.log(reading(cappedText, fullText, pending.length, drawnUsers.length));
+
+    assert.equal(pending.length, 0, 'the capped delivery row retires once its full turn is on screen');
+    assert.equal(drawnUsers.length, 1, 'one send draws one user bubble, not a 400-char prefix beside the turn');
+    assert.equal(
+      drawnUsers[0]?.content,
+      fullText,
+      'the survivor is the persisted full text; the cap must not be what the reader is left with',
+    );
+  });
+
+  it('still retires a send at the 400-character cap and a shorter one (positive control)', () => {
+    const atCap = 'x'.repeat(400);
+    const capped = mountChat();
+    capped.dispatch(activityFrame([
+      delivery({ deliveryId: 'd-at-cap', state: 'started', text: atCap, enqueuedAt: ENQUEUED_AT }),
+    ]));
+    capped.store.appendRealtime(SESSION_ID, persistedTurn('srv-at-cap', atCap, ENQUEUED_AT + 1_000));
+    const cappedPending = pendingRows(capped.store);
+    const cappedUsers = userRows(capped.store);
+    console.log(reading(atCap, atCap, cappedPending.length, cappedUsers.length));
+    assert.equal(cappedPending.length, 0, 'exactly 400 characters is the unchanged comparison, and it retires');
+    assert.equal(cappedUsers.length, 1);
+
+    const short = 'continue';
+    const shorter = mountChat();
+    shorter.dispatch(activityFrame([
+      delivery({ deliveryId: 'd-short', state: 'started', text: short, enqueuedAt: ENQUEUED_AT }),
+    ]));
+    shorter.store.appendRealtime(SESSION_ID, persistedTurn('srv-short', short, ENQUEUED_AT + 1_000));
+    const shortPending = pendingRows(shorter.store);
+    const shortUsers = userRows(shorter.store);
+    console.log(reading(short, short, shortPending.length, shortUsers.length));
+    assert.equal(shortPending.length, 0, 'a send under the cap is still retired by its persisted turn');
+    assert.equal(shortUsers.length, 1);
+  });
+
+  it('does not relax the one-to-one claim or the one-sided clock floor (negative controls)', () => {
+    // (i) One-to-one: two pending rows with the same words and one persisted
+    // turn — exactly one may be claimed, so the other keeps its pending row.
+    const words = 'continue';
+    const oneToOne = mountChat();
+    oneToOne.dispatch(activityFrame([
+      delivery({ deliveryId: 'd-first', state: 'started', text: words, enqueuedAt: ENQUEUED_AT }),
+      delivery({ deliveryId: 'd-second', state: 'started', text: words, enqueuedAt: ENQUEUED_AT + 1_000 }),
+    ]));
+    oneToOne.store.appendRealtime(SESSION_ID, persistedTurn('srv-one', words, ENQUEUED_AT + 2_000));
+    const onePending = pendingRows(oneToOne.store);
+    const oneUsers = userRows(oneToOne.store);
+    console.log(`twoPendingWords=${JSON.stringify(words)} ${reading(words, words, onePending.length, oneUsers.length)}`);
+    assert.equal(
+      onePending.length,
+      1,
+      'one persisted turn retires one pending row; a prefix match must not claim both',
+    );
+    assert.equal(oneUsers.length, 1);
+
+    // (ii) Clock floor: a same-prefix turn from before the send is a different
+    // send and must not retire the row the user has just sent.
+    const cappedText = 'y'.repeat(400);
+    const outsideWindow = mountChat();
+    outsideWindow.dispatch(activityFrame([
+      delivery({ deliveryId: 'd-new', state: 'started', text: cappedText, enqueuedAt: ENQUEUED_AT }),
+    ]));
+    outsideWindow.store.appendRealtime(
+      SESSION_ID,
+      persistedTurn('srv-old', `${cappedText}older`, ENQUEUED_AT - 11_000),
+    );
+    const windowPending = pendingRows(outsideWindow.store);
+    const windowUsers = userRows(outsideWindow.store);
+    console.log(`outsideWindow ${reading(cappedText, `${cappedText}older`, windowPending.length, windowUsers.length)}`);
+    assert.equal(
+      windowPending.length,
+      1,
+      'a turn older than the echo-skew floor must not retire a freshly sent pending row',
+    );
+  });
+});
+
