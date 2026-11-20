@@ -79,13 +79,21 @@ Extract the primitive types (ChatRunSource / CommandLifecycleState / HostMode) i
 - `vitest run src/shared/tests/wireContractTypeSync.test.ts` → 5/5 pass（`HostMode` 行按 `server/shared/types` 目录读取，新叶子仍被读到）
 - `tsx --test server/shared/tests/architecture-ratchet.test.ts server/shared/tests/cloudpit-goal-exit-gate.test.ts` → 9/9 pass（新文件 65 行 <800、无模块级可变状态、无新目录）
 
+**本轮（2026-11-20 续跑）——上一轮 suite 红的真因与解除**：红的是 `src/modules/architecture/tests/architectureTab.test.tsx`「the analysis time is a relative reading」，与本任务 delta 无关，是 develop 全域的固定相对时间夹具炸弹：`GENERATED_AT` 曾钉死 `2026-10-20T15:52:34.427Z`，跨过格式器 30 天月界后读数从 "… ago" 变成 "last month"，`/ago|now/i` 判据在每棵树都红。develop 的 `2ae15aa53` 已把夹具改为滚动 `new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()`；本 worktree 合并 develop 后：
+
+- `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → 129/129 pass（1 file passed）
+- `npx tsx --test server/shared/tests/server-import-cycle-budget.test.ts` → 13/13 pass（case (k) 在 merge 后仍在，无冲突标记）
+- `npx tsc --noEmit -p server/tsconfig.json` → exit 0
+- anti-drift Touches 检查 → `ANTI-DRIFT OK`，8 个实改文件全部落在声明的 9 个 glob 内
+- `task_check` → acTotal=2 acChecked=2，dodTotal=2 dodChecked=2，`execute->done` ok
+
 ADR-007 暗轴记录：
 
 - L_G import-graph: sccs=0（server/shared/types files=18 intraPackageEdges=31；whole server files=688 staticEdges=2780）
 
 ## Blocker
 
-**2026-11-20T12:12:19.947Z — worker 未落地（exited-not-landed）**
+**2026-11-20T12:12:19.947Z — worker 未落地（exited-not-landed）** —— 已解除，见上「本轮续跑」小节。
 
 - 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: the analysis time is a relative reading [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/architectureTab.test.tsx]
 - run_id：wk-prod-anchor
