@@ -48,11 +48,11 @@ MCP 浏览器打开 `https://cloudpit.lrfz.com/session/10d533ec-8b33-4acf-acfc-a
 
 ## AC
 
-- [ ] AC1 新回归判据：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx --maxWorkers=1` 退出 0；新用例先打印读数 `deliveryTextLen=400 persistedLen=440 pendingRowsAfterMerge=0 userRowsAfterMerge=1` 再断言。红态记录：在未修实现上同一条用例红在 `pendingRowsAfterMerge=1`（贴逐字失败读数与命令）。
-- [ ] AC2 正对照：<=400 字消息的 pending 行仍被持久化行退休（`pendingRowsAfterMerge=0`），且 400 字边界通过；读数与命令贴出。
-- [ ] AC3 负控（改完即还原）：把 `startsWith` 还原成严格相等 ⇒ AC1 新用例红且 AC2 仍绿；记录 diff、失败行、恢复命令。
-- [ ] AC4 既有客户端判据不回退：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx src/modules/chat/tests/sessionMessageReconciliation.test.ts src/modules/chat/hooks/tests/useSessionStoreCommandLifecycle.test.tsx --maxWorkers=1` 退出 0；`npm run typecheck`、`npm run lint` 退出 0。
-- [ ] AC5 真实页面（DoD 第 3 条）：截图路径与读数写入 Evidence。
+- [x] AC1 新回归判据：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx --maxWorkers=1` 退出 0；新用例先打印读数 `deliveryTextLen=400 persistedLen=440 pendingRowsAfterMerge=0 userRowsAfterMerge=1` 再断言。红态记录：在未修实现上同一条用例红在 `pendingRowsAfterMerge=1`（贴逐字失败读数与命令）。
+- [x] AC2 正对照：<=400 字消息的 pending 行仍被持久化行退休（`pendingRowsAfterMerge=0`），且 400 字边界通过；读数与命令贴出。
+- [x] AC3 负控（改完即还原）：把 `startsWith` 还原成严格相等 ⇒ AC1 新用例红且 AC2 仍绿；记录 diff、失败行、恢复命令。
+- [x] AC4 既有客户端判据不回退：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx src/modules/chat/tests/sessionMessageReconciliation.test.ts src/modules/chat/hooks/tests/useSessionStoreCommandLifecycle.test.tsx --maxWorkers=1` 退出 0；`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC5 真实页面（DoD 第 3 条）：截图路径与读数写入 Evidence。
 
 ## DoD
 
@@ -67,3 +67,66 @@ MCP 浏览器打开 `https://cloudpit.lrfz.com/session/10d533ec-8b33-4acf-acfc-a
 - src/modules/chat-session/hooks/useSessionStore.ts
 - src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx
 - tasks/gap-resident-pending-capped-text-not-retired.md
+
+## Evidence
+
+实现：`retireDeliveredResidentPending` 的认领判据由 `(candidate.content || '').trim() !== text` 改为 `(candidate.content || '').trim().startsWith(text)`；一对一 `claimed` 与 `RESIDENT_PENDING_ECHO_FLOOR_SKEW_MS` 时间窗原样保留。commit `7ab1acdd7`。
+
+### AC1 — 新回归判据（绿）
+
+```
+cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx --maxWorkers=1
+```
+
+用例先打印后断言：
+
+- `deliveryTextLen=400 persistedLen=440 pendingRowsAfterMerge=0 userRowsAfterMerge=1`
+
+结果：`Test Files 1 passed (1) / Tests 15 passed (15)`，exit 0。
+
+红态：同一用例在未修实现（严格相等）上红在 `pending.length`，`1 !== 0`（`pendingRowsAfterMerge=1`），逐字见 AC3。
+
+### AC2 — 正对照（<=400 字仍退休）
+
+- 400 字边界：`deliveryTextLen=400 persistedLen=400 pendingRowsAfterMerge=0 userRowsAfterMerge=1`
+- 短消息：`deliveryTextLen=8 persistedLen=8 pendingRowsAfterMerge=0 userRowsAfterMerge=1`
+
+两条均通过（同文件 `(g) … positive control` 用例）。
+
+### AC3 — 负控（改完即还原）
+
+把实现还原为 `(candidate.content || '').trim() !== text` 后单跑同文件：
+
+```
+× (g) a capped delivery row is retired by the persisted turn it is a prefix of > draws the persisted full message once and no pending row (a 440-char send) 6ms
+  → the capped delivery row retires once its full turn is on screen
+  1 !== 0
+ FAIL src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx:678:12
+ Test Files 1 failed (1) / Tests 1 failed | 14 passed (15)
+```
+
+AC2 的两条（400 字边界与短消息）在还原态仍绿。恢复：从备份 `cp` 回（等价 `git checkout -- src/modules/chat-session/hooks/useSessionStore.ts`），恢复后 `grep -n "startsWith(text)"` 命中第 928 行。
+
+### AC4 — 既有客户端判据不回退
+
+```
+cd <worktree> && bash scripts/with-memory-cap.sh npx vitest run \
+  src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx \
+  src/modules/chat/tests/sessionMessageReconciliation.test.ts \
+  src/modules/chat/hooks/tests/useSessionStoreCommandLifecycle.test.tsx --maxWorkers=1
+```
+
+`Test Files 3 passed (3) / Tests 29 passed (29)`，exit 0。`npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning，无 error）。
+
+### AC5 — 真实页面（DoD 第 3 条）
+
+**执行时没有活的 delivery，如实说明。** 在 worktree dev server（vite `127.0.0.1:5191`，`SERVER_PORT=3001` 代理 live 实例）上，用 MCP `session_create`（项目 `/data/home/yale/work/claudecodeui`，`lifecycleMode=resident`，消息 440 字）建了两个隔离 resident 会话（`24f2080f-358e-4403-9d23-4c5fe712cb17`、`21df8d1d-f956-4a87-b4ae-c9eb176d924b`）。
+
+- 每次 delivery 都在约 353ms 内 `queued→started→cancelled`；页面以 25ms 轮询 2597 个样本，`MAX_PENDING_TEXT_LEN=0`，delivery 行只以 `cancelled` 态出现（无文本、`data-resident-withdrawn=true`）。会话 transcript 的 assistant 行是 `Failed to authenticate: OAuth session expired and could not be refreshed` —— 本环境的 resident CLI 进程无法认证，产不出 `queued`/`started` 的真实 delivery。
+- 因此**没有截到“两条连续 user 气泡”的真实页面截图**。`tmp/resident-capped-pending.png` / `tmp/resident-capped-final.png` 是上述认证失败会话（两条 454 字 user 行 + 两条已撤回 delivery 行），**不作为修复证据**。
+- 用真实 store + 真实组件的读数补足（AC1）：真实 `useSessionStore` 合并后 `pendingRowsAfterMerge=0`、`userRowsAfterMerge=1` 且内容是持久化全文 440 字；真实 `PendingResidentMessage` 不渲染任何 pending 行。
+- 清理：两个会话已 `session_close`；observer token 已 `revoke`（row absent，`GET /api/auth/user` → 401）；vite 已停止。
+
+## 验证记录
+
+该轴仍暗,理由:本任务只改 resident 待发行的退休判据（严格相等→前缀）与判据用例，未新增模块/依赖、未改服务端 cap 或快照形状，未做架构度量。

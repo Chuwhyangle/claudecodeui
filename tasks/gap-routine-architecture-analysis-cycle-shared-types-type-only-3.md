@@ -39,15 +39,46 @@ Extract the primitive types (ChatRunSource / CommandLifecycleState / HostMode) i
 - recorded_at: 2026-11-20T11:46:37.228Z
 
 ## AC
-- [ ] `.quay/routine-findings.jsonl` 中 finding `cycle-shared-types-type-only-3`（routine `architecture-analysis`，runId `architecture-analysis-1795175197228`）所描述的问题被复核并处置
-- [ ] 处置结论可核：要么修掉，要么写明「已有机制在管、失败在哪一步」，⛔ 不以「已注意到」结案
+- [x] `.quay/routine-findings.jsonl` 中 finding `cycle-shared-types-type-only-3`（routine `architecture-analysis`，runId `architecture-analysis-1795175197228`）所描述的问题被复核并处置
+- [x] 处置结论可核：要么修掉，要么写明「已有机制在管、失败在哪一步」，⛔ 不以「已注意到」结案
 
 ## DoD
-- [ ] 上面的判据实跑通过
-- [ ] ⛔ 探针只立案不执行：本任务若需要跑产出者/修复，由派发链执行，⛔ 不由例程代跑
+- [x] 上面的判据实跑通过
+- [x] ⛔ 探针只立案不执行：本任务若需要跑产出者/修复，由派发链执行，⛔ 不由例程代跑
 
 ## Touches
 - `server/shared/types/claude-events.ts`
 - `server/shared/types/cli-session.ts`
 - `server/shared/types/provider-launch.ts`
+- `server/shared/types/primitives.ts`
+- `server/shared/types/index.ts`
+- `server/shared/types/delivery.ts`
+- `server/shared/types/mcp-tools.ts`
+- `server/shared/tests/server-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-cycle-shared-types-type-only-3.md`
+
+## Evidence
+
+**处置结论：已修掉（不是「已有机制在管」）。** 复核读数来自仓库自己的 TS 语法树扫描器 `server/shared/import-graph.ts`（显式包含 `import type` 边），在工作树上实跑：
+
+- 修复前 `server/shared/types/` 文件级：`files=17 edges=30 sccs=[["shared/types/claude-events.ts","shared/types/cli-session.ts","shared/types/provider-launch.ts"]]` —— 与 finding 逐字一致。闭合边正是四条 type-only 边：claude-events→cli-session（ChatRunSource）、cli-session→provider-launch（ProviderRuntimeContext）、provider-launch→claude-events（CommandLifecycleState）、provider-launch→cli-session（HostMode）。
+- 修复后 `server/shared/types/`：`files=18 intraPackageEdges=31 sccs=[]`。
+- 全仓 `server/`：`files=688 staticEdges=2780 dynamicEdges=4 sccs=[] unresolvedInternal=17 nonLiteralDynamic=2`（目录级本来就读不到包内环，这里只作旁证）。
+
+**改动**（commit `55747db61`）：
+
+- 新增叶子 `server/shared/types/primitives.ts`：import 为零，承载 `ChatRunSource` / `CommandLifecycleState` / `HostMode` 三个 union（原有文档注释逐字搬迁）。
+- `claude-events.ts` / `cli-session.ts` / `provider-launch.ts` 单向 import 叶子；`delivery.ts` / `mcp-tools.ts` 的 `ChatRunSource` 也改指叶子；`index.ts` 增加 `export * from './primitives.js'`，包对外导出面不变（`@/shared/types.js` 的消费者无需改动）。
+- 固定图：`server/shared/tests/server-import-cycle-budget.test.ts` 新增 case (k)（骑在既有 AC-394 判据文件上，不新建测试文件）——合成「只由 `import type` 闭合的两文件环」必须被报告（判别力/假形态），真实 `server/shared/types` 包必须 `nonTrivialSccs=[]`，并带 intra-package 边数非空下限（实测 31 ≥ 10）防止空走。
+
+**实跑**：
+
+- `npx tsc --noEmit -p server/tsconfig.json` → exit 0
+- `npx tsc --noEmit -p tsconfig.json`、`npx tsc --noEmit -p scripts/tsconfig.json` → exit 0
+- `tsx --test server/shared/tests/server-import-cycle-budget.test.ts` → 13/13 pass（含新 case (k)）
+- `vitest run src/shared/tests/wireContractTypeSync.test.ts` → 5/5 pass（`HostMode` 行按 `server/shared/types` 目录读取，新叶子仍被读到）
+- `tsx --test server/shared/tests/architecture-ratchet.test.ts server/shared/tests/cloudpit-goal-exit-gate.test.ts` → 9/9 pass（新文件 65 行 <800、无模块级可变状态、无新目录）
+
+ADR-007 暗轴记录：
+
+- L_G import-graph: sccs=0（server/shared/types files=18 intraPackageEdges=31；whole server files=688 staticEdges=2780）
