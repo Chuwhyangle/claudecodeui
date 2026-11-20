@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-cycle-websocket-services-two-pairs
 title: "architecture-analysis: Two independent 2-file SCCs inside one 20-file
   package: activity-heartbeat.service.ts (239 lines) ⇄
   activity-protocol.service.ts (314), and chat-control.serv"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
