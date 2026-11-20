@@ -202,7 +202,11 @@ beforeAll(async () => {
   await import('@yalehwang/plantuml-js/elk');
 });
 
-const GENERATED_AT = '2026-10-20T15:52:34.427Z';
+// Rolling rather than a fixed date: the readout's age is asserted to be a
+// RELATIVE reading ("… ago"), and a hard-coded instant crosses the formatter's
+// 30-day month boundary and starts reading "last month" — red on every tree,
+// independent of any delta (2026-11-20, GENERATED_AT was 2026-10-20).
+const GENERATED_AT = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
 const FILE_MMD = '@startuml\nA --> B\n@enduml';
 const ENTITY_MMD = '@startuml\nX --> Y\n@enduml';
 
