@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-cycle-shared-types-type-only-3
 title: "architecture-analysis: 3-file SCC closed entirely by `import type` edges
   (claude-events → cli-session → provider-launch → claude-events, plus
   provider-launch → cli-session); a type"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
