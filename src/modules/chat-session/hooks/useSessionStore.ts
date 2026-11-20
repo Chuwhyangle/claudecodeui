@@ -875,6 +875,21 @@ const RESIDENT_PENDING_ECHO_FLOOR_SKEW_MS = 10_000;
  * replacement is *visible*. A persisted user row whose text matches and whose
  * clock is not before the send retires the pending row — one-to-one, so two
  * sends of the same words retire two rows rather than one row twice.
+ *
+ * MATCHING IS BY PREFIX, for the same reason the optimistic-turn suppression
+ * above matches by prefix: a live delivery's words are capped
+ * (`DELIVERY_TEXT_MAX_CHARS`), so the pending row carries only the first 400
+ * characters of what the user sent. A send with no browser-side `local_` row —
+ * an MCP `session_create`/`session_send`, or another client — has no optimistic
+ * turn to be suppressed, so this is the only path that retires the delivery row;
+ * requiring the persisted row to equal the capped text byte-for-byte left a
+ * 400-character prefix drawn beside the 440/3319-character persisted turn for as
+ * long as the turn ran (live reading, 2026-11-19). The persisted row is the full
+ * text, so `persisted.startsWith(capped)` is the relation that holds.
+ *
+ * The one-to-one claim and the one-sided clock floor are NOT relaxed: a
+ * same-prefix turn from earlier in the conversation is still a different send
+ * and must not retire a row the user has just sent.
  */
 function retireDeliveredResidentPending(
   serverMessages: NormalizedMessage[],
@@ -902,7 +917,15 @@ function retireDeliveredResidentPending(
     }
 
     const echo = echoCandidates.find((candidate) => {
-      if (claimed.has(candidate) || (candidate.content || '').trim() !== text) {
+      if (claimed.has(candidate)) {
+        return false;
+      }
+      // Prefix, not equality: the pending row is the delivery's capped text
+      // (`DELIVERY_TEXT_MAX_CHARS`), the persisted row is the user's full send.
+      // For a send of 400 characters or fewer the two are equal and this is the
+      // strict comparison it replaces; above the cap only the prefix relation
+      // holds. See the doc comment above for why the cap is the reason.
+      if (!(candidate.content || '').trim().startsWith(text)) {
         return false;
       }
       const echoTime = readMessageTime(candidate);
