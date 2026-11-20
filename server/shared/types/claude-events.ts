@@ -1,4 +1,4 @@
-import type { ChatRunSource } from './cli-session.js';
+import type { ChatRunSource, CommandLifecycleState } from './primitives.js';
 
 // ---------------------------------------------------------------------------
 // The resident ledger's own types (SPEC `resident-delivery-turn-ledger` §5).
@@ -219,18 +219,6 @@ export type ResidentLedger = {
   /** The ledger's own account of the states it could not make consistent. */
   readonly anomalies: readonly ResidentLedgerAnomaly[];
 };
-
-/**
- * Where one queued user message is in the CLI's own lifecycle.
- *
- * `queued` and `started` are the two facts that separate "still withdrawable"
- * from "already running"; `cancelled` is the only evidence a withdrawal worked
- * (the CLI answers a `cancel_async_message` control frame with no
- * `control_response` at any timing, so the queue's own account of the message is
- * the verdict — `docs/proposals/claude-resident-sessions-experiments.md` §9.2);
- * `completed` is the turn having run to its end.
- */
-export type CommandLifecycleState = 'queued' | 'started' | 'cancelled' | 'completed';
 
 /**
  * The dialect's own name for the row that carries one command lifecycle fact.

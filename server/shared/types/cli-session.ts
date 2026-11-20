@@ -1,5 +1,6 @@
 import type { ProviderRuntimeContext } from './provider-launch.js';
 import type { LLMProvider } from './provider-message.js';
+import type { ChatRunSource, HostMode } from './primitives.js';
 import type { AnyRecord } from './ui.js';
 
 // ---------------------------
@@ -97,16 +98,6 @@ export type ResolvedLaunchSpec = {
 
 // ---------------------------
 //----------------- SESSION HOST LIFECYCLE TYPES ------------
-/**
- * How long one host process is meant to live.
- *
- * `per-run` is the default for every provider: the process exists for exactly
- * one turn, so the application has no handle on it between turns. `resident`
- * is the Claude-only mode in which one process serves many turns, which is what
- * `HostLease` records are for.
- */
-export type HostMode = 'per-run' | 'resident';
-
 /**
  * State of one `ProcessHost`.
  *
@@ -553,35 +544,6 @@ export type HostReconfigurePatch = {
 
 // ---------------------------
 //----------------- CHAT RUN ORIGIN + NON-UNION CAPABILITIES ------------
-/**
- * Who asked for one provider run.
- *
- * `user` is a turn a human sent from a client; `scheduled` is one a timer
- * fired (the scheduled-messages dispatcher); `unattended` is one the
- * session-host layer opened by itself, with no request and no socket behind
- * it. The fact is recorded on the run rather than inferred later from the
- * absence of a connection, because "no connection" is equally true of a
- * scheduled run — and a run opened by a host driver must be distinguishable
- * from both.
- *
- * `mcp` is one the MCP gateway opened on a tool call. It too has no socket
- * behind it, so it shares the no-connection shape with `scheduled` and
- * `unattended`: which of the three a run is has to come from this recorded
- * value, never from whether a connection happens to be attached.
- *
- * `voice` is one the Live Voice relay opened when a spoken sentence settled. It
- * reaches the control service through the MCP gateway's own `session_send`
- * builder, but it is deliberately NOT `mcp`: a spoken delivery is not a command
- * a person can withdraw, and the activity channel's clients read this value to
- * decide whether a delivery row is theirs to draw (see `src/shared/types.ts`'s
- * `ActivityDeliverySource`). Keeping it a distinct member is what lets a voice
- * delivery reach the transcript without becoming a pending command row.
- *
- * Read by `chatRunRegistry` (which stamps it at `startRun` and exposes it on
- * the run record) and by the debug agent's host-driver criterion.
- */
-export type ChatRunSource = 'user' | 'scheduled' | 'unattended' | 'mcp' | 'voice';
-
 /**
  * What made a provider CLI open a turn nobody pushed.
  *

@@ -1006,3 +1006,55 @@ test('(j) server/modules/mcp-gateway has no file-level import cycle', () => {
   assert.ok(intraPackageEdges.length >= 10, `non-vacuity: the package must really import its own files, saw ${intraPackageEdges.length}`);
   assert.deepEqual(fileGraph.nonTrivialSccs, [], 'no file in server/modules/mcp-gateway may sit in an intra-package import cycle');
 });
+
+// ---------------------------------------------------------------------------
+// (k) the same file-level companion reading for server/shared/types
+// ---------------------------------------------------------------------------
+
+/**
+ * `cycle-shared-types-type-only-3` (routine `architecture-analysis`, probe
+ * `architecture-analysis`, runId `architecture-analysis-1795175197228`): the
+ * directory ratchet cannot see a cycle whose members all live in ONE directory,
+ * and `server/shared/types` carried a three-file one —
+ *
+ *   claude-events → cli-session → provider-launch → claude-events
+ *   (plus provider-launch → cli-session)
+ *
+ * — closed ENTIRELY by `import type` edges. `import type` is still a compile
+ * dependency, so every consumer of any one of the three contracts compiled all
+ * three, and no gate read the shape. The primitive unions
+ * (`ChatRunSource` / `CommandLifecycleState` / `HostMode`) now live in the leaf
+ * `primitives.ts`, which imports nothing; this case is the committed reading
+ * that keeps the package acyclic.
+ *
+ * The synthetic pair first proves the file-level detector DISCRIMINATES (a
+ * two-file cycle made only of `import type` is reported; a one-way type import
+ * is not), then the real package must report no component larger than one file,
+ * with a non-vacuity floor on the intra-package edges it resolved.
+ */
+test('(k) server/shared/types has no file-level import cycle — including one closed by `import type`', () => {
+  const typeOnlyCycle = scanFileImportGraph([
+    { path: 'types/a.ts', text: "import type { B } from './b.js';\nexport type A = B | number;\n" },
+    { path: 'types/b.ts', text: "import type { A } from './a.js';\nexport type B = A | string;\n" },
+  ]);
+  assert.deepEqual(
+    typeOnlyCycle.nonTrivialSccs,
+    [['types/a.ts', 'types/b.ts']],
+    'an `import type` cycle is still a compile dependency and must be reported',
+  );
+
+  const oneWayType = scanFileImportGraph([
+    { path: 'types/a.ts', text: "import type { B } from './b.js';\nexport type A = B;\n" },
+    { path: 'types/b.ts', text: 'export type B = string;\n' },
+  ]);
+  assert.deepEqual(oneWayType.nonTrivialSccs, [], 'a one-way type import is not a cycle');
+
+  const PACKAGE_PREFIX = 'shared/types/';
+  const packageSources = sourcesOnce().filter((source) => source.path.startsWith(PACKAGE_PREFIX));
+  assert.ok(packageSources.length >= 10, `the scan must read the package's sources, found ${packageSources.length}`);
+  const fileGraph = scanFileImportGraph(packageSources, { includeDynamic: true });
+  const intraPackageEdges = fileGraph.fileEdges.filter((edge) => edge.from.startsWith(PACKAGE_PREFIX) && edge.to.startsWith(PACKAGE_PREFIX));
+  console.log(`[file-scc] ${PACKAGE_PREFIX} files=${fileGraph.files} intraPackageEdges=${intraPackageEdges.length} sccs=${JSON.stringify(fileGraph.nonTrivialSccs)}`);
+  assert.ok(intraPackageEdges.length >= 10, `non-vacuity: the package must really import its own files, saw ${intraPackageEdges.length}`);
+  assert.deepEqual(fileGraph.nonTrivialSccs, [], 'no file in server/shared/types may sit in an intra-package import cycle — type-only edges included');
+});
