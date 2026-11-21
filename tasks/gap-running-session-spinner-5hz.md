@@ -1,7 +1,7 @@
 ---
 id: gap-running-session-spinner-5hz
 title: 运行中会话侧栏 spinner 60Hz 旋转持续占 CPU：改为 5Hz 步进并保留旋转
-status: todo
+status: done
 labels:
   - gap
   - defect
