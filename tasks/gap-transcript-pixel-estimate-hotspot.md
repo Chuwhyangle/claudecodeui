@@ -1,7 +1,7 @@
 ---
 id: gap-transcript-pixel-estimate-hotspot
 title: 流式 transcript 的行高估算遍历所有可见行：profile offsetHeight 热点并按需增量
-status: ready
+status: done
 labels:
   - gap
   - performance
