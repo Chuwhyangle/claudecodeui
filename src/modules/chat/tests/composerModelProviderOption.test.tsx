@@ -561,7 +561,7 @@ test('(d3) the menu source carries no provider === \'codex\' branch', () => {
   // the catalog data (server) and in PROVIDER_DESCRIPTORS (client), never in a
   // branch inside the composer menu.
   const source = readFileSync(
-    path.join(process.cwd(), 'src/modules/chat-composer/composer/ComposerModelMenu.tsx'),
+    path.join(process.cwd(), 'src/modules/chat-composer/composer/menus/ComposerModelMenu.tsx'),
     'utf8',
   );
   assert.doesNotMatch(

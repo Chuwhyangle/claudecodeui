@@ -17,7 +17,7 @@ export { SUGGESTION_CHIP_PASS_THROUGH_PX } from '@/modules/chat-composer/compose
 export { VoiceFailureNotice } from '@/modules/chat-composer/composer/VoiceInputButton';
 export { default as ActivityIndicator } from '@/modules/chat-composer/composer/ActivityIndicator';
 export { default as ChatComposer } from '@/modules/chat-composer/composer/ChatComposer';
-export { default as ComposerModelMenu } from '@/modules/chat-composer/composer/ComposerModelMenu';
+export { default as ComposerModelMenu } from '@/modules/chat-composer/composer/menus/ComposerModelMenu';
 export { default as PermissionRequestsBanner } from '@/modules/chat-composer/composer/PermissionRequestsBanner';
 export { default as TokenUsageSummary } from '@/modules/chat-composer/composer/TokenUsageSummary';
 export { default as VoiceClipButton } from '@/modules/chat-composer/composer/VoiceClipButton';

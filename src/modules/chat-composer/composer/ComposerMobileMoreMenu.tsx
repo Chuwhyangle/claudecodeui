@@ -8,7 +8,7 @@ import {
   ComposerMenuHeading,
   ComposerMenuItem,
   ComposerMenuSurface,
-} from '@/modules/chat-composer/composer/ComposerMenuPrimitives';
+} from '@/modules/chat-composer/composer/menus/ComposerMenuPrimitives';
 import { PromptInputButton } from '@/modules/chat-composer/composer/PromptInput';
 import { ScheduleMessagePopover } from '@/modules/chat-composer/composer/ScheduleMessagePopover';
 import TokenUsageSummary from '@/modules/chat-composer/composer/TokenUsageSummary';

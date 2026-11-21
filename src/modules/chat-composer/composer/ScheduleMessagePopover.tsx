@@ -10,7 +10,7 @@ import {
   ComposerMenuItem,
   ComposerMenuSeparator,
   ComposerMenuSurface,
-} from '@/modules/chat-composer/composer/ComposerMenuPrimitives';
+} from '@/modules/chat-composer/composer/menus/ComposerMenuPrimitives';
 
 type ScheduleMessagePopoverProps = {
   disabled: boolean;
