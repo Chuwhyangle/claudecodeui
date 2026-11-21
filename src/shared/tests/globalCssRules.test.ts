@@ -113,3 +113,27 @@ describe('a global rule must not out-rank the element it styles', () => {
     assert.ok(scoped.length > 0, 'the shift must still exist, scoped to `[data-app-shell]` — otherwise the shells lose it');
   });
 });
+
+describe('the sidebar activity indicator runs at a bounded frame rate', () => {
+  test('the sidebar spinner is stepped to five updates per second', () => {
+    // A running-session row spins for the whole turn. The app page has ~170 compositor layers, so a
+    // 60fps transform animation made the compositor re-walk that tree every frame: measured ~20% of
+    // one core of browser CPU (9.5% in the GPU process) on a running session, ~8% after stepping to
+    // 5Hz. The spinner is still visibly rotating; it just no longer asks for a frame per vsync.
+    const rules = declarations().filter(
+      (d) => d.selector === '#sidebar-panel .animate-spin' && d.prop === 'animation',
+    );
+    assert.equal(
+      rules.length,
+      1,
+      `exactly one \`#sidebar-panel .animate-spin\` animation rule must exist:\n  ${describeFound(rules)}`,
+    );
+    const value = rules[0].value.replace(/\s+/g, ' ').trim();
+    console.log(`sidebarSpinAnimation=${value}`);
+    assert.match(
+      value,
+      /^spin 1s steps\(5(?:,\s*end)?\) infinite$/,
+      `the sidebar spinner must step five times per second, not run at the display rate; found: ${value}`,
+    );
+  });
+});
