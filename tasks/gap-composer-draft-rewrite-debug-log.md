@@ -2,7 +2,7 @@
 id: gap-composer-draft-rewrite-debug-log
 title: Composer 草稿润色调试日志：默认关闭、Settings → Diagnostics
   开关、~/.cloudpit/reply-suggestions-debug.jsonl 轮转落盘完整草稿与候选
-status: todo
+status: ready
 labels:
   - gap
 parent: null
