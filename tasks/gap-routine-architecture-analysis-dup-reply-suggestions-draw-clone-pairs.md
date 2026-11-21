@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-dup-reply-suggestions-draw-clone-pairs
 title: "architecture-analysis: archguard_detect_duplicates (minStatements 6 /
   minTokens 50, tests excluded) reports totalGroups=2 for scope server and both
   sit in this file: logCompletion "
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
