@@ -1,6 +1,6 @@
 {
   "name": "composer-draft-rewrite",
-  "description": "The composer's ✦ draft-rewrite surface on a real page: chip position, one request, candidate preview, collapsed cache, retry de-duplication, apply-without-send, and a failure that leaves the original draft intact. The gateway is a LOCAL injected mock (report.mockGateway.note); this proves the wiring and contract, never real model quality. All draft text below is synthetic. A final NODE-SIDE leg drives the OPT-IN debug ledger through the server (bypassing the page mock): off + rewrite records 0 new lines, on + rewrite records exactly 1, off + rewrite again records 0. The drafts there are synthetic too.",
+  "description": "The composer's ✦ draft-rewrite surface on a real page: chip position, one request, candidate preview, collapsed cache, retry de-duplication, apply-without-send, and a failure that leaves the original draft intact. The gateway is a LOCAL injected mock (report.mockGateway.note); this proves the wiring and contract, never real model quality. All draft text below is synthetic. A final NODE-SIDE leg drives the OPT-IN debug ledger through the server (bypassing the page mock): off + rewrite records 0 new lines, on + rewrite records exactly 1, off + rewrite again records 0. The drafts there are synthetic too. The apply legs assert the transcript COUNT IS UNCHANGED (a delta, so any fixture size works) because applying never sends.",
   "mockGateway": {
     "responses": [
       {
@@ -107,7 +107,7 @@
         "draftRewriteStateIs": "chip",
         "draftRewriteRequestsIs": 1,
         "composerTextIs": "我们周四下午三点开个会，讨论支付流程，请记得带上上次的表格。",
-        "chatMessageCount": 2
+        "chatMessageCountDeltaIs": 0
       },
       "checkpoint": true
     },
@@ -133,7 +133,7 @@
         "draftRewriteRequestsIs": 2,
         "composerTextIs": "第二条草稿 用来验证失败时原文保持不变",
         "composerDisabledIs": false,
-        "chatMessageCount": 2
+        "chatMessageCountDeltaIs": 0
       },
       "checkpoint": true
     },

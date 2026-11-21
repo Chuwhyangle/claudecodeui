@@ -246,10 +246,12 @@ function sameJson(a, b) {
  *
  * @param {Record<string, unknown>} expect
  * @param {any} reading
- * @param {number | null} [previousDebugLogLines]
+ * @param {{ debugLogLines?: number | null, chatMessageCount?: number | null }} [previous]
  * @returns {string[]} one sentence per failed assertion (empty when every one held)
  */
-function expectationFailures(expect, reading, previousDebugLogLines = null) {
+function expectationFailures(expect, reading, previous = {}) {
+  const previousDebugLogLines = typeof previous.debugLogLines === 'number' ? previous.debugLogLines : null;
+  const previousChatMessageCount = typeof previous.chatMessageCount === 'number' ? previous.chatMessageCount : null;
   /** @type {string[]} */
   const failures = [];
   /** @type {(key: string, expected: unknown, actual: unknown) => void} */
@@ -756,6 +758,15 @@ function expectationFailures(expect, reading, previousDebugLogLines = null) {
       }
       case 'chatMessageCount': {
         const actual = Array.isArray(reading.chat?.messages) ? reading.chat.messages.length : null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'chatMessageCountDeltaIs': {
+        // The change since the PREVIOUS step. A criterion that means "this action sent no
+        // message" states it as a delta, so it does not depend on the chosen fixture's size.
+        const actual = Array.isArray(reading.chat?.messages) && previousChatMessageCount !== null
+          ? reading.chat.messages.length - previousChatMessageCount
+          : null;
         if (actual !== expected) fail(key, expected, actual);
         break;
       }
@@ -1559,10 +1570,10 @@ async function runScenario(browser, scenario, options) {
   /** @type {{ step: ScenarioStep, index: number }[]} */
   let batch = [];
   /**
-   * The debug-ledger line count read at the previous step, for `debugLogLinesDeltaIs`.
-   * @type {number | null}
+   * The previous step's readings that delta expectations compare against.
+   * @type {{ debugLogLines: number | null, chatMessageCount: number | null }}
    */
-  let previousDebugLogLines = null;
+  const previousReading = { debugLogLines: null, chatMessageCount: null };
 
   /**
    * Runs the accumulated in-page steps in ONE evaluate and records their results.
@@ -1600,7 +1611,7 @@ async function runScenario(browser, scenario, options) {
         await page.screenshot({ path: file, fullPage: true });
         screenshot = file;
       }
-      const failures = expectationFailures(step.expect ?? {}, reading, previousDebugLogLines);
+      const failures = expectationFailures(step.expect ?? {}, reading, previousReading);
       results.push({
         index: entry.index + 1,
         action: stepAction(step),
@@ -1610,7 +1621,8 @@ async function runScenario(browser, scenario, options) {
         screenshot,
         reading,
       });
-      if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
+      if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
     }
     batch = [];
   };
@@ -1705,7 +1717,7 @@ async function runScenario(browser, scenario, options) {
           await page.screenshot({ path: file, fullPage: true });
           screenshot = file;
         }
-        const failures = expectationFailures(step.expect ?? {}, reading, previousDebugLogLines);
+        const failures = expectationFailures(step.expect ?? {}, reading, previousReading);
         results.push({
           index: index + 1,
           action: stepAction(step),
@@ -1715,7 +1727,8 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
-        if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
+        if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
         continue;
       }
 
@@ -1751,8 +1764,8 @@ async function runScenario(browser, scenario, options) {
           screenshot = file;
         }
         const failures = failure === null
-          ? expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)
-          : [failure, ...expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)];
+          ? expectationFailures(step.expect ?? {}, reading, previousReading)
+          : [failure, ...expectationFailures(step.expect ?? {}, reading, previousReading)];
         results.push({
           index: index + 1,
           action: stepAction(step),
@@ -1762,7 +1775,8 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
-        if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
+        if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
         continue;
       }
 
@@ -1798,8 +1812,8 @@ async function runScenario(browser, scenario, options) {
           screenshot = file;
         }
         const failures = waitFailure === null
-          ? expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)
-          : [waitFailure, ...expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)];
+          ? expectationFailures(step.expect ?? {}, reading, previousReading)
+          : [waitFailure, ...expectationFailures(step.expect ?? {}, reading, previousReading)];
         results.push({
           index: index + 1,
           action: stepAction(step),
@@ -1809,7 +1823,8 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
-        if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
+        if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
         continue;
       }
 
