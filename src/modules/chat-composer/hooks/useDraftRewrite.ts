@@ -28,8 +28,8 @@ type UseDraftRewriteOptions = {
   draftScope: string | null;
   /** The draft exactly as the textarea shows it. */
   draft: string;
-  /** The shared reply-suggestions feature is enabled for this deployment. */
-  enabled: boolean;
+  /** The shared reply-suggestions feature switch; `null` while the shared reading is pending. */
+  enabled: boolean | null;
   /** Writes the candidate through the composer's single draft path; never submits. */
   writeDraft: (text: string) => void;
 };
@@ -69,7 +69,9 @@ export function useDraftRewrite({
 
   const controller = useMemo(
     () => createDraftRewriteController({
-      api: { rewrite: api.replySuggestions.draftRewrite },
+      // Property access is deferred to the call: a composer test that doubles `api` without the
+      // rewrite verb can still mount (the verb is only reached when the chip is pressed).
+      api: { rewrite: (request) => api.replySuggestions.draftRewrite(request) },
       writeDraft: writeDraftStable,
     }),
     [writeDraftStable],
@@ -83,27 +85,36 @@ export function useDraftRewrite({
   /**
    * The shared feature switch, read from the same `/status` endpoint the chip strip uses.
    *
-   * WHY BESIDE THE PROP: the reply-suggestions hook constructs its controller once and disposes
+   * WHY A FALLBACK AT ALL: the reply-suggestions hook constructs its controller once and disposes
    * it from an effect cleanup; React's development StrictMode runs that cleanup and re-runs the
-   * effect on the same instance, so its `status` stays null in a Vite dev page. Reading the same
-   * public reading here (the settings are shared, not duplicated) keeps the ✦ chip available in
-   * development and in production, and the prop still wins where a caller injects the reading.
+   * effect on the same instance, so its `status` stays null in a Vite dev page while a request is
+   * already in hand. The prop is authoritative when it is a boolean (`false` is a real "off" and
+   * must NOT trigger a second read); only a still-pending `null` after one beat falls back to the
+   * same public reading. In tests and production the prop arrives, so exactly one status call is
+   * made by the existing hook — this hook adds none.
    */
-  const [featureEnabled, setFeatureEnabled] = useState(false);
+  const [fallbackEnabled, setFallbackEnabled] = useState(false);
   useEffect(() => {
+    if (enabled !== null) return undefined;
     let alive = true;
-    void api.replySuggestions.status()
-      .then((reading) => {
-        if (alive && reading !== null && reading.enabled) setFeatureEnabled(true);
-      })
-      .catch(() => {
-        // A refused status is "off": the same fail-closed reading the controller uses.
-      });
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const statusApi = api.replySuggestions;
+          if (statusApi === undefined || typeof statusApi.status !== 'function') return;
+          const reading = await statusApi.status();
+          if (alive && reading !== null && reading.enabled) setFallbackEnabled(true);
+        } catch {
+          // A refused status is "off": the same fail-closed reading the controller uses.
+        }
+      })();
+    }, 250);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, []);
-  const effectiveEnabled = enabled || featureEnabled;
+  }, [enabled]);
+  const effectiveEnabled = enabled === true || fallbackEnabled;
 
   /**
    * The controller's lifetime, StrictMode-safe.

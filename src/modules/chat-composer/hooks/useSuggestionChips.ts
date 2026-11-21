@@ -85,8 +85,11 @@ export type UseSuggestionChipsResult = {
    * The shared reply-suggestions feature switch, WITHOUT the empty-box/assistant-message
    * conditions that make the chip strip eligible. The draft rewrite shares this feature's
    * settings and budget but is available on any non-blank draft, so it reads this raw flag.
+   * `null` means the shared `/status` reading has not arrived yet (the rewrite hook may then
+   * read the same endpoint itself, which is how a Vite dev page survives React StrictMode's
+   * effect replay); `false` is an authoritative "off".
    */
-  replySuggestionsEnabled: boolean;
+  replySuggestionsEnabled: boolean | null;
   /**
    * Handles the Ctrl/Cmd+Z that undoes a chip fill. Returns true when consumed;
    * every other key keeps the browser's own undo.
@@ -438,7 +441,7 @@ export function useSuggestionChips({
 
   return {
     chipStrip,
-    replySuggestionsEnabled: replySuggestionsStatus?.enabled === true,
+    replySuggestionsEnabled: replySuggestionsStatus === null ? null : replySuggestionsStatus.enabled,
     handleChipUndoKey,
     noteDraftEdit,
     reportChipSent,
