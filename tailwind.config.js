@@ -65,10 +65,6 @@ export default {
         'mobile-nav': 'var(--mobile-nav-total)',
       },
       keyframes: {
-        shimmer: {
-          '0%': { backgroundPosition: '200% 0' },
-          '100%': { backgroundPosition: '-200% 0' },
-        },
         'dialog-overlay-show': {
           from: { opacity: '0' },
           to: { opacity: '1' },
@@ -83,7 +79,6 @@ export default {
         },
       },
       animation: {
-        shimmer: 'shimmer 2s linear infinite',
         'dialog-overlay-show': 'dialog-overlay-show 150ms ease-out',
         'dialog-content-show': 'dialog-content-show 150ms ease-out',
         'bottom-sheet-content-show': 'bottom-sheet-content-show 220ms cubic-bezier(0.22, 1, 0.36, 1)',

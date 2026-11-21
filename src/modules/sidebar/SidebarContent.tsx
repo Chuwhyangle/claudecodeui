@@ -215,9 +215,24 @@ export default function SidebarContent({
       // The drawer sizes itself and is drawn over the workspace, so only the
       // docked panel pins a width. A device that cannot resize still pins one —
       // it opens at the stored width, it just has no handle.
-      className="relative flex h-full flex-col bg-background/80 backdrop-blur-sm md:select-none"
+      className="relative isolate flex h-full flex-col md:select-none"
       style={isMobile ? undefined : { width: `${sidebarWidth}px` }}
     >
+      {/* The frosted pane is its own empty layer, not an ancestor of the
+          sidebar's content. A `backdrop-filter` is re-evaluated whenever the
+          framebuffer under it changes, and a running-session row's spinner
+          animates above it for as long as any turn runs — measured at ~30% of
+          one core of GPU process time with the filter on, ~2% with it off. The
+          filter is therefore only worn while nothing is running: the panel is
+          frosted at rest, and the live-turn case keeps the translucent
+          background without paying for a blur nobody needs while spinners
+          rotate. The layer stays empty either way, and `-z-10` puts it behind
+          the content inside the root's `isolate` stacking context. */}
+      <div
+        aria-hidden="true"
+        data-sidebar-backdrop="true"
+        className={`pointer-events-none absolute inset-0 -z-10 bg-background/80${runningSessionsCount === 0 ? ' backdrop-blur-sm' : ''}`}
+      />
       <SidebarHeader
         isPWA={isPWA}
         isMobile={isMobile}
