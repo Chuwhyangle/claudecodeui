@@ -134,6 +134,7 @@ test('GET /status is the visibility reading with no key and no settings path in 
     expansion: 'off',
     maxChips: 3,
     maxChipChars: 120,
+    debugLog: false,
   });
   assert.ok(!response.text.includes(API_KEY), 'the status body must not carry the key');
   assert.ok(!response.text.includes(harness.settingsPath), 'the ready reading has no paths to carry');

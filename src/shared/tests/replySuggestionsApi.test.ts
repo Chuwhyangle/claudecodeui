@@ -141,6 +141,7 @@ describe('api.replySuggestions.status', () => {
       expansion: 'vary',
       maxChips: 5,
       maxChipChars: 80,
+      debugLog: true,
     });
 
     const result = await api.replySuggestions.status();
@@ -153,6 +154,7 @@ describe('api.replySuggestions.status', () => {
       expansion: 'vary',
       maxChips: 5,
       maxChipChars: 80,
+      debugLog: true,
     });
     const [url] = fetchMock.mock.calls[0] as unknown as [string];
     assert.equal(url, '/api/reply-suggestions/status');
@@ -203,6 +205,7 @@ describe('api.replySuggestions.status', () => {
       expansion: 'off',
       maxChips: 3,
       maxChipChars: 120,
+      debugLog: false,
     });
   });
 
