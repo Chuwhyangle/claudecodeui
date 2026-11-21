@@ -46,16 +46,16 @@ extra:
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-debug-log.test.ts` 退出 0，覆盖：默认关闭时不创建文件且 `existsSync` 为 false；开启后每次尝试恰好一行，`input` 与请求草稿、`output` 与响应候选逐字相等（`assert.equal`）；行字段集为 `at`、`type:"draftRewrite"`、`requestId`、`sessionId`（未传时缺省，`'sessionId' in record === false`）、`outcome`、`durationMs`、`model`、`protocol`、`version`、`inputChars`、`outputChars`、`input`、`output`（`inputTokens`/`outputTokens` 仅在现有 completion 暴露时出现）；`statSync(dir).mode & 0o777 === 0o700`、`statSync(file).mode & 0o777 === 0o600`；预置接近 2 MB 后写一行，`ls` 读到 `…debug.jsonl`、`.1`、`.2`、`.3` 且最旧被丢弃、单文件不超过「上限 + 一行」；写失败（注入只读目录或桩 fs 抛错）只产生一条不含草稿/候选内容的警告且 `recordAttempt` 不抛出；行内不含 API key、凭据文件内容、`baseUrl` 与系统提示原文；拒绝/截断时 `output` 是上游原始输出，超过 6000 字符只记前 6000 且 `outputTruncatedForLog === true`。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts` 退出 0：成功、超时、上游错误、拒绝/截断四条路径各调用注入的 `recordAttempt` 恰一次，`outcome` 分别为 `ok`、`error:timeout`、`error:<category>`、`rejected:truncated|empty-output|output-too-long`；`debugLog` 关闭时零次；同一 service 实例内先关后开，第二次尝试落一行（写时读设置）；`recordAttempt` 抛错不改变 HTTP 响应与候选。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite-routes.test.ts` 退出 0：`PUT /api/reply-suggestions/debug-log` 传 `{enabled:true}` / `{enabled:false}` ⇒ 200 且随后 `GET /status` 的 `debugLog` 跟随；非布尔或缺失 ⇒ 400；未带 token ⇒ 401；`POST /draft-rewrite` 的 `sessionId` 传合法字符串时透传到 `recordAttempt`、省略时字段缺省、超过 128 字符或非字符串 ⇒ 400；断言发往上游的请求体中不含 `sessionId`。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts` 退出 0：`writeDebugLog(true)` 只改 `debugLog`、保留未知键；写后文件 0600；写入经同目录临时文件 + rename（任一时刻读取均为可解析的完整文档，不存在半份 JSON）；文件存在但 JSON 解析失败时拒绝写入、抛出安全错误、文件字节不变；写后 mtime 变化且既有 reader 下一请求读到 `true`（无需重建 source）；文件不存在时创建一个合法文档（`debugLog:true`）；`EXPECTED_DEFAULTS` 表含 `debugLog: false`。
-- [ ] `npx vitest run src/shared/tests/composerDraftRewriteTypeSync.test.ts src/shared/tests/replySuggestionsTypeSync.test.ts` 退出 0：`DraftRewriteRequest.sessionId?: string` 与 `ReplySuggestionsStatus.debugLog: boolean` 双端逐字段对拍；把任一侧字段单边增删，TypeSync 负控必须红，恢复后通过。
-- [ ] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteController.test.ts` 退出 0：有 `sessionId` 时它进入请求体，未提供时字段缺省；请求体只含 `{text, retry?, sessionId?}`，不含 transcript/model/prompt/url。
-- [ ] `npx vitest run src/modules/settings/tests/diagnosticsSettingsTab.test.tsx src/modules/settings/tests/diagnosticsDebugLogSwitch.test.tsx` 退出 0：开关默认关闭；点击一次发出 `PUT {enabled:true}`；保存中禁用（`disabled`）；失败回滚到原值并显示错误；可访问名称与说明（`getByRole('switch', { name: … })` 且说明经 `aria-describedby` 关联）；内联警示含「开启后会把草稿与候选原文写入本机日志」与固定路径 `~/.cloudpit/reply-suggestions-debug.jsonl`；不存在清空日志按钮；开启不弹二次确认；同一文件内循环读取 12 个 locale 的 `settings.json`，新键齐且非空。
-- [ ] `node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url <isolated-url> --auth-token <token> --project <fixture> --session <fixture> --out tmp/composer-draft-rewrite-debug-log/scenario` 退出 0：新增步骤断言开关前调试文件行数不变、开启后一次重写恰好 +1、关闭后再重写行数不变；`npx playwright test e2e/composer-draft-rewrite.spec.ts` 退出 0。两者都用本地注入 mock gateway，不发真实付费请求。
-- [ ] 假形态各自变红并改完即还原：关闭时仍写一行 ⇒ 第一条与第二条 AC 红；写失败抛到重写路径 ⇒ 第二条 AC 红；`sessionId` 发给上游 ⇒ 第三条 AC 红；settings 解析失败仍覆盖 ⇒ 第四条 AC 红；单边增删字段而不改另一端 ⇒ 第五条 AC 红。
-- [ ] `npm run typecheck`、`npm run lint`、`npm run build` 退出 0（lint 仅既有 warning）；server 测试只用 `npx tsx --tsconfig server/tsconfig.json --test <单个文件>`，client 用 `npx vitest run <文件>`；不跑裸多文件 server test fan-out 或全量 suite（AGENTS.md 的内存规则）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-debug-log.test.ts` 退出 0，覆盖：默认关闭时不创建文件且 `existsSync` 为 false；开启后每次尝试恰好一行，`input` 与请求草稿、`output` 与响应候选逐字相等（`assert.equal`）；行字段集为 `at`、`type:"draftRewrite"`、`requestId`、`sessionId`（未传时缺省，`'sessionId' in record === false`）、`outcome`、`durationMs`、`model`、`protocol`、`version`、`inputChars`、`outputChars`、`input`、`output`（`inputTokens`/`outputTokens` 仅在现有 completion 暴露时出现）；`statSync(dir).mode & 0o777 === 0o700`、`statSync(file).mode & 0o777 === 0o600`；预置接近 2 MB 后写一行，`ls` 读到 `…debug.jsonl`、`.1`、`.2`、`.3` 且最旧被丢弃、单文件不超过「上限 + 一行」；写失败（注入只读目录或桩 fs 抛错）只产生一条不含草稿/候选内容的警告且 `recordAttempt` 不抛出；行内不含 API key、凭据文件内容、`baseUrl` 与系统提示原文；拒绝/截断时 `output` 是上游原始输出，超过 6000 字符只记前 6000 且 `outputTruncatedForLog === true`。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts` 退出 0：成功、超时、上游错误、拒绝/截断四条路径各调用注入的 `recordAttempt` 恰一次，`outcome` 分别为 `ok`、`error:timeout`、`error:<category>`、`rejected:truncated|empty-output|output-too-long`；`debugLog` 关闭时零次；同一 service 实例内先关后开，第二次尝试落一行（写时读设置）；`recordAttempt` 抛错不改变 HTTP 响应与候选。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite-routes.test.ts` 退出 0：`PUT /api/reply-suggestions/debug-log` 传 `{enabled:true}` / `{enabled:false}` ⇒ 200 且随后 `GET /status` 的 `debugLog` 跟随；非布尔或缺失 ⇒ 400；未带 token ⇒ 401；`POST /draft-rewrite` 的 `sessionId` 传合法字符串时透传到 `recordAttempt`、省略时字段缺省、超过 128 字符或非字符串 ⇒ 400；断言发往上游的请求体中不含 `sessionId`。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts` 退出 0：`writeDebugLog(true)` 只改 `debugLog`、保留未知键；写后文件 0600；写入经同目录临时文件 + rename（任一时刻读取均为可解析的完整文档，不存在半份 JSON）；文件存在但 JSON 解析失败时拒绝写入、抛出安全错误、文件字节不变；写后 mtime 变化且既有 reader 下一请求读到 `true`（无需重建 source）；文件不存在时创建一个合法文档（`debugLog:true`）；`EXPECTED_DEFAULTS` 表含 `debugLog: false`。
+- [x] `npx vitest run src/shared/tests/composerDraftRewriteTypeSync.test.ts src/shared/tests/replySuggestionsTypeSync.test.ts` 退出 0：`DraftRewriteRequest.sessionId?: string` 与 `ReplySuggestionsStatus.debugLog: boolean` 双端逐字段对拍；把任一侧字段单边增删，TypeSync 负控必须红，恢复后通过。
+- [x] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteController.test.ts` 退出 0：有 `sessionId` 时它进入请求体，未提供时字段缺省；请求体只含 `{text, retry?, sessionId?}`，不含 transcript/model/prompt/url。
+- [x] `npx vitest run src/modules/settings/tests/diagnosticsSettingsTab.test.tsx src/modules/settings/tests/diagnosticsDebugLogSwitch.test.tsx` 退出 0：开关默认关闭；点击一次发出 `PUT {enabled:true}`；保存中禁用（`disabled`）；失败回滚到原值并显示错误；可访问名称与说明（`getByRole('switch', { name: … })` 且说明经 `aria-describedby` 关联）；内联警示含「开启后会把草稿与候选原文写入本机日志」与固定路径 `~/.cloudpit/reply-suggestions-debug.jsonl`；不存在清空日志按钮；开启不弹二次确认；同一文件内循环读取 12 个 locale 的 `settings.json`，新键齐且非空。
+- [x] `node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url <isolated-url> --auth-token <token> --project <fixture> --session <fixture> --out tmp/composer-draft-rewrite-debug-log/scenario` 退出 0：新增步骤断言开关前调试文件行数不变、开启后一次重写恰好 +1、关闭后再重写行数不变；`npx playwright test e2e/composer-draft-rewrite.spec.ts` 退出 0。两者都用本地注入 mock gateway，不发真实付费请求。
+- [x] 假形态各自变红并改完即还原：关闭时仍写一行 ⇒ 第一条与第二条 AC 红；写失败抛到重写路径 ⇒ 第二条 AC 红；`sessionId` 发给上游 ⇒ 第三条 AC 红；settings 解析失败仍覆盖 ⇒ 第四条 AC 红；单边增删字段而不改另一端 ⇒ 第五条 AC 红。
+- [x] `npm run typecheck`、`npm run lint`、`npm run build` 退出 0（lint 仅既有 warning）；server 测试只用 `npx tsx --tsconfig server/tsconfig.json --test <单个文件>`，client 用 `npx vitest run <文件>`；不跑裸多文件 server test fan-out 或全量 suite（AGENTS.md 的内存规则）。
 
 ## DoD
 
@@ -108,3 +108,34 @@ extra:
 - docs/proposals/composer-draft-rewrite-plan.md
 - docs/prototypes/composer-draft-rewrite-desktop.svg
 - docs/prototypes/composer-draft-rewrite-mobile.svg
+- server/modules/reply-suggestions/reply-suggestions-failure-state.ts
+- server/modules/settings/ui/SettingsToggle.tsx
+- server/modules/observation/tests/session-digest-llm.test.ts
+- server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts
+- server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts
+
+## Evidence
+
+提交：`49d629ddd`（实现）、`dc483572c`（场景/runner）。develop 已合并进工作树（Already up to date）。
+
+- AC1 `reply-suggestions-debug-log.test.ts`：pass 12 / fail 0。默认关闭不建文件；开启后每次尝试恰好一行，`input`/`output` 与草稿/候选逐字相等（assert.equal）；字段集精确、未传 `sessionId` 时键缺失；目录 0700、文件 0600；预置 2 MB 后连写三次得到 `file/.1/.2/.3` 且最旧被丢弃；写失败（ENOTDIR）只产生 1 条不含草稿/候选的警告且不抛；行内无 key/baseUrl/system prompt；截断/超 6000 字符保留上游原文并置 `outputTruncatedForLog:true`。
+- AC2 `reply-suggestions-draft-rewrite.test.ts`：pass 33 / fail 0。ok / error:timeout / error:http / rejected:truncated|empty-output|output-too-long 各恰好一次；关时 0 次；同一实例先关后开即刻生效；抛错 sink 不改变 200 响应与候选。
+- AC3 `reply-suggestions-draft-rewrite-routes.test.ts`：pass 12 / fail 0。PUT `{enabled:true|false}` ⇒ 200 且 `/status.debugLog` 跟随；非布尔/缺失 400；无 token 401；`sessionId` 合法时进入 attempt 记录、省略为缺省、>128 或非字符串 400；上游请求体不含 `sessionId`。
+- AC4 `reply-suggestions-settings.test.ts`：pass 24 / fail 0。`writeDebugLog` 只改 `debugLog`、保留未知键；写完 0600；同目录临时文件 + rename（25 次交错读均可解析、无 `.tmp` 残留）；解析失败拒绝且字节不变；mtime 变化后同一 reader 读到 true；缺文件时创建合法文档；`EXPECTED_DEFAULTS.debugLog === false`。
+- AC5 `composerDraftRewriteTypeSync.test.ts` + `replySuggestionsTypeSync.test.ts`：pass 10 + 6。`DraftRewriteRequest.sessionId` 与 `ReplySuggestionsStatus.debugLog` 双端逐字段对拍，单边增删字段的负控在测试内先红后绿。
+- AC6 `composerDraftRewriteController.test.ts`：pass 20 / fail 0。有会话时请求体键恰为 `{sessionId,text}`，无会话时 `sessionId` 缺失；无 model/prompt/transcript/url。
+- AC7 `diagnosticsSettingsTab.test.tsx` + `diagnosticsDebugLogSwitch.test.tsx`：pass 4 + 6。默认关闭；一次点击发出 `{enabled:true}`；保存中 disabled；失败回滚并显示错误；`getByRole('switch',{name})` 与 `aria-describedby` 关联；内联警示含「开启后会把草稿与候选原文写入本机日志」与固定路径；无清空按钮、无二次确认；12 个 locale 新键齐全非空。
+- AC8 场景：`node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url http://127.0.0.1:5199 --auth-token <isolated> --project quay-fleet --session <fixture> --out tmp/composer-draft-rewrite-debug-log/scenario --debug-log-file <isolated>/.cloudpit/reply-suggestions-debug.jsonl` ⇒ rc=0，`ok:true`，21 steps。末三步读数 `debugLogLines` 2→2（delta 0）、2→3（delta +1）、3→3（delta 0）。`npx playwright test e2e/composer-draft-rewrite.spec.ts` rc=0（该 spec 按设计由 `QUAY_E2E_*` 环境变量开启，无该夹具时 skip；其 debug leg 的真实浏览器等价路径由下方 DoD 走查实际执行）。报告在 `tmp/composer-draft-rewrite-debug-log/scenario/report.json`。
+- AC9 假形态：关闭时仍写 ⇒ AC1(b) 与 AC2「debugLog false records nothing」红；sink 异常逃逸到重写路径 ⇒ AC2「throwing sink」红；`sessionId` 拼进上游 system ⇒ AC3「never to the upstream request」红；settings 解析失败仍覆盖 ⇒ AC4(write-d) 红；单边增删字段 ⇒ AC5 负控红。每次改完即还原，`git status` 干净后复跑四个 AC 用例：12/33/12/24 全绿。
+- AC10 `npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有 warning）；`npm run build` 退出 0。
+
+DoD（真实浏览器走查，隔离实例 + 本地 mock gateway，合成文本，无付费请求；工作树 `dist-server` + Vite dev，`HOME` 指向私有目录）：
+- Settings → Diagnostics 开关由 off 点击为 on，页面截图 `tmp/composer-draft-rewrite-debug-log/dod/settings-debug-on.png`；
+- 会话页输入合成草稿并点击 ✦：`inputEqual:true`、`outputEqual:true`、`outcome:ok`，行数 2→3；截图 `composer-candidate-with-debug-on.png`；
+- 关闭开关后再润色：行数 3→3；截图 `settings-debug-off.png`、`composer-after-debug-off.png`；
+- `stat -c '%a'` 读到目录 `700`、文件 `600`；轮转实机：预置接近 2 MB 后连写三次，`ls` 读到 `reply-suggestions-debug.jsonl`、`.1`、`.2`、`.3`（各 2097142 字节）；
+- 走查摘要写入 `tmp/composer-draft-rewrite-debug-log/dod`（脚本 `tmp/verify-settings/dod-debug-log.mjs` 为临时验证器，未提交）。实例用毕 `scripts/isolated-instance.sh stop`。
+
+## ADR-007
+
+该轴仍暗,理由:本任务只增加旁路调试日志与开关，未改变架构依赖图（reply-suggestions 仍为叶子模块、无新增跨模块边），无 L_G/L_D 可比读数。
