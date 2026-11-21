@@ -1,7 +1,7 @@
 ---
 id: gap-hidden-tab-timer-raf-audit
 title: 隐藏标签页仍在跑的持久 timer/RAF：inventory 并条件暂停/清理
-status: ready
+status: done
 labels:
   - gap
   - performance
