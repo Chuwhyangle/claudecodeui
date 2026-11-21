@@ -30,16 +30,16 @@ extra:
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts` exit 0：注入 settings、共享 guard 与假 completion；断言 POST 仅含 draft 文本，server prompt 不带 transcript/audio/attachment/history，且为独立 rewrite prompt；设置关闭、失效 enabled/upstream 缺字段、空输入、输入超共享上限分别 fail closed 且 complete 调用数为 0；正例一次调用、temperature 正确；retry 使用 redrawTemperature；maxOutputTokens 与既有 generation.maxOutputTokens 相等（默认配置读数 400）；试图使用错误模型/provider override 或客户端 prompt 被拒绝/忽略且不改变 completion 配置；响应和日志不含草稿、候选、prompt、凭据。
-- [ ] 同一命令：共享 guard 正控连续执行 chip 与 rewrite 时共同消耗既有额度、达到 maxCallsPerMinute/maxCallsPerDay 时均被同一限制拒绝；负控分别新建独立 owner 的隔离 fixture 可独立计数；chip 与 rewrite 不可各自按整份限额运行。复用共用 owner 后 chip 现有 failure/circuit/window 行为不变。
-- [ ] 同一命令及 `npx tsx --tsconfig server/tsconfig.json --test server/modules/llm-gateway/tests/llm-client.test.ts` exit 0：输出空白/非文本/超预算及 maxOutputTokens 耗尽或 stop/finish reason 表示截断均不产生候选；server 返回可识别安全错误，原 draft 不变；Anthropic/OpenAI 的 stop reason 读取均由回环 HTTP fixture 覆盖，正控完整 finish 可读，负控截断拒绝应用；响应体不回传上游原始错误文本/密钥。
-- [ ] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteController.test.ts` exit 0：逐用例断言打开时只请求一次并保留原文；收起后再次打开显示同候选且调用数不增；两个重复 retry 触发一个在途请求；请求返回前改文/清空/scope 切换/dispose 后的迟到答复都不入 cache、不覆盖 draft；apply 只写当前 scope/current draft、不调用 submit/send；loading 与 error 可折叠，失败保留原稿；候选与原稿完全相同也不破坏正文；超预算/截断拒绝；各清理动作取消旧缓存和候选。
-- [ ] `npx vitest run src/modules/chat/tests/composerDraftScoping.test.tsx src/modules/chat-composer/tests/chatComposerResponsive.test.tsx` exit 0：会话切换与当前 draft writer 仍同步；apply 后 immediate Enter/按钮读到新文本并遵从原有 send 路径；未 apply 时 send 原 draft；应用不自动发送、不改变发送次数、textarea focus/caret/key handlers/footer/send props 原样工作；clear、成功 send、scope change 后重开是空缓存；既有输入/快捷键与响应式控件回归通过。
-- [ ] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteView.test.tsx` exit 0：非空且可用时 chip 出现在 textarea 下方 footer 上方；禁用/空白时不显示/不调用；展开框 DOM 不含「润色建议」「尚未替换」标题或状态说明（loading/error 必要信息除外），只有候选正文、应用/重试 icon buttons 与必要错误/进度；保留原文由候选非按钮区点击收起；图标 click 不冒泡；非空 selection 完成不收起；候选区滚动不收起；加载和失败时均能收起；button 有 aria-label/title；viewport 320/375/1280 下均在 composer 内、footer 仍可见，软键盘/短视口下候选区限高并内部滚动。
-- [ ] `npx vitest run src/shared/tests/replySuggestionsTypeSync.test.ts src/shared/tests/composerDraftRewriteTypeSync.test.ts` exit 0：既有 reply-suggestions literal unions 同步用例不回归；新增 draft rewrite 的 request/response/error/stop reason 对两端声明逐字段读取并对拍；把 server 或 client 任一侧的字段/枚举单边增删，TypeSync 自测负控必须失败，恢复后通过。
-- [ ] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteI18n.test.ts` exit 0：新增提示键在 12 个当前语言资源 `de,en,es,fr,id,it,ja,ko,ru,tr,zh-CN,zh-TW` 的 `chat.json` 全存在且非空；测试语言集合从 `src/modules/i18n/languages.ts` 读，不硬编码另造 locale 集。
-- [ ] `node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url <isolated-url> --auth-token <token> --project <fixture> --session <fixture> --out tmp/composer-draft-rewrite-scenario` exit 0：真实页面语义读数及逐 checkpoint screenshot 的 JSON 报告证明 chip 位置、首次请求、候选、折叠缓存、重试去重、apply 不发送/草稿更新、未 apply 的原稿可发送；runner 的 mock gateway 为本地注入，报告显明“不等同真实模型质量”，场景清理注入 draft 与临时数据。错误场景通过场景断言证明原文保持。不得用任务内裸多文件 test fan-out。
-- [ ] `npm run typecheck`、`npm run lint`、`npm run build` exit 0；server 单文件使用 `npx tsx --tsconfig server/tsconfig.json --test <single-file>`，多个 server 测试只通过仓库既有有界内存入口及明确文件列表运行；不运行裸多文件 server 测试或全量套件。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts` exit 0：注入 settings、共享 guard 与假 completion；断言 POST 仅含 draft 文本，server prompt 不带 transcript/audio/attachment/history，且为独立 rewrite prompt；设置关闭、失效 enabled/upstream 缺字段、空输入、输入超共享上限分别 fail closed 且 complete 调用数为 0；正例一次调用、temperature 正确；retry 使用 redrawTemperature；maxOutputTokens 与既有 generation.maxOutputTokens 相等（默认配置读数 400）；试图使用错误模型/provider override 或客户端 prompt 被拒绝/忽略且不改变 completion 配置；响应和日志不含草稿、候选、prompt、凭据。
+- [x] 同一命令：共享 guard 正控连续执行 chip 与 rewrite 时共同消耗既有额度、达到 maxCallsPerMinute/maxCallsPerDay 时均被同一限制拒绝；负控分别新建独立 owner 的隔离 fixture 可独立计数；chip 与 rewrite 不可各自按整份限额运行。复用共用 owner 后 chip 现有 failure/circuit/window 行为不变。
+- [x] 同一命令及 `npx tsx --tsconfig server/tsconfig.json --test server/modules/llm-gateway/tests/llm-client.test.ts` exit 0：输出空白/非文本/超预算及 maxOutputTokens 耗尽或 stop/finish reason 表示截断均不产生候选；server 返回可识别安全错误，原 draft 不变；Anthropic/OpenAI 的 stop reason 读取均由回环 HTTP fixture 覆盖，正控完整 finish 可读，负控截断拒绝应用；响应体不回传上游原始错误文本/密钥。
+- [x] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteController.test.ts` exit 0：逐用例断言打开时只请求一次并保留原文；收起后再次打开显示同候选且调用数不增；两个重复 retry 触发一个在途请求；请求返回前改文/清空/scope 切换/dispose 后的迟到答复都不入 cache、不覆盖 draft；apply 只写当前 scope/current draft、不调用 submit/send；loading 与 error 可折叠，失败保留原稿；候选与原稿完全相同也不破坏正文；超预算/截断拒绝；各清理动作取消旧缓存和候选。
+- [x] `npx vitest run src/modules/chat/tests/composerDraftScoping.test.tsx src/modules/chat-composer/tests/chatComposerResponsive.test.tsx` exit 0：会话切换与当前 draft writer 仍同步；apply 后 immediate Enter/按钮读到新文本并遵从原有 send 路径；未 apply 时 send 原 draft；应用不自动发送、不改变发送次数、textarea focus/caret/key handlers/footer/send props 原样工作；clear、成功 send、scope change 后重开是空缓存；既有输入/快捷键与响应式控件回归通过。
+- [x] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteView.test.tsx` exit 0：非空且可用时 chip 出现在 textarea 下方 footer 上方；禁用/空白时不显示/不调用；展开框 DOM 不含「润色建议」「尚未替换」标题或状态说明（loading/error 必要信息除外），只有候选正文、应用/重试 icon buttons 与必要错误/进度；保留原文由候选非按钮区点击收起；图标 click 不冒泡；非空 selection 完成不收起；候选区滚动不收起；加载和失败时均能收起；button 有 aria-label/title；viewport 320/375/1280 下均在 composer 内、footer 仍可见，软键盘/短视口下候选区限高并内部滚动。
+- [x] `npx vitest run src/shared/tests/replySuggestionsTypeSync.test.ts src/shared/tests/composerDraftRewriteTypeSync.test.ts` exit 0：既有 reply-suggestions literal unions 同步用例不回归；新增 draft rewrite 的 request/response/error/stop reason 对两端声明逐字段读取并对拍；把 server 或 client 任一侧的字段/枚举单边增删，TypeSync 自测负控必须失败，恢复后通过。
+- [x] `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteI18n.test.ts` exit 0：新增提示键在 12 个当前语言资源 `de,en,es,fr,id,it,ja,ko,ru,tr,zh-CN,zh-TW` 的 `chat.json` 全存在且非空；测试语言集合从 `src/modules/i18n/languages.ts` 读，不硬编码另造 locale 集。
+- [x] `node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url <isolated-url> --auth-token <token> --project <fixture> --session <fixture> --out tmp/composer-draft-rewrite-scenario` exit 0：真实页面语义读数及逐 checkpoint screenshot 的 JSON 报告证明 chip 位置、首次请求、候选、折叠缓存、重试去重、apply 不发送/草稿更新、未 apply 的原稿可发送；runner 的 mock gateway 为本地注入，报告显明“不等同真实模型质量”，场景清理注入 draft 与临时数据。错误场景通过场景断言证明原文保持。不得用任务内裸多文件 test fan-out。
+- [x] `npm run typecheck`、`npm run lint`、`npm run build` exit 0；server 单文件使用 `npx tsx --tsconfig server/tsconfig.json --test <single-file>`，多个 server 测试只通过仓库既有有界内存入口及明确文件列表运行；不运行裸多文件 server 测试或全量套件。
 
 ## DoD
 
@@ -48,6 +48,34 @@ extra:
 同轮执行上面完整 ui-scenario 命令，提交完整 JSON 报告及 checkpoint 截图路径。真实页面操作、controller 与后端回环 mock 只证明实现链路与契约，不宣称模型改写质量；如果真实质量需要评估，另需授权并使用人工提供的非敏感样本。本任务不得以“测试存在”代替页面实际操作，也不得要求未经授权的付费请求。
 
 交付同步更新 `/data/home/yale/work/claudecodeui/docs/proposals/composer-draft-rewrite-plan.md` 与 `/data/home/yale/work/claudecodeui/docs/prototypes/composer-draft-rewrite-desktop.svg`、`/data/home/yale/work/claudecodeui/docs/prototypes/composer-draft-rewrite-mobile.svg`：去除独立设置、标题、状态副文案与 120 字 chip 截断暗示；原型改为候选纯正文+图标、无标题。文档说明共享 reply-suggestions 推理设置/预算、maxOutputTokens 保持 400、超限/截断拒绝且保留原稿。任务 Touches 将这些 untracked docs 作为实施交付声明，不要求立案前 commit。
+
+## 架构轴
+
+该轴仍暗,理由:本任务只扩展现有 reply-suggestions 模块与 composer 前端，未改变包级依赖图（无新包/新环），架构棘轮读数不适用；anti-drift 已确认 43 个改动文件全部在 Touches 内。
+
+## 验证记录
+
+实现提交：`d6b25b3de`（worktree `task/gap-composer-draft-rewrite-shared-suggestion-runtime`，已 merge develop 且无冲突）。
+
+逐条读数（均在 implementation-only 的隔离 worktree 内执行，未跑全量套件）：
+
+- AC1/AC2 `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts` → exit 0，26 pass / 0 fail。覆盖：disabled/missing model/unresolved key/blank/over-6000 均 0 次 completion；POST user 仅 draft；独立 rewrite system prompt；model/protocol/prompt 覆盖字段被忽略；日志与响应不含 draft/candidate/prompt/key；temperature 0.25 → redrawTemperature 1.5；maxOutputTokens=400；chips 与 rewrite 共享 minute/day 预算（第 3 次被同一 429 拒绝，2 次 reach upstream）；两独立 service 各自计数；回环 HTTP 覆盖 Anthropic `end_turn`/`max_tokens` 与 OpenAI `stop`/`length`，thinking-only/空 content 拒绝。
+- AC3 `... --test server/modules/llm-gateway/tests/llm-client.test.ts` → exit 0，11 pass / 0 fail；新增 (j) 读取两侧 stop reason 并置 `truncated`。
+- AC4 `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteController.test.ts` → exit 0，19 pass。
+- AC5 `npx vitest run src/modules/chat/tests/composerDraftScoping.test.tsx src/modules/chat-composer/tests/chatComposerResponsive.test.tsx` → exit 0，21 pass。
+- AC6 `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteView.test.tsx` → exit 0，12 pass。
+- AC7 `npx vitest run src/shared/tests/replySuggestionsTypeSync.test.ts src/shared/tests/composerDraftRewriteTypeSync.test.ts` → exit 0，13 pass（含单边增删负控）。
+- AC8 `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteI18n.test.ts` → exit 0，4 pass；语言集从 `src/modules/i18n/languages.ts` 读取（12 个）。
+- AC10 `npm run typecheck` exit 0（client/server/scripts 三工程）、`npm run lint` exit 0、`npm run build` exit 0。
+- AC9/DoD 真实页面：以 `scripts/isolated-instance.sh` 启动独立实例（临时 HOME、全新 auth.db、`residentRestore=false`、`CLAUDE_SESSION_SCOPE_SWEEP=off`、rewrite 设置 enabled 指向本地假网关地址），Vite dev server 代理到该实例，fixture project=`composer-draft-rewrite-workspace`、session=`draft-rewrite-fixture`。`node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url <isolated-url> --auth-token <token> --project composer-draft-rewrite-workspace --session draft-rewrite-fixture` 三个视口全部 exit 0：
+  - 1280x800 → 18 steps / 8 checkpoints，报告 `tmp/composer-draft-rewrite/desktop/report.json`
+  - 375x720 → 18 steps / 8 checkpoints，报告 `tmp/composer-draft-rewrite/mobile-375/report.json`
+  - 320x640 → 18 steps / 8 checkpoints，报告 `tmp/composer-draft-rewrite/mobile-320/report.json`
+  - 每次 mock gateway `requests=3`（首次成功、失败一次、去重后重试一次）；`mockGateway.note` 明示“local injected mock gateway — proves the wiring/contract only, not real model quality”。
+  - 断言包含：chip 出现在 composer body 内且 footer 仍存在；首次请求仅一次；候选出现；非按钮区收起后再次打开 `requests` 不变；apply 后 composer 文本更新且 `chatMessageCount` 不变（无发送）；失败态 `requests=2` 且原 draft 逐字保持、textarea 未禁用；两次连续 retry 只增一次请求（`requests=3`）。
+  - 截图：`tmp/composer-draft-rewrite/desktop/step-5-waitFor-draftRewrite-candidate.png`（候选框、无标题、仅两图标）、`.../step-9-drive-draftRewrite.apply.png`、`.../step-12-waitFor-draftRewrite-error.png`；375/320 同名文件在各自目录。
+
+诚实声明：本会话没有可用的 MCP 浏览器工具；DoD 的“亲手在真实页面操作”由仓库自带的真实 Chromium 场景 runner（`scripts/ui-scenario.mjs`，非 jsdom）完成，读取的是渲染后的真实页面并按 checkpoint 截图；没有用测试存在代替页面操作。网关是本地注入 mock，没有发出任何真实付费请求；不宣称模型改写质量。截图/报告只含合成的 fixture 文本与假 token，不含真实用户文本或凭据。
 
 ## Touches
 
