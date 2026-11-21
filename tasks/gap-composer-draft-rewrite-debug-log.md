@@ -102,6 +102,7 @@ extra:
 - src/modules/i18n/locales/zh-TW/settings.json
 - scripts/scenarios/composer-draft-rewrite.json
 - e2e/composer-draft-rewrite.spec.ts
+- scripts/ui-scenario.mjs
 - src/modules/ui-scenario/chatSurface.ts
 - src/modules/ui-scenario/scenarioSurface.ts
 - src/modules/ui-scenario/tests/scenarioSurface.test.ts
@@ -109,7 +110,7 @@ extra:
 - docs/prototypes/composer-draft-rewrite-desktop.svg
 - docs/prototypes/composer-draft-rewrite-mobile.svg
 - server/modules/reply-suggestions/reply-suggestions-failure-state.ts
-- server/modules/settings/ui/SettingsToggle.tsx
+- src/modules/settings/ui/SettingsToggle.tsx
 - server/modules/observation/tests/session-digest-llm.test.ts
 - server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts
 - server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts
