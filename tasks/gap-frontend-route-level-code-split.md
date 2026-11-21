@@ -1,7 +1,7 @@
 ---
 id: gap-frontend-route-level-code-split
 title: 首包主 chunk 4.55MB：路由级 lazy + 重依赖按需加载
-status: todo
+status: ready
 labels:
   - gap
   - performance
