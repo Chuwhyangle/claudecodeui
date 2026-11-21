@@ -237,3 +237,55 @@ export function startEditingMessage(text: string): boolean {
   }
   return false;
 }
+
+/** The composer's own readings: the textarea's disabled state and the ✦ draft-rewrite surface. */
+export type ScenarioComposerReading = {
+  composerDisabled: boolean;
+  draftRewrite: ScenarioDraftRewriteReading;
+};
+
+/** Both composer readings in one pass, so the scenario reading cannot drift from the surface. */
+export function readComposerReading(): ScenarioComposerReading {
+  return { composerDisabled: readComposerDisabled(), draftRewrite: readDraftRewriteReading() };
+}
+
+/** The steps that drive the composer's own DOM: the textarea and the ✦ surface. */
+export type ComposerDriveStep =
+  | { 'chat.type': string }
+  | { 'draftRewrite.open': true }
+  | { 'draftRewrite.collapse': true }
+  | { 'draftRewrite.apply': true }
+  | { 'draftRewrite.retry': true };
+
+/** True when a scenario step belongs to the composer slice. */
+export function isComposerStep(step: object): step is ComposerDriveStep {
+  return 'chat.type' in step || 'draftRewrite.open' in step || 'draftRewrite.collapse' in step
+    || 'draftRewrite.apply' in step || 'draftRewrite.retry' in step;
+}
+
+/**
+ * Drives one composer step and returns the action name the timing record reports.
+ *
+ * Typing goes through the real textarea's React input path so the composer's own change handler
+ * (voice-range remap, candidate invalidation) runs; the ✦ verbs press the product's own controls.
+ */
+export function driveComposerStep(step: ComposerDriveStep): string {
+  if ('chat.type' in step) {
+    typeDraft(step['chat.type']);
+    return 'chat.type';
+  }
+  if ('draftRewrite.open' in step) {
+    openDraftRewrite();
+    return 'draftRewrite.open';
+  }
+  if ('draftRewrite.collapse' in step) {
+    collapseDraftRewrite();
+    return 'draftRewrite.collapse';
+  }
+  if ('draftRewrite.apply' in step) {
+    applyDraftRewrite();
+    return 'draftRewrite.apply';
+  }
+  retryDraftRewrite();
+  return 'draftRewrite.retry';
+}

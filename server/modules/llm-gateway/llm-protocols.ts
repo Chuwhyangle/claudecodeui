@@ -190,7 +190,7 @@ function readAnthropicText(payload: unknown): string {
 }
 
 /** Stop/finish reasons that mean the answer was cut off rather than finished. */
-const TRUNCATING_STOP_REASONS: ReadonlySet<string> = new Set(['max_tokens', 'length']);
+const TRUNCATING_STOP_REASONS: readonly string[] = ['max_tokens', 'length'];
 
 /**
  * Whether a dialect's stop/finish reason says the answer was truncated.
@@ -200,7 +200,7 @@ const TRUNCATING_STOP_REASONS: ReadonlySet<string> = new Set(['max_tokens', 'len
  * carrying its own comparison. Any other reason — including null — is a finished answer.
  */
 export function isTruncatingStopReason(stopReason: string | null): boolean {
-  return stopReason !== null && TRUNCATING_STOP_REASONS.has(stopReason);
+  return stopReason !== null && TRUNCATING_STOP_REASONS.includes(stopReason);
 }
 
 /** A plain-object record, or null for anything else (including arrays). */
@@ -234,7 +234,8 @@ function readOpenAiStopReason(payload: unknown): string | null {
   return readStringField(readOpenAiChoice(payload), 'finish_reason');
 }
 
-/** Pull the answer text out of an OpenAI Chat Completions response. */function readOpenAiText(payload: unknown): string {
+/** Pull the answer text out of an OpenAI Chat Completions response. */
+function readOpenAiText(payload: unknown): string {
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new LlmShapeError('upstream response was not an object');
   }

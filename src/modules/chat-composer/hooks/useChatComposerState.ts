@@ -21,7 +21,12 @@ import { useDraftState } from '@/modules/chat-composer/hooks/useDraftState';
 import { useFileMentions } from '@/modules/chat-composer/hooks/useFileMentions';
 import { useInputHistory } from '@/modules/chat-composer/hooks/useInputHistory';
 import { useSuggestionChips } from '@/modules/chat-composer/hooks/useSuggestionChips';
-import { useDraftRewrite } from '@/modules/chat-composer/hooks/useDraftRewrite';
+import { useComposerDraftRewrite } from '@/modules/chat-composer/hooks/useComposerDraftRewrite';
+import {
+  createFakeSubmitEvent,
+  getNotificationSessionSummary,
+  stripTrailingWhitespace,
+} from '@/modules/chat-composer/utils/composerSendHelpers';
 import { useSendDeliveryState } from '@/modules/chat-composer/hooks/useSendDeliveryState';
 import { useSendOnEnter } from '@/modules/chat-composer/hooks/useSendOnEnter';
 import { useTextareaInteractionState } from '@/modules/chat-composer/hooks/useTextareaInteractionState';
@@ -39,16 +44,6 @@ import { findSessionHostState, findSessionOccupancy, useSessionHosts } from '@/s
  * to see all of them at once: the send path (`handleSubmit`) and the handlers
  * that route a DOM event to the concern that owns it.
  */
-
-/**
- * The message text a draft sends as: trailing spaces and line breaks removed,
- * anything internal kept. A quote chip accepted at the end of an empty line
- * leaves two newlines in the box, and those are the composer's padding rather
- * than part of the message.
- */
-function stripTrailingWhitespace(text: string): string {
-  return text.replace(/\s+$/u, '');
-}
 
 type UseChatComposerStateArgs = {
   selectedProject: Project | null;
@@ -184,28 +179,6 @@ type UseChatComposerStateArgs = {
 type MentionableFile = {
   name: string;
   path: string;
-};
-
-const createFakeSubmitEvent = () => {
-  return { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>;
-};
-
-const getNotificationSessionSummary = (
-  selectedSession: ProjectSession | null,
-  fallbackInput: string,
-): string | null => {
-  const sessionSummary = selectedSession?.summary || selectedSession?.name || selectedSession?.title;
-  if (typeof sessionSummary === 'string' && sessionSummary.trim()) {
-    const normalized = sessionSummary.replace(/\s+/g, ' ').trim();
-    return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
-  }
-
-  const normalizedFallback = fallbackInput.replace(/\s+/g, ' ').trim();
-  if (!normalizedFallback) {
-    return null;
-  }
-
-  return normalizedFallback.length > 80 ? `${normalizedFallback.slice(0, 77)}...` : normalizedFallback;
 };
 
 export function useChatComposerState({
@@ -417,34 +390,19 @@ export function useChatComposerState({
     quotedSelection,
   });
 
-  /**
-   * The ✦ candidate's write path: the composer's ONE draft writer.
-   *
-   * A whole-text replacement invalidates everything keyed to the old bytes — the voice insertion
-   * range is remapped (not left pointing into the old text), a model-chip attribution is
-   * forfeited, and the expansion chain anchored on the old draft is dropped — then both draft
-   * stores are written so an immediate Enter sends the candidate. It never submits.
-   */
-  const applyDraftRewriteText = useCallback((text: string) => {
-    const previous = inputValueRef.current;
-    clearExpansion();
-    noteDraftEdit(text);
-    remapVoiceRangeOnEdit(previous, text);
-    setInputFromHistory(text);
-  }, [clearExpansion, inputValueRef, noteDraftEdit, remapVoiceRangeOnEdit, setInputFromHistory]);
-
-  // The candidate surface: shares the reply-suggestions settings/budget but is available on any
-  // non-blank draft. It is reset by every path that ends the draft's identity (edit, clear, send,
-  // scope change via setContext, unmount via the hook's dispose).
-  const draftRewrite = useDraftRewrite({
+  // The ✦ candidate bound to the composer's ONE draft writer (see the hook for the invariants).
+  const draftRewrite = useComposerDraftRewrite({
     sessionId: currentSessionId,
     draftScope,
     draft: input,
     enabled: replySuggestionsEnabled,
-    writeDraft: applyDraftRewriteText,
+    inputValueRef,
+    clearExpansion,
+    noteDraftEdit,
+    remapVoiceRangeOnEdit,
+    setInputFromHistory,
   });
-  // The two controller verbs the composer's synchronous paths call. Destructured so the
-  // callbacks below depend on the stable controller method, not on the hook's per-render object.
+  // The two controller verbs the composer's synchronous paths call.
   const invalidateDraftRewrite = draftRewrite.invalidate;
   const resetDraftRewrite = draftRewrite.reset;
 
@@ -831,8 +789,6 @@ export function useChatComposerState({
         // The message left the box; the variants that answered it are no longer
         // about anything on screen.
         clearExpansion();
-        // A delivered message ends the draft's identity: any candidate (or late answer) for it
-        // must not survive into the now-empty box.
         resetDraftRewrite();
         // The box itself is cleared only while it still shows the scope the
         // message came from; a scope that has moved on (a new chat) already
@@ -962,9 +918,7 @@ export function useChatComposerState({
       // variants would replace text the person just changed by hand.
       clearExpansion();
 
-      // A manual edit also invalidates a draft-rewrite candidate: it answered the old bytes.
-      // Done synchronously (not only in the controller's effect) so a response that lands
-      // between this event and the next render is already stale.
+      // Synchronous, so a response landing before the next render is already stale.
       invalidateDraftRewrite();
       // An edit also forfeits the `sent` attribution. Only an unedited model-chip
       // fill is that chip's text going out; once the person changes it, whatever
@@ -1267,11 +1221,6 @@ export function useChatComposerState({
      * `useSuggestionChips` and forwarded unchanged.
      */
     chipStrip,
-    /**
-     * The ✦ draft-rewrite candidate surface: snapshot + the commands
-     * (`openOrRequest`, `collapse`, `retry`, `apply`, `invalidate`/`reset`). The composer
-     * draws it between the textarea and the footer; nothing here sends.
-     */
     draftRewrite,
     getRootProps,
     getInputProps,
