@@ -138,3 +138,11 @@ L_D directory-graph: cycles=0
 - `server/shared/tests/server-import-cycle-budget.baseline.json`
 - `server/shared/tests/server-import-cycle-budget.test.ts`
 - `tasks/gap-routine-architecture-analysis-god-package-server-websocket-services.md`
+
+## Blocker
+
+**2026-11-21T12:17:25.174Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=5488 server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts passed=false end_ms=1795263245444 [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts,server/modules/mcp-gateway/tests/mcp-english-only.test.ts,server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts,server/modules/mcp-gateway/tests/mcp-english-only.test.ts changed=-]
+- run_id：wk-prod-anchor
+- session_id：10a6d9fe-f364-4ff5-b5cd-439db97128e4
