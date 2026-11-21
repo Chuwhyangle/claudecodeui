@@ -1581,8 +1581,11 @@ async function legHandshake(smoke) {
   }
 
   let client;
+  let serverInfo;
   try {
     client = await mcpConnect(smoke.server.port, smoke.pat);
+    // 握手自报的身份：客户端显示的就是这里，读数不能再写死一个字面量。
+    serverInfo = client.getServerVersion();
   } catch (error) {
     throw new LegRefusal(
       `拒绝运行：MCP 客户端接不上 /mcp（PAT 认证或传输未落地）：${error instanceof Error ? error.message : String(error)}`,
@@ -1606,7 +1609,7 @@ async function legHandshake(smoke) {
 
   const reading = `claude mcp add 逐字命令：${add.command}；退出码 ${add.status}；`
     + `写出 ${mcpJsonPath}；tools/list 共 ${smoke.toolNames.length} 件，逐字：${smoke.toolNames.join(', ')}；`
-    + `MCP SERVER_INFO name=claudecodeui-mcp-gateway；入站面 http://127.0.0.1:${smoke.server.port}${MCP_PATH}（PAT ${smoke.pat.slice(0, 8)}…，Bearer）。`;
+    + `MCP SERVER_INFO name=${serverInfo?.name ?? '<none>'}${serverInfo?.title ? ` title=${serverInfo.title}` : ''}；入站面 http://127.0.0.1:${smoke.server.port}${MCP_PATH}（PAT ${smoke.pat.slice(0, 8)}…，Bearer）。`;
   smoke.write(
     'Claude Code 握手与工具列表',
     reading,

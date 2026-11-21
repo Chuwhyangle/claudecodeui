@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { Express, RequestHandler } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -5,6 +8,7 @@ import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { ZodRawShape } from 'zod';
 
 import type { AccessTokensService } from '@/modules/oauth/index.js';
+import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 // The cross-module barrel imports below are what make this file the ONE place
 // the gateway reaches another module for its own wiring (AC-253): the projects
 // readers its read tools answer from, the project-path lookup the by-id session
@@ -75,8 +79,37 @@ import type { McpWriteNotification } from './mcp-write-notification.js';
  * middleware in front of the transport.
  */
 
-/** Advertised to MCP clients in the `initialize` handshake. */
-const SERVER_INFO = { name: 'claudecodeui-mcp-gateway', version: '0.1.0' };
+/**
+ * Advertised to MCP clients in the `initialize` handshake.
+ *
+ * `name` and `title` are what an MCP client DISPLAYS: Gemini title-cases
+ * `cloudpit-mcp-gateway` into "Cloudpit Mcp Gateway" and prefers `title` when
+ * the SDK advertises it. Keep both on the Cloudpit brand — the pre-3.0 name
+ * `claudecodeui-mcp-gateway` survived the brand sweep because that sweep only
+ * renamed the client-side config key and the token env var, not this wire
+ * identity, and nothing pinned it. The leg in `mcp-transport.test.ts` (f) now
+ * does.
+ *
+ * `version` is the version of the code actually running, read ONCE at module
+ * load from the application root's `package.json` (the same source and the same
+ * freshness rule as `RUNNING_VERSION` in `server/index.ts`: a long-lived process
+ * keeps the version it started with even after an update replaces the file). It
+ * was a literal `0.1.0` while the package was 3.x; a literal drifts, the package
+ * cannot.
+ */
+const SERVER_VERSION = (() => {
+  try {
+    const appRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8'));
+    const version =
+      parsed !== null && typeof parsed === 'object' ? (parsed as { version?: unknown }).version : undefined;
+    return typeof version === 'string' && version !== '' ? version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+
+const SERVER_INFO = { name: 'cloudpit-mcp-gateway', title: 'Cloudpit', version: SERVER_VERSION };
 
 /**
  * A fresh server per request, the stateless recipe's other half.

@@ -524,3 +524,66 @@ test('(e) the SDK auth router and the stateless transport run on this repo’s e
     await close();
   }
 });
+
+test('(f) the initialize handshake advertises the Cloudpit identity the client displays', async () => {
+  // The pre-3.0 name `claudecodeui-mcp-gateway` survived the Cloudpit brand sweep:
+  // that sweep renamed the client-side config key (`cloudpit`) and the token env
+  // var, not this wire identity, and no test pinned it — an MCP client such as
+  // Gemini therefore kept displaying "Claudecodeui Mcp Gateway". This leg pins the
+  // handshake itself, over real HTTP, so the next sweep cannot miss it again.
+  const app = express();
+  app.use(express.json({ limit: '50mb' }));
+  mountMcpGateway(app, { env: { MCP_ENABLED: 'true' }, authorize: passthrough });
+  const { baseUrl, close } = await listen(app);
+
+  try {
+    const initialize = await request(baseUrl, 'POST', MCP_GATEWAY_PATH, {
+      label: 'initialize',
+      accept: MCP_ACCEPT,
+      body: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'mcp-transport-guard', version: '0.0.0' },
+        },
+      },
+    });
+
+    console.log(`[initialize] ${describeHttp(initialize.reading)}\n[json] ${JSON.stringify(initialize.json)}`);
+
+    assert.equal(initialize.reading.status, 200, `initialize must answer 200: ${describeHttp(initialize.reading)}`);
+    const result = initialize.json?.result as
+      | { serverInfo?: { name?: unknown; title?: unknown; version?: unknown } }
+      | undefined;
+    const serverInfo = result?.serverInfo;
+    assert.ok(serverInfo && typeof serverInfo === 'object', `the initialize result must carry serverInfo: ${JSON.stringify(initialize.json)}`);
+    assert.equal(
+      serverInfo.name,
+      'cloudpit-mcp-gateway',
+      `serverInfo.name is what an MCP client displays; it must be the Cloudpit identity: ${JSON.stringify(serverInfo)}`,
+    );
+    assert.equal(
+      serverInfo.title,
+      'Cloudpit',
+      `serverInfo.title must give clients a human-readable Cloudpit name: ${JSON.stringify(serverInfo)}`,
+    );
+    assert.equal(
+      typeof serverInfo.name === 'string' && serverInfo.name.includes('claudecodeui'),
+      false,
+      `the legacy name must not survive in the handshake: ${JSON.stringify(serverInfo)}`,
+    );
+    // The advertised version is the package's, not a literal that drifts from `package.json`.
+    const packageVersion = (JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as { version?: unknown })
+      .version;
+    assert.equal(
+      serverInfo.version,
+      packageVersion,
+      `serverInfo.version must be the running package version: ${JSON.stringify(serverInfo)} vs package.json ${String(packageVersion)}`,
+    );
+  } finally {
+    await close();
+  }
+});
