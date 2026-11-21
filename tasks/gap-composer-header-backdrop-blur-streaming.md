@@ -1,7 +1,7 @@
 ---
 id: gap-composer-header-backdrop-blur-streaming
 title: composer/header 的 backdrop-blur 覆盖流式内容：隔离重算成本并条件化
-status: ready
+status: done
 labels:
   - gap
   - defect
