@@ -59,7 +59,7 @@ Out of AC1's stated scope and untouched: architecture viewport 2s poll + 1s tick
 - Tests: `SessionTaskChain`（5, incl. new visibility fake-timer case）、`activityDock*`（7 files）、`SidebarProjectItemTaskCounts`（11）、`SidebarModeSwitch`（10）、`workspaceTabsResponsive`（22）、`src/modules/sidebar/tests` + `src/modules/chat-composer/tests` + `busySessionIds` + `aboutTabCommunityLinks` + `WorkspaceStateViewOverview`（236 files / 2123 tests）— all pass.
 - `npx tsc --noEmit -p tsconfig.json` / `-p server/tsconfig.json` / `-p scripts/tsconfig.json`: exit 0.
 - `npx oxlint src/ server/ scripts/ shared/`: exit 0 (only pre-existing warnings).
-- - L_G import-graph: src_files=774, src_edges=2396, pinned_sccs=3, new_cycles=0 (`server/shared/tests/frontend-import-cycle-budget.test.ts` 15/15 pass).
+- L_G import-graph: src_files=774, src_edges=2396, pinned_sccs=3, new_cycles=0 (server/shared/tests/frontend-import-cycle-budget.test.ts 15/15 pass).
 
 ## Touches
 
