@@ -130,3 +130,11 @@ extra:
 - docs/prototypes/composer-draft-rewrite-desktop.svg
 - docs/prototypes/composer-draft-rewrite-mobile.svg
 - tasks/gap-composer-draft-rewrite-shared-suggestion-runtime.md
+
+## Blocker
+
+**2026-11-21T09:20:50.975Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/architecture-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: ratchet: oversizeFiles src/modules/chat-composer/hooks/useChatComposerState.ts 1253→1303 — 基线内读数不得上调（此基线只允许下降） [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/architecture-ratchet.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx,server/shared/tests/architecture-ratchet.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx changed=-]
+- run_id：wk-prod-anchor
+- session_id：6484c9ec-9da5-444f-808d-904a8546ab92
