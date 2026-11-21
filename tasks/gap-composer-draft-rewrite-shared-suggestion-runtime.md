@@ -75,7 +75,11 @@ extra:
   - 断言包含：chip 出现在 composer body 内且 footer 仍存在；首次请求仅一次；候选出现；非按钮区收起后再次打开 `requests` 不变；apply 后 composer 文本更新且 `chatMessageCount` 不变（无发送）；失败态 `requests=2` 且原 draft 逐字保持、textarea 未禁用；两次连续 retry 只增一次请求（`requests=3`）。
   - 截图：`tmp/composer-draft-rewrite/desktop/step-5-waitFor-draftRewrite-candidate.png`（候选框、无标题、仅两图标）、`.../step-9-drive-draftRewrite.apply.png`、`.../step-12-waitFor-draftRewrite-error.png`；375/320 同名文件在各自目录。
 
-诚实声明：本会话没有可用的 MCP 浏览器工具；DoD 的“亲手在真实页面操作”由仓库自带的真实 Chromium 场景 runner（`scripts/ui-scenario.mjs`，非 jsdom）完成，读取的是渲染后的真实页面并按 checkpoint 截图；没有用测试存在代替页面操作。网关是本地注入 mock，没有发出任何真实付费请求；不宣称模型改写质量。截图/报告只含合成的 fixture 文本与假 token，不含真实用户文本或凭据。
+2026-11-21 追加修复轮（收敛 fan-in 红灯，不回退上面任何读数）：
+
+- `architecture-ratchet` 三条本任务引入的红：`useChatComposerState.ts` 基线 1253 行不得上调 → 把候选写路径绑定抽到新 `hooks/useComposerDraftRewrite.ts`、三个纯 helper 抽到 `utils/composerSendHelpers.ts`，读数 1303→1252；`src/modules/ui-scenario/scenarioSurface.ts` 基线外 825>800 → 把 composer 读数与驱动切片移入 `chatSurface.ts`（`readComposerReading`/`ComposerDriveStep`/`driveComposerStep`），读数 794；`llm-protocols.ts` 模块级 `new Set` 改为只读数组（模块级可变状态 1→0）。
+- `inlineQuoteChip.test.tsx` 的 en/zh-CN key-set digest：新增 `input.draftRewrite` 6 键属预期变更，按同一 `keyPaths` 算法重测为 `bf98…a66f` / `57ca…10f6`。
+- 复跑读数：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/architecture-ratchet.test.ts` exit 0（无本任务违规）；`npx tsx ... --test server/modules/llm-gateway/tests/llm-client.test.ts` 11 pass；`... --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts` 26 pass；`npx vitest run` inlineQuoteChip+scenarioSurface 8 pass、composer 四判据 52 pass；`npm run typecheck` 与 `npm run lint` exit 0。
 
 ## Touches
 
@@ -96,7 +100,9 @@ extra:
 - src/modules/chat-composer/hooks/useChatComposerState.ts
 - src/modules/chat-composer/hooks/useSuggestionChips.ts
 - src/modules/chat-composer/hooks/useDraftRewrite.ts (new)
+- src/modules/chat-composer/hooks/useComposerDraftRewrite.ts (new)
 - src/modules/chat-composer/utils/draftRewriteController.ts (new)
+- src/modules/chat-composer/utils/composerSendHelpers.ts (new)
 - src/modules/chat-composer/composer/DraftRewriteCandidate.tsx (new)
 - src/modules/chat/ChatInterface.tsx
 - src/shared/api/clientTail.ts
@@ -107,6 +113,7 @@ extra:
 - src/modules/chat-composer/tests/composerDraftRewriteView.test.tsx (new)
 - src/modules/chat-composer/tests/composerDraftRewriteI18n.test.ts (new)
 - src/modules/chat/tests/composerDraftScoping.test.tsx
+- src/modules/chat/tests/inlineQuoteChip.test.tsx
 - src/modules/chat-composer/tests/chatComposerResponsive.test.tsx
 - src/modules/i18n/locales/de/chat.json
 - src/modules/i18n/locales/en/chat.json
