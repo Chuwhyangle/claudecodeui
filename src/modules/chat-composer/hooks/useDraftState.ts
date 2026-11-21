@@ -8,6 +8,7 @@ import {
   writeQueuedMessage,
 } from '@/shared/api/chatDrafts';
 import type { QueuedDraft } from '@/shared/types';
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 
 /**
  * The durable queue card for a message typed while a turn was already running.
@@ -64,9 +65,12 @@ export function useDraftState({
   const queuedDraftSessionRef = useRef<string | null>(sessionKey);
 
   // The VPS dispatcher owns sending. While the card is visible, periodically
-  // reconcile only its removal so the UI notices when the server claims it.
+  // reconcile only its removal so the UI notices when the server claims it. A
+  // hidden tab stops the reconcile: the card is not on screen, and the first
+  // visible tick notices a claim at most five seconds late.
+  const visible = usePageVisible();
   useEffect(() => {
-    if (!sessionKey || !queuedDraft) {
+    if (!sessionKey || !queuedDraft || !visible) {
       return;
     }
     let cancelled = false;
@@ -82,7 +86,7 @@ export function useDraftState({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [queuedDraft, sessionKey]);
+  }, [queuedDraft, sessionKey, visible]);
 
   // Persist the queued draft under its session's key. Must be defined BEFORE
   // the swap effect below: on a session switch there is one commit where

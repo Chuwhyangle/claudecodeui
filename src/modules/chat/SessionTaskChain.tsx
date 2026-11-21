@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { authenticatedFetch } from '@/shared/api';
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 import type {
   SessionTaskChainEntry,
   SessionTaskChainReading,
@@ -105,6 +106,9 @@ export default function SessionTaskChain({
   // Transitions already announced. Essential: a later poll that still shows "running" must not
   // repeat the notice, so the announcement is remembered by (task, previous stage, next stage).
   const announcedTransitionsRef = useRef<Set<string>>(new Set());
+  // Whether the tab is on screen. A hidden bar's poll would read the server for a reading nobody
+  // can see, so the interval exists only while visible; returning catches up with one fresh read.
+  const visible = usePageVisible();
 
   const load = useCallback(async () => {
     try {
@@ -139,12 +143,15 @@ export default function SessionTaskChain({
   }, [projectId, read, sessionId, t]);
 
   useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
     void load();
     const timer = window.setInterval(() => {
       void load();
     }, pollIntervalMs);
     return () => window.clearInterval(timer);
-  }, [load, pollIntervalMs]);
+  }, [load, pollIntervalMs, visible]);
 
   const sortedTasks = useMemo(
     () => (reading === null ? [] : [...reading.tasks]),

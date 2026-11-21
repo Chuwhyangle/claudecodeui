@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -211,6 +211,55 @@ describe('SessionTaskChain', () => {
     // Keep polling through the same unchanged reading: the announcement is not repeated.
     await waitFor(() => expect(calls).toBeGreaterThanOrEqual(4));
     expect(screen.getAllByTestId('session-task-chain-notice')).toHaveLength(1);
+  });
+
+  it('pauses its poll while the tab is hidden and catches up with one read on return', async () => {
+    // `usePageVisible` reads `document.hidden`; jsdom lets the test own that reading.
+    const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, 'hidden');
+    let hidden = true;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+    vi.useFakeTimers();
+
+    try {
+      const read = vi.fn<SessionTaskChainPort>(async () => reading());
+      renderBar(read, 30_000);
+
+      // Hidden at mount: not even the initial read is issued.
+      expect(read).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(90_000);
+      });
+      expect(read).not.toHaveBeenCalled();
+
+      // Returning to the tab reads once immediately, then the 30-second cadence resumes.
+      hidden = false;
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(read).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(read).toHaveBeenCalledTimes(2);
+
+      // Going hidden again stops the interval (not merely skips the fetch).
+      hidden = true;
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120_000);
+      });
+      expect(read).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      if (hiddenDescriptor === undefined) {
+        delete (document as unknown as { hidden?: boolean }).hidden;
+      } else {
+        Object.defineProperty(document, 'hidden', hiddenDescriptor);
+      }
+    }
   });
 
   it('shows the first line of a blocked task’s unlanded reason when expanded', async () => {

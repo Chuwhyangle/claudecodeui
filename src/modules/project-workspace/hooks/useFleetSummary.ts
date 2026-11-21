@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { api } from '@/shared/api';
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 
 /**
  * The task counts one quay project reports for the landing overview.
@@ -110,8 +111,14 @@ function readProject(value: unknown): FleetProjectSummary | null {
  */
 export function useFleetSummary(): FleetSummaryView {
   const [view, setView] = useState<FleetSummaryView>({ status: 'loading' });
+  // A hidden landing page would otherwise keep asking for counts nobody is looking at; the
+  // cadence lives only while visible, and returning reads once before resuming it.
+  const visible = usePageVisible();
 
   useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
     let cancelled = false;
 
     const read = async (): Promise<void> => {
@@ -149,7 +156,7 @@ export function useFleetSummary(): FleetSummaryView {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [visible]);
 
   return view;
 }
