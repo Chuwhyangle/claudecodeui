@@ -2,10 +2,10 @@ import type { Server as HttpServer } from 'node:http';
 
 import { WebSocket, WebSocketServer, type VerifyClientCallbackSync } from 'ws';
 
-import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
-import { verifyWebSocketClient } from '@/modules/websocket/services/websocket-auth.service.js';
-import { handlePluginWsProxy } from '@/modules/websocket/services/plugin-websocket-proxy.service.js';
-import { handleShellConnection } from '@/modules/websocket/services/shell-websocket.service.js';
+import { handleChatConnection } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
+import { verifyWebSocketClient } from '@/modules/websocket/services/transport/websocket-auth.service.js';
+import { handlePluginWsProxy } from '@/modules/websocket/services/transport/plugin-websocket-proxy.service.js';
+import { handleShellConnection } from '@/modules/websocket/services/ui/shell-websocket.service.js';
 import { handleDesktopNotificationsConnection } from '@/modules/notifications/index.js';
 import type { AuthenticatedWebSocketRequest } from '@/shared/types.js';
 

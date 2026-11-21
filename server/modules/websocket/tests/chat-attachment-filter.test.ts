@@ -6,7 +6,7 @@ import test from 'node:test';
 import {
   filterAttachmentsToUploadStore,
   filterImagesToUploadStore,
-} from '@/modules/websocket/services/chat-websocket.service.js';
+} from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 
 const STORE = path.join(os.tmpdir(), 'cloudcli-assets-store');
 

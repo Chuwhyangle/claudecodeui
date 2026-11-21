@@ -12,8 +12,8 @@ import {
   sessionsDb,
 } from '@/modules/database/index.js';
 import { sessionsService } from '@/modules/providers/index.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
-import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import { handleChatConnection } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import { connectedClients } from '@/modules/websocket/services/websocket-state.service.js';
 
 /**

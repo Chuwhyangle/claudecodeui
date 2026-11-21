@@ -5,7 +5,7 @@ import test from 'node:test';
 
 import { WebSocket } from 'ws';
 
-import { handleShellConnection } from '@/modules/websocket/services/shell-websocket.service.js';
+import { handleShellConnection } from '@/modules/websocket/services/ui/shell-websocket.service.js';
 
 type Spawn = { command: string; env: Record<string, string | undefined> };
 

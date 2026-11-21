@@ -58,8 +58,8 @@ const SERVER_DIR = path.join(REPO_ROOT, 'server');
 const LEAF_REL = 'server/shared/utils.ts';
 /** The other three files whose import face this criterion pins. */
 const DRIVER_REL = 'server/modules/providers/list/claude/claude-host-driver.provider.ts';
-const REGISTRY_REL = 'server/modules/websocket/services/chat-run-registry.service.ts';
-const DISPATCH_REL = 'server/modules/websocket/services/chat-run-dispatch.service.ts';
+const REGISTRY_REL = 'server/modules/websocket/services/dispatch/chat-run-registry.service.ts';
+const DISPATCH_REL = 'server/modules/websocket/services/dispatch/chat-run-dispatch.service.ts';
 /** The module specifier every consumer must import the predicate from. */
 const LEAF_SPECIFIER = '@/shared/utils.js';
 

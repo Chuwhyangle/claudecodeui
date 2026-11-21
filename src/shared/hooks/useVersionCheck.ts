@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 
 import { APP_VERSION } from '@/shared/constants';
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 import type { InstallMode, ReleaseInfo } from '@/shared/types';
 
 /**
@@ -55,7 +56,13 @@ export const useVersionCheck = (owner: string, repo: string) => {
     fetchHealth();
   }, []);
 
+  // The release check is a GitHub request; a hidden tab stops issuing it, and returning checks
+  // once immediately before the five-minute cadence resumes.
+  const visible = usePageVisible();
   useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
     const checkVersion = async () => {
       try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
@@ -93,7 +100,7 @@ export const useVersionCheck = (owner: string, repo: string) => {
     checkVersion();
     const interval = setInterval(checkVersion, 5 * 60 * 1000); // Check every 5 minutes
     return () => clearInterval(interval);
-  }, [owner, repo]);
+  }, [owner, repo, visible]);
 
   return { updateAvailable, latestVersion, currentVersion: APP_VERSION, releaseInfo, installMode, runningVersion, restartRequired };
 };

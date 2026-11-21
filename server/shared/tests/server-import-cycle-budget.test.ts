@@ -433,6 +433,20 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/voice-realtime/transport',
   'modules/websocket',
   'modules/websocket/services',
+  // TWENTY-SECOND RECORDED CHANGE (2026-11-21,
+  // gap-routine-architecture-analysis-god-package-server-websocket-services): the
+  // websocket services god-package split moved the transport pair/trio into
+  // `transport/`, the chat run/control/session-writer family into `dispatch/` and
+  // the ui-*/shell family into `ui/`. Registered under AC-394 (c)'s escape hatch:
+  // the `modules/websocket` barrel imports each subpackage, `dispatch/` points at
+  // the package root (activity/state/protocol-error) and at `ui/`, `transport/`
+  // points at `dispatch/` and `ui/`, and `ui/` points at the package root — every
+  // edge is one-way (DAG), so no SCC is added and no cycle group changes. fileCount
+  // at the package root falls 24 -> 9. `directoryManifest` and `nodeCount` rise
+  // 103 -> 106.
+  'modules/websocket/services/dispatch',
+  'modules/websocket/services/transport',
+  'modules/websocket/services/ui',
   'modules/worktrees',
   'modules/worktrees/services',
   'shared',

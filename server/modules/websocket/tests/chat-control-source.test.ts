@@ -36,9 +36,9 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
-import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+import { createChatControlService } from '@/modules/websocket/services/dispatch/chat-control.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import type { ProviderRuntimeGateway } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import type {
   AnyRecord,
   ChatRunSource,

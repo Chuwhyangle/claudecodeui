@@ -94,7 +94,7 @@ import { createSessionHostManager } from '@/modules/session-hosts/index.js';
 import {
   assertSessionAccess,
   handleChatConnection,
-} from '@/modules/websocket/services/chat-websocket.service.js';
+} from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import type {
   AnyRecord,
   ProviderRuntimeContext,

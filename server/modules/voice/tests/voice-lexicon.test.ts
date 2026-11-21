@@ -406,7 +406,7 @@ test('the recording hook is called from exactly one place outside the tests', ()
     // The dispatch funnel moved out of the WebSocket transport into its own leaf
     // (`cycle-websocket-services-two-pairs`); the recording hook still has exactly
     // one production call site, now in that leaf.
-    ['server/modules/websocket/services/chat-run-dispatch.service.ts'],
+    ['server/modules/websocket/services/dispatch/chat-run-dispatch.service.ts'],
     `the send hook must have one call site, got:\n${output}`,
   );
 });

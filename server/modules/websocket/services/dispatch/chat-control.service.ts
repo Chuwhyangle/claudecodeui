@@ -4,12 +4,12 @@ import type {
   ControlStopTaskOutcome,
 } from '@/modules/providers/index.js';
 import { readSessionDeliveries, readSessionTurnRun } from '@/modules/providers/index.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
 import {
   assertSessionAccess,
   type ProviderRuntimeGateway,
-} from '@/modules/websocket/services/chat-control.contract.js';
-import { dispatchRun } from '@/modules/websocket/services/chat-run-dispatch.service.js';
+} from '@/modules/websocket/services/dispatch/chat-control.contract.js';
+import { dispatchRun } from '@/modules/websocket/services/dispatch/chat-run-dispatch.service.js';
 import { isRunIdCompatWindowOpen } from '@/shared/types.js';
 import { readSessionUserTurnPort } from '@/shared/ports/session-user-turn.port.js';
 import type {

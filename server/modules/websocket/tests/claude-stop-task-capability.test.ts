@@ -79,7 +79,7 @@ import type { SessionHostManager } from '@/modules/session-hosts/index.js';
 // Imported from the service rather than the module barrel, for the same reason
 // AC-196's criterion does: the handler is this module's own file and no extra
 // barrel surface should be added for one criterion.
-import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
+import { handleChatConnection } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import type {
   AnyRecord,
   ProviderRuntimeContext,

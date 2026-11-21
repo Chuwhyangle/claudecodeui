@@ -565,7 +565,7 @@ test('(b) the three barrels export the GOAL-020 symbols and the gateway consumes
     kind: 'root',
   });
 
-  const unionSources = [readFileSync(path.resolve(testsDir, '../../websocket/services/chat-run-registry.service.ts'), 'utf8')];
+  const unionSources = [readFileSync(path.resolve(testsDir, '../../websocket/services/dispatch/chat-run-registry.service.ts'), 'utf8')];
 
   const audit = auditBarrelConsumers({ barrels, sources, declaredNewExports: DECLARED_NEW_EXPORTS, unionSources });
 

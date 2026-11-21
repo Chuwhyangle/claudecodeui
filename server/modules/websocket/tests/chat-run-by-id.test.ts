@@ -43,7 +43,7 @@ import {
   createChatRunRegistry,
   type ChatRunLookupResult,
   type ChatRunSummary,
-} from '@/modules/websocket/services/chat-run-registry.service.js';
+} from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
 
 const SESSION_ID = 'run-by-id-session';
 const PROVIDER = 'claude';

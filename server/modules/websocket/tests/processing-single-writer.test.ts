@@ -74,10 +74,10 @@ import {
 import { dispatchQueuedMessages } from '@/modules/scheduled-messages/index.js';
 import { createSessionHostManager } from '@/modules/session-hosts/index.js';
 import type { HostScheduler, SessionHostManager } from '@/modules/session-hosts/index.js';
-import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
+import { createChatControlService } from '@/modules/websocket/services/dispatch/chat-control.service.js';
 import { attachActivityHeartbeat } from '@/modules/websocket/services/activity-heartbeat.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import type { ProviderRuntimeGateway } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import type {
   AnyRecord,
   LLMProvider,

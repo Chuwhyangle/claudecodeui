@@ -80,12 +80,12 @@ import type {
 import { createSessionHostManager } from '@/modules/session-hosts/index.js';
 import type { HostScheduler } from '@/modules/session-hosts/index.js';
 import { activityAnnouncement } from '@/modules/websocket/services/activity-heartbeat.service.js';
-import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
+import { createChatControlService } from '@/modules/websocket/services/dispatch/chat-control.service.js';
 import {
   DEFAULT_RUN_RETENTION_MS,
   chatRunRegistry,
-} from '@/modules/websocket/services/chat-run-registry.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+} from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import type { ProviderRuntimeGateway } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import {
   WS_OPEN_STATE,
   activityStore as activityStoreForAnnouncement,

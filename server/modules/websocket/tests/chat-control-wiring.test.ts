@@ -47,8 +47,8 @@ import {
   userDb,
 } from '@/modules/database/index.js';
 import { dispatchDueScheduledMessages } from '@/modules/scheduled-messages/index.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
-import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import { handleChatConnection } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import { connectedClients } from '@/modules/websocket/services/websocket-state.service.js';
 import type { AnyRecord } from '@/shared/types.js';
 
@@ -387,11 +387,11 @@ function sumCounts(perFunction: Record<string, SymbolCounts>): SymbolCounts {
 
 test('(c)/(d) the three transport verbs touch no runtime, and the same scanner finds the calls in the control service', async () => {
   const gatewaySource = await readFile(
-    fileURLToPath(new URL('../services/chat-websocket.service.ts', import.meta.url)),
+    fileURLToPath(new URL('../services/dispatch/chat-websocket.service.ts', import.meta.url)),
     'utf8',
   );
   const controlSource = await readFile(
-    fileURLToPath(new URL('../services/chat-control.service.ts', import.meta.url)),
+    fileURLToPath(new URL('../services/dispatch/chat-control.service.ts', import.meta.url)),
     'utf8',
   );
 

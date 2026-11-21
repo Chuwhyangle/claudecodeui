@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { api } from '@/shared/api';
+import { isPageHidden } from '@/shared/hooks/usePageVisibility';
 import type { QuayDriverState, QuayFleetCliState, QuayFleetSummary, QuayFleetTaskCounts } from '@/shared/types';
 import { createExternalStore } from '@/shared/utils';
 
@@ -61,7 +62,7 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null;
  */
 const summaryStore = createExternalStore<FleetSummarySnapshot>(EMPTY_SNAPSHOT, {
   onFirstSubscriber: () => {
-    if (!pageIsHidden()) void load();
+    if (!isPageHidden()) void load();
     startPolling();
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -78,10 +79,6 @@ const summaryStore = createExternalStore<FleetSummarySnapshot>(EMPTY_SNAPSHOT, {
 const publish = (next: FleetSummarySnapshot): void => {
   summaryStore.set(next);
 };
-
-/** True while the tab is in the background; polling is suspended so a hidden tab is free. */
-const pageIsHidden = (): boolean =>
-  typeof document !== 'undefined' && document.hidden === true;
 
 /**
  * Reads the fleet summary once and publishes its per-project readings.
@@ -156,7 +153,7 @@ function startPolling(): void {
   refreshTimer = setInterval(() => {
     // Even with the timer alive, a hidden tab issues nothing: the visibility listener also
     // stops the timer, this is the second guard for browsers that do not deliver the event.
-    if (!pageIsHidden()) void load();
+    if (!isPageHidden()) void load();
   }, REFRESH_INTERVAL_MS);
 }
 
@@ -169,7 +166,7 @@ function stopPolling(): void {
 
 /** A background tab costs nothing; returning to it reads once immediately, then resumes the cadence. */
 function handleVisibilityChange(): void {
-  if (pageIsHidden()) {
+  if (isPageHidden()) {
     stopPolling();
     return;
   }

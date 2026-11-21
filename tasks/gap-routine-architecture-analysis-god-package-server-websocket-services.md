@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-server-websocket-services
 title: "architecture-analysis: archguard_detect_god_packages(scope=server) flags
   modules/websocket/services with tooManyFiles: 24 direct files (threshold 20),
   33 entities, fanOut 205; the "
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
@@ -82,6 +82,20 @@ Split by lifecycle (transport: websocket-server/websocket-auth; dispatch: chat-r
   `providers-websocket-cycle.test.ts` + `server-composition-startup.test.ts` → 20 pass / 0 fail。
 - `server/modules/websocket/tests/*.test.ts` → **153 pass / 0 fail**。
 
+第二轮（exited-not-landed 后补，2026-11-21）：
+
+- 上一轮 suite 红 3 条，逐条复核：
+  - `server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts` case (b) 与
+    `server/modules/mcp-gateway/tests/mcp-english-only.test.ts` case (d) 是**真红** —— 两个兄弟探针文件里硬编码的旧路径
+    `.../websocket/services/chat-run-registry.service.ts` 与 `.../websocket/services/chat-control.service.ts` 在 split 后
+    `ENOENT`（import 图一跳之外，机械 delta-relatedness 看不到，正是「split 必须扫硬编码探针路径表」那条教训）。
+    两处各补 `dispatch/` 段后：`mcp-gateway-wiring.test.ts` 3 pass / 0 fail，`mcp-english-only.test.ts` 10 pass / 0 fail。
+  - `server/modules/providers/tests/provider-models.service.test.ts`（`[codex-models] model/list discovery`）在**干净 develop
+    检出**上逐字复现同一断言差异（打包 Codex CLI 的账户目录缺 `gpt-6.2-astra`/`gpt-6.2-sol`）⇒ 既存环境红，与本任务无关，
+    本轮不改动它。
+- `server/shared/tests/server-import-cycle-budget.test.ts` 的 `SERVER_FILE_SCC_BASELINE` 里仍留有一组旧 websocket 双文件路径；
+  在干净 develop 上 `(j)` 读数同为 `sccs=[15,8,3,2,2]`（该组本就已失效），属既存 stale baseline，containment 口径仍绿，不在本任务范围内改动。
+
 ADR-007 暗轴记录：
 
 L_G file-graph: sccs=0 files=25
@@ -91,6 +105,8 @@ L_D directory-graph: cycles=0
 `scanImportGraph` 的全仓 `sccs=[]`。）
 
 ## Touches
+- `server/modules/mcp-gateway/tests/mcp-english-only.test.ts`
+- `server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts`
 - `server/modules/websocket/index.ts`
 - `server/modules/websocket/services/dispatch/chat-attachment-filter.service.ts`
 - `server/modules/websocket/services/dispatch/chat-control.contract.ts`
