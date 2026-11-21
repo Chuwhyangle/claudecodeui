@@ -75,12 +75,14 @@ extra:
 - server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts
 - server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts
 - server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite-routes.test.ts
+- server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts
 - config/reply-suggestions.settings.example.json
 - src/shared/replySuggestionsType.ts
 - src/shared/api/requests.ts
 - src/shared/api/clientTail.ts
 - src/shared/tests/composerDraftRewriteTypeSync.test.ts
 - src/shared/tests/replySuggestionsTypeSync.test.ts
+- src/shared/tests/replySuggestionsApi.test.ts
 - src/modules/chat-composer/utils/draftRewriteController.ts
 - src/modules/chat-composer/hooks/useComposerDraftRewrite.ts
 - src/modules/chat-composer/hooks/useChatComposerState.ts
@@ -117,7 +119,7 @@ extra:
 
 ## Evidence
 
-提交：`49d629ddd`（实现）、`dc483572c`（场景/runner）。develop 已合并进工作树（Already up to date）。
+提交：`49d629ddd`（实现）、`dc483572c`（场景/runner）、`aad8c764d`（兄弟夹具随 `debugLog` 契约更新）。
 
 - AC1 `reply-suggestions-debug-log.test.ts`：pass 12 / fail 0。默认关闭不建文件；开启后每次尝试恰好一行，`input`/`output` 与草稿/候选逐字相等（assert.equal）；字段集精确、未传 `sessionId` 时键缺失；目录 0700、文件 0600；预置 2 MB 后连写三次得到 `file/.1/.2/.3` 且最旧被丢弃；写失败（ENOTDIR）只产生 1 条不含草稿/候选的警告且不抛；行内无 key/baseUrl/system prompt；截断/超 6000 字符保留上游原文并置 `outputTruncatedForLog:true`。
 - AC2 `reply-suggestions-draft-rewrite.test.ts`：pass 33 / fail 0。ok / error:timeout / error:http / rejected:truncated|empty-output|output-too-long 各恰好一次；关时 0 次；同一实例先关后开即刻生效；抛错 sink 不改变 200 响应与候选。
@@ -129,6 +131,7 @@ extra:
 - AC8 场景：`node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url http://127.0.0.1:5199 --auth-token <isolated> --project quay-fleet --session <fixture> --out tmp/composer-draft-rewrite-debug-log/scenario --debug-log-file <isolated>/.cloudpit/reply-suggestions-debug.jsonl` ⇒ rc=0，`ok:true`，21 steps。末三步读数 `debugLogLines` 2→2（delta 0）、2→3（delta +1）、3→3（delta 0）。`npx playwright test e2e/composer-draft-rewrite.spec.ts` rc=0（该 spec 按设计由 `QUAY_E2E_*` 环境变量开启，无该夹具时 skip；其 debug leg 的真实浏览器等价路径由下方 DoD 走查实际执行）。报告在 `tmp/composer-draft-rewrite-debug-log/scenario/report.json`。
 - AC9 假形态：关闭时仍写 ⇒ AC1(b) 与 AC2「debugLog false records nothing」红；sink 异常逃逸到重写路径 ⇒ AC2「throwing sink」红；`sessionId` 拼进上游 system ⇒ AC3「never to the upstream request」红；settings 解析失败仍覆盖 ⇒ AC4(write-d) 红；单边增删字段 ⇒ AC5 负控红。每次改完即还原，`git status` 干净后复跑四个 AC 用例：12/33/12/24 全绿。
 - AC10 `npm run typecheck` 退出 0；`npm run lint` 退出 0（仅既有 warning）；`npm run build` 退出 0。
+- 兄弟夹具随契约更新（suite 收口）：`/status` 新增 `debugLog` 后，既有全对象 deepEqual 的两处兄弟夹具补上该字段——`server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts`（期望 `debugLog:false`）与 `src/shared/tests/replySuggestionsApi.test.ts`（显式 `true` 透传 + 缺失读 `false`）；修复后单跑 `reply-suggestions-routes.test.ts` 17/17、`replySuggestionsApi.test.ts` 14/14 全绿。
 
 DoD（真实浏览器走查，隔离实例 + 本地 mock gateway，合成文本，无付费请求；工作树 `dist-server` + Vite dev，`HOME` 指向私有目录）：
 - Settings → Diagnostics 开关由 off 点击为 on，页面截图 `tmp/composer-draft-rewrite-debug-log/dod/settings-debug-on.png`；
@@ -140,3 +143,12 @@ DoD（真实浏览器走查，隔离实例 + 本地 mock gateway，合成文本�
 ## ADR-007
 
 该轴仍暗,理由:本任务只增加旁路调试日志与开关，未改变架构依赖图（reply-suggestions 仍为叶子模块、无新增跨模块边），无 L_G/L_D 可比读数。
+
+## Blocker
+
+**2026-11-21T15:14:24.318Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/shared/tests/replySuggestionsApi.test.ts: AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal: [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts,src/shared/tests/replySuggestionsApi.test.ts,server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts,src/shared/tests/replySuggestionsApi.test.ts changed=-]
+- run_id：wk-prod-anchor
+- session_id：2501a5b3-4ea8-4901-8436-c90b5ee0107a
+- 已修复（本轮）：两个兄弟夹具的 `/status` 全对象 deepEqual 期望补 `debugLog` 字段（提交 `aad8c764d`），单跑 17/17 与 14/14 全绿；`provider-models.service.test.ts` 的 codex 目录差异为 develop 基线既有红（本任务未触及该文件/模块），不在本任务红集内。
