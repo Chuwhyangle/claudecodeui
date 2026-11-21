@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { test, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 
 import { Markdown } from '@/modules/chat/ui/Markdown';
 
@@ -27,6 +27,26 @@ const STYLE_ELEMENT_SELECTOR = 'style#cc-syntax-theme';
 const CODE_MARKDOWN = 'Intro line.\n\n```ts\nconst answer = 41;\n```\n';
 
 const renderMarkdown = () => render(<Markdown>{CODE_MARKDOWN}</Markdown>);
+
+/**
+ * The highlighter is its own lazy chunk (it is fetched the first time a fenced
+ * block renders), so the first paint of a code block is a plain `<pre>`. Wait
+ * for the highlighted one before reading its custom properties.
+ */
+const waitForHighlightedPre = async (container: HTMLElement): Promise<HTMLElement> => {
+  await waitFor(() => {
+    const pre = container.querySelector('pre[style]');
+    assert.ok(pre, 'expected the fenced block to render a highlighted <pre>');
+    assert.match(
+      pre.getAttribute('style') ?? '',
+      /color:\s*var\(--cc-syntax-\d+\)/,
+      'expected the <pre> colour to be a --cc-syntax variable',
+    );
+  });
+  const pre = container.querySelector('pre[style]');
+  assert.ok(pre, 'expected a highlighted <pre>');
+  return pre as HTMLElement;
+};
 
 /** The `--cc-syntax-N` names the rendered highlighter actually asks the page for. */
 const referencedVariables = (root: HTMLElement): Set<string> => {
@@ -60,8 +80,9 @@ const injectedCss = (): string => {
   return elements[0].textContent ?? '';
 };
 
-test('the dark block declares every custom property a rendered code block references', () => {
+test('the dark block declares every custom property a rendered code block references', async () => {
   const { container } = renderMarkdown();
+  await waitForHighlightedPre(container);
 
   const referenced = referencedVariables(container);
   assert.ok(referenced.size > 0, 'the rendered code block referenced no --cc-syntax variable');
@@ -71,11 +92,9 @@ test('the dark block declares every custom property a rendered code block refere
   assert.deepEqual(missing, [], 'variables used by the rendered code block are undeclared in .dark');
 });
 
-test('the root block declares the property the highlighted <pre> reads its colour from', () => {
+test('the root block declares the property the highlighted <pre> reads its colour from', async () => {
   const { container } = renderMarkdown();
-
-  const pre = container.querySelector('pre');
-  assert.ok(pre, 'expected the fenced block to render a highlighted <pre>');
+  const pre = await waitForHighlightedPre(container);
   const colourVariable = /color:\s*var\((--cc-syntax-\d+)\)/.exec(pre.getAttribute('style') ?? '');
   assert.ok(colourVariable, 'expected the <pre> colour to be a --cc-syntax variable');
 

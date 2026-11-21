@@ -1,10 +1,9 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '@/shared/ui';
-import { Settings } from '@/modules/settings';
 import { VersionUpgradeModal } from '@/modules/version-upgrade';
 import type { InstallMode, PendingSidebarDeletion, Project, ReleaseInfo, SettingsProject } from '@/shared/types';
 import { normalizeProjectForSettings } from '@/modules/sidebar/utils/sidebarProjectFormatting';
@@ -44,10 +43,24 @@ type TypedSettingsProps = {
   initialTab: string;
 };
 
-const SettingsComponent = Settings as (props: TypedSettingsProps) => JSX.Element;
+/**
+ * The settings surface is the largest side entry in the workspace (~280 KB of
+ * source: every settings tab, the provider tables, the credential panels). It
+ * only exists after the user opens Settings, so it is fetched on first open
+ * instead of shipping in the first-screen chunk.
+ */
+const LazySettings = lazy(() =>
+  import('@/modules/settings').then((module) => ({ default: module.Settings })),
+);
+
+const SettingsComponent = LazySettings as (props: TypedSettingsProps) => JSX.Element;
 
 function TypedSettings(props: TypedSettingsProps) {
-  return <SettingsComponent {...props} />;
+  return (
+    <Suspense fallback={null}>
+      <SettingsComponent {...props} />
+    </Suspense>
+  );
 }
 
 /** Rendered by Sidebar to host its settings, new-project, delete-confirmation and version modals in one place. */

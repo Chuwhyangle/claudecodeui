@@ -1,10 +1,20 @@
+import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 
-import { StandaloneShell } from '@/modules/standalone-shell';
 import { PROVIDER_DESCRIPTORS } from '@/shared/constants';
 import { IS_PLATFORM } from '@/shared/utils';
 import type { LLMProvider } from '@/shared/types';
+
+/**
+ * The embedded terminal is the code-editor-sized part of this module: xterm and
+ * its addons are only fetched when someone actually opens a provider login
+ * modal. The modal is opened from onboarding or the settings page, neither of
+ * which should pay for that graph on first paint.
+ */
+const LazyStandaloneShell = lazy(() =>
+  import('@/modules/standalone-shell').then((module) => ({ default: module.StandaloneShell })),
+);
 
 /**
  * For empty shell instances where no project is provided,
@@ -92,7 +102,9 @@ export default function ProviderLoginModal({
         </div>
 
         <div className="flex-1 overflow-hidden">
-          <StandaloneShell project={DEFAULT_PROJECT_FOR_EMPTY_SHELL} command={command} onComplete={handleComplete} minimal={true} />
+          <Suspense fallback={null}>
+            <LazyStandaloneShell project={DEFAULT_PROJECT_FOR_EMPTY_SHELL} command={command} onComplete={handleComplete} minimal={true} />
+          </Suspense>
         </div>
       </div>
     </div>

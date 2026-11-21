@@ -1,20 +1,15 @@
-import React, { useCallback, useEffect, useRef, type Dispatch, type SetStateAction, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useRef, type Dispatch, type SetStateAction, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
 import { resolveProviderDescriptor } from '@/shared/constants';
 import { ChatInterface } from '@/modules/chat';
-import { FileTree } from '@/modules/file-tree';
-import { StandaloneShell } from '@/modules/standalone-shell';
-import { GitPanel } from '@/modules/git-panel';
-import { PluginTabContent } from '@/modules/plugins';
-import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
+import { useBrowserUseEnabled } from '@/modules/browser-use';
 import { CockpitColumnRegion } from '@/modules/cockpit';
 import { usePaletteOpsRegister } from '@/modules/command-palette';
-import { TaskMasterPanel, useTaskMasterProjectSync, useTasksSettings } from '@/modules/task-master';
-import { isQuayTabVisible, QuayPanel, useEnsureQuayTabVisible, useQuayStatus } from '@/modules/quay';
+import { useTaskMasterProjectSync, useTasksSettings } from '@/modules/task-master';
+import { isQuayTabVisible, useEnsureQuayTabVisible, useQuayStatus } from '@/modules/quay';
 import {
-  ArchitecturePanel,
   isArchitectureTabVisible,
   useArchitectureChatBridge,
   useEnsureArchitectureTabVisible,
@@ -22,11 +17,53 @@ import {
 import type { AppTab, DirectoryRevealRequest, Project, ProjectSession, SessionEstablishedContext, SessionNavigationOptions, SettingsMainTab, UiNavigateReveal } from '@/shared/types';
 import { useUiPreferences } from '@/shared/context/UiPreferencesContext';
 import { useFileOpenResolver } from '@/modules/project-workspace/hooks/useFileOpenResolver';
-import { EditorSidebar, useEditorSidebar } from '@/modules/code-editor';
+import { useEditorSidebar } from '@/modules/project-workspace/hooks/useEditorSidebar';
 import WorkspaceHeader from '@/modules/project-workspace/WorkspaceHeader';
 import { RESIDENT_SHELL_NOTICE_ID } from '@/modules/project-workspace/WorkspaceTabs';
 import WorkspaceStateView from '@/modules/project-workspace/WorkspaceStateView';
 import WorkspaceErrorBoundary from '@/modules/project-workspace/WorkspaceErrorBoundary';
+
+/**
+ * The workspace shell and the chat pane are the first screen and stay eager. Its
+ * side surfaces are not: each tab below is fetched only when the workspace
+ * actually mounts it, with a local `Suspense` so one tab's chunk never blanks the
+ * others. `ChatInterface`, the sidebar and the composer remain in the first
+ * chunk — the session keeps rendering (and keeps its state) while these load.
+ *
+ * The editor sidebar is mounted unconditionally so a file open does not have to
+ * wait for a chunk decision in the click handler; its own component renders
+ * nothing until a file is selected.
+ */
+const LazyFileTree = lazy(() => import('@/modules/file-tree').then((module) => ({ default: module.FileTree })));
+const LazyStandaloneShell = lazy(() =>
+  import('@/modules/standalone-shell').then((module) => ({ default: module.StandaloneShell })),
+);
+const LazyGitPanel = lazy(() => import('@/modules/git-panel').then((module) => ({ default: module.GitPanel })));
+const LazyPluginTabContent = lazy(() =>
+  import('@/modules/plugins').then((module) => ({ default: module.PluginTabContent })),
+);
+const LazyBrowserUsePanel = lazy(() =>
+  import('@/modules/browser-use').then((module) => ({ default: module.BrowserUsePanel })),
+);
+const LazyQuayPanel = lazy(() => import('@/modules/quay').then((module) => ({ default: module.QuayPanel })));
+const LazyTaskMasterPanel = lazy(() =>
+  import('@/modules/task-master').then((module) => ({ default: module.TaskMasterPanel })),
+);
+const LazyArchitecturePanel = lazy(() =>
+  import('@/modules/architecture').then((module) => ({ default: module.ArchitecturePanel })),
+);
+const LazyEditorSidebar = lazy(() =>
+  import('@/modules/code-editor').then((module) => ({ default: module.EditorSidebar })),
+);
+
+/** The wait state inside one tab's own area; it fills that area, not the page. */
+function TabLoadingFallback() {
+  return (
+    <div className="flex h-full w-full items-center justify-center" role="status" aria-label="Loading">
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-foreground" />
+    </div>
+  );
+}
 
 /**
  * How often the workspace re-reads the selected session's lifecycle mode. The
@@ -422,11 +459,13 @@ function WorkspaceMain({
 
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">
-              <FileTree
-                selectedProject={selectedProject}
-                onFileOpen={handleFileOpen}
-                revealDirectory={revealDirectory}
-              />
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyFileTree
+                  selectedProject={selectedProject}
+                  onFileOpen={handleFileOpen}
+                  revealDirectory={revealDirectory}
+                />
+              </Suspense>
             </div>
           )}
 
@@ -436,41 +475,50 @@ function WorkspaceMain({
               resident session is not closed, so its view mounts like any other. */}
           {activeTab === 'shell' && !shellClosed && (
             <div className="h-full w-full overflow-hidden" data-workspace-view="shell">
-              <StandaloneShell
-                project={selectedProject}
-                session={selectedSession}
-                showHeader={false}
-                isActive={activeTab === 'shell'}
-              />
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyStandaloneShell
+                  project={selectedProject}
+                  session={selectedSession}
+                  showHeader={false}
+                  isActive={activeTab === 'shell'}
+                />
+              </Suspense>
             </div>
           )}
 
           {activeTab === 'git' && (
             <div className="h-full overflow-hidden">
-              <GitPanel
-                selectedProject={selectedProject}
-                isMobile={isMobile}
-                onFileOpen={handleFileOpen}
-                onProjectSelect={onProjectSelect}
-                onProjectsRefresh={onProjectsRefresh}
-                revealFilePath={revealNavigate && revealNavigate.reveal.kind === 'diff' ? revealNavigate.reveal.filePath : null}
-                revealRequestId={revealNavigate && revealNavigate.reveal.kind === 'diff' ? revealNavigate.requestId : null}
-              />
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyGitPanel
+                  selectedProject={selectedProject}
+                  isMobile={isMobile}
+                  onFileOpen={handleFileOpen}
+                  onProjectSelect={onProjectSelect}
+                  onProjectsRefresh={onProjectsRefresh}
+                  revealFilePath={revealNavigate && revealNavigate.reveal.kind === 'diff' ? revealNavigate.reveal.filePath : null}
+                  revealRequestId={revealNavigate && revealNavigate.reveal.kind === 'diff' ? revealNavigate.requestId : null}
+                />
+              </Suspense>
             </div>
           )}
 
           {shouldShowTasksTab && (
-            <TaskMasterPanel
-              isVisible={activeTab === 'tasks'}
-              revealTaskId={revealNavigate && revealNavigate.reveal.kind === 'task' ? revealNavigate.reveal.taskId : null}
-              revealRequestId={revealNavigate && revealNavigate.reveal.kind === 'task' ? revealNavigate.requestId : null}
-            />
+            /* Always mounted (the panel owns its own hidden state), so its
+               boundary renders nothing until the chunk arrives. */
+            <Suspense fallback={null}>
+              <LazyTaskMasterPanel
+                isVisible={activeTab === 'tasks'}
+                revealTaskId={revealNavigate && revealNavigate.reveal.kind === 'task' ? revealNavigate.reveal.taskId : null}
+                revealRequestId={revealNavigate && revealNavigate.reveal.kind === 'task' ? revealNavigate.requestId : null}
+              />
+            </Suspense>
           )}
 
           {shouldShowQuayTab && activeTab === 'quay' && (
             <div className="h-full overflow-hidden" data-workspace-view="quay">
-              <QuayPanel
-                projectId={selectedProject.projectId}
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyQuayPanel
+                  projectId={selectedProject.projectId}
                 view={quayView}
                 onRefresh={refreshQuay}
                 // The dashboard link comes from the snapshot itself: the backend
@@ -492,56 +540,65 @@ function WorkspaceMain({
                 // reading, and only mobile folds the detail cards.
                 collapsibleDetails={isMobile}
               />
+              </Suspense>
             </div>
           )}
 
           {shouldShowArchitectureTab && activeTab === 'architecture' && (
             <div className="h-full overflow-hidden" data-workspace-view="architecture">
-              <ArchitecturePanel
-                projectId={selectedProject.projectId}
-                sessionId={selectedSession?.id ?? null}
-                // The copied header names the project and session the way the
-                // workspace labels them; the ids are only a fallback.
-                projectName={selectedProject.displayName}
-                sessionTitle={selectedSession?.title ?? selectedSession?.summary ?? null}
-                // The inspector's mention hits switch the workspace to Chat
-                // after asking the shared locator seam to centre the message;
-                // the architecture module never imports the chat module.
-                onOpenChat={() => setActiveTab('chat')}
-              />
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyArchitecturePanel
+                  projectId={selectedProject.projectId}
+                  sessionId={selectedSession?.id ?? null}
+                  // The copied header names the project and session the way the
+                  // workspace labels them; the ids are only a fallback.
+                  projectName={selectedProject.displayName}
+                  sessionTitle={selectedSession?.title ?? selectedSession?.summary ?? null}
+                  // The inspector's mention hits switch the workspace to Chat
+                  // after asking the shared locator seam to centre the message;
+                  // the architecture module never imports the chat module.
+                  onOpenChat={() => setActiveTab('chat')}
+                />
+              </Suspense>
             </div>
           )}
 
           {shouldShowBrowserTab && activeTab === 'browser' && (
             <div className="h-full overflow-hidden">
-              <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyBrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
+              </Suspense>
             </div>
           )}
 
           {activeTab.startsWith('plugin:') && (
             <div className="h-full overflow-hidden">
-              <PluginTabContent
-                pluginName={activeTab.replace('plugin:', '')}
-                selectedProject={selectedProject}
-                selectedSession={selectedSession}
-              />
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyPluginTabContent
+                  pluginName={activeTab.replace('plugin:', '')}
+                  selectedProject={selectedProject}
+                  selectedSession={selectedSession}
+                />
+              </Suspense>
             </div>
           )}
         </div>
 
-        <EditorSidebar
-          editingFile={editingFile}
-          isMobile={isMobile}
-          editorExpanded={editorExpanded}
-          editorWidth={editorWidth}
-          hasManualWidth={hasManualWidth}
-          resizeHandleRef={resizeHandleRef}
-          onResizeStart={handleResizeStart}
-          onCloseEditor={handleCloseEditor}
-          onToggleEditorExpand={handleToggleEditorExpand}
-          projectPath={selectedProject.path}
-          fillSpace={activeTab === 'files'}
-        />
+        <Suspense fallback={null}>
+          <LazyEditorSidebar
+            editingFile={editingFile}
+            isMobile={isMobile}
+            editorExpanded={editorExpanded}
+            editorWidth={editorWidth}
+            hasManualWidth={hasManualWidth}
+            resizeHandleRef={resizeHandleRef}
+            onResizeStart={handleResizeStart}
+            onCloseEditor={handleCloseEditor}
+            onToggleEditorExpand={handleToggleEditorExpand}
+            projectPath={selectedProject.path}
+            fillSpace={activeTab === 'files'}
+          />
+        </Suspense>
       </div>
     </CockpitColumnRegion>
   );

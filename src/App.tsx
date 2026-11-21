@@ -1,24 +1,45 @@
-import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import { useCallback, useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
 import { OAUTH_CONSENT_SPA_PATH } from '@shared/oauthConsent';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
 import { UiPreferencesProvider } from '@/shared/context/UiPreferencesContext';
 import { AuthProvider, ProtectedRoute, useAuth } from '@/modules/auth';
-import { TaskMasterProvider,TasksSettingsProvider } from '@/modules/task-master';
+import { TaskMasterProvider } from '@/modules/task-master/context/TaskMasterContext';
+import { TasksSettingsProvider } from '@/modules/task-master/context/TasksSettingsContext';
 import { WebSocketProvider } from '@/shared/context/WebSocketContext';
-import { PluginsProvider } from '@/modules/plugins';
-import { ProjectWorkspaceRoute, useProjectsState } from '@/modules/project-workspace';
-import { OAuthConsentRoute } from '@/modules/oauth-consent';
-import { CockpitOverlayHost, CockpitRoute } from '@/modules/cockpit';
-import { ArchitecturePanel, requestArchitectureSessionFocus } from '@/modules/architecture';
-import { LogDrawerHost } from '@/modules/diagnostics';
-import { useWebSocket } from '@/shared/context/WebSocketContext';
-import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
+import { PluginsProvider } from '@/modules/plugins/context/PluginsContext';
+import { ProjectWorkspaceRoute } from '@/modules/project-workspace';
 import { useServerFeatures } from '@/shared/hooks/useServerFeatures';
 import { installViewEvents, reportView } from '@/shared/api/viewEvents';
 import { i18n } from '@/modules/i18n';
+
+/**
+ * The non-resident surfaces are route-level code splits: only the workspace and
+ * the sign-in/shell providers ship in the first-screen chunk. Each surface below
+ * is fetched when its address is actually mounted, and the local `Suspense`
+ * keeps the fallback confined to that surface — the whole App is never
+ * suspended.
+ *
+ * The workspace itself is deliberately NOT lazy: it is the first screen and the
+ * session state is mounted directly under it. Its heavy side tabs (architecture,
+ * git, files, shell, tasks, quay, plugins, browser, code editor) are the split
+ * points, and they live in `WorkspaceMain`.
+ */
+const LazyArchitectureStandaloneRoute = lazy(() => import('@/modules/project-workspace/ArchitectureStandaloneRoute'));
+const LazyCockpitRoute = lazy(() =>
+  import('@/modules/cockpit').then((module) => ({ default: module.CockpitRoute })),
+);
+const LazyCockpitOverlayHost = lazy(() =>
+  import('@/modules/cockpit').then((module) => ({ default: module.CockpitOverlayHost })),
+);
+const LazyOAuthConsentRoute = lazy(() =>
+  import('@/modules/oauth-consent').then((module) => ({ default: module.OAuthConsentRoute })),
+);
+const LazyLogDrawerHost = lazy(() =>
+  import('@/modules/diagnostics').then((module) => ({ default: module.LogDrawerHost })),
+);
 
 const DEPLOYMENT_ASSET_DIRECTORIES = new Set(['assets', 'static', 'icons', 'images']);
 
@@ -129,14 +150,25 @@ function AuthenticatedWebSocket({ children }: { children: ReactNode }) {
 }
 
 /**
- * A stable "nothing is running" answer for the standalone page's project state.
+ * The wait state for a lazy route.
  *
- * `useProjectsState` normally receives the busy-session predicate from the
- * workspace's `SessionProtectionProvider`; the standalone architecture page has
- * no chat, so no turn can be running in it. A module-level function keeps the
- * hook's dependency identity stable across renders.
+ * Deliberately one fixed-size, centered spinner: the fallback never changes the
+ * shell's layout (no header, sidebar or tab strip is drawn here), so the page
+ * it replaces does not jump when the chunk arrives. It is local to the surface
+ * being loaded — there is no `Suspense` above `Routes`.
  */
-const NO_SESSION_IS_PROCESSING = (): boolean => false;
+function RouteLoadingFallback() {
+  return (
+    <div className="flex h-dvh w-full items-center justify-center" role="status" aria-label="Loading">
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-foreground" />
+    </div>
+  );
+}
+
+/** A route's own `Suspense` boundary, so one lazy surface never blanks another. */
+function LazySurface({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteLoadingFallback />}>{children}</Suspense>;
+}
 
 /**
  * Starts the local view-event instrumentation and reports the cockpit route.
@@ -164,68 +196,6 @@ function ViewEventInstrumentation() {
   return null;
 }
 
-/**
- * The `/session/:sessionId/architecture` route: the architecture panel alone, in
- * a page of its own.
- *
- * Used by `App` and opened by the panel's "Open in new tab". It deliberately
- * mounts NO workspace shell (no sidebar, no tab strip), so the drawing gets the
- * whole viewport; the panel itself reports the deep link's first-paint state and
- * draws the "Back to session" entry. The project is resolved from the session
- * through the workspace's own state hook, which is also what carries the
- * Tier-1 `hasArchguardCache` reading for a session that is not in the loaded
- * project pages.
- */
-function ArchitectureStandaloneRoute() {
-  const { sessionId } = useParams<{ sessionId?: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { subscribe } = useWebSocket();
-  const { isMobile } = useDeviceSettings({ trackPWA: false });
-  const { selectedProject, selectedSession } = useProjectsState({
-    sessionId,
-    navigate,
-    subscribe,
-    isMobile,
-    isSessionProcessing: NO_SESSION_IS_PROCESSING,
-  });
-
-  /**
-   * Switch to the open workspace tab when one answers; otherwise navigate this
-   * tab to the session. A confirmed tab means this standalone copy closes
-   * itself, so "Back" does not leave a duplicate workspace behind.
-   */
-  const handleBackToSession = useCallback((): void => {
-    if (sessionId === undefined || sessionId === '') {
-      navigate('/');
-      return;
-    }
-    void (async () => {
-      const focused = await requestArchitectureSessionFocus(sessionId);
-      if (!focused) {
-        navigate(`/session/${encodeURIComponent(sessionId)}`);
-        return;
-      }
-      // The workspace tab brought itself forward. Closing a script-opened tab is
-      // allowed; a manually opened one stays, which is harmless — the reader is
-      // already looking at the workspace.
-      window.close();
-    })();
-  }, [navigate, sessionId]);
-
-  return (
-    <ArchitecturePanel
-      projectId={selectedProject?.projectId ?? null}
-      sessionId={sessionId ?? null}
-      projectName={selectedProject?.displayName ?? null}
-      sessionTitle={selectedSession?.title ?? selectedSession?.summary ?? null}
-      standalone
-      deepLinkSearch={location.search}
-      onBackToSession={handleBackToSession}
-    />
-  );
-}
-
 /** Rendered by main.tsx; mounts the shared providers, the auth gate and the project workspace routes. */
 export default function App() {  const routerBasename = detectRouterBasename();
 
@@ -244,7 +214,9 @@ export default function App() {  const routerBasename = detectRouterBasename();
                       diagnostics health cards and the Settings tab all reach the
                       same drawer through the shared port instead of importing
                       this module. Renders nothing until a producer opens it. */}
-                  <LogDrawerHost />
+                  <Suspense fallback={null}>
+                    <LazyLogDrawerHost />
+                  </Suspense>
                   <Router basename={routerBasename}>
                     <ViewEventInstrumentation />
                     <Routes>
@@ -257,33 +229,35 @@ export default function App() {  const routerBasename = detectRouterBasename();
                           visitor is sent to the existing login first. */}
                       <Route
                         path="/session/:sessionId/architecture"
-                        element={<ArchitectureStandaloneRoute />}
+                        element={<LazySurface><LazyArchitectureStandaloneRoute /></LazySurface>}
                       />
                       {/* The cockpit: a top-level read-only stage over the quay fleet, a sibling
                           of the project workspace rather than a tab inside one. It is behind the
                           same ProtectedRoute, so it reads the fleet only for a signed-in user;
                           `CockpitRoute` additionally checks the server's boot-time
                           `cockpit.enabled` switch and redirects to the workspace when off. */}
-                      <Route path="/cockpit" element={<CockpitRoute surface="stage" />} />
+                      <Route path="/cockpit" element={<LazySurface><LazyCockpitRoute surface="stage" /></LazySurface>} />
                       {/* The phone remote: the input half of the same hub, opened by scanning
                           the code the stage draws. Same ProtectedRoute and the same switch, so a
                           disabled deployment cannot be reached by scanning a previously drawn
                           code either. */}
-                      <Route path="/cockpit/remote" element={<CockpitRoute surface="remote" />} />
+                      <Route path="/cockpit/remote" element={<LazySurface><LazyCockpitRoute surface="remote" /></LazySurface>} />
                       {/* The OAuth consent screen: a full-page surface of its own, NOT
                           inside the project workspace shell, so an authorization request
                           never mounts the sidebar, tabs or chat pane behind it. It is
                           behind the same ProtectedRoute as the workspace — an anonymous
                           visitor lands on the login form with the query string untouched,
                           which is what sends them back here after they sign in. */}
-                      <Route path={OAUTH_CONSENT_SPA_PATH} element={<OAuthConsentRoute />} />
+                      <Route path={OAUTH_CONSENT_SPA_PATH} element={<LazySurface><LazyOAuthConsentRoute /></LazySurface>} />
                     </Routes>
                     {/* The phone's cockpit layer. A SIBLING of the routes, not a route: it draws
                         the cards over whatever the current location matched while the session page
                         underneath stays mounted. It reads the history entry its opener pushed (the
                         phone header's cockpit button) and renders nothing without it, so a direct
                         `/cockpit?view=cards` deep link remains the standalone page. */}
-                    <CockpitOverlayHost />
+                    <Suspense fallback={null}>
+                      <LazyCockpitOverlayHost />
+                    </Suspense>
                   </Router>
                 </ProtectedRoute>
                 </TaskMasterProvider>

@@ -1,22 +1,91 @@
-import React, { createContext, memo, useContext, useMemo, useState } from 'react';
+import React, { createContext, lazy, memo, Suspense, useContext, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTranslation } from 'react-i18next';
+import type remarkMath from 'remark-math';
+import type rehypeKatex from 'rehype-katex';
 
-import { MermaidDiagram } from '@/modules/code-editor';
-import { MarkdownImage } from '@/modules/chat/ui/MarkdownImage';
-import { normalizeInlineCodeFences } from '@/modules/chat-transcript';
-import { matchReplyItem } from '@/modules/chat-transcript';
-import { buildSyntaxTheme } from '@/modules/chat-transcript';
-import { copyTextToClipboard } from '@/shared/utils';
-import { SyntaxHighlighter } from '@/shared/syntaxHighlighter';
 import { usePaletteOps } from '@/modules/command-palette';
-import type { PrismStyleSheet } from '@/modules/chat-transcript';
-import type { ReplyItem, ReplyItemRenderContext } from '@/modules/chat-transcript';
+import { MarkdownImage } from '@/modules/chat/ui/MarkdownImage';
+import {
+  buildSyntaxTheme,
+  matchReplyItem,
+  normalizeInlineCodeFences,
+} from '@/modules/chat-transcript';
+import { copyTextToClipboard } from '@/shared/utils';
+import type { PrismStyleSheet, ReplyItem, ReplyItemRenderContext } from '@/modules/chat-transcript';
+
+/**
+ * Two heavy renderers stay out of this module's static import graph and are
+ * fetched the first time the element they serve actually appears:
+ *
+ * - the Prism highlighter (~50 grammars + refractor) is only needed once a
+ *   fenced code block renders, and a plain `<pre>` is a correct first paint;
+ * - the mermaid diagram wrapper (and, through its own dynamic import, the
+ *   mermaid library) is only fetched for a ```mermaid fence;
+ * - `remark-math` + `rehype-katex` (KaTeX is ~600 KB of source) only run when
+ *   the text carries one of the delimiters they act on — which the `hasMath`
+ *   gate below already detects before this module would have used them.
+ *
+ * The caches are module-level or closure-owned so a transcript with many blocks
+ * resolves once.
+ */
+const LazySyntaxHighlighter = lazy(() =>
+  import('@/shared/syntaxHighlighter').then((module) => ({ default: module.SyntaxHighlighter })),
+);
+const LazyMermaidDiagram = lazy(() =>
+  import('@/modules/code-editor').then((module) => ({ default: module.MermaidDiagram })),
+);
+
+type MathPluginSet = {
+  remarkMath: typeof remarkMath;
+  rehypeKatex: typeof rehypeKatex;
+};
+
+/**
+ * One in-flight module promise, owned by this closure rather than by a
+ * module-level binding (the architecture ratchet forbids module-scope `let`).
+ */
+const loadMathPlugins = (() => {
+  let pending: Promise<MathPluginSet> | null = null;
+  return (): Promise<MathPluginSet> => {
+    pending ??= Promise.all([import('remark-math'), import('rehype-katex')]).then(
+      ([math, katex]) => ({ remarkMath: math.default, rehypeKatex: katex.default }),
+    );
+    return pending;
+  };
+})();
+
+/** Resolves the KaTeX plugins only for content that actually contains math. */
+function useMathPlugins(enabled: boolean): MathPluginSet | null {
+  const [plugins, setPlugins] = useState<MathPluginSet | null>(null);
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+    let cancelled = false;
+    void loadMathPlugins().then((loaded) => {
+      if (!cancelled) {
+        setPlugins(loaded);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+  return enabled ? plugins : null;
+}
+
+/** The plain-text code block shown while the highlighter chunk is in flight. */
+function PlainCodeBlock({ raw }: { raw: string }) {
+  return (
+    <pre className="m-0 overflow-x-auto px-4 pb-4 pt-2 font-mono text-[0.8125rem] leading-[1.6]">
+      <code>{raw}</code>
+    </pre>
+  );
+}
 
 type MarkdownProps = {
   children: React.ReactNode;
@@ -115,7 +184,11 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
   const languageLabel = language.charAt(0).toUpperCase() + language.slice(1);
 
   if (language === 'mermaid') {
-    return <MermaidDiagram code={raw} />;
+    return (
+      <Suspense fallback={<PlainCodeBlock raw={raw} />}>
+        <LazyMermaidDiagram code={raw} />
+      </Suspense>
+    );
   }
 
   return (
@@ -165,28 +238,30 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
         </button>
       </div>
 
-      <SyntaxHighlighter
-        language={language}
-        style={syntaxTheme.style}
-        customStyle={{
-          margin: 0,
-          borderRadius: 0,
-          fontSize: '0.8125rem',
-          lineHeight: 1.6,
-          padding: '0.5rem 1rem 1rem',
-          // The container owns the background so the label row and code read as one panel.
-          background: 'transparent',
-        }}
-        codeTagProps={{
-          style: {
-            fontFamily:
-              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      <Suspense fallback={<PlainCodeBlock raw={raw} />}>
+        <LazySyntaxHighlighter
+          language={language}
+          style={syntaxTheme.style}
+          customStyle={{
+            margin: 0,
+            borderRadius: 0,
+            fontSize: '0.8125rem',
+            lineHeight: 1.6,
+            padding: '0.5rem 1rem 1rem',
+            // The container owns the background so the label row and code read as one panel.
             background: 'transparent',
-          },
-        }}
-      >
-        {raw}
-      </SyntaxHighlighter>
+          }}
+          codeTagProps={{
+            style: {
+              fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              background: 'transparent',
+            },
+          }}
+        >
+          {raw}
+        </LazySyntaxHighlighter>
+      </Suspense>
     </div>
   );
 };
@@ -405,20 +480,24 @@ function MarkdownBodyRenderer({ children, breaks = false, replyItems }: Omit<Mar
   // render, and almost no assistant message contains math. Only wire the two
   // plugins up when the text has a delimiter they could act on.
   const hasMath = useMemo(() => MATH_DELIMITER.test(content), [content]);
+  const mathPlugins = useMathPlugins(hasMath);
   const remarkPlugins = useMemo(
     () => {
       const plugins: unknown[] = [remarkGfm];
-      if (hasMath) {
-        plugins.push([remarkMath, { singleDollarTextMath: false }]);
+      if (mathPlugins) {
+        plugins.push([mathPlugins.remarkMath, { singleDollarTextMath: false }]);
       }
       if (breaks) {
         plugins.push(remarkBreaks);
       }
       return plugins as any;
     },
-    [breaks, hasMath],
+    [breaks, mathPlugins],
   );
-  const rehypePlugins = useMemo(() => (hasMath ? [rehypeKatex] : EMPTY_PLUGINS), [hasMath]);
+  const rehypePlugins = useMemo(
+    () => (mathPlugins ? [mathPlugins.rehypeKatex] : EMPTY_PLUGINS),
+    [mathPlugins],
+  );
   const { openFileInEditor, openDirectory } = usePaletteOps();
   // Presence, not identity: the memo below must not rebuild when the transcript
   // hands over a fresh `replyItems` object with the same shape.
