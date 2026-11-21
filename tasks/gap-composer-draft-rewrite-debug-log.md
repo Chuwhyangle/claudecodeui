@@ -140,3 +140,11 @@ DoD（真实浏览器走查，隔离实例 + 本地 mock gateway，合成文本�
 ## ADR-007
 
 该轴仍暗,理由:本任务只增加旁路调试日志与开关，未改变架构依赖图（reply-suggestions 仍为叶子模块、无新增跨模块边），无 L_G/L_D 可比读数。
+
+## Blocker
+
+**2026-11-21T15:14:24.318Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/shared/tests/replySuggestionsApi.test.ts: AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal: [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts,src/shared/tests/replySuggestionsApi.test.ts,server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts,src/shared/tests/replySuggestionsApi.test.ts changed=-]
+- run_id：wk-prod-anchor
+- session_id：2501a5b3-4ea8-4901-8436-c90b5ee0107a
