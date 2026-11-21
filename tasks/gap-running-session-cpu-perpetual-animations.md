@@ -130,3 +130,26 @@ runningBadge="1"  title="运行中会话列表 CPU 占用高"  Thinking · 17m 1
 ```
 
 截图：`tmp/running-session-cpu-fixed.png`（修复后）；`tmp/cpu-running-session-03.png`（修复前，含 `Thinking…` shimmer 与 `backdrop-blur-sm`）。验证用的 dev server、静态代理与一次性 JWT 端点均为临时进程，收尾停止；浏览器 localStorage 中临时 `auth-token` 已删除。
+
+### 上线后复核（2026-11-21 16:40–16:43 本地）
+
+`npm run build:client` 在 `develop`（build-info gitSha `3bf560cb8`）完成后，线上 `:3001` 的 `index.html` 指向 `assets/index-JDsoKD9U.js`；该 bundle 内 `data-sidebar-backdrop` 命中 1 次、`animate-shimmer` 命中 0 次、`motion-safe:animate-pulse` 命中 2 次。无需重启 `dist-server`，静态资源按请求从 `dist/` 读取。
+
+MCP 浏览器在线上 `:3001` 打开同一 running 会话复核：`layerClass="pointer-events-none absolute inset-0 -z-10 bg-background/80"`、`layerChildren=0`、`shimmerCount=0`、`spinCount=2`（spinner 按约定保持不动）、`runningBadge=1`。
+
+上线后 10 个 10s 窗口（分两批，同一 CDP 测法）：
+
+| # | on total | main Task | GPU | off total | delta |
+|---|---:|---:|---:|---:|---:|
+| 1 | 30.0% | 6.3% | 12.9% | 5.4% | 24.6 |
+| 2 | 23.1% | 4.9% | 9.7% | 3.2% | 19.9 |
+| 3 | 20.3% | 4.4% | 7.5% | 8.3% | 12.0 |
+| 4 | 16.5% | 2.8% | 8.5% | 5.7% | 10.8 |
+| 5 | 16.3% | 2.7% | 8.6% | 10.1% | 6.2 |
+| 6 | 26.4% | 8.6% | 9.5% | 5.7% | 20.7 |
+| 7 | 18.5% | 3.0% | 9.7% | 9.1% | 9.4 |
+| 8 | 24.7% | 6.3% | 9.5% | 6.2% | 18.5 |
+| 9 | 17.7% | 3.0% | 9.1% | 5.5% | 12.2 |
+| 10 | 16.3% | 2.8% | 8.3% | 4.1% | 12.2 |
+
+中位数：**total 19.4%**、**main TaskDuration 3.7%**、**GPU 9.3%**、**delta 12.2 点**。上线前同机同会话是 55–60% total / 12–14% main / GPU 31–36%；残余 GPU 仍由两只未改动的 `Loader2 animate-spin` 贡献。线上读数比 worktree 隔离构建（median total 14.7%）高约 5 点，归因于线上同时有其它会话/fleet 活动；仍低于 AC4 的 20% 上限。
