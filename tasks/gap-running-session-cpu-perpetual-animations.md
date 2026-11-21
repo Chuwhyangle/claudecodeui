@@ -14,7 +14,6 @@ depends_on: []
 ---
 ## Finding
 
-**PARKED** 临时挂起：本任务由人类主会话在独立 worktree 实现并以 MCP 浏览器采集实测读数；实现与证据写回前不要派发 worker。解除时删除本行。
 
 2026-11-21 在 MCP 浏览器打开正在运行的会话（app session `7126bf10-0087-4920-918d-c73d99377a13`，jsonl `dd4a4c0a-de57-42ff-a886-2e86f36617bb`）实测：浏览器进程合计 **55–60% of one core**（renderer 20–27%，GPU 31–36%，主线程 `TaskDuration` 12–14%，`RecalcStyle` ≈60 次/秒）；同页注入 `animation:none` 后 **1.1–1.7%**；未打开会话的 fleet overview 为 **1.4%**。逐项 A/B（6–10s 窗口，同一 running 页）：只关 `.animate-spin` 57.7%→16.1%；只关 `.animate-shimmer` 57.7%→40.5%；只关 `.animate-pulse` 53.5%（噪声级）；去掉侧栏 `backdrop-filter` 60%→36.8%（GPU 35.8%→3.3%）；去背景模糊 + shimmer 静态（spinner 仍旋转）13.9%。服务端 `dist-server` 进程仅 5.9%，成本在浏览器侧。
 
