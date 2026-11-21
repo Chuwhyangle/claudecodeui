@@ -11,7 +11,7 @@ import type {
   UiStateRequestTarget,
 } from '@/shared/types.js';
 import { isSessionOpeningPosition } from '@/shared/types.js';
-import { uiClientRegistry } from '@/modules/websocket/services/ui-client-registry.service.js';
+import { uiClientRegistry } from '@/modules/websocket/services/ui/ui-client-registry.service.js';
 import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 
 /**

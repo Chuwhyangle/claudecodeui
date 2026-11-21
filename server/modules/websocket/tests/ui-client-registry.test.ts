@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import test, { afterEach } from 'node:test';
 
 import { handleChatConnection, listUiClients } from '@/modules/websocket/index.js';
-import { UI_CLIENT_ID_MAX_LENGTH, UI_CLIENT_NAME_MAX_LENGTH } from '@/modules/websocket/services/ui-client-registry.service.js';
+import { UI_CLIENT_ID_MAX_LENGTH, UI_CLIENT_NAME_MAX_LENGTH } from '@/modules/websocket/services/ui/ui-client-registry.service.js';
 import { connectedClients } from '@/modules/websocket/services/websocket-state.service.js';
 import type { AnyRecord } from '@/shared/types.js';
 

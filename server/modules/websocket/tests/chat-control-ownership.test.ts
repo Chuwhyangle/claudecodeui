@@ -52,8 +52,8 @@ import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/datab
 import {
   assertSessionAccess,
   handleChatConnection,
-} from '@/modules/websocket/services/chat-websocket.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
+} from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
 import { connectedClients } from '@/modules/websocket/services/websocket-state.service.js';
 import type { AnyRecord } from '@/shared/types.js';
 

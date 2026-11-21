@@ -1,5 +1,5 @@
 export { WS_OPEN_STATE, connectedClients } from './services/websocket-state.service.js';
-export { createWebSocketServer } from './services/websocket-server.service.js';
+export { createWebSocketServer } from './services/transport/websocket-server.service.js';
 // The business heartbeat's public face. The shipped timings are read by the
 // process criterion that measures the beat, and the two entries that read the
 // environment overrides / describe the frames are the module's advertised
@@ -48,7 +48,7 @@ export { createActivityRouter } from './services/activity.routes.js';
 // beside its readings so a green run says WHICH path it measured — the same
 // reading `websocket/tests/chat-run-turn-semantics.test.ts` takes from the
 // module directly.
-export { chatRunRegistry, createChatRunRegistry } from './services/chat-run-registry.service.js';
+export { chatRunRegistry, createChatRunRegistry } from './services/dispatch/chat-run-registry.service.js';
 export { residentRunIsTurn } from '@/shared/utils.js';
 // ChatRunSummary / ChatRunLookupMiss / ChatRunLookupResult: the run-addressing
 // vocabulary. `ChatRunSummary` is the read-only projection of one tracked run;
@@ -62,7 +62,7 @@ export type {
   ChatRunLookupMiss,
   ChatRunLookupResult,
   ChatRunSummary,
-} from './services/chat-run-registry.service.js';
+} from './services/dispatch/chat-run-registry.service.js';
 // createChatControlService: the transport-agnostic control plane. Consumed by
 // `server/index.ts` to build the single process-wide instance the WebSocket
 // gateway, the scheduled-message dispatcher and (later) the MCP gateway share;
@@ -70,7 +70,7 @@ export type {
 // and by the debug agent's control-queue criterion
 // (`server/modules/debug-agent/tests/debug-agent-control-queue.test.ts`), which
 // drives a resident busy send and its withdrawal through it with no socket.
-export { createChatControlService } from './services/chat-control.service.js';
+export { createChatControlService } from './services/dispatch/chat-control.service.js';
 // Consumed by the providers module's sessions watcher, which announces the
 // sessions it (re)indexed from disk through the same builder the chat gateway
 // uses, so both paths put the identical delta on the wire.
@@ -84,8 +84,8 @@ export { broadcastSessionUpserted, broadcastSessionUpsertedBatch } from './servi
 export { broadcastHostsChanged } from './services/hosts-changed-broadcast.service.js';
 // handleChatConnection: the chat websocket surface, mounted by
 // `createWebSocketServer` and driven directly by the gateway criteria.
-export { handleChatConnection } from './services/chat-websocket.service.js';
-export type { ProviderRuntimeGateway } from './services/chat-websocket.service.js';
+export { handleChatConnection } from './services/dispatch/chat-websocket.service.js';
+export type { ProviderRuntimeGateway } from './services/dispatch/chat-websocket.service.js';
 // The upload-store resend trust boundary. Published for the dual-root asset
 // criterion (`server/modules/assets/tests/cloudpit-assets-dual-root.test.ts`,
 // GOAL-053 A3), which must read "old-root and new-root direct children pass
@@ -93,7 +93,7 @@ export type { ProviderRuntimeGateway } from './services/chat-websocket.service.j
 export {
   filterAttachmentsToUploadStore,
   filterImagesToUploadStore,
-} from './services/chat-websocket.service.js';
+} from './services/dispatch/chat-websocket.service.js';
 // The UI client registry: which devices (browsers) are connected, and which tabs
 // of each. `listUiClients` is the read port the MCP tools (`ui_clients_list`,
 // the `client` parameter of `ui_visible_context` / `ui_open_session`) call;
@@ -104,8 +104,8 @@ export {
   createUiClientRegistry,
   listUiClients,
   uiClientRegistry,
-} from './services/ui-client-registry.service.js';
-export type { UiClientRegistry } from './services/ui-client-registry.service.js';
+} from './services/ui/ui-client-registry.service.js';
+export type { UiClientRegistry } from './services/ui/ui-client-registry.service.js';
 // The UI-visible-context round trip (gap-mcp-ui-visible-context). `requestUiState`
 // broadcasts one `ui.state_request` to the connected browsers and resolves with
 // what they answered, grouped by device and ordered by the newest tab focus
@@ -117,12 +117,12 @@ export {
   createUiStateRequestService,
   uiStateRequestService,
   UI_STATE_REQUEST_DEFAULT_TIMEOUT_MS,
-} from './services/ui-state-request.service.js';
+} from './services/ui/ui-state-request.service.js';
 export type {
   UiStateRequestDeps,
   UiStateRequestOptions,
   UiStateRequestService,
-} from './services/ui-state-request.service.js';
+} from './services/ui/ui-state-request.service.js';
 // The UI-navigation push (gap-mcp-ui-open-session). `navigate` writes one
 // `ui.navigate` to ONE device's tabs and resolves with the DELIVERY reading
 // (the browser's `ui.navigate_ack` mapped to `applied` / `pending_user` /
@@ -139,12 +139,12 @@ export {
   UI_NAVIGATION_DELIVERY_TIMEOUT_MS,
   UI_NAVIGATION_MAX_RECORDS,
   UI_NAVIGATION_RETENTION_MS,
-} from './services/ui-navigation.service.js';
+} from './services/ui/ui-navigation.service.js';
 export type {
   UiNavigationDeps,
   UiNavigationRequest,
   UiNavigationService,
-} from './services/ui-navigation.service.js';
+} from './services/ui/ui-navigation.service.js';
 // handleShellConnection: driven by the passthrough-parity test to prove the pty
 // env stays byte-identical when no configured model is selected.
-export { handleShellConnection } from './services/shell-websocket.service.js';
+export { handleShellConnection } from './services/ui/shell-websocket.service.js';

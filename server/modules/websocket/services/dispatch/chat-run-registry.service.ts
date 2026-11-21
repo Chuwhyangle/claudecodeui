@@ -12,7 +12,7 @@ import {
 } from '@/modules/observation/index.js';
 import { listProcessingSessions, readSessionProcessing } from '@/modules/providers/index.js';
 import { BOOT_ID } from '@/modules/websocket/services/activity-heartbeat.service.js';
-import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
+import { ChatSessionWriter } from '@/modules/websocket/services/dispatch/chat-session-writer.service.js';
 import { broadcastSessionUpserted } from '@/modules/websocket/services/session-upsert-broadcast.service.js';
 import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {

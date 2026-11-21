@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { WebSocket } from 'ws';
 
-import { attachWebSocketHeartbeat } from '@/modules/websocket/services/websocket-server.service.js';
+import { attachWebSocketHeartbeat } from '@/modules/websocket/services/transport/websocket-server.service.js';
 
 function createFakeSocket() {
   const socket = new EventEmitter() as EventEmitter & {

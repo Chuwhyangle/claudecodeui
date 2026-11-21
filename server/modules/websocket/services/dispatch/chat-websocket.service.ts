@@ -22,26 +22,26 @@ import { activityStore } from '@/modules/websocket/services/activity-protocol.se
 import {
   createChatEditPreparationService,
   type ChatEditPreparationService,
-} from '@/modules/websocket/services/chat-edit-preparation.service.js';
-import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
+} from '@/modules/websocket/services/dispatch/chat-edit-preparation.service.js';
+import { createChatControlService } from '@/modules/websocket/services/dispatch/chat-control.service.js';
 import {
   assertSessionAccess,
   type ProviderRuntimeGateway,
-} from '@/modules/websocket/services/chat-control.contract.js';
-import { dispatchRun } from '@/modules/websocket/services/chat-run-dispatch.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
+} from '@/modules/websocket/services/dispatch/chat-control.contract.js';
+import { dispatchRun } from '@/modules/websocket/services/dispatch/chat-run-dispatch.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
 import {
   uiClientRegistry,
   type UiClientRegistry,
-} from '@/modules/websocket/services/ui-client-registry.service.js';
+} from '@/modules/websocket/services/ui/ui-client-registry.service.js';
 import {
   uiStateRequestService,
   type UiStateRequestService,
-} from '@/modules/websocket/services/ui-state-request.service.js';
+} from '@/modules/websocket/services/ui/ui-state-request.service.js';
 import {
   uiNavigationService,
   type UiNavigationService,
-} from '@/modules/websocket/services/ui-navigation.service.js';
+} from '@/modules/websocket/services/ui/ui-navigation.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import { sendJson, sendProtocolError } from '@/modules/websocket/services/websocket-protocol-error.js';
 import type {
@@ -61,7 +61,7 @@ import { parseIncomingJsonObject } from '@/shared/utils.js';
 export {
   filterAttachmentsToUploadStore,
   filterImagesToUploadStore,
-} from '@/modules/websocket/services/chat-attachment-filter.service.js';
+} from '@/modules/websocket/services/dispatch/chat-attachment-filter.service.js';
 
 /**
  * The full verdict set one `chat.stop-task` receipt can carry: everything the

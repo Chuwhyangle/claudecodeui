@@ -5,9 +5,9 @@ import type { WebSocket } from 'ws';
 import { sessionsDb } from '@/modules/database/index.js';
 import { providerModelsService } from '@/modules/providers/index.js';
 import { voiceLexicon } from '@/modules/voice/index.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
-import { filterAttachmentsToUploadStore } from '@/modules/websocket/services/chat-attachment-filter.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-control.contract.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import { filterAttachmentsToUploadStore } from '@/modules/websocket/services/dispatch/chat-attachment-filter.service.js';
+import type { ProviderRuntimeGateway } from '@/modules/websocket/services/dispatch/chat-control.contract.js';
 import { sendProtocolError } from '@/modules/websocket/services/websocket-protocol-error.js';
 import {
   isImageAttachmentDescriptor,

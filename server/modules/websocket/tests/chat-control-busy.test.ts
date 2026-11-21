@@ -37,9 +37,9 @@ import { fileURLToPath } from 'node:url';
 
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
 // Same-module service imports (this criterion lives in the websocket module).
-import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+import { createChatControlService } from '@/modules/websocket/services/dispatch/chat-control.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import type { ProviderRuntimeGateway } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import type { AnyRecord, HostQueuedInputCancelResult, LLMProvider } from '@/shared/types.js';
 
 // ---------------------------------------------------------- pin the world ---

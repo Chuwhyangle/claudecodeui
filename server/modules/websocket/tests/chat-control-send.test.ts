@@ -33,9 +33,9 @@ import { fileURLToPath } from 'node:url';
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
 // Same-module service import (this criterion lives in the websocket module); the
 // cross-module imports above go through their barrels.
-import { createChatControlService } from '@/modules/websocket/services/chat-control.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
-import type { ProviderRuntimeGateway } from '@/modules/websocket/services/chat-websocket.service.js';
+import { createChatControlService } from '@/modules/websocket/services/dispatch/chat-control.service.js';
+import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
+import type { ProviderRuntimeGateway } from '@/modules/websocket/services/dispatch/chat-websocket.service.js';
 import type { AnyRecord, LLMProvider } from '@/shared/types.js';
 
 const SESSION_ID = 'control-send-session';
