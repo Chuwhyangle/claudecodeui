@@ -1,7 +1,7 @@
 ---
 id: gap-composer-draft-rewrite-shared-suggestion-runtime
 title: Composer 草稿润色：复用回复建议推理设置与共享预算，预览单一候选并安全应用
-status: ready
+status: done
 labels:
   - gap
 parent: null
