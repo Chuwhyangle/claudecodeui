@@ -55,23 +55,23 @@ extra:
 
 ## 验证记录
 
-实现提交：`d6b25b3de`（worktree `task/gap-composer-draft-rewrite-shared-suggestion-runtime`，已 merge develop 且无冲突）。
+实现提交：`d6b25b3de`（主实现）+ `aee159e70`（StrictMode/dev 下共享 /status 读数的兜底，保持既有 composer 恰好一次 status 调用）；worktree `task/gap-composer-draft-rewrite-shared-suggestion-runtime` 已再次 merge develop，develop 是 HEAD 的祖先。
 
 逐条读数（均在 implementation-only 的隔离 worktree 内执行，未跑全量套件）：
 
 - AC1/AC2 `npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draft-rewrite.test.ts` → exit 0，26 pass / 0 fail。覆盖：disabled/missing model/unresolved key/blank/over-6000 均 0 次 completion；POST user 仅 draft；独立 rewrite system prompt；model/protocol/prompt 覆盖字段被忽略；日志与响应不含 draft/candidate/prompt/key；temperature 0.25 → redrawTemperature 1.5；maxOutputTokens=400；chips 与 rewrite 共享 minute/day 预算（第 3 次被同一 429 拒绝，2 次 reach upstream）；两独立 service 各自计数；回环 HTTP 覆盖 Anthropic `end_turn`/`max_tokens` 与 OpenAI `stop`/`length`，thinking-only/空 content 拒绝。
 - AC3 `... --test server/modules/llm-gateway/tests/llm-client.test.ts` → exit 0，11 pass / 0 fail；新增 (j) 读取两侧 stop reason 并置 `truncated`。
 - AC4 `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteController.test.ts` → exit 0，19 pass。
-- AC5 `npx vitest run src/modules/chat/tests/composerDraftScoping.test.tsx src/modules/chat-composer/tests/chatComposerResponsive.test.tsx` → exit 0，21 pass。
+- AC5 `npx vitest run src/modules/chat/tests/composerDraftScoping.test.tsx src/modules/chat-composer/tests/chatComposerResponsive.test.tsx` → exit 0，21 pass；同一轮回归 `chatComposerReplyChips.test.tsx`（38 pass）与 `chatComposerSuggestHighlight.test.tsx`（7 pass），确认 status 调用次数仍为 1。
 - AC6 `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteView.test.tsx` → exit 0，12 pass。
 - AC7 `npx vitest run src/shared/tests/replySuggestionsTypeSync.test.ts src/shared/tests/composerDraftRewriteTypeSync.test.ts` → exit 0，13 pass（含单边增删负控）。
 - AC8 `npx vitest run src/modules/chat-composer/tests/composerDraftRewriteI18n.test.ts` → exit 0，4 pass；语言集从 `src/modules/i18n/languages.ts` 读取（12 个）。
 - AC10 `npm run typecheck` exit 0（client/server/scripts 三工程）、`npm run lint` exit 0、`npm run build` exit 0。
-- AC9/DoD 真实页面：以 `scripts/isolated-instance.sh` 启动独立实例（临时 HOME、全新 auth.db、`residentRestore=false`、`CLAUDE_SESSION_SCOPE_SWEEP=off`、rewrite 设置 enabled 指向本地假网关地址），Vite dev server 代理到该实例，fixture project=`composer-draft-rewrite-workspace`、session=`draft-rewrite-fixture`。`node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url <isolated-url> --auth-token <token> --project composer-draft-rewrite-workspace --session draft-rewrite-fixture` 三个视口全部 exit 0：
+- AC9/DoD 真实页面（在最终代码上重跑，非早期快照）：以 `scripts/isolated-instance.sh` 启动独立实例（临时 HOME、全新 auth.db、`residentRestore=false`、`CLAUDE_SESSION_SCOPE_SWEEP=off`、rewrite 设置 enabled 指向本地假网关地址），Vite dev server 代理到该实例，fixture project=`composer-draft-rewrite-workspace`、session=`draft-rewrite-fixture`。`node scripts/ui-scenario.mjs scripts/scenarios/composer-draft-rewrite.json --base-url <isolated-url> --auth-token <token> --project composer-draft-rewrite-workspace --session draft-rewrite-fixture --out tmp/composer-draft-rewrite-scenario` → exit 0，18 steps / 8 checkpoints / `mockGateway.requests=3`。三个视口同样全部 exit 0：
   - 1280x800 → 18 steps / 8 checkpoints，报告 `tmp/composer-draft-rewrite/desktop/report.json`
   - 375x720 → 18 steps / 8 checkpoints，报告 `tmp/composer-draft-rewrite/mobile-375/report.json`
   - 320x640 → 18 steps / 8 checkpoints，报告 `tmp/composer-draft-rewrite/mobile-320/report.json`
-  - 每次 mock gateway `requests=3`（首次成功、失败一次、去重后重试一次）；`mockGateway.note` 明示“local injected mock gateway — proves the wiring/contract only, not real model quality”。
+  - `mockGateway.note` 明示“local injected mock gateway — proves the wiring/contract only, not real model quality”。
   - 断言包含：chip 出现在 composer body 内且 footer 仍存在；首次请求仅一次；候选出现；非按钮区收起后再次打开 `requests` 不变；apply 后 composer 文本更新且 `chatMessageCount` 不变（无发送）；失败态 `requests=2` 且原 draft 逐字保持、textarea 未禁用；两次连续 retry 只增一次请求（`requests=3`）。
   - 截图：`tmp/composer-draft-rewrite/desktop/step-5-waitFor-draftRewrite-candidate.png`（候选框、无标题、仅两图标）、`.../step-9-drive-draftRewrite.apply.png`、`.../step-12-waitFor-draftRewrite-error.png`；375/320 同名文件在各自目录。
 
