@@ -34,14 +34,21 @@ import express, {
 import { AppError } from '@/shared/utils.js';
 import type { LlmCompletion } from '@/modules/llm-gateway/index.js';
 
-import type { ReplySuggestionsCompletionRequest } from '../reply-suggestions-client.js';
+import {
+  ReplySuggestionsClientError,
+  type ReplySuggestionsCompletionRequest,
+} from '../reply-suggestions-client.js';
 import {
   buildDraftRewriteSystemPrompt,
   DRAFT_REWRITE_MAX_INPUT_CHARS,
   DRAFT_REWRITE_MAX_OUTPUT_CHARS,
 } from '../reply-suggestions-draw.js';
 import { createReplySuggestionsModule, type ReplySuggestionsModuleDeps } from '../reply-suggestions.module.js';
-import { createReplySuggestionsSettingsSource } from '../reply-suggestions-settings.js';
+import type { ReplySuggestionsDebugAttempt, ReplySuggestionsDebugLog } from '../reply-suggestions-debug-log.js';
+import {
+  createReplySuggestionsSettingsSource,
+  type ReplySuggestionsSettingsSource,
+} from '../reply-suggestions-settings.js';
 
 const API_KEY = 'sk-draft-rewrite-secret';
 const DRAFT = '我们明天上午十点讨论一下这个方案吧，记得带上上次的文档';
@@ -57,6 +64,10 @@ type HarnessOptions = {
   messageText?: string | null;
   /** Use the module's real completion path against a loopback HTTP fixture. */
   realComplete?: boolean;
+  /** A recording debug-ledger sink (the opt-in attempt log). */
+  debugLog?: ReplySuggestionsDebugLog;
+  /** When present, the module's settings reading reports this object's mutable `value`. */
+  debugLogFlag?: { value: boolean };
 };
 
 type Harness = {
@@ -94,8 +105,20 @@ async function start(t: { after(callback: () => void | Promise<void>): void }, o
 
   const calls: ReplySuggestionsCompletionRequest[] = [];
   const logs: string[] = [];
+  const baseSource = createReplySuggestionsSettingsSource({ settingsPath });
+  const settingsSource: ReplySuggestionsSettingsSource | undefined = options.debugLogFlag === undefined
+    ? undefined
+    : {
+      read: () => ({ ...baseSource.read(), debugLog: options.debugLogFlag!.value }),
+      writeDebugLog: (value) => {
+        options.debugLogFlag!.value = value;
+        return value;
+      },
+    };
   const deps: ReplySuggestionsModuleDeps = {
     settingsPath,
+    ...(settingsSource === undefined ? {} : { settingsSource }),
+    ...(options.debugLog === undefined ? {} : { debugLog: options.debugLog }),
     logger: (line) => logs.push(line),
     readLastAssistantMessage: async () => {
       if (options.messageText === null) return null;
@@ -503,4 +526,129 @@ test('the guard is shared even when the rewrite arrives first', async (t) => {
   const chip = await post(harness.baseUrl, '/api/reply-suggestions', { sessionId: 's' });
   assert.equal(chip.status, 429);
   assert.equal(harness.calls.length, 1);
+});
+
+//---------------------------------------------------------------------------------------------
+// (7) the OPT-IN debug ledger: one decided attempt per path, gated at WRITE time
+//---------------------------------------------------------------------------------------------
+
+/** A recording sink that keeps every attempt it was handed. */
+function recordingDebugLog(): { log: ReplySuggestionsDebugLog; attempts: ReplySuggestionsDebugAttempt[] } {
+  const attempts: ReplySuggestionsDebugAttempt[] = [];
+  return {
+    attempts,
+    log: { path: '/tmp/recording-debug.jsonl', record: (attempt) => attempts.push(attempt) },
+  };
+}
+
+test('a successful attempt reports ok exactly once with the draft and the candidate', async (t) => {
+  const { log, attempts } = recordingDebugLog();
+  const harness = await start(t, { debugLog: log, debugLogFlag: { value: true } });
+  const response = await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT, sessionId: 'session-9' });
+
+  assert.equal(response.status, 200);
+  assert.equal(attempts.length, 1, 'exactly one attempt record');
+  assert.equal(attempts[0].outcome, 'ok');
+  assert.equal(attempts[0].input, DRAFT);
+  assert.equal(attempts[0].output, REWRITTEN);
+  assert.equal(attempts[0].sessionId, 'session-9');
+  // The correlation label is log-only: it is not part of the upstream request body.
+  assert.ok(!JSON.stringify(harness.calls[0]).includes('session-9'));
+});
+
+test('an omitted sessionId is reported absent (null) and never reaches upstream', async (t) => {
+  const { log, attempts } = recordingDebugLog();
+  const harness = await start(t, { debugLog: log, debugLogFlag: { value: true } });
+  await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT });
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].sessionId, null);
+});
+
+test('a timeout reports error:timeout exactly once', async (t) => {
+  const { log, attempts } = recordingDebugLog();
+  const harness = await start(t, {
+    debugLog: log,
+    debugLogFlag: { value: true },
+    completeThrows: () => new ReplySuggestionsClientError('timeout', 'request timed out'),
+  });
+  const response = await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT });
+  assert.notEqual(response.status, 200);
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].outcome, 'error:timeout');
+  assert.equal(attempts[0].output, '');
+});
+
+test('an upstream HTTP failure reports error:http exactly once with no output', async (t) => {
+  const { log, attempts } = recordingDebugLog();
+  const harness = await start(t, {
+    debugLog: log,
+    debugLogFlag: { value: true },
+    completeThrows: () => new ReplySuggestionsClientError('http', 'upstream said no', 502),
+  });
+  const response = await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT });
+  assert.equal(response.status, 502);
+  assert.equal(attempts.length, 1);
+  assert.equal(attempts[0].outcome, 'error:http');
+});
+
+test('each rejection reports rejected:<reason> exactly once with the raw upstream output', async (t) => {
+  const cases: Array<{ label: string; options: HarnessOptions; expected: string; raw: string }> = [
+    {
+      label: 'truncated',
+      options: { completeResult: () => ({ text: REWRITTEN, inputTokens: 1, outputTokens: 400, stopReason: 'max_tokens', truncated: true }) },
+      expected: 'rejected:truncated',
+      raw: REWRITTEN,
+    },
+    {
+      label: 'empty-output',
+      options: { responder: (request) => (isRewrite(request) ? '   \n ' : '{"chips":[]}') },
+      expected: 'rejected:empty-output',
+      raw: '   \n ',
+    },
+    {
+      label: 'output-too-long',
+      options: { responder: (request) => (isRewrite(request) ? 'y'.repeat(DRAFT_REWRITE_MAX_OUTPUT_CHARS + 1) : '{"chips":[]}') },
+      expected: 'rejected:output-too-long',
+      raw: 'y'.repeat(DRAFT_REWRITE_MAX_OUTPUT_CHARS + 1),
+    },
+  ];
+
+  for (const entry of cases) {
+    const { log, attempts } = recordingDebugLog();
+    const harness = await start(t, { ...entry.options, debugLog: log, debugLogFlag: { value: true } });
+    const response = await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT });
+    assert.equal(response.status, 502, entry.label);
+    assert.equal(attempts.length, 1, entry.label);
+    assert.equal(attempts[0].outcome, entry.expected, entry.label);
+    assert.equal(attempts[0].output, entry.raw, `${entry.label}: the log keeps the raw upstream answer`);
+  }
+});
+
+test('debugLog false records nothing; the SAME service instance writes after it is switched on', async (t) => {
+  const { log, attempts } = recordingDebugLog();
+  const flag = { value: false };
+  const harness = await start(t, { debugLog: log, debugLogFlag: flag });
+
+  assert.equal((await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT })).status, 200);
+  assert.equal(attempts.length, 0, 'off writes nothing');
+
+  // The switch is read at WRITE time, so flipping it inside the same service instance is
+  // enough — no rebuild, no restart.
+  flag.value = true;
+  assert.equal((await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT })).status, 200);
+  assert.equal(attempts.length, 1, 'the next attempt after the flip lands one line');
+  assert.equal(attempts[0].outcome, 'ok');
+});
+
+test('a throwing sink changes neither the HTTP response nor the candidate', async (t) => {
+  const throwing: ReplySuggestionsDebugLog = {
+    path: '/tmp/throwing-debug.jsonl',
+    record: () => {
+      throw new Error('sink exploded');
+    },
+  };
+  const harness = await start(t, { debugLog: throwing, debugLogFlag: { value: true } });
+  const response = await post(harness.baseUrl, '/api/reply-suggestions/draft-rewrite', { text: DRAFT });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { rewrittenText: REWRITTEN });
 });

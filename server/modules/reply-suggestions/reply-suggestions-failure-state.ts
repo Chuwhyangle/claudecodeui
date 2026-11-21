@@ -93,6 +93,11 @@ export type ReplySuggestionsStatus = {
   expansion: ReplySuggestionsSettings['generation']['expansion'];
   maxChips: number;
   maxChipChars: number;
+  /**
+   * The OPT-IN local debug-ledger switch, mirrored by `ReplySuggestionsStatus.debugLog` on the
+   * client. Read-only here; the Settings page writes it through `PUT /debug-log`.
+   */
+  debugLog: boolean;
 };
 
 /** The category vocabulary as data, for validating a value that crossed the wire. */
@@ -172,6 +177,7 @@ export function replySuggestionsStatus(
     expansion: settings.generation.expansion,
     maxChips: settings.generation.maxChips,
     maxChipChars: settings.generation.maxChipChars,
+    debugLog: settings.debugLog,
   };
 }
 

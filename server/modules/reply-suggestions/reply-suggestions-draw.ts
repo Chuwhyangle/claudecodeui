@@ -33,6 +33,7 @@ import {
   REPLY_SUGGESTIONS_REDRAW_MEMORY,
 } from './reply-suggestions-prompts.js';
 import type { ReplySuggestionsExpansionSource } from './reply-suggestions.service.js';
+import type { ReplySuggestionsDebugAttempt } from './reply-suggestions-debug-log.js';
 import type { ReplySuggestionsSettings } from './reply-suggestions-settings.js';
 
 /** The already-clipped message context one draw shares across its one or two calls. */
@@ -250,6 +251,12 @@ export type DraftRewriteDrawContext = {
   text: string;
   retry: boolean;
   requestId: string;
+  /**
+   * The conversation the composer was rewriting in, when one existed. It is written to the
+   * OPT-IN debug ledger ONLY for correlation and never reaches the upstream request body
+   * (`composeDraftRewriteRequest` reads only `text`/`retry`/the settings).
+   */
+  sessionId: string | null;
 };
 
 /** The accepted candidate and the stop reason the gateway read. */
@@ -363,8 +370,43 @@ export function createDraftRewriteRunner(options: {
   now: () => number;
   logger: (line: string) => void;
   guard: ReplySuggestionsUpstreamGuard;
+  /**
+   * The OPT-IN debug ledger sink, called exactly ONCE per attempt after its outcome is decided
+   * (success, upstream failure, or a truncated/empty/over-long answer). The service's sink is
+   * where the `debugLog` switch is consulted at WRITE time. A throwing sink is contained here,
+   * so it can never change the HTTP response or the candidate.
+   */
+  recordAttempt: (attempt: ReplySuggestionsDebugAttempt) => void;
 }): DraftRewriteRunner {
-  const { complete, now, logger, guard } = options;
+  const { complete, now, logger, guard, recordAttempt } = options;
+
+  /** Hand one decided attempt to the debug sink; a failing sink is swallowed. */
+  function emitAttempt(
+    context: DraftRewriteDrawContext,
+    outcome: ReplySuggestionsDebugAttempt['outcome'],
+    durationMs: number,
+    output: string,
+    completion: ReplySuggestionsCompletion | null,
+  ): void {
+    try {
+      recordAttempt({
+        requestId: context.requestId,
+        sessionId: context.sessionId,
+        outcome,
+        durationMs,
+        model: context.settings.upstream.model,
+        protocol: context.settings.upstream.protocol,
+        version: context.settings.version,
+        inputTokens: completion?.inputTokens ?? null,
+        outputTokens: completion?.outputTokens ?? null,
+        input: context.text,
+        output,
+      });
+    } catch (failure) {
+      const reason = failure instanceof Error ? failure.name : 'unknown';
+      logger(`[reply-suggestions] debug log sink failed: ${reason}`);
+    }
+  }
 
   return {
     async rewrite(context: DraftRewriteDrawContext): Promise<DraftRewriteDrawResult> {
@@ -380,6 +422,7 @@ export function createDraftRewriteRunner(options: {
           logger, 'draftRewrite ', settings, now() - startedAt, `error:${category}`, null,
           context.requestId, httpStatus,
         );
+        emitAttempt(context, `error:${category}`, now() - startedAt, '', null);
         const details = { requestId: context.requestId, httpStatus, model: settings.upstream.model, category };
         if (failure instanceof AppError) {
           throw new AppError(failure.message, {
@@ -400,6 +443,8 @@ export function createDraftRewriteRunner(options: {
         logCompletionOutcome(
           logger, 'draftRewrite ', settings, now() - startedAt, 'error:truncated', completion, context.requestId,
         );
+        // The log keeps the RAW upstream answer, which is what a refusal needs to explain.
+        emitAttempt(context, 'rejected:truncated', now() - startedAt, completion.text, completion);
         throw draftRewriteRejectedError('truncated');
       }
 
@@ -408,16 +453,20 @@ export function createDraftRewriteRunner(options: {
         logCompletionOutcome(
           logger, 'draftRewrite ', settings, now() - startedAt, 'error:empty-output', completion, context.requestId,
         );
+        emitAttempt(context, 'rejected:empty-output', now() - startedAt, completion.text, completion);
         throw draftRewriteRejectedError('empty-output');
       }
       if (text.length > DRAFT_REWRITE_MAX_OUTPUT_CHARS) {
         logCompletionOutcome(
           logger, 'draftRewrite ', settings, now() - startedAt, 'error:output-too-long', completion, context.requestId,
         );
+        emitAttempt(context, 'rejected:output-too-long', now() - startedAt, completion.text, completion);
         throw draftRewriteRejectedError('output-too-long');
       }
 
       logCompletionOutcome(logger, 'draftRewrite ', settings, now() - startedAt, 'ok', completion, context.requestId);
+      // On success `output` is the accepted candidate — the exact bytes the browser receives.
+      emitAttempt(context, 'ok', now() - startedAt, text, completion);
       return { rewrittenText: text, stopReason: 'finished' };
     },
   };

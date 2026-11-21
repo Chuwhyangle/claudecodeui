@@ -121,7 +121,7 @@ describe('draft rewrite controller', () => {
     assert.equal(snapshot.expanded, true);
     assert.equal(snapshot.loading, true);
     assert.equal(harness.calls.length, 1);
-    assert.deepEqual(harness.calls[0], { text: DRAFT });
+    assert.deepEqual(harness.calls[0], { text: DRAFT, sessionId: 'session-a' });
     assert.deepEqual(harness.written, [], 'requesting never writes the draft');
 
     // A second open while in flight must not become a second request.
@@ -135,6 +135,25 @@ describe('draft rewrite controller', () => {
     assert.equal(snapshot.candidate, POLISHED);
     assert.equal(snapshot.expanded, true);
     assert.deepEqual(harness.written, []);
+  });
+
+  it('the request body carries the sessionId when one exists and omits it otherwise', async () => {
+    // With an open conversation: the id is in the body, which still has no other field.
+    const withSession = createHarness();
+    withSession.controller.openOrRequest();
+    assert.deepEqual(Object.keys(withSession.calls[0]).sort(), ['sessionId', 'text']);
+    assert.equal(withSession.calls[0].sessionId, 'session-a');
+    assert.equal('model' in withSession.calls[0], false);
+    assert.equal('prompt' in withSession.calls[0], false);
+    assert.equal('transcript' in withSession.calls[0], false);
+    assert.equal('url' in withSession.calls[0], false);
+
+    // Before a conversation exists: `sessionId` is absent, not null/empty.
+    const noSession = createHarness({ sessionId: null, draftScope: 'project:p1' });
+    noSession.controller.openOrRequest();
+    assert.equal(noSession.calls.length, 1);
+    assert.deepEqual(noSession.calls[0], { text: DRAFT });
+    assert.equal('sessionId' in noSession.calls[0], false);
   });
 
   it('collapse keeps the candidate; re-opening restores it without another call', async () => {

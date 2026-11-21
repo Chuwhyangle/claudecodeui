@@ -1,3 +1,7 @@
+import { existsSync, readFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { expect, test } from '@playwright/test';
 
 /**
@@ -81,4 +85,50 @@ test('composer draft rewrite: chip, one request, preview, cache, apply-without-s
   await expect(textarea).toHaveValue(REWRITTEN);
   expect(requests).toBe(1);
   expect(await page.locator('[data-message-style]').count()).toBe(messagesBefore);
+
+  //---------------------------------------------------------------------------------------------
+  // The OPT-IN debug ledger, through the REAL server.
+  //
+  // The page's own ✦ requests are answered by the route mock above; the ledger lives on the
+  // server, so this leg uses Playwright's request context (which bypasses page routes) and the
+  // server makes the completion against its configured (local, mock) gateway. Counts are read
+  // from the server's file on this machine; `CLOUDPIT_DEBUG_LOG_FILE` relocates it when the
+  // instance runs with its own HOME.
+  //---------------------------------------------------------------------------------------------
+  const debugLogFile = process.env.CLOUDPIT_DEBUG_LOG_FILE
+    ?? path.join(os.homedir(), '.cloudpit', 'reply-suggestions-debug.jsonl');
+  const debugLogLines = (): number => {
+    if (!existsSync(debugLogFile)) return 0;
+    return readFileSync(debugLogFile, 'utf8').split('\n').filter((line) => line !== '').length;
+  };
+  const authHeaders = { authorization: `Bearer ${token}` };
+  const setDebugLog = async (enabled: boolean): Promise<void> => {
+    const response = await page.request.put('/api/reply-suggestions/debug-log', {
+      headers: authHeaders,
+      data: { enabled },
+    });
+    expect(response.ok(), `PUT /debug-log answered ${response.status()}`).toBe(true);
+  };
+  const serverRewrite = async (text: string): Promise<void> => {
+    const response = await page.request.post('/api/reply-suggestions/draft-rewrite', {
+      headers: authHeaders,
+      data: { text },
+    });
+    expect(response.ok(), `POST /draft-rewrite answered ${response.status()}`).toBe(true);
+  };
+
+  await setDebugLog(false);
+  const offBefore = debugLogLines();
+  await serverRewrite('e2e debug-ledger off synthetic draft one');
+  expect(debugLogLines(), 'debugLog:false records no line').toBe(offBefore);
+
+  await setDebugLog(true);
+  const onBefore = debugLogLines();
+  await serverRewrite('e2e debug-ledger on synthetic draft two');
+  expect(debugLogLines(), 'debugLog:true records exactly one line').toBe(onBefore + 1);
+
+  await setDebugLog(false);
+  const afterOffBefore = debugLogLines();
+  await serverRewrite('e2e debug-ledger off synthetic draft three');
+  expect(debugLogLines(), 'turning it off stops new lines').toBe(afterOffBefore);
 });

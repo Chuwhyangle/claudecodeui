@@ -37,14 +37,24 @@ const serverFailureFile = path.join(
 );
 
 /** Reads one exported literal union's members from a source file. */
-const readLiteralUnion = (file: string, typeName: string): string[] => {
-  const source = readFileSync(file, 'utf8');
-  // `\\s*` after `=`: a long union may be declared on the following lines.
+const readLiteralUnionFrom = (source: string, typeName: string, file: string): string[] => {
   const declaration = new RegExp(`export type ${typeName} =\\s*([^;]+);`).exec(source);
   assert.ok(declaration, `${typeName} must be declared in ${file}`);
   const members = [...declaration[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
   assert.ok(members.length > 0, `${typeName} must be a literal union`);
   return [...new Set(members)].sort();
+};
+
+const readLiteralUnion = (file: string, typeName: string): string[] =>
+  readLiteralUnionFrom(readFileSync(file, 'utf8'), typeName, file);
+
+/** Reads one exported object type's declared field names from a source string. */
+const readObjectFieldsFrom = (source: string, typeName: string, file: string): string[] => {
+  const declaration = new RegExp(`export type ${typeName} = \\{([\\s\\S]*?)\\};`).exec(source);
+  assert.ok(declaration, `${typeName} must be declared as an object type in ${file}`);
+  const fields = [...declaration[1].matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\??\s*:/gm)].map((match) => match[1]);
+  assert.ok(fields.length > 0, `${typeName} must declare at least one field`);
+  return [...new Set(fields)].sort();
 };
 
 describe('reply-suggestions type sync', () => {
@@ -67,6 +77,39 @@ describe('reply-suggestions type sync', () => {
       readLiteralUnion(frontendTypesFile, 'ReplySuggestionsFailureCategory'),
       readLiteralUnion(serverFailureFile, 'ReplySuggestionsFailureCategory'),
     );
+  });
+
+  it('(c2) both ends declare the same ReplySuggestionsStatus fields (including debugLog)', () => {
+    const frontend = readFileSync(frontendTypesFile, 'utf8');
+    const server = readFileSync(serverFailureFile, 'utf8');
+    const fields = readObjectFieldsFrom(frontend, 'ReplySuggestionsStatus', frontendTypesFile);
+    assert.deepEqual(
+      fields,
+      readObjectFieldsFrom(server, 'ReplySuggestionsStatus', serverFailureFile),
+      'the /status reading drifted between the client and the server',
+    );
+    assert.ok(fields.includes('debugLog'), 'the opt-in debug-ledger switch is declared on both ends');
+  });
+
+  it('(c3) a one-sided field change is caught, and restoring the bytes passes again', () => {
+    const frontend = readFileSync(frontendTypesFile, 'utf8');
+    const server = readFileSync(serverFailureFile, 'utf8');
+    const mutatedFrontend = frontend.replace(
+      '  debugLog?: boolean;\n',
+      '  debugLog?: boolean;\n  debugLogLines?: number;\n',
+    );
+    assert.notEqual(mutatedFrontend, frontend, 'the mutation must actually change the source');
+    assert.throws(
+      () => assert.deepEqual(
+        readObjectFieldsFrom(mutatedFrontend, 'ReplySuggestionsStatus', frontendTypesFile),
+        readObjectFieldsFrom(server, 'ReplySuggestionsStatus', serverFailureFile),
+      ),
+      'an extra client-side status field must fail the comparison',
+    );
+    assert.doesNotThrow(() => assert.deepEqual(
+      readObjectFieldsFrom(frontend, 'ReplySuggestionsStatus', frontendTypesFile),
+      readObjectFieldsFrom(server, 'ReplySuggestionsStatus', serverFailureFile),
+    ));
   });
 
   it('(d) reads a non-empty declaration on both ends, so (a)-(c) cannot pass vacuously', () => {

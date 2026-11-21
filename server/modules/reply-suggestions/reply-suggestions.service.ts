@@ -32,6 +32,11 @@ import { createDrawRunner, createDraftRewriteRunner, DRAFT_REWRITE_MAX_INPUT_CHA
 import { createUpstreamGuard } from './reply-suggestions-guard.js';
 import { createDrawStore } from './reply-suggestions-draw-store.js';
 import {
+  createReplySuggestionsDebugLog,
+  type ReplySuggestionsDebugAttempt,
+  type ReplySuggestionsDebugLog,
+} from './reply-suggestions-debug-log.js';
+import {
   createReplySuggestionsFailureState,
   createReplySuggestionsRequestId,
   describeFailure,
@@ -85,6 +90,12 @@ export type ReplySuggestionsService = {
   suggest(input: ReplySuggestionsInput): Promise<{ chips: string[]; draw: number }>;
   /** One draft-only rewrite: the composer's ✦ polish candidate. Never a chip draw. */
   rewriteDraft(input: DraftRewriteInput): Promise<DraftRewriteResult>;
+  /**
+   * Persist the OPT-IN debug-ledger switch through the settings source (which owns the file).
+   * Answers the value written; a settings file that cannot be safely rewritten throws a safe
+   * `AppError` and is left untouched.
+   */
+  setDebugLog(enabled: boolean): boolean;
   recordEvent(input: ReplySuggestionsEventInput): void;
 };
 
@@ -95,6 +106,11 @@ export type ReplySuggestionsService = {
  */
 export type DraftRewriteInput = {
   text: string;
+  /**
+   * The open conversation, when there is one. OPTIONAL, log-correlation only: it is handed to
+   * the debug ledger and NEVER added to the upstream request body.
+   */
+  sessionId?: string;
   retry?: boolean;
 };
 
@@ -112,6 +128,13 @@ export type ReplySuggestionsServiceDeps = {
   now?: () => number;
   logger?: (line: string) => void;
   usageLog?: ReplySuggestionsUsageLog;
+  /**
+   * The OPT-IN debug ledger. The service consults `readSettings().debugLog` at WRITE time, so a
+   * switch flipped inside the same instance takes effect on the next attempt.
+   */
+  debugLog?: ReplySuggestionsDebugLog;
+  /** The settings source's safe write path; the module binds `settings.writeDebugLog`. */
+  writeDebugLog?: (enabled: boolean) => boolean;
   /** The failure reading; one per process, injectable so a criterion can read the history ring. */
   failureState?: ReplySuggestionsFailureState;
 };
@@ -171,8 +194,28 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
   // same minute/day budget and share one circuit. A per-surface guard would give each feature a
   // full quota, which is exactly the double-budget the task forbids.
   const guard = createUpstreamGuard({ now });
+  const debugLog = deps.debugLog ?? createReplySuggestionsDebugLog({ logger, now });
   const runner = createDrawRunner({ complete, now, logger, guard });
-  const draftRewriteRunner = createDraftRewriteRunner({ complete, now, logger, guard });
+  const draftRewriteRunner = createDraftRewriteRunner({
+    complete,
+    now,
+    logger,
+    guard,
+    /**
+     * Read the switch NOW, not when the runner was built: flipping `debugLog` in the settings
+     * file takes effect on the very next attempt of this same service instance. A refusal to
+     * read is treated as off; the writer's own failures are contained inside it.
+     */
+    recordAttempt: (attempt: ReplySuggestionsDebugAttempt): void => {
+      try {
+        if (!deps.readSettings().debugLog) return;
+        debugLog.record(attempt);
+      } catch (failure) {
+        const reason = failure instanceof Error ? failure.name : 'unknown';
+        logger(`[reply-suggestions] debug log gate failed: ${reason}`);
+      }
+    },
+  });
   const store = createDrawStore();
 
   function recordFailedDraw(
@@ -294,8 +337,20 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
         text,
         retry: input.retry === true,
         requestId: createReplySuggestionsRequestId(),
+        sessionId: input.sessionId === undefined || input.sessionId === '' ? null : input.sessionId,
       });
       return { rewrittenText: result.rewrittenText };
+    },
+
+    setDebugLog(enabled: boolean): boolean {
+      const write = deps.writeDebugLog;
+      if (write === undefined) {
+        throw new AppError('reply-suggestions settings are not writable in this composition', {
+          code: 'REPLY_SUGGESTIONS_SETTINGS_UNWRITABLE',
+          statusCode: 500,
+        });
+      }
+      return write(enabled);
     },
 
     recordEvent(input: ReplySuggestionsEventInput): void {

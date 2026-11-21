@@ -27,13 +27,24 @@ import express, {
 import { AppError } from '@/shared/utils.js';
 
 import type { ReplySuggestionsCompletionRequest } from '../reply-suggestions-client.js';
+import type { ReplySuggestionsDebugAttempt, ReplySuggestionsDebugLog } from '../reply-suggestions-debug-log.js';
 import { createReplySuggestionsModule } from '../reply-suggestions.module.js';
 
 const API_KEY = 'sk-draft-route-secret';
 const DRAFT = '把这段话润色一下，明天十点见';
 const REWRITTEN = '请把这段话润色一下，明天十点见。';
 
-async function start(t: { after(callback: () => void | Promise<void>): void }) {
+type StartOptions = {
+  /** Record debug-ledger attempts into the returned `attempts` array. */
+  recordAttempts?: boolean;
+  /** Also require `Authorization: Bearer test-token` in front of the router (401 leg). */
+  guardAuth?: boolean;
+};
+
+async function start(
+  t: { after(callback: () => void | Promise<void>): void },
+  options: StartOptions = {},
+) {
   const directory = mkdtempSync(path.join(tmpdir(), 'draft-rewrite-routes-'));
   const keyFile = path.join(directory, 'key.txt');
   writeFileSync(keyFile, API_KEY, { mode: 0o600 });
@@ -44,13 +55,31 @@ async function start(t: { after(callback: () => void | Promise<void>): void }) {
     model: 'route-model',
     apiKeyFile: keyFile,
     usageLog: false,
+    ...(options.recordAttempts === true ? { debugLog: true } : {}),
   }), { mode: 0o600 });
 
   const calls: ReplySuggestionsCompletionRequest[] = [];
+  const attempts: ReplySuggestionsDebugAttempt[] = [];
+  const debugLog: ReplySuggestionsDebugLog | undefined = options.recordAttempts === true
+    ? { path: path.join(directory, 'debug.jsonl'), record: (attempt) => attempts.push(attempt) }
+    : undefined;
+
   const app = express();
   app.use(express.json());
+  if (options.guardAuth === true) {
+    // The production mount puts `authenticateToken` in front of this router; this stand-in
+    // reproduces exactly the fact these legs need — a request with no token never reaches it.
+    app.use('/api/reply-suggestions', (request, response, next) => {
+      if (request.header('authorization') !== 'Bearer test-token') {
+        response.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } });
+        return;
+      }
+      next();
+    });
+  }
   app.use('/api/reply-suggestions', createReplySuggestionsModule({
     settingsPath,
+    ...(debugLog === undefined ? {} : { debugLog }),
     readLastAssistantMessage: async () => null,
     complete: async (request) => {
       calls.push(request);
@@ -70,7 +99,27 @@ async function start(t: { after(callback: () => void | Promise<void>): void }) {
   const { port } = server.address() as AddressInfo;
   t.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  return { baseUrl: `http://127.0.0.1:${port}`, calls };
+  return { baseUrl: `http://127.0.0.1:${port}`, calls, attempts };
+}
+
+/** Shared request helper: one JSON body to an arbitrary path, keeping the status and body. */
+async function send(
+  baseUrl: string,
+  route: string,
+  method: 'POST' | 'PUT' | 'GET',
+  body?: unknown,
+  token?: string,
+): Promise<{ status: number; body: any }> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      'content-type': 'application/json',
+      ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  return { status: response.status, body: text === '' ? null : JSON.parse(text) };
 }
 
 async function post(baseUrl: string, body: unknown): Promise<{ status: number; body: any }> {
@@ -147,4 +196,77 @@ test('no response body carries the key', async (t) => {
     body: JSON.stringify({ text: DRAFT }),
   });
   assert.ok(!(await response.text()).includes(API_KEY));
+});
+
+//---------------------------------------------------------------------------------------------
+// The opt-in debug-ledger switch route and the log-only sessionId field
+//---------------------------------------------------------------------------------------------
+
+test('PUT /debug-log persists and GET /status follows', async (t) => {
+  const harness = await start(t);
+
+  const before = await send(harness.baseUrl, '/api/reply-suggestions/status', 'GET');
+  assert.equal(before.status, 200);
+  assert.equal(before.body.debugLog, false, 'the shipped default is off');
+
+  const enabled = await send(harness.baseUrl, '/api/reply-suggestions/debug-log', 'PUT', { enabled: true });
+  assert.equal(enabled.status, 200);
+  assert.deepEqual(enabled.body, { debugLog: true });
+  assert.equal((await send(harness.baseUrl, '/api/reply-suggestions/status', 'GET')).body.debugLog, true);
+
+  const disabled = await send(harness.baseUrl, '/api/reply-suggestions/debug-log', 'PUT', { enabled: false });
+  assert.equal(disabled.status, 200);
+  assert.deepEqual(disabled.body, { debugLog: false });
+  assert.equal((await send(harness.baseUrl, '/api/reply-suggestions/status', 'GET')).body.debugLog, false);
+});
+
+test('PUT /debug-log rejects a non-boolean or missing enabled with 400', async (t) => {
+  const harness = await start(t);
+  for (const body of [{}, { enabled: 'true' }, { enabled: 1 }, { enabled: null }]) {
+    const response = await send(harness.baseUrl, '/api/reply-suggestions/debug-log', 'PUT', body);
+    assert.equal(response.status, 400, `body=${JSON.stringify(body)}`);
+    assert.equal(response.body.error.code, 'INVALID_REQUEST');
+  }
+});
+
+test('PUT /debug-log without a token is a 401 and never reaches the router', async (t) => {
+  const harness = await start(t, { guardAuth: true });
+  const anonymous = await send(harness.baseUrl, '/api/reply-suggestions/debug-log', 'PUT', { enabled: true });
+  assert.equal(anonymous.status, 401);
+
+  const authorized = await send(
+    harness.baseUrl, '/api/reply-suggestions/debug-log', 'PUT', { enabled: true }, 'test-token',
+  );
+  assert.equal(authorized.status, 200);
+  assert.deepEqual(authorized.body, { debugLog: true });
+});
+
+test('sessionId is passed to the attempt record but never to the upstream request', async (t) => {
+  const harness = await start(t, { recordAttempts: true });
+  const response = await post(harness.baseUrl, { text: DRAFT, sessionId: 'route-session-1' });
+  assert.equal(response.status, 200);
+  assert.equal(harness.attempts.length, 1);
+  assert.equal(harness.attempts[0].sessionId, 'route-session-1');
+  assert.ok(!JSON.stringify(harness.calls[0]).includes('route-session-1'), 'sessionId stays local');
+});
+
+test('an omitted sessionId is absent from the attempt record', async (t) => {
+  const harness = await start(t, { recordAttempts: true });
+  await post(harness.baseUrl, { text: DRAFT });
+  assert.equal(harness.attempts.length, 1);
+  assert.equal(harness.attempts[0].sessionId, null);
+});
+
+test('a sessionId longer than 128 characters or not a string is a 400 before any completion', async (t) => {
+  const harness = await start(t);
+  for (const body of [
+    { text: DRAFT, sessionId: 's'.repeat(129) },
+    { text: DRAFT, sessionId: 42 },
+    { text: DRAFT, sessionId: { id: 'x' } },
+  ]) {
+    const response = await post(harness.baseUrl, body);
+    assert.equal(response.status, 400, `body=${JSON.stringify(body)}`);
+    assert.equal(response.body.error.code, 'INVALID_REQUEST');
+  }
+  assert.equal(harness.calls.length, 0);
 });

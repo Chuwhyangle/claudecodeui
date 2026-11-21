@@ -51,7 +51,18 @@
 
 - 超时/限流/上游失败：保留草稿，候选框呈可恢复错误，↻ 可重试。
 - 服务关闭/缺有效上游：fail closed，不产生任何外部调用。
-- 不保存或记录用户原文、候选、prompt 或密钥；日志只含 protocol/model/version/duration/outcome/token 计数/requestId。
+- 默认元数据日志不保存或记录用户原文、候选、prompt 或密钥；只含 protocol/model/version/duration/outcome/token 计数/requestId。
+- 另有**默认关闭**的本机调试日志（见 §2.1）：只有显式开启后才落盘原文与候选。
+
+### 2.1 本机调试日志（默认关闭，显式开启，可轮转）
+
+- 单一开关键 `debugLog: false`（默认关闭）；没有路径/大小/保留天数等旋钮。
+- 入口在 Settings → Diagnostics 的 reply-suggestions 区块：页面内联警示「开启后会把草稿与候选原文写入本机日志」并写出固定路径 `~/.cloudpit/reply-suggestions-debug.jsonl`；开启无需二次确认，也**不提供清空日志按钮**。
+- 每次尝试一行 JSONL：`at`、`type:"draftRewrite"`、`requestId`、`sessionId?`（仅日志关联，绝不发给上游）、`outcome`（`ok` / `error:<category>` / `rejected:truncated|empty-output|output-too-long`）、`durationMs`、`model`、`protocol`、`version`、`inputTokens?`、`outputTokens?`、`inputChars`、`outputChars`、`input`（完整草稿）、`output`（完整候选；拒绝/截断时是上游原始输出；超过 6000 字符只记前 6000 并置 `outputTruncatedForLog:true`）。
+- 不记录 API key、凭据文件内容、`baseUrl` 或系统提示原文（只记 `version`）。
+- 目录 0700、文件 0600；单文件 2 MB，保留当前文件 + `.1`/`.2`/`.3`（最旧丢弃）。写入前检查大小并轮转；写入失败只记一条不含内容的警告，**绝不**让重写请求失败。
+- 关闭时不创建文件、不写任何内容；开启后每次尝试（成功、超时、上游错误、拒绝/截断）恰好一行。写入时读取开关，同一服务实例内先关后开会立刻生效。
+- 本机调试文件、不上传、不参与遥测；轮转是唯一保留策略。
 
 ## 3. 文案与模型约束
 
@@ -77,8 +88,9 @@
 
 ### API
 
-- `POST /api/reply-suggestions/draft-rewrite`：请求 `{ text, retry? }`；成功 `{ rewrittenText }`。
-- 请求体里除 `text`/`retry` 以外的字段（model、provider、prompt、system、history、url…）一律忽略，不能改变 completion 配置。
+- `POST /api/reply-suggestions/draft-rewrite`：请求 `{ text, sessionId?, retry? }`；成功 `{ rewrittenText }`。`sessionId` 可选（≤128，仅日志关联，绝不发给上游）；不传也合法。
+- 请求体里除 `text`/`sessionId`/`retry` 以外的字段（model、provider、prompt、system、history、url…）一律忽略，不能改变 completion 配置。
+- `PUT /api/reply-suggestions/debug-log`：`{ enabled: boolean }` → `{ debugLog: boolean }`（挂在既有 `authenticateToken` 下；非布尔 400）。`GET /api/reply-suggestions/status` 增加 `debugLog` 布尔读数，双端 TypeSync 钉住。
 - 错误映射：禁用/缺有效上游 `503`、空或超长输入 `400`、无额度 `429`、上游/候选不合格 `502`（携带机器可读 `details.category`）。
 - 不提供历史上下文参数、候选列表、客户端 prompt、模型 override 或 arbitrary URL 参数。
 - 不持久化原文和候选；不写文本型 usage log。
@@ -126,4 +138,5 @@
 - 展开框**只有候选正文与 ✓/↻ 两个图标**；无「润色建议」标题、无「尚未替换」状态。图标带 tooltip/aria-label（原型中以提示气泡示意）。
 - 点击框内容区收起；点击图标只执行各自操作；无「保留原文」按钮，也无 120 字 chip 截断的暗示。
 - 候选不受 120 字 chip 上限约束；超限/截断候选被拒绝且保留原稿。
+- Settings → Diagnostics 的 reply-suggestions 区块另有**默认关闭**的「草稿润色调试日志」开关：内联警示「开启后会把草稿与候选原文写入本机日志」、固定路径 `~/.cloudpit/reply-suggestions-debug.jsonl`；无清空按钮、开启无二次确认。该文件仅在本机，不上传、不参与遥测，轮转（2 MB × 4 份）是唯一保留策略。
 - SVG 为静态交互原型，不是运行中的 UI；示例文案是虚构文本，未请求任何模型。

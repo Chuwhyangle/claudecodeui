@@ -429,6 +429,7 @@ test('AC1: with no settings file the tier is off and reports nothing', () => {
       },
       limits: { maxCallsPerMinute: 30, maxCallsPerDay: 3000 },
       usageLog: true,
+      debugLog: false,
       diagnostics: {
         source: 'default',
         path: null,
@@ -437,7 +438,7 @@ test('AC1: with no settings file the tier is off and reports nothing', () => {
         apiKeyFile: '',
         apiKeyVar: '',
       },
-    }) },
+    }), writeDebugLog: () => false },
   });
   const reading = source.read();
   assert.equal(reading.enabled, false);

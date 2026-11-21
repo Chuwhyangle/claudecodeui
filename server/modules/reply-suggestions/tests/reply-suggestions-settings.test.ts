@@ -10,7 +10,17 @@
  *     server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts
  */
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -68,6 +78,7 @@ const EXPECTED_DEFAULTS = {
     maxCallsPerDay: 3000,
   },
   usageLog: true,
+  debugLog: false,
   diagnostics: {
     configuredEnabled: false,
     apiKeyFile: '',
@@ -107,6 +118,7 @@ test('(c) an empty settings object reads every key at its shipped default', (t) 
   assert.deepEqual(settings.generation, EXPECTED_DEFAULTS.generation);
   assert.deepEqual(settings.limits, EXPECTED_DEFAULTS.limits);
   assert.equal(settings.usageLog, EXPECTED_DEFAULTS.usageLog);
+  assert.equal(settings.debugLog, EXPECTED_DEFAULTS.debugLog, 'the debug ledger is OFF by default');
   assert.deepEqual(
     {
       configuredEnabled: settings.diagnostics.configuredEnabled,
@@ -376,4 +388,104 @@ test('ApiCredential is constructible from a bare value and hides it by construct
   assert.equal(credential.reveal(), 'sk-standalone');
   assert.equal(JSON.stringify([credential]), '["[redacted]"]');
   assert.equal(inspect(credential), '[redacted]');
+});
+
+// ---------------------------------------------------------------------------
+// The debug-log switch: the settings source owns the safe write path
+// ---------------------------------------------------------------------------
+
+test('(write-a) writeDebugLog(true) changes only debugLog and keeps every unknown key', (t) => {
+  const directory = temporaryDirectory(t, 'reply-settings-write-a-');
+  const file = writeJson(path.join(directory, 'settings.json'), {
+    version: 'keep-me',
+    debugLog: false,
+    unknownKnob: { nested: 42 },
+    anotherUnknown: 'stay',
+  });
+  const source = createReplySuggestionsSettingsSource({ settingsPath: file, homeDir: directory });
+  assert.equal(source.read().debugLog, false);
+
+  assert.equal(source.writeDebugLog(true), true);
+  const document = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  assert.equal(document.debugLog, true);
+  assert.equal(document.version, 'keep-me');
+  assert.deepEqual(document.unknownKnob, { nested: 42 });
+  assert.equal(document.anotherUnknown, 'stay');
+  assert.deepEqual(Object.keys(document).sort(), ['anotherUnknown', 'debugLog', 'unknownKnob', 'version']);
+});
+
+test('(write-b) after the write the file is 0600 (an existing wide mode is tightened)', (t) => {
+  const directory = temporaryDirectory(t, 'reply-settings-write-b-');
+  const file = writeJson(path.join(directory, 'settings.json'), { debugLog: false }, 0o644);
+  assert.equal(statSync(file).mode & 0o777, 0o644);
+  const source = createReplySuggestionsSettingsSource({ settingsPath: file, homeDir: directory });
+  source.writeDebugLog(true);
+  assert.equal(statSync(file).mode & 0o777, 0o600);
+});
+
+test('(write-c) the write is atomic: every intermediate read parses and no temp file remains', (t) => {
+  const directory = temporaryDirectory(t, 'reply-settings-write-c-');
+  const file = writeJson(path.join(directory, 'settings.json'), { debugLog: false, keep: true });
+  const source = createReplySuggestionsSettingsSource({ settingsPath: file, homeDir: directory });
+
+  // Interleave writes with a reader exactly as a concurrent request would. With a direct
+  // in-place write some iteration would observe a truncated/empty document; the sibling-temp
+  // + rename path can only ever expose a complete one.
+  for (let index = 0; index < 25; index += 1) {
+    source.writeDebugLog(index % 2 === 0);
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    assert.equal(typeof parsed.debugLog, 'boolean', `iteration ${index} reads a complete document`);
+    assert.equal(parsed.keep, true);
+  }
+  const leftovers = readdirSync(directory).filter((name) => name.endsWith('.tmp'));
+  assert.deepEqual(leftovers, [], 'the rename consumed every temp file');
+});
+
+test('(write-d) a file that exists but does not parse is refused, named safely, and left byte-identical', (t) => {
+  const directory = temporaryDirectory(t, 'reply-settings-write-d-');
+  const file = path.join(directory, 'settings.json');
+  const original = '{ this is not json';
+  writeFileSync(file, original, { mode: 0o600 });
+  const source = createReplySuggestionsSettingsSource({ settingsPath: file, homeDir: directory });
+
+  let thrown: unknown = null;
+  try {
+    source.writeDebugLog(true);
+  } catch (failure) {
+    thrown = failure;
+  }
+  assert.ok(thrown instanceof Error, 'the write refuses instead of overwriting');
+  assert.match((thrown as Error).message, /not valid JSON/);
+  assert.ok(!(thrown as Error).message.includes('this is not json'), 'the error does not echo file content');
+  assert.equal(readFileSync(file, 'utf8'), original, 'the original bytes are untouched');
+});
+
+test('(write-e) the write changes mtime and the SAME reader picks it up on the next request', (t) => {
+  const directory = temporaryDirectory(t, 'reply-settings-write-e-');
+  const file = writeJson(path.join(directory, 'settings.json'), { debugLog: false, temperature: 0.4 });
+  // Pin the pre-write mtime into the past so "the rewrite moved it" is deterministic even when
+  // both filesystem operations land inside the same clock tick.
+  utimesSync(file, 1_700_000_000, 1_700_000_000);
+  const source = createReplySuggestionsSettingsSource({ settingsPath: file, homeDir: directory });
+  assert.equal(source.read().debugLog, false);
+  const beforeMtime = statSync(file).mtimeMs;
+
+  source.writeDebugLog(true);
+  assert.ok(statSync(file).mtimeMs !== beforeMtime, 'the rewrite moves the mtime');
+  // No source rebuild: the existing instance re-reads on its own.
+  assert.equal(source.read().debugLog, true);
+  assert.equal(source.read().generation.temperature, 0.4);
+});
+
+test('(write-f) a missing file is created as a valid document with debugLog:true', (t) => {
+  const directory = temporaryDirectory(t, 'reply-settings-write-f-');
+  const file = path.join(directory, 'new-settings.json');
+  assert.equal(existsSync(file), false);
+  const source = createReplySuggestionsSettingsSource({ settingsPath: file, homeDir: directory });
+
+  assert.equal(source.writeDebugLog(true), true);
+  assert.equal(existsSync(file), true);
+  const document = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  assert.equal(document.debugLog, true);
+  assert.equal(source.read().debugLog, true);
 });

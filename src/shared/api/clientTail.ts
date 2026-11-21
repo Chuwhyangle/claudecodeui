@@ -387,6 +387,24 @@ export const apiTail = {
       const body = await response.json().catch(() => null) as unknown;
       return readReplySuggestionsStatus(body);
     },
+    /**
+     * The OPT-IN local debug ledger switch. `PUT { enabled }` -> `{ debugLog }`.
+     *
+     * Unlike `status` (which reads "off" on any refusal), a failed write THROWS: the Settings
+     * switch must be able to roll back to the previous value and show a visible error rather
+     * than silently pretending the write landed.
+     */
+    setDebugLog: async (enabled: boolean): Promise<boolean> => {
+      const response = await put('/api/reply-suggestions/debug-log', { enabled });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const body = await response.json().catch(() => null) as unknown;
+      const record = body !== null && typeof body === 'object' && !Array.isArray(body)
+        ? body as Record<string, unknown>
+        : {};
+      return record.debugLog === true;
+    },
     suggest: async (
       request: ReplySuggestionsRequest,
       options: { maxChips?: number } = {},

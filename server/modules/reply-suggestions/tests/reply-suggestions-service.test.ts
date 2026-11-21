@@ -71,6 +71,7 @@ function baseSettings(overrides: SettingsOverrides = {}): ReplySuggestionsSettin
       ...overrides.limits,
     },
     usageLog: overrides.usageLog ?? false,
+    debugLog: false,
     diagnostics: {
       source: 'file',
       path: '/tmp/reply-suggestions-settings.json',

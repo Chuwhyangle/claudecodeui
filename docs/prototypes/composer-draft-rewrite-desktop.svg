@@ -40,4 +40,8 @@
 <text x="47" y="683" class="ink">点「润色」→ 请求中 / 展开候选框 → 点候选内容或空白处收起 → chip 再点开同一候选（不重复调用）。</text>
 <text x="47" y="711" class="ink">点 ✓ 应用到草稿，候选写回 textarea 并收起；点 ↻ 重试，只更新候选，不动原文。编辑原文则清掉旧候选。</text>
 <text x="47" y="733" class="tiny">候选框里的图标带 tooltip / aria-label；点击图标不触发框体收起。没有「保留原文」按钮。</text>
+<rect x="25" y="760" width="1190" height="96" rx="12" fill="#fff" stroke="#dfe3e8"/>
+<text x="47" y="790" class="h">调试日志（默认关闭）</text>
+<text x="47" y="816" class="ink">Settings → Diagnostics 的 reply-suggestions 区块：开关默认关闭；开启即写本机日志，无二次确认、无清空按钮。</text>
+<text x="47" y="840" class="tiny">开启后会把草稿与候选原文写入 ~/.cloudpit/reply-suggestions-debug.jsonl；仅本机、不上传、不参与遥测；2 MB × 4 份轮转是唯一保留策略。</text>
 </svg>

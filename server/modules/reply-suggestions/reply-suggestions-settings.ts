@@ -39,6 +39,7 @@
  * reading it merges under its own `observation.sessionDigest` block) and the
  * settings criterion in `tests/reply-suggestions-settings.test.ts`.
  */
+import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -52,8 +53,10 @@ import {
   readString,
   resolveApiKey,
   resolveSettingsPath,
+  writeSettingsFileAtomically,
   type SettingsBlockContext,
 } from '@/shared/settings-file.js';
+import { AppError } from '@/shared/utils.js';
 
 /**
  * The only environment variable this module reads. It names the settings file.
@@ -162,6 +165,12 @@ export type ReplySuggestionsSettings = {
   generation: ReplySuggestionsGeneration;
   limits: ReplySuggestionsLimits;
   usageLog: boolean;
+  /**
+   * The OPT-IN local debug ledger switch: when true, each draft-rewrite attempt writes its full
+   * draft and candidate to `~/.cloudpit/reply-suggestions-debug.jsonl`. Default false. It adds
+   * no path/size/retention knob — the debug-log writer's rotation is the only policy.
+   */
+  debugLog: boolean;
   diagnostics: ReplySuggestionsDiagnostics;
 };
 
@@ -188,6 +197,7 @@ const DEFAULT_SETTINGS = {
   maxCallsPerDay: 3000,
   expansion: 'off',
   usageLog: true,
+  debugLog: false,
   systemPrompt: '',
 } as const;
 
@@ -248,6 +258,7 @@ function parseSettings(
       maxCallsPerDay: readNumber(record, 'maxCallsPerDay', DEFAULT_SETTINGS.maxCallsPerDay, { minimum: 1, maximum: 1000000, integer: true }, problems),
     },
     usageLog: readBoolean(record, 'usageLog', DEFAULT_SETTINGS.usageLog, problems),
+    debugLog: readBoolean(record, 'debugLog', DEFAULT_SETTINGS.debugLog, problems),
     diagnostics: {
       source: context.source,
       path: context.path,
@@ -303,7 +314,25 @@ function parseSettings(
  */
 export type ReplySuggestionsSettingsSource = {
   read(): ReplySuggestionsSettings;
+  /**
+   * Persist the debug-log switch. This module owns the file path, so it owns the write: the
+   * existing document is read, UNKNOWN KEYS ARE KEPT and only `debugLog` changes; the bytes go
+   * to a sibling temp file and are renamed over the target (0600), so a reader never sees half
+   * a JSON document and the next `read()` picks the change up without a restart.
+   *
+   * A file that exists but does not parse is REFUSED (a safe {@link AppError}) and left
+   * untouched — overwriting it would destroy whatever the operator was editing.
+   */
+  writeDebugLog(enabled: boolean): boolean;
 };
+
+/** A safe, content-free error for a settings write this module refuses. */
+function settingsUnwritableError(reason: string): AppError {
+  return new AppError(`could not update the reply-suggestions settings file: ${reason}`, {
+    code: 'REPLY_SUGGESTIONS_SETTINGS_UNWRITABLE',
+    statusCode: 500,
+  });
+}
 
 /**
  * Build the stateful reader.
@@ -329,10 +358,46 @@ export function createReplySuggestionsSettingsSource(
     defaultPath: defaultSettingsPath,
   });
 
-  return createSettingsBlockSource({
+  const source = createSettingsBlockSource({
     settingsPath: filePath,
     homeDir,
     explicit,
     parse: (block, context) => parseSettings(block, context, homeDir),
   });
+
+  return {
+    read: () => source.read(),
+    writeDebugLog(enabled: boolean): boolean {
+      if (filePath === null) {
+        throw settingsUnwritableError('no settings file is configured');
+      }
+      let document: Record<string, unknown> = {};
+      if (existsSync(filePath)) {
+        let raw: string;
+        try {
+          raw = readFileSync(filePath, 'utf8');
+        } catch {
+          throw settingsUnwritableError('the settings file could not be read');
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          // Never echo the parser's message: it can quote file content.
+          throw settingsUnwritableError('the settings file is not valid JSON');
+        }
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw settingsUnwritableError('the settings file must contain a JSON object');
+        }
+        document = parsed as Record<string, unknown>;
+      }
+      const next = { ...document, debugLog: enabled };
+      try {
+        writeSettingsFileAtomically(filePath, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+      } catch {
+        throw settingsUnwritableError('the settings file could not be written');
+      }
+      return enabled;
+    },
+  };
 }

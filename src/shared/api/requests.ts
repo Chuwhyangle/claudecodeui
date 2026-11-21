@@ -299,6 +299,8 @@ export function readReplySuggestionsStatus(body: unknown): ReplySuggestionsStatu
     expansion: record.expansion === 'vary' ? 'vary' : 'off',
     maxChips: typeof record.maxChips === 'number' ? record.maxChips : DEFAULT_REPLY_SUGGESTIONS_MAX_CHIPS,
     maxChipChars: typeof record.maxChipChars === 'number' ? record.maxChipChars : 120,
+    // A server that predates the debug ledger omits it; an absent/mistyped value is OFF.
+    debugLog: record.debugLog === true,
   };
 }
 

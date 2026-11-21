@@ -51,3 +51,17 @@ export type {
   ReplySuggestionsUsageLog,
   ReplySuggestionsUsageRecord,
 } from './reply-suggestions-usage-log.js';
+// consumer: the debug-log criterion and any composition that wants the opt-in ledger. The
+// writer's path/rotation policy and the row vocabulary have ONE owner (this leaf).
+export {
+  createReplySuggestionsDebugLog,
+  REPLY_SUGGESTIONS_DEBUG_LOG_FILE_NAME,
+  REPLY_SUGGESTIONS_DEBUG_LOG_MAX_BYTES,
+  REPLY_SUGGESTIONS_DEBUG_LOG_MAX_OUTPUT_CHARS,
+} from './reply-suggestions-debug-log.js';
+export type {
+  ReplySuggestionsDebugAttempt,
+  ReplySuggestionsDebugLog,
+  ReplySuggestionsDebugOutcome,
+  ReplySuggestionsDebugRow,
+} from './reply-suggestions-debug-log.js';

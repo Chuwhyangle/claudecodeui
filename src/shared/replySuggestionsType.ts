@@ -101,6 +101,13 @@ export type ReplySuggestionsStatus = {
   maxChips: number;
   /** Longest chip text one draw may return, before the client's own label truncation. */
   maxChipChars: number;
+  /**
+   * The OPT-IN local debug-ledger switch (`~/.cloudpit/reply-suggestions-debug.jsonl`), mirrored
+   * from the server's `ReplySuggestionsStatus.debugLog`. Optional here because a settings
+   * reading assembled by an older test double need not state it; the wire reader always
+   * produces the field (default false).
+   */
+  debugLog?: boolean;
 };
 
 /** One completed draw, from `POST /api/reply-suggestions`. `draw` names the batch later events refer to. */
@@ -179,6 +186,11 @@ export const DRAFT_REWRITE_MAX_OUTPUT_CHARS = 6000;
 /** The one request the composer sends. Mirrors the server's `DraftRewriteInput`. */
 export type DraftRewriteRequest = {
   text: string;
+  /**
+   * The open conversation, when there is one. OPTIONAL and log-correlation only: the server
+   * writes it to the OPT-IN debug ledger and never adds it to the upstream request body.
+   */
+  sessionId?: string;
   /** A manual retry of the same draft; the server uses its redraw temperature. */
   retry?: boolean;
 };

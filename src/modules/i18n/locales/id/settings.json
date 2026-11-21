@@ -1032,6 +1032,12 @@
       "copied": "Diagnostik disalin ke papan klip",
       "failed": "Gagal menyalin — pilih teks secara manual",
       "hint": "Paket disunting di server: tanpa kunci atau isi pesan."
+    },
+    "debugLog": {
+      "title": "Log debug pemolesan draf",
+      "description": "Mengaktifkannya akan menulis draf dan teks kandidat ke log lokal. File ini hanya tersimpan lokal, tidak diunggah, dan bukan bagian dari telemetri. Nonaktif secara bawaan; rotasi adalah satu-satunya kebijakan penyimpanan.",
+      "label": "Tulis percobaan pemolesan ke log debug lokal",
+      "saveFailed": "Gagal menyimpan — pengaturan tidak diubah."
     }
   }
 }

@@ -64,7 +64,9 @@ function assertSameFields(clientSourceText: string, serverSourceText: string, cl
 describe('draft rewrite type sync', () => {
   it('the request declares the same fields on both ends', () => {
     assertSameFields(clientSource, serverServiceSource, 'DraftRewriteRequest', 'DraftRewriteInput');
-    assert.deepEqual(readObjectFields(clientSource, 'DraftRewriteRequest'), ['retry', 'text']);
+    // `sessionId` is log-correlation only, but it is still part of the two-end contract: the
+    // route parses it on the server and the controller sends it from the client.
+    assert.deepEqual(readObjectFields(clientSource, 'DraftRewriteRequest'), ['retry', 'sessionId', 'text']);
   });
 
   it('the response declares the same fields on both ends', () => {
@@ -118,6 +120,19 @@ describe('draft rewrite type sync', () => {
     assert.throws(
       () => assertSameFields(mutated, serverServiceSource, 'DraftRewriteRequest', 'DraftRewriteInput'),
       'an extra request field must fail the comparison',
+    );
+    assert.doesNotThrow(() => assertSameFields(clientSource, serverServiceSource, 'DraftRewriteRequest', 'DraftRewriteInput'));
+  });
+
+  it('a one-sided sessionId change is caught, and restoring the bytes passes again', () => {
+    const mutatedServer = serverServiceSource.replace(
+      '  sessionId?: string;\n',
+      '',
+    );
+    assert.notEqual(mutatedServer, serverServiceSource, 'the mutation must actually change the source');
+    assert.throws(
+      () => assertSameFields(clientSource, mutatedServer, 'DraftRewriteRequest', 'DraftRewriteInput'),
+      'a server-side removal of sessionId must fail the comparison',
     );
     assert.doesNotThrow(() => assertSameFields(clientSource, serverServiceSource, 'DraftRewriteRequest', 'DraftRewriteInput'));
   });

@@ -6,7 +6,8 @@
  *
  *   · `GET  /status` — the four-field public reading; no key and no path.
  *   · `POST /`       — `{ sessionId, redraw?, focus?, seed?, expand? }` -> `{ chips, draw }`.
- *   · `POST /draft-rewrite` — `{ text, retry? }` -> `{ rewrittenText }` (the composer's ✦ candidate).
+ *   · `POST /draft-rewrite` — `{ text, sessionId?, retry? }` -> `{ rewrittenText }`.
+ *   · `PUT  /debug-log` — `{ enabled: boolean }` -> `{ debugLog: boolean }` (the opt-in switch).
  *   · `POST /events` — `{ sessionId, draw, event, index?, source? }` -> 204.
  *
  * This file only parses transport input, calls one service method and formats
@@ -100,19 +101,32 @@ function readSuggestInput(body: unknown): ReplySuggestionsInput {
 }
 
 /**
- * The draft rewrite's transport input: the draft text and an optional retry flag, and nothing
- * else. Any `model`, `provider`, `prompt`, `system`, `url` or history field a client sends is
- * IGNORED here — it is never read, so it cannot override the settings' upstream or prompt. The
- * empty/blank and over-length cases are the service's to refuse (400), not this parser's.
+ * The draft rewrite's transport input: the draft text, an optional `sessionId` (log correlation
+ * only — never sent upstream) and an optional retry flag, and nothing else. Any `model`,
+ * `provider`, `prompt`, `system`, `url` or history field a client sends is IGNORED here — it is
+ * never read, so it cannot override the settings' upstream or prompt. The empty/blank and
+ * over-length text cases are the service's to refuse (400), not this parser's; a `sessionId`
+ * that is not a string, or is longer than 128 characters, is this parser's 400.
  */
 function readDraftRewriteInput(body: unknown): DraftRewriteInput {
   const record = readObjectBody(body);
   const retry = optionalBooleanField(record, 'retry');
+  const sessionId = optionalStringField(record, 'sessionId');
+  if (sessionId !== undefined && sessionId.length > DRAFT_REWRITE_MAX_SESSION_ID_CHARS) {
+    throw invalidRequest(`"sessionId" must be at most ${DRAFT_REWRITE_MAX_SESSION_ID_CHARS} characters`);
+  }
   return {
     text: requireStringField(record, 'text'),
+    ...(sessionId === undefined ? {} : { sessionId }),
     ...(retry === undefined ? {} : { retry }),
   };
 }
+
+/**
+ * The longest `sessionId` the draft-rewrite route accepts. It is a LOG-CORRELATION label only
+ * (never sent upstream), so the cap keeps one line bounded without being a functional limit.
+ */
+const DRAFT_REWRITE_MAX_SESSION_ID_CHARS = 128;
 
 function readEventInput(body: unknown): ReplySuggestionsEventInput {  const record = readObjectBody(body);
   const event = record.event;
@@ -162,6 +176,22 @@ export function createReplySuggestionsRoutes(service: ReplySuggestionsService): 
     asyncHandler(async (request, response) => {
       const input = readDraftRewriteInput(request.body);
       response.json(await service.rewriteDraft(input));
+    }),
+  );
+
+  /**
+   * The OPT-IN debug-ledger switch. Strictly `{ enabled: boolean }`: anything else is a 400,
+   * and a settings file that cannot be safely rewritten answers the service's safe error. The
+   * answer echoes the persisted value so the Settings page can settle on it.
+   */
+  router.put(
+    '/debug-log',
+    asyncHandler(async (request, response) => {
+      const record = readObjectBody(request.body);
+      if (typeof record.enabled !== 'boolean') {
+        throw invalidRequest('"enabled" must be a boolean');
+      }
+      response.json({ debugLog: service.setDebugLog(record.enabled) });
     }),
   );
 

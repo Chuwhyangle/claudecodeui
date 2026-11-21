@@ -42,6 +42,8 @@
   "_expansion": "Experimental post-selection expansion: \"off\" (default) or \"vary\". With \"vary\", picking a model chip asks for variants of that reply, and quoting a passage asks for responses to it; both appear as chips under the textarea and replace the body when clicked. With \"off\" an expand request is refused 400 and the composer behaves as before.",
   "usageLog": true,
   "_usageLog": "Write the local-only JSONL usage ledger (~/.cloudpit/reply-suggestions-usage.jsonl). Rotation: a file that would exceed 5 MB is renamed to .1 and the older .1 is discarded.",
+  "debugLog": false,
+  "_debugLog": "OPT-IN local debug ledger for the composer's draft rewrite. When true, every attempt appends one JSONL line with the FULL draft and the full candidate to ~/.cloudpit/reply-suggestions-debug.jsonl (directory 0700, file 0600). It is a local-only file: nothing is uploaded and it is not part of telemetry. Default false. Rotation (2 MB per file, keeping the current file plus .1/.2/.3) is the only retention policy; there is no path/size/retention knob and no clear-log action. A candidate longer than 6000 characters is logged as its first 6000 characters with outputTruncatedForLog: true. No API key, credential file content, baseUrl or prompt text is ever written.",
   "systemPrompt": "",
   "_systemPrompt": "Empty means the built-in prompt. A non-empty string replaces it whole."
 }

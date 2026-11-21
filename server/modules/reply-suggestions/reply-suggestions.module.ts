@@ -28,6 +28,7 @@ import {
   type ReplySuggestionsSettingsSource,
 } from './reply-suggestions-settings.js';
 import { createReplySuggestionsUsageLog } from './reply-suggestions-usage-log.js';
+import { createReplySuggestionsDebugLog, type ReplySuggestionsDebugLog } from './reply-suggestions-debug-log.js';
 
 /**
  * The seams the process composition root binds.
@@ -49,6 +50,11 @@ export type ReplySuggestionsModuleDeps = {
   complete?: (request: LlmCompletionRequest) => Promise<LlmCompletion>;
   usageLogPath?: string;
   usageLogMaxBytes?: number;
+  /** Overrides for criteria: the opt-in debug ledger's file and size cap. */
+  debugLogPath?: string;
+  debugLogMaxBytes?: number;
+  /** A criterion's recording sink; production uses the writer built from `debugLogPath`. */
+  debugLog?: ReplySuggestionsDebugLog;
   /**
    * The settings reader and the failure tracker to share with the diagnostics
    * reader. `server/index.ts` builds one of each and hands the same instances to
@@ -77,12 +83,21 @@ export function createReplySuggestionsModule(deps: ReplySuggestionsModuleDeps): 
     ...(deps.usageLogMaxBytes === undefined ? {} : { maxBytes: deps.usageLogMaxBytes }),
     ...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
   });
+  const debugLog = deps.debugLog ?? createReplySuggestionsDebugLog({
+    ...(deps.debugLogPath === undefined ? {} : { filePath: deps.debugLogPath }),
+    ...(deps.debugLogMaxBytes === undefined ? {} : { maxBytes: deps.debugLogMaxBytes }),
+    ...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
+    ...(deps.now === undefined ? {} : { now: deps.now }),
+    ...(deps.logger === undefined ? {} : { logger: deps.logger }),
+  });
 
   return createReplySuggestionsRoutes(
     createReplySuggestionsService({
       readSettings: () => settings.read(),
       readLastAssistantMessage: deps.readLastAssistantMessage,
       usageLog,
+      debugLog,
+      writeDebugLog: (enabled) => settings.writeDebugLog(enabled),
       ...(deps.now === undefined ? {} : { now: deps.now }),
       ...(deps.logger === undefined ? {} : { logger: deps.logger }),
       ...(deps.complete === undefined ? {} : { complete: deps.complete }),

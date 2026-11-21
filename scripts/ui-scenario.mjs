@@ -43,6 +43,13 @@
  *   · `waitFor`: a page-state wait, readable when the state is produced by an async answer that
  *     a synchronous `drive` cannot observe. Currently `draftRewrite:<chip|loading|candidate|error>`.
  *     `timeoutMs` bounds it (default the boot budget).
+ *   · `debugLog`: a NODE-SIDE step against the reply-suggestions debug ledger, because the
+ *     ledger is a server file the page cannot read. `{ set?: boolean, rewrite?: string }` writes
+ *     the opt-in switch (`PUT /debug-log`) and/or performs one real `POST /draft-rewrite`
+ *     through Playwright's request context (which BYPASSES the page's `--mock-gateway` route, so
+ *     the server actually records the attempt). Every reading carries `debugLogLines`, and
+ *     `debugLogLinesIs` / `debugLogLinesDeltaIs` assert the file's line count (the latter
+ *     against the previous step's reading). `--debug-log-file` overrides the path.
  *   · `expect`: a map of reading assertions, evaluated after the step (see
  *     {@link expectationFailures}); an unsupported key is a failure, never a silent pass.
  *   · `checkpoint`: take a full-page screenshot after this step.
@@ -54,7 +61,7 @@
  * USAGE.
  *   node scripts/ui-scenario.mjs <scenario.json> --base-url http://127.0.0.1:5173 \
  *     --auth-token <token> --project <workspace-name> --session <session-name> [--out <dir>]
- *     [--viewport 1280x800] [--mock-gateway <responses.json>]
+ *     [--viewport 1280x800] [--mock-gateway <responses.json>] [--debug-log-file <path>]
  *
  * `--mock-gateway` installs a LOCAL route for `POST /api/reply-suggestions/draft-rewrite` and
  * answers from the JSON file's `responses` array, one per request in order (the last entry is
@@ -65,6 +72,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { chromium } from 'playwright';
@@ -89,6 +97,7 @@ const PANEL_TIMEOUT_MS = 30_000;
  *   drive?: Record<string, unknown>,
  *   waitFor?: string,
  *   timeoutMs?: number,
+ *   debugLog?: { set?: boolean, rewrite?: string, sessionId?: string },
  *   expect?: Record<string, unknown>,
  *   checkpoint?: boolean,
  * }} ScenarioStep
@@ -169,9 +178,30 @@ function readScenario(file) {
 function stepAction(step) {
   if (typeof step.open === 'string') return `open:${step.open}`;
   if (step.reload === true) return 'reload';
+  if (step.debugLog !== undefined) {
+    if (step.debugLog.set !== undefined) return `debugLog:set:${String(step.debugLog.set)}`;
+    return 'debugLog:rewrite';
+  }
   if (step.drive !== undefined) return `drive:${Object.keys(step.drive)[0] ?? 'unknown'}`;
   if (typeof step.waitFor === 'string') return `waitFor:${step.waitFor}`;
   return 'expect';
+}
+
+/**
+ * The reply-suggestions debug ledger's line count, read from the SERVER's local file.
+ *
+ * The page cannot see the server's home, so this reading is taken here. A missing file is
+ * 0 lines (the shipped default), never an error.
+ * @param {string} filePath
+ * @returns {number}
+ */
+function countDebugLogLines(filePath) {
+  try {
+    const text = fs.readFileSync(filePath, 'utf8');
+    return text.split('\n').filter((line) => line !== '').length;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -216,9 +246,10 @@ function sameJson(a, b) {
  *
  * @param {Record<string, unknown>} expect
  * @param {any} reading
+ * @param {number | null} [previousDebugLogLines]
  * @returns {string[]} one sentence per failed assertion (empty when every one held)
  */
-function expectationFailures(expect, reading) {
+function expectationFailures(expect, reading, previousDebugLogLines = null) {
   /** @type {string[]} */
   const failures = [];
   /** @type {(key: string, expected: unknown, actual: unknown) => void} */
@@ -883,6 +914,21 @@ function expectationFailures(expect, reading) {
         if (actual !== expected) fail(key, expected, actual);
         break;
       }
+      case 'debugLogLinesIs': {
+        const actual = typeof reading.debugLogLines === 'number' ? reading.debugLogLines : null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'debugLogLinesDeltaIs': {
+        // The change since the PREVIOUS step's reading. A scenario that asserts an attempt was
+        // (not) recorded states it as a delta, so a pre-existing file with old lines still makes
+        // the assertion meaningful.
+        const actual = typeof reading.debugLogLines === 'number' && typeof previousDebugLogLines === 'number'
+          ? reading.debugLogLines - previousDebugLogLines
+          : null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
       default:
         failures.push(`${key}: unsupported expectation key (a scenario typo must not pass silently)`);
     }
@@ -1444,6 +1490,7 @@ async function openCostPanel(page, target, authToken) {
  *   scenarioFile: string,
  *   viewport?: { width: number, height: number },
  *   mock?: { responses: unknown[] } | null,
+ *   debugLogFile?: string,
  * }} options
  * @returns {Promise<{ report: any, ok: boolean }>}
  */
@@ -1491,15 +1538,31 @@ async function runScenario(browser, scenario, options) {
   /** Adds the locally observed request count to the page's own reading.
    * @param {any} reading
    */
+  /**
+   * The server-side debug ledger path. `--debug-log-file` overrides it (an isolated instance
+   * with its own HOME passes its own path there); the default is the shipped location.
+   */
+  const debugLogFile = options.debugLogFile
+    ?? path.join(os.homedir(), '.cloudpit', 'reply-suggestions-debug.jsonl');
+  /** @type {(reading: any) => any} */
   const withGatewayReading = (reading) => (
     reading === null || typeof reading !== 'object'
       ? reading
-      : { ...reading, draftRewriteRequests: gatewayCounter.count }
+      : {
+        ...reading,
+        draftRewriteRequests: gatewayCounter.count,
+        debugLogLines: countDebugLogLines(debugLogFile),
+      }
   );
   /** @type {StepResult[]} */
   const results = [];
   /** @type {{ step: ScenarioStep, index: number }[]} */
   let batch = [];
+  /**
+   * The debug-ledger line count read at the previous step, for `debugLogLinesDeltaIs`.
+   * @type {number | null}
+   */
+  let previousDebugLogLines = null;
 
   /**
    * Runs the accumulated in-page steps in ONE evaluate and records their results.
@@ -1537,7 +1600,7 @@ async function runScenario(browser, scenario, options) {
         await page.screenshot({ path: file, fullPage: true });
         screenshot = file;
       }
-      const failures = expectationFailures(step.expect ?? {}, reading);
+      const failures = expectationFailures(step.expect ?? {}, reading, previousDebugLogLines);
       results.push({
         index: entry.index + 1,
         action: stepAction(step),
@@ -1547,6 +1610,7 @@ async function runScenario(browser, scenario, options) {
         screenshot,
         reading,
       });
+      if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
     }
     batch = [];
   };
@@ -1641,7 +1705,7 @@ async function runScenario(browser, scenario, options) {
           await page.screenshot({ path: file, fullPage: true });
           screenshot = file;
         }
-        const failures = expectationFailures(step.expect ?? {}, reading);
+        const failures = expectationFailures(step.expect ?? {}, reading, previousDebugLogLines);
         results.push({
           index: index + 1,
           action: stepAction(step),
@@ -1651,6 +1715,54 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
+        if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
+        continue;
+      }
+
+      if (step.debugLog !== undefined) {
+        // A NODE-SIDE step: the debug ledger is a server file, so neither the page nor its
+        // `--mock-gateway` route can observe it. Playwright's request context bypasses page
+        // routes, which is exactly why the server (not the mock) records this attempt.
+        await flushBatch();
+        const headers = { authorization: `Bearer ${options.authToken}` };
+        let failure = null;
+        if (typeof step.debugLog.set === 'boolean') {
+          const response = await page.request.put('/api/reply-suggestions/debug-log', {
+            headers,
+            data: { enabled: step.debugLog.set },
+          });
+          if (!response.ok()) failure = `PUT /debug-log answered ${response.status()}`;
+        }
+        if (typeof step.debugLog.rewrite === 'string') {
+          const response = await page.request.post('/api/reply-suggestions/draft-rewrite', {
+            headers,
+            data: {
+              text: step.debugLog.rewrite,
+              ...(typeof step.debugLog.sessionId === 'string' ? { sessionId: step.debugLog.sessionId } : {}),
+            },
+          });
+          if (!response.ok()) failure = `POST /draft-rewrite answered ${response.status()}`;
+        }
+        const reading = withGatewayReading(await readSurface(page));
+        let screenshot = null;
+        if (step.checkpoint === true) {
+          const file = path.join(options.outDir, `step-${index + 1}-${stepAction(step).replace(/[:/]/g, '-')}.png`);
+          await page.screenshot({ path: file, fullPage: true });
+          screenshot = file;
+        }
+        const failures = failure === null
+          ? expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)
+          : [failure, ...expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)];
+        results.push({
+          index: index + 1,
+          action: stepAction(step),
+          ok: failures.length === 0,
+          failures,
+          checkpoint: step.checkpoint === true,
+          screenshot,
+          reading,
+        });
+        if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
         continue;
       }
 
@@ -1686,8 +1798,8 @@ async function runScenario(browser, scenario, options) {
           screenshot = file;
         }
         const failures = waitFailure === null
-          ? expectationFailures(step.expect ?? {}, reading)
-          : [waitFailure, ...expectationFailures(step.expect ?? {}, reading)];
+          ? expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)
+          : [waitFailure, ...expectationFailures(step.expect ?? {}, reading, previousDebugLogLines)];
         results.push({
           index: index + 1,
           action: stepAction(step),
@@ -1697,6 +1809,7 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
+        if (typeof reading.debugLogLines === 'number') previousDebugLogLines = reading.debugLogLines;
         continue;
       }
 
@@ -1818,6 +1931,9 @@ async function main() {
       scenarioFile,
       viewport,
       mock,
+      ...(flags['debug-log-file'] === undefined
+        ? {}
+        : { debugLogFile: path.resolve(flags['debug-log-file']) }),
     });
     // The report is the program's output; a failing step is still a complete report.
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

@@ -5,16 +5,19 @@ type SettingsToggleProps = {
   onChange: (value: boolean) => void;
   ariaLabel: string;
   disabled?: boolean;
+  /** The id of the element that explains this switch; linked with `aria-describedby`. */
+  describedBy?: string;
 };
 
 /** Used by the settings module's appearance, browser-use, tasks and voice tabs to render a boolean setting switch. */
-export default function SettingsToggle({ checked, onChange, ariaLabel, disabled }: SettingsToggleProps) {
+export default function SettingsToggle({ checked, onChange, ariaLabel, disabled, describedBy }: SettingsToggleProps) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
+      {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(

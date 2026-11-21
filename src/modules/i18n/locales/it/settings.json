@@ -738,6 +738,12 @@
       "copied": "Diagnostica copiata negli appunti",
       "failed": "Copia non riuscita — seleziona il testo manualmente",
       "hint": "Il pacchetto è oscurato sul server: nessuna chiave o corpo dei messaggi."
+    },
+    "debugLog": {
+      "title": "Registro di debug della rifinitura della bozza",
+      "description": "Attivandolo, la bozza e il testo del candidato vengono scritti in un registro locale. Il file resta locale, non viene caricato e non fa parte della telemetria. Disattivato per impostazione predefinita; la rotazione è l’unica politica di conservazione.",
+      "label": "Scrivi i tentativi di rifinitura nel registro di debug locale",
+      "saveFailed": "Salvataggio non riuscito — l’impostazione non è stata modificata."
     }
   }
 }

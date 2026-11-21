@@ -34,4 +34,6 @@
 <text x="499" y="741" class="ink">⌕　♩　◖))　···</text><text x="772" y="741" class="tiny">权限</text><rect x="818" y="723" width="33" height="35" rx="9" class="primary"/><text x="829" y="746" class="primaryText">➤</text>
 <text x="489" y="781" class="tiny">Send 仍照常发送 textarea 内容；候选只有点 ✓ 才应用。</text>
 <text x="489" y="813" class="tiny">点建议框文字/空白处收回 chip；再次打开沿用原候选，不重复请求。</text>
+<text x="489" y="843" class="tiny">Settings → Diagnostics：草稿润色调试日志默认关闭；开启会把草稿与候选原文写入</text>
+<text x="489" y="865" class="tiny">~/.cloudpit/reply-suggestions-debug.jsonl（仅本机、不上传、不参与遥测；轮转是唯一保留策略）。</text>
 </svg>

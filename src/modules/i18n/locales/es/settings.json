@@ -825,6 +825,12 @@
       "copied": "Diagnóstico copiado al portapapeles",
       "failed": "Error al copiar — selecciona el texto manualmente",
       "hint": "El paquete se censura en el servidor: sin claves ni cuerpos de mensajes."
+    },
+    "debugLog": {
+      "title": "Registro de depuración del pulido de borradores",
+      "description": "Al activarlo, el borrador y el texto del candidato se escriben en un registro local. El archivo solo existe en este equipo, no se sube ni forma parte de la telemetría. Desactivado por defecto; la rotación es la única política de retención.",
+      "label": "Escribir los intentos de pulido en el registro de depuración local",
+      "saveFailed": "No se pudo guardar: la opción no ha cambiado."
     }
   }
 }

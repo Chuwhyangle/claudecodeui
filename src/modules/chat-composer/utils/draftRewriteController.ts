@@ -212,7 +212,12 @@ export function createDraftRewriteController(
     void (async () => {
       let response: DraftRewriteResponse;
       try {
-        response = await api.rewrite({ text: snapshot.draft });
+        // `sessionId` is correlation ONLY (the server logs it in the opt-in debug ledger and
+        // never forwards it upstream); a composer with no open conversation omits it entirely.
+        response = await api.rewrite({
+          text: snapshot.draft,
+          ...(snapshot.sessionId === null ? {} : { sessionId: snapshot.sessionId }),
+        });
       } catch (reason) {
         if (disposed || snapshot.token !== requestSeq) return;
         failure = {

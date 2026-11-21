@@ -1,6 +1,6 @@
 {
   "name": "composer-draft-rewrite",
-  "description": "The composer's ✦ draft-rewrite surface on a real page: chip position, one request, candidate preview, collapsed cache, retry de-duplication, apply-without-send, and a failure that leaves the original draft intact. The gateway is a LOCAL injected mock (report.mockGateway.note); this proves the wiring and contract, never real model quality. All draft text below is synthetic.",
+  "description": "The composer's ✦ draft-rewrite surface on a real page: chip position, one request, candidate preview, collapsed cache, retry de-duplication, apply-without-send, and a failure that leaves the original draft intact. The gateway is a LOCAL injected mock (report.mockGateway.note); this proves the wiring and contract, never real model quality. All draft text below is synthetic. A final NODE-SIDE leg drives the OPT-IN debug ledger through the server (bypassing the page mock): off + rewrite records 0 new lines, on + rewrite records exactly 1, off + rewrite again records 0. The drafts there are synthetic too.",
   "mockGateway": {
     "responses": [
       {
@@ -16,7 +16,9 @@
           "error": {
             "code": "DRAFT_REWRITE_REJECTED",
             "message": "draft rewrite produced no usable candidate (truncated)",
-            "details": { "category": "truncated" }
+            "details": {
+              "category": "truncated"
+            }
           }
         }
       },
@@ -28,7 +30,9 @@
           "error": {
             "code": "DRAFT_REWRITE_REJECTED",
             "message": "draft rewrite produced no usable candidate (truncated)",
-            "details": { "category": "truncated" }
+            "details": {
+              "category": "truncated"
+            }
           }
         }
       }
@@ -39,7 +43,9 @@
       "open": "session"
     },
     {
-      "drive": { "chat.type": "我们周四下午三点开个会 讨论一下支付流程 记得把上次的表格带上" }
+      "drive": {
+        "chat.type": "我们周四下午三点开个会 讨论一下支付流程 记得把上次的表格带上"
+      }
     },
     {
       "expect": {
@@ -52,7 +58,9 @@
       "checkpoint": true
     },
     {
-      "drive": { "draftRewrite.open": true }
+      "drive": {
+        "draftRewrite.open": true
+      }
     },
     {
       "waitFor": "draftRewrite:candidate",
@@ -66,7 +74,9 @@
       "checkpoint": true
     },
     {
-      "drive": { "draftRewrite.collapse": true },
+      "drive": {
+        "draftRewrite.collapse": true
+      },
       "expect": {
         "draftRewriteStateIs": "chip",
         "draftRewriteRequestsIs": 1,
@@ -75,7 +85,9 @@
       "checkpoint": true
     },
     {
-      "drive": { "draftRewrite.open": true }
+      "drive": {
+        "draftRewrite.open": true
+      }
     },
     {
       "waitFor": "draftRewrite:candidate",
@@ -88,7 +100,9 @@
       "checkpoint": true
     },
     {
-      "drive": { "draftRewrite.apply": true },
+      "drive": {
+        "draftRewrite.apply": true
+      },
       "expect": {
         "draftRewriteStateIs": "chip",
         "draftRewriteRequestsIs": 1,
@@ -98,14 +112,18 @@
       "checkpoint": true
     },
     {
-      "drive": { "chat.type": "第二条草稿 用来验证失败时原文保持不变" },
+      "drive": {
+        "chat.type": "第二条草稿 用来验证失败时原文保持不变"
+      },
       "expect": {
         "composerTextIs": "第二条草稿 用来验证失败时原文保持不变",
         "draftRewriteStateIs": "chip"
       }
     },
     {
-      "drive": { "draftRewrite.open": true }
+      "drive": {
+        "draftRewrite.open": true
+      }
     },
     {
       "waitFor": "draftRewrite:error",
@@ -120,10 +138,14 @@
       "checkpoint": true
     },
     {
-      "drive": { "draftRewrite.collapse": true }
+      "drive": {
+        "draftRewrite.collapse": true
+      }
     },
     {
-      "drive": { "draftRewrite.open": true }
+      "drive": {
+        "draftRewrite.open": true
+      }
     },
     {
       "waitFor": "draftRewrite:error",
@@ -136,10 +158,14 @@
       "checkpoint": true
     },
     {
-      "drive": { "draftRewrite.retry": true }
+      "drive": {
+        "draftRewrite.retry": true
+      }
     },
     {
-      "drive": { "draftRewrite.retry": true }
+      "drive": {
+        "draftRewrite.retry": true
+      }
     },
     {
       "waitFor": "draftRewrite:error",
@@ -149,6 +175,36 @@
         "draftRewriteRequestsIs": 3,
         "composerTextIs": "第二条草稿 用来验证失败时原文保持不变",
         "composerDisabledIs": false
+      },
+      "checkpoint": true
+    },
+    {
+      "debugLog": {
+        "set": false,
+        "rewrite": "调试日志关闭时的合成草稿 这是一次不会落盘的润色"
+      },
+      "expect": {
+        "debugLogLinesDeltaIs": 0
+      },
+      "checkpoint": true
+    },
+    {
+      "debugLog": {
+        "set": true,
+        "rewrite": "调试日志开启时的合成草稿 这一次应当恰好落一行"
+      },
+      "expect": {
+        "debugLogLinesDeltaIs": 1
+      },
+      "checkpoint": true
+    },
+    {
+      "debugLog": {
+        "set": false,
+        "rewrite": "关闭之后的合成草稿 这一次不应再落行"
+      },
+      "expect": {
+        "debugLogLinesDeltaIs": 0
       },
       "checkpoint": true
     }

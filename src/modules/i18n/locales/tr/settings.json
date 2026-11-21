@@ -739,6 +739,12 @@
       "copied": "Tanılama panoya kopyalandı",
       "failed": "Kopyalama başarısız — metni elle seçin",
       "hint": "Paket sunucuda gizlenir: anahtar veya mesaj gövdesi yok."
+    },
+    "debugLog": {
+      "title": "Taslak düzenleme hata ayıklama günlüğü",
+      "description": "Etkinleştirildiğinde taslak ve aday metni yerel bir günlüğe yazılır. Bu dosya yalnızca yerelde tutulur, yüklenmez ve telemetriye dahil edilmez. Varsayılan olarak kapalıdır; rotasyon tek saklama politikasıdır.",
+      "label": "Düzenleme denemelerini yerel hata ayıklama günlüğüne yaz",
+      "saveFailed": "Kaydedilemedi — ayar değiştirilmedi."
     }
   }
 }

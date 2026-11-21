@@ -193,6 +193,7 @@ test('(e) a failed record carries the failure reading and the service writes it 
     },
     limits: { maxCallsPerMinute: 30, maxCallsPerDay: 3000 },
     usageLog,
+    debugLog: false,
     diagnostics: {
       source: 'file', path: filePath, problems: [], configuredEnabled: true, apiKeyFile: '', apiKeyVar: '',
     },
