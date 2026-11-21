@@ -1203,7 +1203,7 @@ function collectModuleSources(dir: string): string[] {
 
 const SCANNED_SOURCES = [
   ...collectModuleSources(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')),
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket/services/chat-control.service.ts'),
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../websocket/services/dispatch/chat-control.service.ts'),
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../oauth/oauth-consent.routes.ts'),
 ];
 
