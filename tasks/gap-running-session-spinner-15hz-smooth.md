@@ -1,7 +1,7 @@
 ---
 id: gap-running-session-spinner-15hz-smooth
 title: 侧栏 spinner 5Hz 仍卡：改为 15Hz 步进，保持 GPU 低平台
-status: todo
+status: done
 labels:
   - gap
   - defect
