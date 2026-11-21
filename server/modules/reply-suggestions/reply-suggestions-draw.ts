@@ -90,8 +90,11 @@ function parseChipsOrUpstreamFailure(text: string, requestId: string, model: str
   }
 }
 
-/** The category and upstream status one failed attempt reports, whichever layer refused it. */
-function describeAttempt(failure: unknown): { category: string; httpStatus: number | null } {
+/**
+ * The category and upstream status one failed attempt reports, whichever layer refused it. Shared
+ * by the chip draw and the draft rewrite so both log and map a failure the same way.
+ */
+function describeUpstreamFailure(failure: unknown): { category: string; httpStatus: number | null } {
   if (failure instanceof ReplySuggestionsClientError) {
     return { category: failure.category, httpStatus: failure.httpStatus };
   }
@@ -101,6 +104,31 @@ function describeAttempt(failure: unknown): { category: string; httpStatus: numb
     if (failure.code === 'REPLY_SUGGESTIONS_RATE_LIMITED') return { category: 'rate-limit', httpStatus: null };
   }
   return { category: 'unknown', httpStatus: null };
+}
+
+/**
+ * The one metadata-only completion log line both runners emit. `prefix` is `''` for a chip draw
+ * and `'draftRewrite '` for a draft rewrite, so the wire log keeps its existing shape.
+ * Only protocol/model/version/duration/outcome/token counts/correlation — never text or the key.
+ */
+function logCompletionOutcome(
+  logger: (line: string) => void,
+  prefix: string,
+  settings: ReplySuggestionsSettings,
+  durationMs: number,
+  outcome: string,
+  completion: ReplySuggestionsCompletion | null,
+  requestId: string,
+  httpStatus: number | null = null,
+): void {
+  const tokens: string[] = [];
+  if (completion?.inputTokens != null) tokens.push(`inputTokens=${completion.inputTokens}`);
+  if (completion?.outputTokens != null) tokens.push(`outputTokens=${completion.outputTokens}`);
+  logger(
+    `[reply-suggestions] ${prefix}protocol=${settings.upstream.protocol} model=${settings.upstream.model} ` +
+      `version=${settings.version} durationMs=${durationMs}${tokens.length === 0 ? '' : ` ${tokens.join(' ')}`} ` +
+      `outcome=${outcome} requestId=${requestId}${httpStatus === null ? '' : ` httpStatus=${httpStatus}`}`,
+  );
 }
 
 /**
@@ -124,25 +152,6 @@ export function createDrawRunner(options: {
 }): ReplySuggestionsDrawRunner {
   const { complete, now, logger, guard } = options;
 
-  function logCompletion(
-    settings: ReplySuggestionsSettings,
-    durationMs: number,
-    outcome: string,
-    completion: ReplySuggestionsCompletion | null,
-    requestId: string,
-    httpStatus: number | null = null,
-  ): void {
-    const tokens: string[] = [];
-    if (completion?.inputTokens != null) tokens.push(`inputTokens=${completion.inputTokens}`);
-    if (completion?.outputTokens != null) tokens.push(`outputTokens=${completion.outputTokens}`);
-    // Only protocol/model/version/duration/outcome/token counts/correlation — never text or the key.
-    logger(
-      `[reply-suggestions] protocol=${settings.upstream.protocol} model=${settings.upstream.model} ` +
-        `version=${settings.version} durationMs=${durationMs}${tokens.length === 0 ? '' : ` ${tokens.join(' ')}`} ` +
-        `outcome=${outcome} requestId=${requestId}${httpStatus === null ? '' : ` httpStatus=${httpStatus}`}`,
-    );
-  }
-
   /** One upstream attempt: the guard owns circuit/limits, this owns logging/mapping. */
   async function callUpstream(
     request: ReplySuggestionsCompletionRequest,
@@ -152,11 +161,13 @@ export function createDrawRunner(options: {
     const startedAt = now();
     try {
       const completion = await guard.run(settings.limits, () => complete(request));
-      logCompletion(settings, now() - startedAt, 'ok', completion, requestId);
+      logCompletionOutcome(logger, '', settings, now() - startedAt, 'ok', completion, requestId);
       return completion;
     } catch (failure) {
-      const { category, httpStatus } = describeAttempt(failure);
-      logCompletion(settings, now() - startedAt, `error:${category}`, null, requestId, httpStatus);
+      const { category, httpStatus } = describeUpstreamFailure(failure);
+      logCompletionOutcome(
+        logger, '', settings, now() - startedAt, `error:${category}`, null, requestId, httpStatus,
+      );
       const details = { requestId, httpStatus, model: settings.upstream.model, category };
       if (failure instanceof AppError) {
         throw new AppError(failure.message, {
@@ -340,19 +351,6 @@ function composeDraftRewriteRequest(
   };
 }
 
-/** The category and upstream status one failed attempt reports (same mapping as a chip draw). */
-function describeRewriteAttempt(failure: unknown): { category: string; httpStatus: number | null } {
-  if (failure instanceof ReplySuggestionsClientError) {
-    return { category: failure.category, httpStatus: failure.httpStatus };
-  }
-  if (failure instanceof AppError) {
-    const message = failure.message.toLowerCase();
-    if (message.includes('circuit-open')) return { category: 'circuit-open', httpStatus: null };
-    if (failure.code === 'REPLY_SUGGESTIONS_RATE_LIMITED') return { category: 'rate-limit', httpStatus: null };
-  }
-  return { category: 'unknown', httpStatus: null };
-}
-
 /**
  * Build one draft rewrite runner over the injected completion seam and the SHARED guard.
  *
@@ -368,25 +366,6 @@ export function createDraftRewriteRunner(options: {
 }): DraftRewriteRunner {
   const { complete, now, logger, guard } = options;
 
-  /** Metadata only: never the draft, the candidate, the prompt or the key. */
-  function logRewrite(
-    settings: ReplySuggestionsSettings,
-    durationMs: number,
-    outcome: string,
-    completion: ReplySuggestionsCompletion | null,
-    requestId: string,
-    httpStatus: number | null = null,
-  ): void {
-    const tokens: string[] = [];
-    if (completion?.inputTokens != null) tokens.push(`inputTokens=${completion.inputTokens}`);
-    if (completion?.outputTokens != null) tokens.push(`outputTokens=${completion.outputTokens}`);
-    logger(
-      `[reply-suggestions] draftRewrite protocol=${settings.upstream.protocol} model=${settings.upstream.model} ` +
-        `version=${settings.version} durationMs=${durationMs}${tokens.length === 0 ? '' : ` ${tokens.join(' ')}`} ` +
-        `outcome=${outcome} requestId=${requestId}${httpStatus === null ? '' : ` httpStatus=${httpStatus}`}`,
-    );
-  }
-
   return {
     async rewrite(context: DraftRewriteDrawContext): Promise<DraftRewriteDrawResult> {
       const { settings } = context;
@@ -396,8 +375,11 @@ export function createDraftRewriteRunner(options: {
       try {
         completion = await guard.run(settings.limits, () => complete(request));
       } catch (failure) {
-        const { category, httpStatus } = describeRewriteAttempt(failure);
-        logRewrite(settings, now() - startedAt, `error:${category}`, null, context.requestId, httpStatus);
+        const { category, httpStatus } = describeUpstreamFailure(failure);
+        logCompletionOutcome(
+          logger, 'draftRewrite ', settings, now() - startedAt, `error:${category}`, null,
+          context.requestId, httpStatus,
+        );
         const details = { requestId: context.requestId, httpStatus, model: settings.upstream.model, category };
         if (failure instanceof AppError) {
           throw new AppError(failure.message, {
@@ -415,21 +397,27 @@ export function createDraftRewriteRunner(options: {
         && completion.outputTokens !== undefined
         && completion.outputTokens >= request.maxOutputTokens;
       if (completion.truncated === true || hitTokenCeiling) {
-        logRewrite(settings, now() - startedAt, 'error:truncated', completion, context.requestId);
+        logCompletionOutcome(
+          logger, 'draftRewrite ', settings, now() - startedAt, 'error:truncated', completion, context.requestId,
+        );
         throw draftRewriteRejectedError('truncated');
       }
 
       const text = completion.text.trim();
       if (text === '') {
-        logRewrite(settings, now() - startedAt, 'error:empty-output', completion, context.requestId);
+        logCompletionOutcome(
+          logger, 'draftRewrite ', settings, now() - startedAt, 'error:empty-output', completion, context.requestId,
+        );
         throw draftRewriteRejectedError('empty-output');
       }
       if (text.length > DRAFT_REWRITE_MAX_OUTPUT_CHARS) {
-        logRewrite(settings, now() - startedAt, 'error:output-too-long', completion, context.requestId);
+        logCompletionOutcome(
+          logger, 'draftRewrite ', settings, now() - startedAt, 'error:output-too-long', completion, context.requestId,
+        );
         throw draftRewriteRejectedError('output-too-long');
       }
 
-      logRewrite(settings, now() - startedAt, 'ok', completion, context.requestId);
+      logCompletionOutcome(logger, 'draftRewrite ', settings, now() - startedAt, 'ok', completion, context.requestId);
       return { rewrittenText: text, stopReason: 'finished' };
     },
   };
