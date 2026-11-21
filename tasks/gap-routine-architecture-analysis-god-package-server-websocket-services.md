@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-server-websocket-services
 title: "architecture-analysis: archguard_detect_god_packages(scope=server) flags
   modules/websocket/services with tooManyFiles: 24 direct files (threshold 20),
   33 entities, fanOut 205; the "
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
