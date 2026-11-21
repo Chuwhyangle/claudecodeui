@@ -1,7 +1,7 @@
 ---
 id: gap-sidebar-project-list-render-budget
 title: 侧栏 587 个项目全量渲染：给项目列表加有界渲染预算和显示全部
-status: ready
+status: done
 labels:
   - gap
   - defect
