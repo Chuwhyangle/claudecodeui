@@ -21,6 +21,7 @@ import { useDraftState } from '@/modules/chat-composer/hooks/useDraftState';
 import { useFileMentions } from '@/modules/chat-composer/hooks/useFileMentions';
 import { useInputHistory } from '@/modules/chat-composer/hooks/useInputHistory';
 import { useSuggestionChips } from '@/modules/chat-composer/hooks/useSuggestionChips';
+import { useDraftRewrite } from '@/modules/chat-composer/hooks/useDraftRewrite';
 import { useSendDeliveryState } from '@/modules/chat-composer/hooks/useSendDeliveryState';
 import { useSendOnEnter } from '@/modules/chat-composer/hooks/useSendOnEnter';
 import { useTextareaInteractionState } from '@/modules/chat-composer/hooks/useTextareaInteractionState';
@@ -395,6 +396,7 @@ export function useChatComposerState({
   // The idle conditions and the draft writer are all it needs from here.
   const {
     chipStrip,
+    replySuggestionsEnabled,
     handleChipUndoKey,
     noteDraftEdit,
     reportChipSent,
@@ -414,6 +416,37 @@ export function useChatComposerState({
     lastAssistantMessageId,
     quotedSelection,
   });
+
+  /**
+   * The ✦ candidate's write path: the composer's ONE draft writer.
+   *
+   * A whole-text replacement invalidates everything keyed to the old bytes — the voice insertion
+   * range is remapped (not left pointing into the old text), a model-chip attribution is
+   * forfeited, and the expansion chain anchored on the old draft is dropped — then both draft
+   * stores are written so an immediate Enter sends the candidate. It never submits.
+   */
+  const applyDraftRewriteText = useCallback((text: string) => {
+    const previous = inputValueRef.current;
+    clearExpansion();
+    noteDraftEdit(text);
+    remapVoiceRangeOnEdit(previous, text);
+    setInputFromHistory(text);
+  }, [clearExpansion, inputValueRef, noteDraftEdit, remapVoiceRangeOnEdit, setInputFromHistory]);
+
+  // The candidate surface: shares the reply-suggestions settings/budget but is available on any
+  // non-blank draft. It is reset by every path that ends the draft's identity (edit, clear, send,
+  // scope change via setContext, unmount via the hook's dispose).
+  const draftRewrite = useDraftRewrite({
+    sessionId: currentSessionId,
+    draftScope,
+    draft: input,
+    enabled: replySuggestionsEnabled,
+    writeDraft: applyDraftRewriteText,
+  });
+  // The two controller verbs the composer's synchronous paths call. Destructured so the
+  // callbacks below depend on the stable controller method, not on the hook's per-render object.
+  const invalidateDraftRewrite = draftRewrite.invalidate;
+  const resetDraftRewrite = draftRewrite.reset;
 
   // Snapshot of everything `chat.send` needs beyond the text itself. Built at
   // send time for immediate sends and at queue time for queued ones, so a
@@ -798,6 +831,9 @@ export function useChatComposerState({
         // The message left the box; the variants that answered it are no longer
         // about anything on screen.
         clearExpansion();
+        // A delivered message ends the draft's identity: any candidate (or late answer) for it
+        // must not survive into the now-empty box.
+        resetDraftRewrite();
         // The box itself is cleared only while it still shows the scope the
         // message came from; a scope that has moved on (a new chat) already
         // shows its own, empty draft.
@@ -889,6 +925,7 @@ export function useChatComposerState({
       recordSentMessage,
       reportChipSent,
       resetCommandMenuState,
+      resetDraftRewrite,
       scrollToBottom,
       selectedProject,
       sendMessage,
@@ -925,6 +962,10 @@ export function useChatComposerState({
       // variants would replace text the person just changed by hand.
       clearExpansion();
 
+      // A manual edit also invalidates a draft-rewrite candidate: it answered the old bytes.
+      // Done synchronously (not only in the controller's effect) so a response that lands
+      // between this event and the next render is already stale.
+      invalidateDraftRewrite();
       // An edit also forfeits the `sent` attribution. Only an unedited model-chip
       // fill is that chip's text going out; once the person changes it, whatever
       // they send is their own message, even if they later type the fill back.
@@ -954,6 +995,7 @@ export function useChatComposerState({
       clearExpansion,
       handleCommandInputChange,
       inputValueRef,
+      invalidateDraftRewrite,
       noteDraftEdit,
       remapVoiceRangeOnEdit,
       resetCommandMenuState,
@@ -984,6 +1026,7 @@ export function useChatComposerState({
     inputValueRef.current = '';
     forgetChipState();
     clearExpansion();
+    resetDraftRewrite();
     resetCommandMenuState();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -996,6 +1039,7 @@ export function useChatComposerState({
     inputValueRef,
     reportCleared,
     resetCommandMenuState,
+    resetDraftRewrite,
     setInput,
     setIsTextareaExpanded,
     textareaRef,
@@ -1223,6 +1267,12 @@ export function useChatComposerState({
      * `useSuggestionChips` and forwarded unchanged.
      */
     chipStrip,
+    /**
+     * The ✦ draft-rewrite candidate surface: snapshot + the commands
+     * (`openOrRequest`, `collapse`, `retry`, `apply`, `invalidate`/`reset`). The composer
+     * draws it between the textarea and the footer; nothing here sends.
+     */
+    draftRewrite,
     getRootProps,
     getInputProps,
     isDragActive,

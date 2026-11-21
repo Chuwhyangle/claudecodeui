@@ -187,6 +187,14 @@
       "willSend": "Verrà inviato al termine",
       "edit": "Modifica il messaggio in coda",
       "delete": "Elimina il messaggio in coda"
+    },
+    "draftRewrite": {
+      "chip": "✦ Lucida",
+      "panelLabel": "Candidato di revisione della bozza",
+      "apply": "Applica alla bozza",
+      "retry": "Lucida di nuovo",
+      "loading": "Lucido…",
+      "failed": "Lucida non riuscita; la bozza è invariata."
     }
   },
   "providerSelection": {

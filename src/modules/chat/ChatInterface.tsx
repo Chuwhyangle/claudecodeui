@@ -748,6 +748,7 @@ function ChatInterface({
     draftScope,
     sendFailed,
     chipStrip,
+    draftRewrite,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
@@ -1450,6 +1451,7 @@ function ChatInterface({
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
           chipStrip={chipStrip}
+          draftRewrite={draftRewrite}
           replyReference={replyReference}
           replyItems={latestReplyItems?.items}
         />

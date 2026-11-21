@@ -203,6 +203,14 @@
       "deliveredDetail": "等当前回答结束后处理",
       "edit": "编辑排队消息",
       "delete": "删除排队消息"
+    },
+    "draftRewrite": {
+      "chip": "✦ 润色",
+      "panelLabel": "草稿润色候选",
+      "apply": "应用到草稿",
+      "retry": "重新润色",
+      "loading": "正在润色…",
+      "failed": "润色失败，原稿保持不变。"
     }
   },
   "providerSelection": {

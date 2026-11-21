@@ -188,6 +188,14 @@
       "willSend": "Sera envoyé une fois terminé",
       "edit": "Modifier le message en file d’attente",
       "delete": "Supprimer le message en file d’attente"
+    },
+    "draftRewrite": {
+      "chip": "✦ Polir",
+      "panelLabel": "Candidat de reformulation du brouillon",
+      "apply": "Appliquer au brouillon",
+      "retry": "Polir à nouveau",
+      "loading": "Polissage…",
+      "failed": "Le polissage a échoué ; le brouillon reste inchangé."
     }
   },
   "providerSelection": {

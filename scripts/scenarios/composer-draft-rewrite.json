@@ -1,0 +1,156 @@
+{
+  "name": "composer-draft-rewrite",
+  "description": "The composer's ✦ draft-rewrite surface on a real page: chip position, one request, candidate preview, collapsed cache, retry de-duplication, apply-without-send, and a failure that leaves the original draft intact. The gateway is a LOCAL injected mock (report.mockGateway.note); this proves the wiring and contract, never real model quality. All draft text below is synthetic.",
+  "mockGateway": {
+    "responses": [
+      {
+        "status": 200,
+        "body": {
+          "rewrittenText": "我们周四下午三点开个会，讨论支付流程，请记得带上上次的表格。"
+        }
+      },
+      {
+        "status": 502,
+        "body": {
+          "success": false,
+          "error": {
+            "code": "DRAFT_REWRITE_REJECTED",
+            "message": "draft rewrite produced no usable candidate (truncated)",
+            "details": { "category": "truncated" }
+          }
+        }
+      },
+      {
+        "status": 502,
+        "delayMs": 400,
+        "body": {
+          "success": false,
+          "error": {
+            "code": "DRAFT_REWRITE_REJECTED",
+            "message": "draft rewrite produced no usable candidate (truncated)",
+            "details": { "category": "truncated" }
+          }
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "open": "session"
+    },
+    {
+      "drive": { "chat.type": "我们周四下午三点开个会 讨论一下支付流程 记得把上次的表格带上" }
+    },
+    {
+      "expect": {
+        "composerTextIs": "我们周四下午三点开个会 讨论一下支付流程 记得把上次的表格带上",
+        "composerDisabledIs": false,
+        "draftRewriteAvailable": true,
+        "draftRewriteStateIs": "chip",
+        "draftRewriteRequestsIs": 0
+      },
+      "checkpoint": true
+    },
+    {
+      "drive": { "draftRewrite.open": true }
+    },
+    {
+      "waitFor": "draftRewrite:candidate",
+      "timeoutMs": 15000,
+      "expect": {
+        "draftRewriteStateIs": "candidate",
+        "draftRewriteCandidateIs": "我们周四下午三点开个会，讨论支付流程，请记得带上上次的表格。",
+        "draftRewriteRequestsIs": 1,
+        "composerTextIs": "我们周四下午三点开个会 讨论一下支付流程 记得把上次的表格带上"
+      },
+      "checkpoint": true
+    },
+    {
+      "drive": { "draftRewrite.collapse": true },
+      "expect": {
+        "draftRewriteStateIs": "chip",
+        "draftRewriteRequestsIs": 1,
+        "composerTextIs": "我们周四下午三点开个会 讨论一下支付流程 记得把上次的表格带上"
+      },
+      "checkpoint": true
+    },
+    {
+      "drive": { "draftRewrite.open": true }
+    },
+    {
+      "waitFor": "draftRewrite:candidate",
+      "timeoutMs": 8000,
+      "expect": {
+        "draftRewriteStateIs": "candidate",
+        "draftRewriteCandidateIs": "我们周四下午三点开个会，讨论支付流程，请记得带上上次的表格。",
+        "draftRewriteRequestsIs": 1
+      },
+      "checkpoint": true
+    },
+    {
+      "drive": { "draftRewrite.apply": true },
+      "expect": {
+        "draftRewriteStateIs": "chip",
+        "draftRewriteRequestsIs": 1,
+        "composerTextIs": "我们周四下午三点开个会，讨论支付流程，请记得带上上次的表格。",
+        "chatMessageCount": 2
+      },
+      "checkpoint": true
+    },
+    {
+      "drive": { "chat.type": "第二条草稿 用来验证失败时原文保持不变" },
+      "expect": {
+        "composerTextIs": "第二条草稿 用来验证失败时原文保持不变",
+        "draftRewriteStateIs": "chip"
+      }
+    },
+    {
+      "drive": { "draftRewrite.open": true }
+    },
+    {
+      "waitFor": "draftRewrite:error",
+      "timeoutMs": 15000,
+      "expect": {
+        "draftRewriteStateIs": "error",
+        "draftRewriteRequestsIs": 2,
+        "composerTextIs": "第二条草稿 用来验证失败时原文保持不变",
+        "composerDisabledIs": false,
+        "chatMessageCount": 2
+      },
+      "checkpoint": true
+    },
+    {
+      "drive": { "draftRewrite.collapse": true }
+    },
+    {
+      "drive": { "draftRewrite.open": true }
+    },
+    {
+      "waitFor": "draftRewrite:error",
+      "timeoutMs": 8000,
+      "expect": {
+        "draftRewriteStateIs": "error",
+        "draftRewriteRequestsIs": 2,
+        "composerTextIs": "第二条草稿 用来验证失败时原文保持不变"
+      },
+      "checkpoint": true
+    },
+    {
+      "drive": { "draftRewrite.retry": true }
+    },
+    {
+      "drive": { "draftRewrite.retry": true }
+    },
+    {
+      "waitFor": "draftRewrite:error",
+      "timeoutMs": 15000,
+      "expect": {
+        "draftRewriteStateIs": "error",
+        "draftRewriteRequestsIs": 3,
+        "composerTextIs": "第二条草稿 用来验证失败时原文保持不变",
+        "composerDisabledIs": false
+      },
+      "checkpoint": true
+    }
+  ]
+}

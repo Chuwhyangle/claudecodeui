@@ -35,6 +35,16 @@ export type ScenarioChatReading = {
   composerText: string;
 };
 
+/** The composer's ✦ draft-rewrite surface, read from the attributes it draws. */
+export type ScenarioDraftRewriteReading = {
+  /** `absent` when nothing is mounted; otherwise the panel/chip state the component declares. */
+  state: 'absent' | 'chip' | 'loading' | 'candidate' | 'error';
+  /** The shared reply-suggestions feature is on AND the draft is non-blank. */
+  available: boolean;
+  /** The candidate body exactly as drawn (empty when there is none). */
+  candidate: string;
+};
+
 /** The transcript pane the rows live in; the same selector the scroll criteria use. */
 const PANE_SELECTOR = '.chat-messages-pane';
 /** The composer's textarea, named by the product's own slot rather than a placeholder. */
@@ -91,6 +101,109 @@ export function readChatReading(): ScenarioChatReading {
   const composerText = composer instanceof HTMLTextAreaElement ? composer.value : '';
 
   return { messages, composerText };
+}
+
+/** True when the composer textarea is present and disabled (a background job owns the session). */
+export function readComposerDisabled(): boolean {
+  if (typeof document === 'undefined') return false;
+  const composer = document.querySelector(COMPOSER_SELECTOR);
+  return composer instanceof HTMLTextAreaElement ? composer.disabled : false;
+}
+
+/** The reading when the surface is not mounted. */
+const ABSENT_DRAFT_REWRITE: ScenarioDraftRewriteReading = {
+  state: 'absent',
+  available: false,
+  candidate: '',
+};
+
+const DRAFT_REWRITE_SLOT = '[data-slot="draft-rewrite"]';
+const DRAFT_REWRITE_CHIP = '[data-slot="draft-rewrite-chip"]';
+const DRAFT_REWRITE_PANEL = '[data-slot="draft-rewrite-panel"]';
+const DRAFT_REWRITE_APPLY = '[data-slot="draft-rewrite-apply"]';
+const DRAFT_REWRITE_RETRY = '[data-slot="draft-rewrite-retry"]';
+
+/**
+ * Reads the draft-rewrite surface from the attributes the component itself declares.
+ *
+ * `state` is the component's own word for what it drew; `candidate` is the text in its body.
+ * A page without the surface answers `absent` rather than a fabricated chip.
+ */
+export function readDraftRewriteReading(): ScenarioDraftRewriteReading {
+  if (typeof document === 'undefined') {
+    return ABSENT_DRAFT_REWRITE;
+  }
+  const root = document.querySelector(DRAFT_REWRITE_SLOT);
+  if (!(root instanceof HTMLElement)) {
+    return ABSENT_DRAFT_REWRITE;
+  }
+  const rawState = root.getAttribute('data-draft-rewrite-state');
+  const state: ScenarioDraftRewriteReading['state'] = rawState === 'chip'
+    || rawState === 'loading'
+    || rawState === 'candidate'
+    || rawState === 'error'
+    ? rawState
+    : 'absent';
+  return {
+    state,
+    available: root.getAttribute('data-draft-rewrite-available') === 'true',
+    candidate: root.getAttribute('data-draft-rewrite-candidate') ?? '',
+  };
+}
+
+/** Presses the collapsed ✦ chip. */
+export function openDraftRewrite(): boolean {
+  if (typeof document === 'undefined') return false;
+  const chip = document.querySelector(DRAFT_REWRITE_CHIP);
+  if (!(chip instanceof HTMLButtonElement)) return false;
+  chip.click();
+  return true;
+}
+
+/**
+ * Presses the panel's non-button area, which is the product's own "keep the original" gesture.
+ * A selection is cleared first so the press reads as a dismissal rather than a text selection.
+ */
+export function collapseDraftRewrite(): boolean {
+  if (typeof document === 'undefined') return false;
+  const panel = document.querySelector(DRAFT_REWRITE_PANEL);
+  if (!(panel instanceof HTMLElement)) return false;
+  window.getSelection()?.removeAllRanges();
+  panel.click();
+  return true;
+}
+
+/** Presses the ✓ apply icon. */
+export function applyDraftRewrite(): boolean {
+  if (typeof document === 'undefined') return false;
+  const button = document.querySelector(DRAFT_REWRITE_APPLY);
+  if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+  button.click();
+  return true;
+}
+
+/** Presses the ↻ retry icon. */
+export function retryDraftRewrite(): boolean {
+  if (typeof document === 'undefined') return false;
+  const button = document.querySelector(DRAFT_REWRITE_RETRY);
+  if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+  button.click();
+  return true;
+}
+
+/**
+ * Types a draft into the real textarea the way a person does: the native value setter plus an
+ * `input` event, which is what React's controlled textarea listens to.
+ */
+export function typeDraft(text: string): boolean {
+  if (typeof document === 'undefined') return false;
+  const textarea = document.querySelector(COMPOSER_SELECTOR);
+  if (!(textarea instanceof HTMLTextAreaElement)) return false;
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  if (setter === undefined) return false;
+  setter.call(textarea, text);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
 }
 
 /**

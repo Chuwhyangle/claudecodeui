@@ -82,6 +82,12 @@ export type UseSuggestionChipsResult = {
   /** Everything `ChatComposer` needs to draw and drive the strip. */
   chipStrip: ComposerChipStrip;
   /**
+   * The shared reply-suggestions feature switch, WITHOUT the empty-box/assistant-message
+   * conditions that make the chip strip eligible. The draft rewrite shares this feature's
+   * settings and budget but is available on any non-blank draft, so it reads this raw flag.
+   */
+  replySuggestionsEnabled: boolean;
+  /**
    * Handles the Ctrl/Cmd+Z that undoes a chip fill. Returns true when consumed;
    * every other key keeps the browser's own undo.
    */
@@ -157,6 +163,7 @@ export function useSuggestionChips({
   // expansion experiment, which is a chip surface too, so it lives under this
   // hook rather than beside it.
   const {
+    status: replySuggestionsStatus,
     enabled: suggestionsEnabled,
     firstDraw: {
       chips: replySuggestionChips,
@@ -431,6 +438,7 @@ export function useSuggestionChips({
 
   return {
     chipStrip,
+    replySuggestionsEnabled: replySuggestionsStatus?.enabled === true,
     handleChipUndoKey,
     noteDraftEdit,
     reportChipSent,

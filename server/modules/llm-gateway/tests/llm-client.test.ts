@@ -293,8 +293,48 @@ test('(i) a slow upstream fails as a timeout within the configured bound', async
   assert.ok(elapsed < 400, `it failed before the slow response arrived (${elapsed} ms)`);
 });
 
-test('(j) the credential cannot be printed, serialised or inspected', () => {
-  const credential = new ApiCredential(API_KEY);
+test('(j) both dialects read the completion stop/finish reason and flag truncation', async (t) => {
+  // Anthropic: `stop_reason` is top-level. A finished answer is `end_turn`; the output-token
+  // ceiling is `max_tokens` and MUST read as truncated so a caller cannot apply a cut answer.
+  let anthropicStop = 'end_turn';
+  const anthropic = await listen(t, (_request, response) => replyJson(response, 200, {
+    content: [{ type: 'text', text: '好的。' }],
+    stop_reason: anthropicStop,
+    usage: { input_tokens: 3, output_tokens: 2 },
+  }));
+  const finished = await completeLlm(request({ baseUrl: anthropic.baseUrl }));
+  assert.equal(finished.stopReason, 'end_turn');
+  assert.equal(finished.truncated, false);
+  anthropicStop = 'max_tokens';
+  const cut = await completeLlm(request({ baseUrl: anthropic.baseUrl }));
+  assert.equal(cut.stopReason, 'max_tokens');
+  assert.equal(cut.truncated, true);
+
+  // OpenAI: `finish_reason` is on the first choice. `stop` is finished, `length` is truncated.
+  let finish = 'stop';
+  const openai = await listen(t, (_request, response) => replyJson(response, 200, {
+    choices: [{ message: { content: 'Done.' }, finish_reason: finish }],
+    usage: { prompt_tokens: 3, completion_tokens: 2 },
+  }));
+  const openAiFinished = await completeLlm(request({ baseUrl: openai.baseUrl, protocol: 'openai' }));
+  assert.equal(openAiFinished.stopReason, 'stop');
+  assert.equal(openAiFinished.truncated, false);
+  finish = 'length';
+  const openAiCut = await completeLlm(request({ baseUrl: openai.baseUrl, protocol: 'openai' }));
+  assert.equal(openAiCut.stopReason, 'length');
+  assert.equal(openAiCut.truncated, true);
+
+  // A response that names no stop reason is finished, not truncated: absence is not a cut.
+  const silent = await listen(t, (_request, response) => replyJson(response, 200, {
+    content: [{ type: 'text', text: '好的。' }],
+    usage: { input_tokens: 3, output_tokens: 2 },
+  }));
+  const unnamed = await completeLlm(request({ baseUrl: silent.baseUrl }));
+  assert.equal(unnamed.stopReason, null);
+  assert.equal(unnamed.truncated, false);
+});
+
+test('(k) the credential cannot be printed, serialised or inspected', () => {  const credential = new ApiCredential(API_KEY);
   assert.equal(credential.reveal(), API_KEY);
   assert.equal(credential.toString(), '[redacted]');
   assert.equal(JSON.stringify(credential), JSON.stringify('[redacted]'));

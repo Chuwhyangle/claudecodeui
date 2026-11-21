@@ -51,6 +51,8 @@ import ComposerModelMenu from '@/modules/chat-composer/composer/ComposerModelMen
 import ComposerPermissionMenu from '@/modules/chat-composer/composer/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat-composer/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat-composer/composer/InputSuggestionChips';
+import DraftRewriteCandidate from '@/modules/chat-composer/composer/DraftRewriteCandidate';
+import type { UseDraftRewriteResult } from '@/modules/chat-composer/hooks/useDraftRewrite';
 import { SuggestionFailureNotice } from '@/modules/chat-composer/composer/SuggestionFailureNotice';
 import ReplyReferencePreview from '@/modules/chat-composer/composer/ReplyReferencePreview';
 import { suggestionOptionId, truncateSuggestionLabel } from '@/modules/chat-support';
@@ -260,6 +262,11 @@ type ChatComposerProps = {
    */
   chipStrip?: ComposerChipStrip;
   /**
+   * The ✦ draft-rewrite surface: the non-blank-draft chip and its one-candidate panel. Produced
+   * by `useDraftRewrite`; absent means the deployment has no rewrite surface and nothing is drawn.
+   */
+  draftRewrite?: UseDraftRewriteResult;
+  /**
    * What the draft currently points at in the latest assistant reply, if
    * anything. Drawn as one line above the input box; `none` draws nothing.
    */
@@ -353,6 +360,7 @@ export default function ChatComposer({
   isTextareaExpanded,
   sendByCtrlEnter,
   chipStrip,
+  draftRewrite,
   replyReference = null,
   replyItems = [],
 }: ChatComposerProps) {
@@ -1210,6 +1218,12 @@ export default function ChatComposer({
                 ))}
               </div>
             )}
+            {/*
+              The draft-rewrite surface: a ✦ chip on a non-blank draft, and the one-candidate
+              panel it expands into. It sits after the textarea and before the footer in the same
+              composer, so the candidate is beside the draft and never becomes a floating card.
+            */}
+            {draftRewrite && <DraftRewriteCandidate draftRewrite={draftRewrite} />}
             {/* Inline tier only: the row below is a sibling of this body, and the form is a row on
                 that tier, so a sibling here would become a third column of its own. It moves into
                 this column instead, under the textarea, where it costs the input height rather than

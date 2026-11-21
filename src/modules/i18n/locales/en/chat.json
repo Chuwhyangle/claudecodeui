@@ -210,6 +210,14 @@
       "deliveredDetail": "Will be handled when this answer finishes",
       "edit": "Edit queued message",
       "delete": "Delete queued message"
+    },
+    "draftRewrite": {
+      "chip": "✦ Polish",
+      "panelLabel": "Draft polish candidate",
+      "apply": "Apply to draft",
+      "retry": "Polish again",
+      "loading": "Polishing…",
+      "failed": "Polish failed; the draft is unchanged."
     }
   },
   "composer": {

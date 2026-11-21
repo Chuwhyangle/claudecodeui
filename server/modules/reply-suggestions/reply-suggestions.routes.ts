@@ -6,6 +6,7 @@
  *
  *   · `GET  /status` — the four-field public reading; no key and no path.
  *   · `POST /`       — `{ sessionId, redraw?, focus?, seed?, expand? }` -> `{ chips, draw }`.
+ *   · `POST /draft-rewrite` — `{ text, retry? }` -> `{ rewrittenText }` (the composer's ✦ candidate).
  *   · `POST /events` — `{ sessionId, draw, event, index?, source? }` -> 204.
  *
  * This file only parses transport input, calls one service method and formats
@@ -27,6 +28,7 @@ import { isBooleanValue, isStringValue, readField } from '@/shared/settings-file
 import { AppError, asyncHandler } from '@/shared/utils.js';
 
 import type {
+  DraftRewriteInput,
   ReplySuggestionsEventName,
   ReplySuggestionsExpansionSource,
   ReplySuggestionsInput,
@@ -97,8 +99,22 @@ function readSuggestInput(body: unknown): ReplySuggestionsInput {
   };
 }
 
-function readEventInput(body: unknown): ReplySuggestionsEventInput {
+/**
+ * The draft rewrite's transport input: the draft text and an optional retry flag, and nothing
+ * else. Any `model`, `provider`, `prompt`, `system`, `url` or history field a client sends is
+ * IGNORED here — it is never read, so it cannot override the settings' upstream or prompt. The
+ * empty/blank and over-length cases are the service's to refuse (400), not this parser's.
+ */
+function readDraftRewriteInput(body: unknown): DraftRewriteInput {
   const record = readObjectBody(body);
+  const retry = optionalBooleanField(record, 'retry');
+  return {
+    text: requireStringField(record, 'text'),
+    ...(retry === undefined ? {} : { retry }),
+  };
+}
+
+function readEventInput(body: unknown): ReplySuggestionsEventInput {  const record = readObjectBody(body);
   const event = record.event;
   if (typeof event !== 'string' || !(EVENT_NAMES as readonly string[]).includes(event)) {
     throw invalidRequest(`"event" must be one of ${EVENT_NAMES.map((name) => `"${name}"`).join(', ')}`);
@@ -138,6 +154,14 @@ export function createReplySuggestionsRoutes(service: ReplySuggestionsService): 
     asyncHandler(async (request, response) => {
       const input = readSuggestInput(request.body);
       response.json(await service.suggest(input));
+    }),
+  );
+
+  router.post(
+    '/draft-rewrite',
+    asyncHandler(async (request, response) => {
+      const input = readDraftRewriteInput(request.body);
+      response.json(await service.rewriteDraft(input));
     }),
   );
 

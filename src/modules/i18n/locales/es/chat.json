@@ -200,6 +200,14 @@
       "willSend": "Se enviará cuando esto termine",
       "edit": "Editar mensaje en cola",
       "delete": "Eliminar mensaje en cola"
+    },
+    "draftRewrite": {
+      "chip": "✦ Pulir",
+      "panelLabel": "Candidato de pulido del borrador",
+      "apply": "Aplicar al borrador",
+      "retry": "Pulir de nuevo",
+      "loading": "Puliendo…",
+      "failed": "No se pudo pulir; el borrador no ha cambiado."
     }
   },
   "composer": {

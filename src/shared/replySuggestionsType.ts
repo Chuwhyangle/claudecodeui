@@ -156,3 +156,92 @@ export type ReplySuggestionsRequest = {
   expand?: boolean;
 };
 
+//----------------- DRAFT REWRITE ------------
+
+/**
+ * The draft rewrite (composer's ✦ candidate) wire contract. Two ends declare it: the composer's
+ * controller/API (`src/shared/api/clientTail.ts`) and the reply-suggestions module
+ * (`server/modules/reply-suggestions/`). `composerDraftRewriteTypeSync.test.ts` reads both
+ * declarations field by field and fails when one side moves alone.
+ *
+ * ONE DRAFT IN, ONE WHOLE TEXT OUT. The request carries the draft text and an optional retry
+ * flag and nothing else — no session, transcript, history, model, provider, prompt or URL — so a
+ * client cannot choose the upstream or extend what is sent. The response carries one candidate
+ * or one typed failure; the client never applies a truncated, blank or over-budget answer.
+ */
+
+/** The shared input ceiling, in characters. A longer draft is refused, never clipped. */
+export const DRAFT_REWRITE_MAX_INPUT_CHARS = 6000;
+
+/** The shared output ceiling, in characters. A longer candidate is refused, never clipped. */
+export const DRAFT_REWRITE_MAX_OUTPUT_CHARS = 6000;
+
+/** The one request the composer sends. Mirrors the server's `DraftRewriteInput`. */
+export type DraftRewriteRequest = {
+  text: string;
+  /** A manual retry of the same draft; the server uses its redraw temperature. */
+  retry?: boolean;
+};
+
+/** Whether the provider finished the answer or cut it off (stop/finish reason). */
+export type DraftRewriteStopReason = 'finished' | 'truncated';
+
+/** Why an answer is not an applicable candidate. */
+export type DraftRewriteRejection = 'truncated' | 'empty-output' | 'output-too-long' | 'non-text';
+
+/**
+ * The coarse reason a rewrite failed, shared with the server. It folds the reply-suggestions
+ * upstream categories in with the rewrite-only rejections so the composer can pick one notice.
+ */
+export type DraftRewriteFailureCategory =
+  | 'timeout'
+  | 'http'
+  | 'network'
+  | 'parse'
+  | 'shape'
+  | 'circuit-open'
+  | 'rate-limit'
+  | 'misconfigured'
+  | 'truncated'
+  | 'empty-output'
+  | 'output-too-long'
+  | 'non-text'
+  | 'too-long'
+  | 'unknown';
+
+/** The machine error codes the endpoint answers with; the client switches on these. */
+export type DraftRewriteErrorCode =
+  | 'DRAFT_REWRITE_INPUT_TOO_LONG'
+  | 'DRAFT_REWRITE_REJECTED'
+  | 'REPLY_SUGGESTIONS_DISABLED'
+  | 'REPLY_SUGGESTIONS_RATE_LIMITED'
+  | 'REPLY_SUGGESTIONS_UPSTREAM_FAILED'
+  | 'INVALID_REQUEST';
+
+/** The accepted candidate. Mirrors the server's `DraftRewriteResult`. */
+export type DraftRewriteResult = {
+  rewrittenText: string;
+};
+
+/** One failed rewrite as the controller remembers it. Never carries the draft or the candidate. */
+export type DraftRewriteFailure = {
+  /** When this client observed the failure, ISO-8601. */
+  at: string;
+  /** The server's machine code, or `unknown` for a transport failure. */
+  code: DraftRewriteErrorCode | 'unknown';
+  category: DraftRewriteFailureCategory;
+  httpStatus: number | null;
+  requestId: string | null;
+  model: string | null;
+  /** A generic sentence; never the draft, the candidate, a prompt or a key. */
+  message: string;
+};
+
+/**
+ * The discriminated answer of `POST /api/reply-suggestions/draft-rewrite`: a candidate, or the
+ * typed reason there is none. A refusal is never conflated with an unreadable answer.
+ */
+export type DraftRewriteResponse =
+  | { ok: true; result: DraftRewriteResult }
+  | { ok: false; failure: DraftRewriteFailure };
+

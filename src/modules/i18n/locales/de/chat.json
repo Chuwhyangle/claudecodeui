@@ -187,6 +187,14 @@
       "willSend": "Wird gesendet, wenn dieser Vorgang abgeschlossen ist",
       "edit": "Nachricht in der Warteschlange bearbeiten",
       "delete": "Nachricht in der Warteschlange löschen"
+    },
+    "draftRewrite": {
+      "chip": "✦ Polieren",
+      "panelLabel": "Überarbeitungsvorschlag für den Entwurf",
+      "apply": "Auf Entwurf anwenden",
+      "retry": "Erneut polieren",
+      "loading": "Wird poliert…",
+      "failed": "Polieren fehlgeschlagen; der Entwurf bleibt unverändert."
     }
   },
   "providerSelection": {

@@ -200,6 +200,14 @@
       "willSend": "완료되면 전송됩니다",
       "edit": "대기 중인 메시지 편집",
       "delete": "대기 중인 메시지 삭제"
+    },
+    "draftRewrite": {
+      "chip": "✦ 다듬기",
+      "panelLabel": "초안 다듬기 후보",
+      "apply": "초안에 적용",
+      "retry": "다시 다듬기",
+      "loading": "다듬는 중…",
+      "failed": "다듬기에 실패했습니다. 초안은 그대로입니다."
     }
   },
   "providerSelection": {

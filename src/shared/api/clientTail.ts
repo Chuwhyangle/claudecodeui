@@ -17,6 +17,14 @@ import type {
   LogsResponse,
 } from '@/shared/types';
 import type {
+  DraftRewriteErrorCode,
+  DraftRewriteFailure,
+  DraftRewriteFailureCategory,
+  DraftRewriteRequest,
+  DraftRewriteResponse,
+  DraftRewriteResult,
+} from '@/shared/replySuggestionsType';
+import type {
   ReplySuggestionsEventInput,
   ReplySuggestionsRequest,
   ReplySuggestionsStatus,
@@ -40,6 +48,92 @@ import type { ApiRequestOptions } from '@/shared/api/requests';
 
 /** The failure states the health card knows; anything else reads as `unknown`-like `degraded`. */
 const DIAGNOSTICS_FEATURE_STATES: readonly string[] = ['off', 'misconfigured', 'ready', 'degraded', 'ok'];
+
+//---------------------------------------------------------------------------------------------
+// Draft rewrite wire readers (the composer's ✦ candidate).
+//
+// Declared here, beside the endpoint, rather than in `requests.ts`: the shared request helpers
+// are not this feature's leaf, and the draft surface is small enough to keep its parsing with
+// its one caller. Every field is validated; an unreadable body is a typed failure, never a
+// silent "no answer".
+//---------------------------------------------------------------------------------------------
+
+const DRAFT_REWRITE_ERROR_CODES: readonly DraftRewriteErrorCode[] = [
+  'DRAFT_REWRITE_INPUT_TOO_LONG',
+  'DRAFT_REWRITE_REJECTED',
+  'REPLY_SUGGESTIONS_DISABLED',
+  'REPLY_SUGGESTIONS_RATE_LIMITED',
+  'REPLY_SUGGESTIONS_UPSTREAM_FAILED',
+  'INVALID_REQUEST',
+];
+
+const DRAFT_REWRITE_FAILURE_CATEGORIES: readonly DraftRewriteFailureCategory[] = [
+  'timeout', 'http', 'network', 'parse', 'shape', 'circuit-open', 'rate-limit', 'misconfigured',
+  'truncated', 'empty-output', 'output-too-long', 'non-text', 'too-long', 'unknown',
+];
+
+function readDraftRewriteCode(value: unknown): DraftRewriteErrorCode | 'unknown' {
+  return typeof value === 'string' && (DRAFT_REWRITE_ERROR_CODES as readonly string[]).includes(value)
+    ? value as DraftRewriteErrorCode
+    : 'unknown';
+}
+
+function readDraftRewriteCategory(value: unknown): DraftRewriteFailureCategory | null {
+  return typeof value === 'string' && (DRAFT_REWRITE_FAILURE_CATEGORIES as readonly string[]).includes(value)
+    ? value as DraftRewriteFailureCategory
+    : null;
+}
+
+/** A coarse category for a body that carried none: its code and status are enough. */
+function inferDraftRewriteCategory(
+  code: DraftRewriteErrorCode | 'unknown',
+  httpStatus: number | null,
+): DraftRewriteFailureCategory {
+  if (code === 'DRAFT_REWRITE_INPUT_TOO_LONG') return 'too-long';
+  if (code === 'REPLY_SUGGESTIONS_RATE_LIMITED' || httpStatus === 429) return 'rate-limit';
+  if (code === 'REPLY_SUGGESTIONS_DISABLED') return 'misconfigured';
+  if (code === 'REPLY_SUGGESTIONS_UPSTREAM_FAILED') return httpStatus === null ? 'unknown' : 'http';
+  if (httpStatus !== null) return 'http';
+  return 'unknown';
+}
+
+/** Reads one failed draft rewrite into the typed failure the controller shows. */
+function readDraftRewriteFailure(
+  status: number,
+  body: unknown,
+  fallbackMessage = `HTTP ${status}`,
+): DraftRewriteFailure {
+  const envelope = body && typeof body === 'object' && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : {};
+  const error = envelope.error && typeof envelope.error === 'object' && !Array.isArray(envelope.error)
+    ? envelope.error as Record<string, unknown>
+    : {};
+  const details = error.details && typeof error.details === 'object' && !Array.isArray(error.details)
+    ? error.details as Record<string, unknown>
+    : {};
+  const code = readDraftRewriteCode(error.code);
+  const httpStatus = typeof details.httpStatus === 'number' && Number.isInteger(details.httpStatus)
+    ? details.httpStatus
+    : null;
+  return {
+    at: new Date().toISOString(),
+    code,
+    category: readDraftRewriteCategory(details.category) ?? inferDraftRewriteCategory(code, httpStatus),
+    httpStatus,
+    requestId: typeof details.requestId === 'string' && details.requestId !== '' ? details.requestId : null,
+    model: typeof details.model === 'string' && details.model !== '' ? details.model : null,
+    message: typeof error.message === 'string' && error.message !== '' ? error.message : fallbackMessage,
+  };
+}
+
+/** Reads the success body: exactly one non-empty string, or null when the shape is unusable. */
+function readDraftRewriteResult(body: unknown): DraftRewriteResult | null {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
+  const record = body as Record<string, unknown>;
+  if (typeof record.rewrittenText !== 'string' || record.rewrittenText.trim() === '') return null;
+  return { rewrittenText: record.rewrittenText };
+}
 
 /** Reads one failure row, or null when the shape is unusable. */
 function readDiagnosticsFailure(value: unknown): DiagnosticsFailure | null {
@@ -317,6 +411,28 @@ export const apiTail = {
     event: async (event: ReplySuggestionsEventInput): Promise<boolean> => {
       const response = await post('/api/reply-suggestions/events', event);
       return response.ok;
+    },
+    /**
+     * The draft rewrite endpoint: `{ text, retry? }` -> `{ rewrittenText }`.
+     *
+     * The composer sends only the draft snapshot; the server owns the model, provider, prompt and
+     * budget. A refusal is the typed discriminated failure, so the controller can keep the draft
+     * and offer a retry instead of conflating "refused" with "empty".
+     */
+    draftRewrite: async (request: DraftRewriteRequest): Promise<DraftRewriteResponse> => {
+      const response = await post('/api/reply-suggestions/draft-rewrite', request);
+      const body = await response.json().catch(() => null) as unknown;
+      if (!response.ok) {
+        return { ok: false, failure: readDraftRewriteFailure(response.status, body) };
+      }
+      const result = readDraftRewriteResult(body);
+      if (result === null) {
+        return {
+          ok: false,
+          failure: readDraftRewriteFailure(response.status, body, 'unreadable draft-rewrite response'),
+        };
+      }
+      return { ok: true, result };
     },
   },
 

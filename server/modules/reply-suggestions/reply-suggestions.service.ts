@@ -28,7 +28,8 @@ import type {
   ReplySuggestionsCompletion,
   ReplySuggestionsCompletionRequest,
 } from './reply-suggestions-client.js';
-import { createDrawRunner } from './reply-suggestions-draw.js';
+import { createDrawRunner, createDraftRewriteRunner, DRAFT_REWRITE_MAX_INPUT_CHARS } from './reply-suggestions-draw.js';
+import { createUpstreamGuard } from './reply-suggestions-guard.js';
 import { createDrawStore } from './reply-suggestions-draw-store.js';
 import {
   createReplySuggestionsFailureState,
@@ -82,7 +83,24 @@ export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent
 export type ReplySuggestionsService = {
   status(): ReplySuggestionsStatus;
   suggest(input: ReplySuggestionsInput): Promise<{ chips: string[]; draw: number }>;
+  /** One draft-only rewrite: the composer's ✦ polish candidate. Never a chip draw. */
+  rewriteDraft(input: DraftRewriteInput): Promise<DraftRewriteResult>;
   recordEvent(input: ReplySuggestionsEventInput): void;
+};
+
+/**
+ * The draft rewrite's already-validated input. `text` is the current draft snapshot; `retry`
+ * marks a manual retry (which uses the redraw temperature). No prompt, model, provider, URL or
+ * history field exists on this type: the request can carry only the draft.
+ */
+export type DraftRewriteInput = {
+  text: string;
+  retry?: boolean;
+};
+
+/** The accepted candidate. The client replaces its draft only with this string. */
+export type DraftRewriteResult = {
+  rewrittenText: string;
 };
 
 /** The injected seams; criteria replace `complete` and the reader with fakes.
@@ -115,6 +133,15 @@ function invalidInputError(message: string): AppError {
   return new AppError(message, { code: 'INVALID_REQUEST', statusCode: 400 });
 }
 
+/** A draft longer than the shared ceiling: refused before any upstream call, never truncated. */
+function draftTooLongError(): AppError {
+  return new AppError(`the draft exceeds the ${DRAFT_REWRITE_MAX_INPUT_CHARS}-character rewrite limit`, {
+    code: 'DRAFT_REWRITE_INPUT_TOO_LONG',
+    statusCode: 400,
+    details: { maxInputChars: DRAFT_REWRITE_MAX_INPUT_CHARS },
+  });
+}
+
 /** The coalescing identity of one draw: everything that decides its answer. */
 function inflightKey(
   sessionId: string,
@@ -140,7 +167,12 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
   const usageLog = deps.usageLog ?? createReplySuggestionsUsageLog();
   const ledger = createReplySuggestionsLedger(usageLog, logger, now);
   const failures = deps.failureState ?? createReplySuggestionsFailureState(undefined, now);
-  const runner = createDrawRunner({ complete, now, logger });
+  // ONE upstream guard for the whole service: the chip draw and the draft rewrite spend the
+  // same minute/day budget and share one circuit. A per-surface guard would give each feature a
+  // full quota, which is exactly the double-budget the task forbids.
+  const guard = createUpstreamGuard({ now });
+  const runner = createDrawRunner({ complete, now, logger, guard });
+  const draftRewriteRunner = createDraftRewriteRunner({ complete, now, logger, guard });
   const store = createDrawStore();
 
   function recordFailedDraw(
@@ -240,6 +272,30 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
         throw invalidInputError('"seed" is only valid with "expand": true');
       }
       return generate(input, settings);
+    },
+
+    /**
+     * Rewrite the current draft once.
+     *
+     * Fail-closed before any upstream call: the shared settings switch and the effective
+     * upstream (`enabled` already folds baseUrl/model/credential), a non-blank draft, and the
+     * shared input ceiling. The single completion then runs under the SHARED guard, so a
+     * rewrite is not a fresh budget beside the chips. Nothing here reads or writes transcript,
+     * cache, ledger text or the draft store: the browser owns the original.
+     */
+    async rewriteDraft(input: DraftRewriteInput): Promise<DraftRewriteResult> {
+      const settings = deps.readSettings();
+      if (!settings.enabled) throw disabledError();
+      const text = input.text;
+      if (text.trim() === '') throw invalidInputError('"text" must contain a non-blank draft');
+      if (text.length > DRAFT_REWRITE_MAX_INPUT_CHARS) throw draftTooLongError();
+      const result = await draftRewriteRunner.rewrite({
+        settings,
+        text,
+        retry: input.retry === true,
+        requestId: createReplySuggestionsRequestId(),
+      });
+      return { rewrittenText: result.rewrittenText };
     },
 
     recordEvent(input: ReplySuggestionsEventInput): void {

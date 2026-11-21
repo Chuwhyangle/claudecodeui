@@ -190,3 +190,93 @@ test('AC2: the surface does not exist while the runtime lock is closed', () => {
   assert.equal(attachScenarioSurface(), false);
   assert.equal(scenarioWindow().__cloudpitScenario, undefined);
 });
+
+/**
+ * The draft-rewrite slice of the same surface.
+ *
+ * The reading is the component's OWN declaration (`data-draft-rewrite-*` on the composer surface)
+ * and the verbs are real DOM presses on the controls the composer draws — so a card reading that
+ * proved only "the attribute exists" would not pass these cases. The fixture below is the shape
+ * ChatComposer renders: the textarea, the ✦ surface after it, and the panel's two icon buttons.
+ */
+test('draft rewrite: the surface reads the declaration and presses the real controls', () => {
+  assert.equal(attachScenarioSurface(), true);
+  const surface = scenarioWindow().__cloudpitScenario!;
+
+  const container = document.createElement('div');
+  container.innerHTML = `
+    <div class="chat-messages-pane"></div>
+    <textarea data-slot="prompt-input-textarea"></textarea>
+    <div data-slot="draft-rewrite" data-draft-rewrite-state="chip"
+         data-draft-rewrite-available="true" data-draft-rewrite-candidate="">
+      <button type="button" data-slot="draft-rewrite-chip">✦ Polish</button>
+    </div>
+    <div data-slot="draft-rewrite-panel">
+      <div data-slot="draft-rewrite-candidate">candidate body</div>
+      <button type="button" data-slot="draft-rewrite-retry">retry</button>
+      <button type="button" data-slot="draft-rewrite-apply">apply</button>
+    </div>`;
+  document.body.appendChild(container);
+
+  // ── the reading is the component's own declaration ──────────────────────────────────────
+  const chipReading = surface.read().draftRewrite;
+  assert.deepEqual(chipReading, { state: 'chip', available: true, candidate: '' });
+
+  const root = container.querySelector('[data-slot="draft-rewrite"]') as HTMLElement;
+  root.setAttribute('data-draft-rewrite-state', 'candidate');
+  root.setAttribute('data-draft-rewrite-candidate', 'polished text');
+  assert.deepEqual(surface.read().draftRewrite, {
+    state: 'candidate',
+    available: true,
+    candidate: 'polished text',
+  });
+
+  // ── typing goes through the real input event ───────────────────────────────────────────
+  const textarea = container.querySelector('[data-slot="prompt-input-textarea"]') as HTMLTextAreaElement;
+  let inputEvents = 0;
+  textarea.addEventListener('input', () => {
+    inputEvents += 1;
+  });
+  surface.drive({ 'chat.type': 'a typed draft' });
+  assert.equal(textarea.value, 'a typed draft');
+  assert.equal(inputEvents, 1, 'the product change handler must see a real input event');
+  assert.equal(surface.read().chat.composerText, 'a typed draft');
+  assert.equal(surface.read().composerDisabled, false);
+
+  // ── each verb presses exactly its own control ──────────────────────────────────────────
+  let opens = 0;
+  let collapses = 0;
+  let applies = 0;
+  let retries = 0;
+  // The chip lives in the chip-only root; the panel is its own node, as ChatComposer renders it.
+  const chip = root.querySelector('[data-slot="draft-rewrite-chip"]') as HTMLButtonElement;
+  chip.addEventListener('click', () => {
+    opens += 1;
+  });
+  const panel = container.querySelector('[data-slot="draft-rewrite-panel"]') as HTMLElement;
+  panel.addEventListener('click', () => {
+    collapses += 1;
+  });
+  // The real buttons stop propagation; without that, their press would also fold the panel.
+  (container.querySelector('[data-slot="draft-rewrite-apply"]') as HTMLButtonElement)
+    .addEventListener('click', (event) => {
+      event.stopPropagation();
+      applies += 1;
+    });
+  (container.querySelector('[data-slot="draft-rewrite-retry"]') as HTMLButtonElement)
+    .addEventListener('click', (event) => {
+      event.stopPropagation();
+      retries += 1;
+    });
+
+  surface.drive({ 'draftRewrite.open': true });
+  surface.drive({ 'draftRewrite.collapse': true });
+  surface.drive({ 'draftRewrite.apply': true });
+  surface.drive({ 'draftRewrite.retry': true });
+  assert.deepEqual({ opens, collapses, applies, retries }, { opens: 1, collapses: 1, applies: 1, retries: 1 });
+
+  // ── an absent surface is `absent`, never a fabricated chip ────────────────────────────
+  root.remove();
+  assert.equal(surface.read().draftRewrite.state, 'absent');
+  container.remove();
+});

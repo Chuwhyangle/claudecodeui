@@ -187,6 +187,14 @@
       "willSend": "將在目前回合完成後傳送",
       "edit": "編輯已排入佇列的訊息",
       "delete": "刪除已排入佇列的訊息"
+    },
+    "draftRewrite": {
+      "chip": "✦ 潤色",
+      "panelLabel": "草稿潤色候選",
+      "apply": "套用到草稿",
+      "retry": "重新潤色",
+      "loading": "正在潤色…",
+      "failed": "潤色失敗，原稿維持不變。"
     }
   },
   "thinkingMode": {

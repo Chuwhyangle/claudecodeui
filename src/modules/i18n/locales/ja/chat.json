@@ -185,6 +185,14 @@
       "willSend": "この処理が完了すると送信されます",
       "edit": "送信待ちのメッセージを編集",
       "delete": "送信待ちのメッセージを削除"
+    },
+    "draftRewrite": {
+      "chip": "✦ 整える",
+      "panelLabel": "下書きの整文候補",
+      "apply": "下書きに適用",
+      "retry": "もう一度整える",
+      "loading": "整えています…",
+      "failed": "整文に失敗しました。下書きは変更されていません。"
     }
   },
   "providerSelection": {

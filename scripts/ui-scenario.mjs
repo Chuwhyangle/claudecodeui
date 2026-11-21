@@ -40,6 +40,9 @@
  *     transcript rows, because a session route fetches its history after the surface mounts.
  *     `waitForCards: true` does the same for the cockpit cards view's visible set.
  *   · `drive`: one {@link ScenarioDriveStep} for `window.__cloudpitScenario.drive`.
+ *   · `waitFor`: a page-state wait, readable when the state is produced by an async answer that
+ *     a synchronous `drive` cannot observe. Currently `draftRewrite:<chip|loading|candidate|error>`.
+ *     `timeoutMs` bounds it (default the boot budget).
  *   · `expect`: a map of reading assertions, evaluated after the step (see
  *     {@link expectationFailures}); an unsupported key is a failure, never a silent pass.
  *   · `checkpoint`: take a full-page screenshot after this step.
@@ -51,6 +54,14 @@
  * USAGE.
  *   node scripts/ui-scenario.mjs <scenario.json> --base-url http://127.0.0.1:5173 \
  *     --auth-token <token> --project <workspace-name> --session <session-name> [--out <dir>]
+ *     [--viewport 1280x800] [--mock-gateway <responses.json>]
+ *
+ * `--mock-gateway` installs a LOCAL route for `POST /api/reply-suggestions/draft-rewrite` and
+ * answers from the JSON file's `responses` array, one per request in order (the last entry is
+ * reused after that). Each entry is `{ status?, body?, delayMs? }`. This is a local injection:
+ * the report says so, and nothing it produces is evidence about real model quality. The request
+ * count is reported (`mockGateway.requests`) and readable as the `draftRewriteRequestsIs`
+ * expectation, so a re-open that spends a second request is observable.
  */
 
 import fs from 'node:fs';
@@ -76,6 +87,8 @@ const PANEL_TIMEOUT_MS = 30_000;
  *   waitForChat?: boolean,
  *   waitForCards?: boolean,
  *   drive?: Record<string, unknown>,
+ *   waitFor?: string,
+ *   timeoutMs?: number,
  *   expect?: Record<string, unknown>,
  *   checkpoint?: boolean,
  * }} ScenarioStep
@@ -85,6 +98,7 @@ const PANEL_TIMEOUT_MS = 30_000;
  * @typedef {{
  *   name?: string,
  *   description?: string,
+ *   mockGateway?: { responses: unknown[] },
  *   steps: ScenarioStep[],
  * }} Scenario
  */
@@ -156,6 +170,7 @@ function stepAction(step) {
   if (typeof step.open === 'string') return `open:${step.open}`;
   if (step.reload === true) return 'reload';
   if (step.drive !== undefined) return `drive:${Object.keys(step.drive)[0] ?? 'unknown'}`;
+  if (typeof step.waitFor === 'string') return `waitFor:${step.waitFor}`;
   return 'expect';
 }
 
@@ -751,6 +766,11 @@ function expectationFailures(expect, reading) {
         if (actual !== expected) fail(key, expected, actual);
         break;
       }
+      case 'composerDisabledIs': {
+        const actual = reading.composerDisabled === true;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
       case 'composerTextIncludes': {
         const actual = typeof reading.chat?.composerText === 'string' ? reading.chat.composerText : null;
         if (actual === null || !actual.includes(String(expected))) fail(key, expected, actual);
@@ -831,6 +851,36 @@ function expectationFailures(expect, reading) {
             fail(`${key}.${sessionId}`, wanted, row === undefined ? 'row missing' : row.ageText);
           }
         }
+        break;
+      }
+      case 'draftRewriteStateIs': {
+        // `chip` (collapsed), `loading`, `candidate`, `error`, or `absent` when the surface is not
+        // mounted at all. Read from the composer's own declaration, not inferred from a label.
+        const actual = typeof reading.draftRewrite?.state === 'string'
+          ? reading.draftRewrite.state
+          : null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'draftRewriteCandidateIs': {
+        const actual = typeof reading.draftRewrite?.candidate === 'string'
+          ? reading.draftRewrite.candidate
+          : null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'draftRewriteAvailable': {
+        const actual = reading.draftRewrite?.available === true;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'draftRewriteRequestsIs': {
+        // How many mock-gateway POSTs the page has made so far. A re-open that spends a second
+        // paid request, or a duplicate retry, is therefore observable.
+        const actual = typeof reading.draftRewriteRequests === 'number'
+          ? reading.draftRewriteRequests
+          : null;
+        if (actual !== expected) fail(key, expected, actual);
         break;
       }
       default:
@@ -1020,6 +1070,40 @@ async function selectProjectSession(page, target) {
 const SESSION_ROUTE = /\/session\/[^/]+/;
 
 /**
+ * Resolves a scenario's session NAMES to the server's session id.
+ *
+ * The mobile layout is a different entry path (the sidebar drawer's project/session gestures do
+ * not route the same way as the desktop two-column view), so a phone-width run opens the
+ * product's own `/session/<id>` route directly. The id comes from the server's own project
+ * reading — never a fabricated one — and the display name is matched exactly as the sidebar
+ * shows it.
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ project: string, session: string }} target
+ * @param {string} authToken
+ */
+async function resolveSessionId(page, target, authToken) {
+  const response = await page.request.get('/api/projects', {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  if (!response.ok()) return null;
+  const projects = await response.json().catch(() => null);
+  if (!Array.isArray(projects)) return null;
+  const project = projects.find((/** @type {any} */ candidate) => (
+    candidate.displayName === target.project
+    || String(candidate.path ?? '').endsWith(`/${target.project}`)
+    || String(candidate.fullPath ?? '').endsWith(`/${target.project}`)
+  ));
+  const sessions = Array.isArray(project?.sessions) ? project.sessions : [];
+  const match = sessions.find((/** @type {any} */ session) => (
+    session.id === target.session
+    || session.summary === target.session
+    || session.title === target.session
+  ));
+  return typeof match?.id === 'string' ? match.id : null;
+}
+
+/**
  * Opens one session's workspace.
  *
  * TWO WAYS IN, ONE READING. From a cold page this is the sidebar selection a person makes. From
@@ -1028,10 +1112,32 @@ const SESSION_ROUTE = /\/session\/[^/]+/;
  * The cold fallback keeps the opener usable when no route was recorded (a scenario that opens
  * `session` first).
  *
+ * PHONE WIDTH OPENS THE ROUTE DIRECTLY. Below the `md` boundary the sidebar is a drawer and the
+ * project/session rows navigate differently; the scenario's subject is not those gestures, so
+ * the id resolved from the server's project reading is opened at the product's own
+ * `/session/<id>` address. The page is the same page either way.
+ *
  * @param {import('playwright').Page} page
  * @param {{ project: string, session: string }} target
+ * @param {string} authToken
  */
-async function openSession(page, target) {
+async function openSession(page, target, authToken) {
+  if ((page.viewportSize()?.width ?? 1280) < 768) {
+    const id = await resolveSessionId(page, target, authToken);
+    if (id !== null) {
+      await page.goto(`/session/${encodeURIComponent(id)}`);
+      await waitForSurface(page);
+      // The composer hydrates its stored draft after the route mounts. A scenario that types
+      // immediately can have that hydration land on top of the typed bytes; wait for the box and
+      // one settle beat so the scenario's own typing is the last write.
+      await page.locator('[data-slot="prompt-input-textarea"]').first().waitFor({
+        state: 'visible',
+        timeout: BOOT_TIMEOUT_MS,
+      });
+      await page.waitForTimeout(750);
+      return;
+    }
+  }
   const onCockpit = await page.getByTestId('cockpit-page').isVisible().catch(() => false);
   if (onCockpit) {
     const sessionsLink = page.locator('[data-mode-switch-link="sessions"]').first();
@@ -1293,8 +1399,9 @@ async function openQuayPulse(page) {
  *
  * @param {import('playwright').Page} page
  * @param {{ project: string, session: string }} target
+ * @param {string} authToken
  */
-async function openCostPanel(page, target) {
+async function openCostPanel(page, target, authToken) {
   // The `/cost` command forwards the client's own `tokenBudget` as the usage context, and that
   // budget arrives from the session's token-usage fetch AFTER the workspace mounts. Executing
   // before it lands renders the LEGACY layout (used 0 / Breakdown Unavailable) — a race in the
@@ -1305,7 +1412,7 @@ async function openCostPanel(page, target) {
       timeout: 15_000,
     })
     .catch(() => null);
-  await openSession(page, target);
+  await openSession(page, target, authToken);
   await tokenUsage;
   // Let the budget's React commit reach the command handler's closure before typing.
   await page.waitForTimeout(300);
@@ -1335,6 +1442,8 @@ async function openCostPanel(page, target) {
  *   session: string,
  *   outDir: string,
  *   scenarioFile: string,
+ *   viewport?: { width: number, height: number },
+ *   mock?: { responses: unknown[] } | null,
  * }} options
  * @returns {Promise<{ report: any, ok: boolean }>}
  */
@@ -1342,7 +1451,7 @@ async function runScenario(browser, scenario, options) {
   const startedAt = Date.now();
   const context = await browser.newContext({
     baseURL: options.baseUrl,
-    viewport: { width: 1280, height: 800 },
+    viewport: options.viewport ?? { width: 1280, height: 800 },
   });
   await context.addInitScript(
     ({ token }) => {
@@ -1359,6 +1468,34 @@ async function runScenario(browser, scenario, options) {
   );
 
   const page = await context.newPage();
+  /** How many draft-rewrite POSTs the local mock gateway has answered for this run. */
+  const gatewayCounter = { count: 0 };
+  if (options.mock !== null && options.mock !== undefined) {
+    const responses = Array.isArray(options.mock.responses) ? options.mock.responses : [];
+    await page.route('**/api/reply-suggestions/draft-rewrite', async (route) => {
+      const index = Math.min(gatewayCounter.count, Math.max(0, responses.length - 1));
+      gatewayCounter.count += 1;
+      const entry = /** @type {{ status?: number, body?: unknown, delayMs?: number }} */ (
+        responses[index] ?? { status: 200, body: { rewrittenText: '' } }
+      );
+      if (typeof entry.delayMs === 'number' && entry.delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, entry.delayMs));
+      }
+      await route.fulfill({
+        status: typeof entry.status === 'number' ? entry.status : 200,
+        contentType: 'application/json',
+        body: JSON.stringify(entry.body ?? {}),
+      });
+    });
+  }
+  /** Adds the locally observed request count to the page's own reading.
+   * @param {any} reading
+   */
+  const withGatewayReading = (reading) => (
+    reading === null || typeof reading !== 'object'
+      ? reading
+      : { ...reading, draftRewriteRequests: gatewayCounter.count }
+  );
   /** @type {StepResult[]} */
   const results = [];
   /** @type {{ step: ScenarioStep, index: number }[]} */
@@ -1392,7 +1529,7 @@ async function runScenario(browser, scenario, options) {
     for (let i = 0; i < batch.length; i += 1) {
       const entry = batch[i];
       const step = entry.step;
-      const reading = readings[i];
+      const reading = withGatewayReading(readings[i]);
       const checkpoint = step.checkpoint === true;
       let screenshot = null;
       if (checkpoint) {
@@ -1472,13 +1609,13 @@ async function runScenario(browser, scenario, options) {
           /** @type {Record<string, (() => Promise<void>) | undefined>} */
           const openers = {
             'quay-panel': () => openQuayPanel(page, target),
-            session: () => openSession(page, target),
+            session: () => openSession(page, target, options.authToken),
             cockpit: () => openCockpit(page),
             'cockpit-cards': () => openCockpitCards(page),
             settings: () => openSettingsCockpit(page),
             'settings-agents-codex': () => openSettingsAgentsCodex(page),
             'quay-pulse': () => openQuayPulse(page),
-            'cost-panel': () => openCostPanel(page, target),
+            'cost-panel': () => openCostPanel(page, target, options.authToken),
           };
           const execute = step.open === undefined ? undefined : openers[step.open];
           if (execute === undefined) {
@@ -1497,7 +1634,7 @@ async function runScenario(browser, scenario, options) {
           await execute();
           appReady = true;
         }
-        const reading = await readSurface(page);
+        const reading = withGatewayReading(await readSurface(page));
         let screenshot = null;
         if (step.checkpoint === true) {
           const file = path.join(options.outDir, `step-${index + 1}-${stepAction(step).replace(/[:/]/g, '-')}.png`);
@@ -1505,6 +1642,52 @@ async function runScenario(browser, scenario, options) {
           screenshot = file;
         }
         const failures = expectationFailures(step.expect ?? {}, reading);
+        results.push({
+          index: index + 1,
+          action: stepAction(step),
+          ok: failures.length === 0,
+          failures,
+          checkpoint: step.checkpoint === true,
+          screenshot,
+          reading,
+        });
+        continue;
+      }
+
+      if (typeof step.waitFor === 'string') {
+        // A state produced by an asynchronous answer: the page must be given real time, which a
+        // synchronous `drive` cannot observe. This ends the current batch, waits in the browser,
+        // then reads the page exactly like an opener step.
+        await flushBatch();
+        const [kind, wanted] = step.waitFor.split(':');
+        let waitFailure = null;
+        if (kind !== 'draftRewrite' || wanted === undefined) {
+          waitFailure = `unsupported waitFor ${JSON.stringify(step.waitFor)}`;
+        } else {
+          try {
+            await page.waitForFunction(
+              (state) => {
+                const doc = /** @type {any} */ (globalThis).document;
+                const root = doc.querySelector('[data-slot="draft-rewrite"]');
+                return root !== null && root.getAttribute('data-draft-rewrite-state') === state;
+              },
+              wanted,
+              { timeout: typeof step.timeoutMs === 'number' ? step.timeoutMs : BOOT_TIMEOUT_MS },
+            );
+          } catch {
+            waitFailure = `the draft-rewrite surface never reached state ${JSON.stringify(wanted)}`;
+          }
+        }
+        const reading = withGatewayReading(await readSurface(page));
+        let screenshot = null;
+        if (step.checkpoint === true) {
+          const file = path.join(options.outDir, `step-${index + 1}-${stepAction(step).replace(/[:/]/g, '-')}.png`);
+          await page.screenshot({ path: file, fullPage: true });
+          screenshot = file;
+        }
+        const failures = waitFailure === null
+          ? expectationFailures(step.expect ?? {}, reading)
+          : [waitFailure, ...expectationFailures(step.expect ?? {}, reading)];
         results.push({
           index: index + 1,
           action: stepAction(step),
@@ -1532,6 +1715,14 @@ async function runScenario(browser, scenario, options) {
     scenario: scenario.name ?? path.basename(options.scenarioFile, '.json'),
     description: scenario.description ?? null,
     baseUrl: options.baseUrl,
+    viewport: options.viewport ?? { width: 1280, height: 800 },
+    mockGateway: options.mock === null || options.mock === undefined
+      ? { used: false, requests: gatewayCounter.count }
+      : {
+        used: true,
+        note: 'local injected mock gateway — proves the wiring/contract only, not real model quality',
+        requests: gatewayCounter.count,
+      },
     ok: failed === null,
     failedStep: failed === null ? null : failed.index,
     stepCount: results.length,
@@ -1590,6 +1781,32 @@ async function main() {
   const outDir = path.resolve(flags.out ?? path.join('tmp', 'ui-scenarios', scenario.name ?? path.basename(scenarioFile, '.json')));
   fs.mkdirSync(outDir, { recursive: true });
 
+  let viewport = { width: 1280, height: 800 };
+  if (flags.viewport !== undefined) {
+    const match = /^(\d+)x(\d+)$/.exec(flags.viewport);
+    if (match === null) return usage('--viewport must be WIDTHxHEIGHT (e.g. 375x720)');
+    viewport = { width: Number(match[1]), height: Number(match[2]) };
+  }
+
+  let mock = null;
+  if (flags['mock-gateway'] !== undefined) {
+    try {
+      mock = JSON.parse(fs.readFileSync(flags['mock-gateway'], 'utf8'));
+    } catch (error) {
+      return usage(`--mock-gateway could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (mock === null || typeof mock !== 'object' || !Array.isArray(mock.responses)) {
+      return usage('--mock-gateway must be a JSON object with a `responses` array');
+    }
+  } else if (scenario.mockGateway !== undefined) {
+    // A scenario that ships its own local gateway responses needs no second file (and no flag):
+    // the report still says the gateway was a local injection, not a real model.
+    mock = scenario.mockGateway;
+    if (mock === null || typeof mock !== 'object' || !Array.isArray(mock.responses)) {
+      return usage('scenario.mockGateway must be an object with a `responses` array');
+    }
+  }
+
   const browser = await chromium.launch({ headless: true });
   try {
     const { report, ok } = await runScenario(browser, scenario, {
@@ -1599,6 +1816,8 @@ async function main() {
       session: session ?? '',
       outDir,
       scenarioFile,
+      viewport,
+      mock,
     });
     // The report is the program's output; a failing step is still a complete report.
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

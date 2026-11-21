@@ -16,8 +16,18 @@ import {
   settleSettingsStep,
 } from '@/modules/ui-scenario/settingsSurface';
 import type { ScenarioSettingsReading } from '@/modules/ui-scenario/settingsSurface';
-import { readChatReading, startEditingMessage } from '@/modules/ui-scenario/chatSurface';
-import type { ScenarioChatReading } from '@/modules/ui-scenario/chatSurface';
+import {
+  readChatReading,
+  readComposerDisabled,
+  readDraftRewriteReading,
+  startEditingMessage,
+  applyDraftRewrite,
+  collapseDraftRewrite,
+  openDraftRewrite,
+  retryDraftRewrite,
+  typeDraft,
+} from '@/modules/ui-scenario/chatSurface';
+import type { ScenarioChatReading, ScenarioDraftRewriteReading } from '@/modules/ui-scenario/chatSurface';
 import {
   dispatchCodexProviderStep,
   isCodexProviderStep,
@@ -102,7 +112,12 @@ export type ScenarioDriveStep =
   | { 'settings.selectEffort': string }
   | { 'settings.save': true }
   | CodexProviderDriveStep
-  | { 'chat.edit': string };
+  | { 'chat.edit': string }
+  | { 'chat.type': string }
+  | { 'draftRewrite.open': true }
+  | { 'draftRewrite.collapse': true }
+  | { 'draftRewrite.apply': true }
+  | { 'draftRewrite.retry': true };
 
 /** True when the step carries one of the cards view's commands (dispatched in its own slice). */
 function isCockpitCardStep(step: ScenarioDriveStep): step is CockpitCardDriveStep {
@@ -229,6 +244,13 @@ export type ScenarioReading = {
    * workspace, which is what lets a scenario assert the conversation after switching back.
    */
   chat: ScenarioChatReading;
+  /**
+   * The composer textarea's disabled reading. Kept top-level rather than on `chat` so the
+   * transcript reading stays the shape the existing chat criteria pin.
+   */
+  composerDisabled: boolean;
+  /** The composer's ✦ draft-rewrite declaration, or the absent reading. */
+  draftRewrite: ScenarioDraftRewriteReading;
   /**
    * The `/cost` modal's cache accounting, or an absent reading when the panel is not mounted.
    * Read from the `data-cost-*` declarations the panel draws.
@@ -595,6 +617,8 @@ function createScenarioSurface(): ScenarioSurface {
       settings: readSettingsReading(),
       codexProviders: readCodexProvidersReading(),
       chat: readChatReading(),
+      composerDisabled: readComposerDisabled(),
+      draftRewrite: readDraftRewriteReading(),
       costPanel: readCostPanelReading(),
       activeView: activeViewUri,
       views: [...registeredViews.keys()],
@@ -727,6 +751,23 @@ function createScenarioSurface(): ScenarioSurface {
       // The press itself is the product's `onEditMessage`; the composer value the step's
       // expectation reads is the state that handler wrote, once `settle` crosses its commit.
       startEditingMessage(step['chat.edit']);
+    } else if ('chat.type' in step) {
+      action = 'chat.type';
+      // Typing into the real textarea through React's input path, so the composer's own change
+      // handler (voice-range remap, candidate invalidation) runs.
+      typeDraft(step['chat.type']);
+    } else if ('draftRewrite.open' in step) {
+      action = 'draftRewrite.open';
+      openDraftRewrite();
+    } else if ('draftRewrite.collapse' in step) {
+      action = 'draftRewrite.collapse';
+      collapseDraftRewrite();
+    } else if ('draftRewrite.apply' in step) {
+      action = 'draftRewrite.apply';
+      applyDraftRewrite();
+    } else if ('draftRewrite.retry' in step) {
+      action = 'draftRewrite.retry';
+      retryDraftRewrite();
     }
 
     stepTimings.push({ index: driveCount, action, ms: nowMs() - started });

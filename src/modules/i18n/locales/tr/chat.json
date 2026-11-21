@@ -187,6 +187,14 @@
       "willSend": "Bu işlem bittiğinde gönderilecek",
       "edit": "Kuyruktaki mesajı düzenle",
       "delete": "Kuyruktaki mesajı sil"
+    },
+    "draftRewrite": {
+      "chip": "✦ Parlat",
+      "panelLabel": "Taslak parlatma adayı",
+      "apply": "Taslağa uygula",
+      "retry": "Yeniden parlat",
+      "loading": "Parlatılıyor…",
+      "failed": "Parlatma başarısız; taslak değişmedi."
     }
   },
   "providerSelection": {

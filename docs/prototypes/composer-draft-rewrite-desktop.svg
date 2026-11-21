@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="780" viewBox="0 0 1240 780" role="img" aria-labelledby="title desc">
+<title id="title">草稿润色：桌面端简化交互</title><desc id="desc">在现有 composer 中，原文留在 textarea；润色 chip 在草稿下面。展开的候选框只有候选正文和应用、重试两个图标按钮，没有标题或状态副文案；候选不受 120 字 chip 上限约束。点击候选框其他区域收起。现有 footer 和发送行为保持不变。</desc>
+<defs><style>
+.bg{fill:#f4f5f7}.app{fill:#faf9f7}.composer{fill:#fff;stroke:#e1e4e8;stroke-width:1.5}.ink{fill:#252b33;font:14px system-ui,sans-serif}.muted{fill:#7c8794;font:12px system-ui,sans-serif}.tiny{fill:#929ba6;font:11px system-ui,sans-serif}.title{fill:#17212b;font:bold 20px system-ui,sans-serif}.h{fill:#27323e;font:bold 14px system-ui,sans-serif}.chip{fill:#fff;stroke:#bfc8d3;stroke-width:1;stroke-dasharray:3 2}.primary{fill:#7ea0f5}.primaryText{fill:white;font:bold 13px system-ui,sans-serif}.iconButton{fill:#fff;stroke:#cbd3dd;stroke-width:1}.candidate{fill:#f3f6fd;stroke:#d6e1fa;stroke-width:1}.rule{stroke:#e8eaed;stroke-width:1}.message{fill:#f0eeeb;stroke:#e5e1dc;stroke-width:1}.tip{fill:#263342}.tipText{fill:#fff;font:11px system-ui,sans-serif}
+</style></defs>
+<rect class="bg" width="1240" height="780"/>
+<text x="30" y="38" class="title">草稿润色 · 简化版桌面原型</text><text x="30" y="61" class="muted">原草稿始终在现有 textarea；改写建议是 composer 内可收起的一段内容，不改 footer / 发送链路。</text>
+<!-- collapsed state -->
+<text x="30" y="100" class="h">① 收起态：草稿下方的「润色」chip</text>
+<rect x="25" y="115" width="580" height="337" rx="14" class="app"/>
+<rect x="474" y="141" width="108" height="41" rx="10" class="message"/><text x="484" y="166" class="tiny">transcript</text>
+<rect x="48" y="284" width="535" height="146" rx="14" class="composer"/>
+<text x="69" y="311" class="muted">textarea · 未发送的草稿</text>
+<text x="69" y="341" class="ink">嗯我想问一下，那个方案如果今天还没定的话，</text><text x="69" y="364" class="ink">我们是不是可以先按之前说的那个做？</text>
+<rect x="68" y="379" width="91" height="28" rx="14" class="chip"/><text x="84" y="398" class="ink">✦ 润色</text>
+<line x1="49" y1="411" x2="582" y2="411" class="rule"/>
+<text x="68" y="429" class="ink">⌕　♩　◖))　···</text><text x="435" y="429" class="tiny">权限</text><rect x="536" y="414" width="36" height="26" rx="7" class="primary"/><text x="548" y="432" class="primaryText">➤</text>
+<text x="47" y="472" class="tiny">点 chip：生成并展开建议框。点击后不改文字、不移动光标、不发送。</text>
+<!-- expanded state -->
+<text x="635" y="100" class="h">② 展开态：候选与操作都在同一个 composer 中</text>
+<rect x="625" y="115" width="590" height="437" rx="14" class="app"/>
+<rect x="1055" y="141" width="135" height="41" rx="10" class="message"/><text x="1065" y="166" class="tiny">transcript stays above</text>
+<rect x="650" y="204" width="540" height="329" rx="14" class="composer"/>
+<text x="671" y="231" class="muted">同一个 textarea · 原文仍是当前草稿</text>
+<text x="671" y="259" class="ink">嗯我想问一下，那个方案如果今天还没定的话，</text><text x="671" y="282" class="ink">我们是不是可以先按之前说的那个做？</text>
+<!-- one inline suggestion box -->
+<rect x="669" y="297" width="502" height="145" rx="10" class="candidate"/>
+<rect x="1101" y="306" width="31" height="30" rx="8" class="iconButton"/><text x="1110" y="327" class="ink">✓</text>
+<rect x="1138" y="306" width="31" height="30" rx="8" class="iconButton"/><text x="1145" y="327" class="ink">↻</text>
+<rect x="1044" y="277" width="112" height="23" rx="5" class="tip"/><text x="1053" y="293" class="tipText">应用到草稿</text>
+<rect x="1130" y="277" width="80" height="23" rx="5" class="tip"/><text x="1138" y="293" class="tipText">重试</text>
+<text x="686" y="331" class="ink">如果今天还无法确定方案，我们可以先按之前讨论的</text><text x="686" y="354" class="ink">方向推进吗？</text>
+<text x="686" y="421" class="tiny">点击建议框内容区收起；图标按钮执行操作并不收起。</text>
+<line x1="651" y1="460" x2="1189" y2="460" class="rule"/>
+<text x="671" y="489" class="ink">⌕　♩　◖))　···</text><text x="1041" y="489" class="tiny">权限</text><rect x="1129" y="471" width="40" height="31" rx="8" class="primary"/><text x="1142" y="492" class="primaryText">➤</text>
+<text x="651" y="573" class="tiny">Send 一直可用：未点 ✓ 时发送原 textarea；点 ✓ 应用后发送改写文本。</text>
+<!-- simple transition -->
+<rect x="25" y="623" width="1190" height="120" rx="12" fill="#fff" stroke="#dfe3e8"/>
+<text x="47" y="654" class="h">状态切换</text>
+<text x="47" y="683" class="ink">点「润色」→ 请求中 / 展开候选框 → 点候选内容或空白处收起 → chip 再点开同一候选（不重复调用）。</text>
+<text x="47" y="711" class="ink">点 ✓ 应用到草稿，候选写回 textarea 并收起；点 ↻ 重试，只更新候选，不动原文。编辑原文则清掉旧候选。</text>
+<text x="47" y="733" class="tiny">候选框里的图标带 tooltip / aria-label；点击图标不触发框体收起。没有「保留原文」按钮。</text>
+</svg>

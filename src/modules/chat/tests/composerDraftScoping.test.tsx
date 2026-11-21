@@ -51,6 +51,34 @@ vi.mock('@/shared/api', () => {
           setTimeout(() => resolve({ ok: true, json: async () => ({ success: true }) }), 5);
         }),
       },
+      // The composer's draft-rewrite surface is constructed with the rest of the composer
+      // even though these cases never open it; the shared feature reading is off here so no
+      // request can be made and the draft-scoping readings below are undisturbed.
+      replySuggestions: {
+        status: async () => ({
+          enabled: false,
+          state: 'off' as const,
+          problems: [],
+          lastFailure: null,
+          expansion: 'off' as const,
+          maxChips: 3,
+          maxChipChars: 120,
+        }),
+        suggest: async () => ({ ok: true as const, result: { chips: [], draw: 0 } }),
+        event: async () => true,
+        draftRewrite: async () => ({
+          ok: false as const,
+          failure: {
+            at: new Date(0).toISOString(),
+            code: 'REPLY_SUGGESTIONS_DISABLED' as const,
+            category: 'misconfigured' as const,
+            httpStatus: 503,
+            requestId: null,
+            model: null,
+            message: 'disabled',
+          },
+        }),
+      },
     },
   };
 });

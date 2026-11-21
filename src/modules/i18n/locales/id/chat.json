@@ -207,6 +207,14 @@
       "willSend": "Akan dikirim setelah proses ini selesai",
       "edit": "Edit pesan antrean",
       "delete": "Hapus pesan antrean"
+    },
+    "draftRewrite": {
+      "chip": "✦ Poles",
+      "panelLabel": "Kandidat polesan draf",
+      "apply": "Terapkan ke draf",
+      "retry": "Poles lagi",
+      "loading": "Memoles…",
+      "failed": "Gagal memoles; draf tidak berubah."
     }
   },
   "composer": {

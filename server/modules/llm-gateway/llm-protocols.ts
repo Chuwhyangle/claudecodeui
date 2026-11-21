@@ -74,6 +74,19 @@ export type LlmCompletion = {
   inputTokens: number | null;
   outputTokens: number | null;
   /**
+   * The upstream's own completion stop/finish reason, verbatim (`end_turn`, `stop`, `max_tokens`,
+   * `length`, …), or null when the dialect did not report one. A caller that must not accept a
+   * truncated answer reads {@link LlmCompletion.truncated} instead of interpreting this string
+   * itself; hand-built stubs may omit both fields.
+   */
+  stopReason?: string | null;
+  /**
+   * True when the stop reason means the answer was cut off (the output token ceiling was hit or
+   * the provider reported a length/truncation finish). Optional so a hand-built stub without it
+   * still satisfies the type; the parsers below always set it.
+   */
+  truncated?: boolean;
+  /**
    * Anthropic prompt-cache reads and creations. Both are REPORTED but never added to
    * `inputTokens`: the cockpit brief's budget counts every class separately, so a consumer that
    * needs the true spend adds these to input + output itself. Absent on dialects (OpenAI) that do
@@ -106,6 +119,8 @@ export type LlmProtocol = {
   headers(): Record<string, string>;
   /** Read the answer text and usage out of one JSON payload. */
   parseResponse(payload: unknown): LlmCompletion;
+  /** Read this dialect's stop/finish reason, or null when the payload names none. */
+  readStopReason(payload: unknown): string | null;
 };
 
 /**
@@ -174,8 +189,52 @@ function readAnthropicText(payload: unknown): string {
   return text;
 }
 
-/** Pull the answer text out of an OpenAI Chat Completions response. */
-function readOpenAiText(payload: unknown): string {
+/** Stop/finish reasons that mean the answer was cut off rather than finished. */
+const TRUNCATING_STOP_REASONS: ReadonlySet<string> = new Set(['max_tokens', 'length']);
+
+/**
+ * Whether a dialect's stop/finish reason says the answer was truncated.
+ *
+ * Both dialects spell the output-ceiling case with their own word (`max_tokens` for Anthropic,
+ * `length` for OpenAI), so the table is shared and the strategies call it rather than each
+ * carrying its own comparison. Any other reason — including null — is a finished answer.
+ */
+export function isTruncatingStopReason(stopReason: string | null): boolean {
+  return stopReason !== null && TRUNCATING_STOP_REASONS.has(stopReason);
+}
+
+/** A plain-object record, or null for anything else (including arrays). */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value === null || typeof value !== 'object' || Array.isArray(value)
+    ? null
+    : value as Record<string, unknown>;
+}
+
+/** Read one string field out of a record, or null when it is absent or not a string. */
+function readStringField(record: Record<string, unknown> | null, key: string): string | null {
+  if (record === null) return null;
+  const value = record[key];
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/** The answer text and stop reason out of an OpenAI Chat Completions response. */
+function readOpenAiChoice(payload: unknown): Record<string, unknown> | null {
+  const first = asRecord(payload)?.choices;
+  if (!Array.isArray(first) || first.length === 0) return null;
+  return asRecord(first[0]);
+}
+
+/** Anthropic reports `stop_reason` at the top level of the Messages response. */
+function readAnthropicStopReason(payload: unknown): string | null {
+  return readStringField(asRecord(payload), 'stop_reason');
+}
+
+/** OpenAI reports `finish_reason` on the first choice. */
+function readOpenAiStopReason(payload: unknown): string | null {
+  return readStringField(readOpenAiChoice(payload), 'finish_reason');
+}
+
+/** Pull the answer text out of an OpenAI Chat Completions response. */function readOpenAiText(payload: unknown): string {
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new LlmShapeError('upstream response was not an object');
   }
@@ -229,11 +288,15 @@ export const anthropicProtocol: LlmProtocol = {
     return { 'anthropic-version': '2023-06-01' };
   },
   parseResponse(payload) {
+    const stopReason = readAnthropicStopReason(payload);
     return {
       text: readAnthropicText(payload),
       ...readUsage(payload, 'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'),
+      stopReason,
+      truncated: isTruncatingStopReason(stopReason),
     };
   },
+  readStopReason: readAnthropicStopReason,
 };
 
 /** The OpenAI Chat Completions dialect. */
@@ -276,11 +339,15 @@ export const openaiProtocol: LlmProtocol = {
     return {};
   },
   parseResponse(payload) {
+    const stopReason = readOpenAiStopReason(payload);
     return {
       text: readOpenAiText(payload),
       ...readUsage(payload, 'prompt_tokens', 'completion_tokens', null, null),
+      stopReason,
+      truncated: isTruncatingStopReason(stopReason),
     };
   },
+  readStopReason: readOpenAiStopReason,
 };
 
 /** The protocol table. Adding a dialect is one entry here, never an `if` in the client. */
