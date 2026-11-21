@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 import type { ActiveSidebarRename, PendingSidebarDeletion, SidebarSearchMode } from '@/shared/types';
 
 type UseSidebarDialogsArgs = {
@@ -43,13 +44,19 @@ export function useSidebarDialogs({
 
   const isSidebarCollapsed = !isMobile && !sidebarVisible;
 
+  // The minute clock is a local `Date` reading, but a hidden tab has no one to show it to: the
+  // interval runs only while visible, and the first visible tick (within a minute) catches up.
+  const visible = usePageVisible();
   useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [visible]);
 
   // Debounce search text updates so both project filtering and conversation
   // SSE requests avoid running on every keypress.

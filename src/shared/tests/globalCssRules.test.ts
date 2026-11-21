@@ -114,27 +114,40 @@ describe('a global rule must not out-rank the element it styles', () => {
   });
 });
 
-describe('the sidebar activity indicator runs at a bounded frame rate', () => {
-  test('the sidebar spinner is stepped to fifteen updates per second', () => {
-    // A running-session row spins for the whole turn. The app page has ~170 compositor layers, so a
-    // 60fps transform animation made the compositor re-walk that tree every frame: measured ~20% of
-    // one core of browser CPU (9.5% in the GPU process) on a running session. Steps(5) landed on the
-    // low GPU plateau but read as choppy; steps(15) keeps the same plateau (~3.1% GPU) at 15 frames
-    // per second. The spinner is still visibly rotating; it just no longer asks for a frame per vsync.
-    const rules = declarations().filter(
+describe('the sidebar activity indicator runs at the display rate', () => {
+  test('no sidebar rule slows the spinner down; the base rotation is continuous', () => {
+    // A running-session row spins for the whole turn. When the page still carried ~172
+    // compositor layers (154 promoted 276x52 sticky project rows), a 60fps transform
+    // animation made the compositor walk that tree every frame: ~20% of one core, ~9.5%
+    // in the GPU process. `steps(15)` sat on the low plateau at 15 updates/s. The sticky
+    // rows are now conditional (collapsed rows have no layer), the same page measures 13
+    // layers, and a 5x10s interleaved CDP matrix put 60fps inside the 15Hz envelope
+    // (paired delta total -0.9 points, GPU -0.0 points) — so the spinner is smooth again.
+    // Reintroducing a sidebar override needs a new measured reading, not a memory of one.
+    const sidebarAnimations = declarations().filter(
       (d) => d.selector === '#sidebar-panel .animate-spin' && d.prop === 'animation',
     );
-    assert.equal(
-      rules.length,
-      1,
-      `exactly one \`#sidebar-panel .animate-spin\` animation rule must exist:\n  ${describeFound(rules)}`,
+    console.log(
+      `sidebarSpinAnimations=${JSON.stringify(sidebarAnimations.map((d) => d.value))}`,
     );
-    const value = rules[0].value.replace(/\s+/g, ' ').trim();
-    console.log(`sidebarSpinAnimation=${value}`);
+    assert.deepEqual(
+      sidebarAnimations,
+      [],
+      `no \`#sidebar-panel .animate-spin\` animation rule may slow the spinner down:\n  ${describeFound(sidebarAnimations)}`,
+    );
+
+    const base = declarations().filter((d) => d.selector === '.animate-spin' && d.prop === 'animation');
+    assert.equal(
+      base.length,
+      1,
+      `exactly one \`.animate-spin\` animation rule must exist:\n  ${describeFound(base)}`,
+    );
+    const value = base[0].value.replace(/\s+/g, ' ').trim();
+    console.log(`baseSpinAnimation=${value}`);
     assert.match(
       value,
-      /^spin 1s steps\(15(?:,\s*end)?\) infinite$/,
-      `the sidebar spinner must step fifteen times per second, not run at the display rate; found: ${value}`,
+      /^spin 1s linear infinite$/,
+      `the spinner must keep rotating every frame; found: ${value}`,
     );
   });
 });

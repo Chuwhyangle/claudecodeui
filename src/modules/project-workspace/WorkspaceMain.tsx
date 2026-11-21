@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
 import { resolveProviderDescriptor } from '@/shared/constants';
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 import { ChatInterface } from '@/modules/chat';
 import { useBrowserUseEnabled } from '@/modules/browser-use';
 import { CockpitColumnRegion } from '@/modules/cockpit';
@@ -262,6 +263,10 @@ function WorkspaceMain({
   // terminal (the app's process owns the conversation; the terminal must not
   // resume it).
   const [lifecycleMode, setLifecycleMode] = useState<LifecycleModeReading | null>(null);
+  // Whether the tab is on screen. The lifecycle poll is a two-second request whose only reader is
+  // this view, so a hidden tab stops issuing it; returning re-runs the effect, which reads once
+  // immediately and then resumes the cadence.
+  const visible = usePageVisible();
 
   const selectedSessionId = selectedSession?.id ?? null;
 
@@ -269,7 +274,7 @@ function WorkspaceMain({
     // Nothing selected, nothing to ask about. The reading is left where it stands rather
     // than cleared: it is tagged with the session it was taken for, so a stale one cannot
     // be mistaken for this session's (see `isResidentSession` below).
-    if (!selectedSessionId) return;
+    if (!selectedSessionId || !visible) return;
 
     let cancelled = false;
 
@@ -306,7 +311,7 @@ function WorkspaceMain({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [selectedSessionId]);
+  }, [selectedSessionId, visible]);
 
   // A reading speaks only for the session it was taken for: while the first poll
   // for a newly selected session is in flight, the previous session's mode must not

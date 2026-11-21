@@ -13,6 +13,7 @@ import type { ReactNode } from 'react';
 import {
   useSessionProtection,
 } from '@/shared/hooks/useSessionProtection';
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 import WebSocketContext from '@/shared/context/WebSocketContext';
 import type {
   ActivityPhase,
@@ -347,17 +348,21 @@ export function SessionProtectionProvider({ children }: { children: ReactNode })
     }
   }, [syncProcessingSessions]);
 
+  // The periodic re-read of running sessions exists to keep the visible UI's protection state
+  // fresh; a hidden tab stops it, and returning re-reads once before the cadence resumes. The
+  // first visible run is also the mount read.
+  const visible = usePageVisible();
   useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
     void refreshRunningSessions();
-  }, [refreshRunningSessions]);
-
-  useEffect(() => {
     const interval = window.setInterval(() => {
       void refreshRunningSessions();
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, [refreshRunningSessions]);
+  }, [refreshRunningSessions, visible]);
 
   const actions = useMemo<SessionProtectionActions>(
     () => ({

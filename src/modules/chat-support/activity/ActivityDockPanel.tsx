@@ -39,6 +39,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePageVisible } from '@/shared/hooks/usePageVisibility';
 import type { ActivityScheduleView, ActivityTaskView } from '@/shared/types';
 import type { ActivityLiveness } from '@/modules/chat-session';
 import { selectActiveTasks, useSessionActivity } from '@/modules/chat-session';
@@ -266,14 +267,17 @@ export default function ActivityDockPanel({
   // One controls reading for the whole panel, so every button shares the same
   // enabled/disabled verdict and the same reason sentence.
   const controls = useActivityControls(sessionId, liveness);
+  // Whether the tab is on screen. The countdown's clock exists only while someone can read it;
+  // a hidden tab stops re-rendering the panel once a second, and the next visible tick catches up.
+  const visible = usePageVisible();
 
   useEffect(() => {
-    if (schedules.length === 0) {
-      return;
+    if (schedules.length === 0 || !visible) {
+      return undefined;
     }
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
-  }, [schedules.length]);
+  }, [schedules.length, visible]);
 
   if (activeTasks.length === 0 && schedules.length === 0 && !foregroundTool) {
     return null;
