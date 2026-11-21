@@ -804,21 +804,20 @@
   }
 
   /*
-   * The sidebar's activity indicators may not rotate at the display's rate.
+   * The sidebar's activity spinner keeps the plain rotation above.
    *
-   * A running-session row carries a spinner for as long as a turn runs, and the
-   * page has ~170 compositor layers; a 60fps transform animation made the
-   * compositor walk that tree every frame (measured ~20% of one core on a
-   * running session, ~9.5% in the GPU process). Steps still sit on the same
-   * low GPU plateau at 15 updates/s, while 5 updates/s read as visibly choppy;
-   * 15 updates/s is the smoother point that does not climb back toward 60fps.
-   * Scoped to the sidebar so one-shot composer/copy spinners keep their smooth
-   * rotation.
+   * It was stepped down to 15 updates/s because a running-session page carried
+   * ~172 compositor layers (154 promoted 276x52 sticky project rows), and a 60fps
+   * transform made the compositor walk that tree every frame (~20% of one core
+   * on a running session). Once collapsed project rows stopped being sticky the
+   * same page measured 13 layers; re-running the 5x10s interleaved CDP matrix on
+   * that page put 60fps inside the 15Hz cost envelope (paired delta total -0.9
+   * points, GPU -0.0 points), so the stepping is gone and the spinner is smooth
+   * again. See task gap-running-spinner-60fps-after-layer-fix. If a rule like
+   * this is ever reintroduced, it needs its own measured reason: the cost came
+   * from the layer count, not from the rotation itself.
    */
-  #sidebar-panel .animate-spin {
-    animation: spin 1s steps(15, end) infinite;
-  }
-  
+
   /* Force hardware acceleration for smoother animation on mobile */
   .loading-spinner {
     animation: spin 1s linear infinite;
