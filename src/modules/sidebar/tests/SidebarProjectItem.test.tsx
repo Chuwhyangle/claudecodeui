@@ -698,3 +698,77 @@ test('the row reads the driver state from the fleet summary, not the constant nu
     'the icon must follow the fleet reading, not a hard-coded idle',
   );
 });
+
+/**
+ * A collapsed project row has nothing to pin: `position: sticky` earns its keep when an expanded
+ * row's session list scrolls under the header, and a collapsed row has no sessions under it.
+ * Chrome promotes every sticky row that could overlap into a compositor layer, so with hundreds
+ * of collapsed projects the class is a per-frame cost with no product behaviour behind it.
+ *
+ * Both surfaces are asserted independently. The outer wrapper (`SidebarProjectItem.tsx:250`) and
+ * the desktop row button (`:438`) carried the trio separately, so a fix on only one of them would
+ * leave the layer promotion in place for the other.
+ */
+const STICKY_TOKENS = ['sticky', 'top-0', 'z-10'] as const;
+
+const stickySurfaces = (container: HTMLElement): HTMLElement[] => {
+  const row = container.querySelector<HTMLElement>('[data-testid="sidebar-project-row"]');
+  assert.notEqual(row, null, 'the desktop row must render');
+  assert.notEqual(row!.parentElement, null, 'the row button must sit inside its header wrapper');
+  return [row!.parentElement as HTMLElement, row!];
+};
+
+/** How many of the row's two surfaces carry ANY sticky token (`0` or `2`). */
+const stickySurfaceCount = (container: HTMLElement): number =>
+  stickySurfaces(container).filter((surface) =>
+    STICKY_TOKENS.some((token) => surface.classList.contains(token)),
+  ).length;
+
+test('the sticky header exists only on the expanded project; a collapsed row stays in flow', async () => {
+  const collapsed = await renderRow(makeProject('collapsed'), { isExpanded: false });
+  const collapsedSurfaces = stickySurfaces(collapsed.container);
+  const collapsedSticky = stickySurfaceCount(collapsed.container);
+  collapsed.unmount();
+
+  const expanded = await renderRow(makeProject('expanded'), { isExpanded: true });
+  const expandedSurfaces = stickySurfaces(expanded.container);
+  // One reading per ROW: the expanded row counts only if BOTH of its surfaces keep the trio.
+  const expandedSticky = expandedSurfaces.every((surface) =>
+    STICKY_TOKENS.every((token) => surface.classList.contains(token)),
+  )
+    ? 1
+    : 0;
+  expanded.unmount();
+
+  console.log(`collapsedSticky=${collapsedSticky} expandedSticky=${expandedSticky}`);
+
+  assert.equal(
+    collapsedSticky,
+    0,
+    'a collapsed row must not be sticky — neither the wrapper nor the row button may carry the trio',
+  );
+  assert.equal(
+    expandedSticky,
+    1,
+    'the expanded row must keep its sticky header on both the wrapper and the row button',
+  );
+
+  for (const surface of collapsedSurfaces) {
+    for (const token of STICKY_TOKENS) {
+      assert.equal(
+        surface.classList.contains(token),
+        false,
+        `collapsed surface must not carry ${token}`,
+      );
+    }
+  }
+  for (const surface of expandedSurfaces) {
+    for (const token of STICKY_TOKENS) {
+      assert.equal(
+        surface.classList.contains(token),
+        true,
+        `expanded surface must carry ${token}`,
+      );
+    }
+  }
+});
