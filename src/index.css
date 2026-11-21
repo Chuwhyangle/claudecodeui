@@ -809,13 +809,14 @@
    * A running-session row carries a spinner for as long as a turn runs, and the
    * page has ~170 compositor layers; a 60fps transform animation made the
    * compositor walk that tree every frame (measured ~20% of one core on a
-   * running session, ~9.5% in the GPU process). Five updates per second is
-   * enough to read as "spinning", and drops the same page to ~8% total / ~3.5%
-   * GPU. Scoped to the sidebar so one-shot composer/copy spinners keep their
-   * smooth rotation.
+   * running session, ~9.5% in the GPU process). Steps still sit on the same
+   * low GPU plateau at 15 updates/s, while 5 updates/s read as visibly choppy;
+   * 15 updates/s is the smoother point that does not climb back toward 60fps.
+   * Scoped to the sidebar so one-shot composer/copy spinners keep their smooth
+   * rotation.
    */
   #sidebar-panel .animate-spin {
-    animation: spin 1s steps(5, end) infinite;
+    animation: spin 1s steps(15, end) infinite;
   }
   
   /* Force hardware acceleration for smoother animation on mobile */
