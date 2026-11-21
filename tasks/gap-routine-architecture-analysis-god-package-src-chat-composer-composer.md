@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-src-chat-composer-composer
 title: "architecture-analysis: archguard_detect_god_packages(scope=src) flags
   modules/chat-composer/composer with tooManyFiles: 24 direct files (threshold
   20), 37 entities, fanOut 147, 4,9"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
