@@ -1,7 +1,7 @@
 ---
 id: gap-running-spinner-60fps-after-layer-fix
 title: 层数降到 21 后复评 60fps spinner：在 15Hz 成本包络内换回平滑旋转
-status: ready
+status: done
 labels:
   - gap
   - feature
