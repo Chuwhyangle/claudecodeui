@@ -1,7 +1,7 @@
 ---
 id: gap-chat-hot-path-render-profile
 title: Chat 热路径大 hook/组件：先 profile commit/render 热点再做一个低风险改动
-status: ready
+status: done
 labels:
   - gap
   - performance
