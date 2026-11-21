@@ -247,7 +247,14 @@ function SidebarProjectItem({
 
   return (
     <div className={cn('md:space-y-1', isDeleting && 'opacity-50 pointer-events-none')}>
-      <div className="sticky top-0 z-10 md:group group">
+      {/*
+        Sticky is a behaviour of the EXPANDED row's session list: the header stays put while its
+        own sessions scroll. A collapsed row has nothing to scroll under it, and Chrome promotes
+        every sticky row that could overlap into a compositor layer — with hundreds of collapsed
+        projects that is a per-frame cost for no product behaviour. The row is a plain flow item
+        until it opens.
+      */}
+      <div className={cn('md:group group', isExpanded && 'sticky top-0 z-10')}>
         {isCompact && (
         <div className="bg-background">
           <div
@@ -435,7 +442,9 @@ function SidebarProjectItem({
           data-testid="sidebar-project-row"
           data-project-id={project.projectId}
           className={cn(
-            'sticky top-0 z-10 flex w-full justify-between p-2 h-auto font-normal hover:bg-accent/50',
+            'flex w-full justify-between p-2 h-auto font-normal hover:bg-accent/50',
+            // Same arm as the wrapper above: only an expanded row's header pins while scrolling.
+            isExpanded && 'sticky top-0 z-10',
             isSelected
               ? 'bg-accent text-accent-foreground'
               : isStarred

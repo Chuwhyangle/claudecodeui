@@ -35,7 +35,7 @@ import {
   PromptInputButton,
   PromptInputSubmit,
 } from '@/modules/chat-composer/composer/PromptInput';
-import CommandMenu from '@/modules/chat-composer/composer/CommandMenu';
+import CommandMenu from '@/modules/chat-composer/composer/menus/CommandMenu';
 import { deriveActivityDockView } from '@/modules/chat-session';
 import type { VoiceInsertion } from '@/modules/chat-voice';
 import ComposerAttachment from '@/modules/chat-composer/composer/ComposerAttachment';
@@ -47,8 +47,8 @@ import TokenUsageSummary from '@/modules/chat-composer/composer/TokenUsageSummar
 import QueuedMessageCard from '@/modules/chat-composer/composer/QueuedMessageCard';
 import { ScheduleMessagePopover } from '@/modules/chat-composer/composer/ScheduleMessagePopover';
 import { ScheduledMessageList } from '@/modules/chat-composer/composer/ScheduledMessageList';
-import ComposerModelMenu from '@/modules/chat-composer/composer/ComposerModelMenu';
-import ComposerPermissionMenu from '@/modules/chat-composer/composer/ComposerPermissionMenu';
+import ComposerModelMenu from '@/modules/chat-composer/composer/menus/ComposerModelMenu';
+import ComposerPermissionMenu from '@/modules/chat-composer/composer/menus/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat-composer/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat-composer/composer/InputSuggestionChips';
 import DraftRewriteCandidate from '@/modules/chat-composer/composer/DraftRewriteCandidate';

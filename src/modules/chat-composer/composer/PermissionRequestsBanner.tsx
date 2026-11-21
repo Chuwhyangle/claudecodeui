@@ -14,7 +14,7 @@ import {
   ConfirmationActions,
   ConfirmationRequest,
   ConfirmationTitle,
-} from '@/modules/chat-composer/composer/Confirmation';
+} from '@/modules/chat-composer/composer/menus/Confirmation';
 
 registerPermissionPanel('AskUserQuestion', AskUserQuestionPanel);
 

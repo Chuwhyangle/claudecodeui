@@ -1,7 +1,7 @@
 ---
 id: gap-sidebar-collapsed-project-sticky-layer-explosion
 title: 586 个收起项目仍 sticky：侧栏 154 个 Overlap 层把每帧成本放大
-status: ready
+status: done
 labels:
   - gap
   - defect
