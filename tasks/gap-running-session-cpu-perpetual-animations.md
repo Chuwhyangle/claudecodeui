@@ -1,7 +1,7 @@
 ---
 id: gap-running-session-cpu-perpetual-animations
 title: 显示运行中会话时 CPU 约 0.6 核：侧栏 backdrop-filter 与 Thinking shimmer 每帧重算
-status: todo
+status: done
 labels:
   - gap
   - defect
