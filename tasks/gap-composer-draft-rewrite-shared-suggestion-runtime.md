@@ -140,8 +140,10 @@ extra:
 
 ## Blocker
 
-**2026-11-21T09:20:50.975Z — worker 未落地（exited-not-landed）**
+**2026-11-21T09:33:48.199Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/shared/tests/architecture-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: ratchet: oversizeFiles src/modules/chat-composer/hooks/useChatComposerState.ts 1253→1303 — 基线内读数不得上调（此基线只允许下降） [baseline A/B: HARD RED (task-introduced-red) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/architecture-ratchet.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx,server/shared/tests/architecture-ratchet.test.ts,src/modules/chat/tests/inlineQuoteChip.test.tsx changed=-]
+- 未落地原因：step=ff: fan-in-ff-merge: working tree not clean in /data/home/yale/work/claudecodeui — the merge-mode ff must run on a clean checkout (found uncommitted changes):
+fan-in-ff-merge:   ?? docs/proposals/composer-draft-rewrite-plan.md
+fan-in-ff-merge:   ?? docs/prototypes/
 - run_id：wk-prod-anchor
-- session_id：6484c9ec-9da5-444f-808d-904a8546ab92
+- session_id：61f97047-d9d1-4a83-930f-69f96222f69d
