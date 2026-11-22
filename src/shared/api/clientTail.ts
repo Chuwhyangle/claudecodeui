@@ -40,11 +40,13 @@ import {
   post,
   put,
   query,
-  readReplySuggestionsFailure,
   readReplySuggestionsResult,
   readReplySuggestionsStatus,
 } from '@/shared/api/requests';
 import type { ApiRequestOptions } from '@/shared/api/requests';
+// The failed-draw reader is feature vocabulary, not transport plumbing: it lives in its
+// own zero-transport leaf beside the reply-suggestions type leaf (see that file's header).
+import { readReplySuggestionsFailure } from '@/shared/replySuggestionsFailure';
 
 /** The failure states the health card knows; anything else reads as `unknown`-like `degraded`. */
 const DIAGNOSTICS_FEATURE_STATES: readonly string[] = ['off', 'misconfigured', 'ready', 'degraded', 'ok'];

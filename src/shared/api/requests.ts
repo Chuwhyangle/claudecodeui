@@ -1,7 +1,12 @@
 /**
  * The request plumbing every endpoint goes through: verb helpers, query serialization,
  * the envelope reader, the URL builders a non-`fetch` consumer needs, and the
- * reply-suggestions response readers.
+ * reply-suggestions draw/status readers.
+ *
+ * The failed-draw reader is NOT here: it lives in `src/shared/replySuggestionsFailure.ts`
+ * beside its type leaf. It is feature vocabulary rather than transport, and keeping it
+ * here put this package at 50 entities — the god-package `tooManyEntities` threshold.
+ * `clientTail.ts` (its only consumer) imports it from that leaf directly.
  *
  * WHY THIS IS NOT (ANY MORE) PART OF `index.ts`. `voiceConfig.ts` has to reach
  * `api.voice.config/saveConfig/capture` because the settings document lives on the server,
@@ -25,13 +30,15 @@ import type {
   SessionMessagesQuery,
 } from '@/shared/types';
 import type {
-  ReplySuggestionsFailure,
   ReplySuggestionsFailureCategory,
   ReplySuggestionsLastFailure,
   ReplySuggestionsResult,
   ReplySuggestionsState,
   ReplySuggestionsStatus,
 } from '@/shared/replySuggestionsType';
+// The ONE client-side category vocabulary: the failed-draw reader owns it, and the
+// `/status` last-failure reader below validates against the same list.
+import { REPLY_SUGGESTIONS_FAILURE_CATEGORIES } from '@/shared/replySuggestionsFailure';
 import { IS_PLATFORM } from '@/shared/utils';
 
 // Headers are a plain record rather than the full `HeadersInit` union so the
@@ -328,57 +335,9 @@ function readLastFailure(value: unknown): ReplySuggestionsLastFailure | null {
   };
 }
 
-/** The literal category vocabulary, as data, so a wire value is checked before it is trusted. */
-const FAILURE_CATEGORIES: readonly ReplySuggestionsFailureCategory[] = [
-  'timeout', 'http', 'network', 'parse', 'shape', 'circuit-open', 'rate-limit', 'misconfigured', 'unknown',
-];
-
 /** Reads a category, or null when the value is not one of the declared members. */
 function readCategory(value: unknown): ReplySuggestionsFailureCategory | null {
-  return typeof value === 'string' && (FAILURE_CATEGORIES as readonly string[]).includes(value)
+  return typeof value === 'string' && (REPLY_SUGGESTIONS_FAILURE_CATEGORIES as readonly string[]).includes(value)
     ? value as ReplySuggestionsFailureCategory
     : null;
-}
-
-/** A coarse category for a refusal body that carried none: the code and the status are enough. */
-function inferCategory(code: string, httpStatus: number | null): ReplySuggestionsFailureCategory {
-  if (code === 'REPLY_SUGGESTIONS_RATE_LIMITED' || httpStatus === 429) return 'rate-limit';
-  if (code === 'REPLY_SUGGESTIONS_UPSTREAM_FAILED') return httpStatus === null ? 'unknown' : 'http';
-  if (httpStatus !== null) return 'http';
-  return 'unknown';
-}
-
-/**
- * Reads one failed `POST /api/reply-suggestions` answer into the typed failure the
- * controller shows. The error envelope's `code`/`message` and its
- * `details.{requestId,httpStatus,category,model}` are preserved verbatim; an
- * unreadable body reads as `code: 'unknown'` rather than as "no answer".
- */
-export function readReplySuggestionsFailure(
-  status: number,
-  body: unknown,
-  fallbackMessage = `HTTP ${status}`,
-): ReplySuggestionsFailure {
-  const envelope = body && typeof body === 'object' && !Array.isArray(body)
-    ? (body as Record<string, unknown>)
-    : {};
-  const error = envelope.error && typeof envelope.error === 'object' && !Array.isArray(envelope.error)
-    ? envelope.error as Record<string, unknown>
-    : {};
-  const details = error.details && typeof error.details === 'object' && !Array.isArray(error.details)
-    ? error.details as Record<string, unknown>
-    : {};
-  const code = typeof error.code === 'string' && error.code !== '' ? error.code : 'unknown';
-  const httpStatus = typeof details.httpStatus === 'number' && Number.isInteger(details.httpStatus)
-    ? details.httpStatus
-    : null;
-  return {
-    at: new Date().toISOString(),
-    code,
-    category: readCategory(details.category) ?? inferCategory(code, httpStatus),
-    httpStatus,
-    requestId: typeof details.requestId === 'string' && details.requestId !== '' ? details.requestId : null,
-    model: typeof details.model === 'string' && details.model !== '' ? details.model : null,
-    message: typeof error.message === 'string' && error.message !== '' ? error.message : fallbackMessage,
-  };
 }
