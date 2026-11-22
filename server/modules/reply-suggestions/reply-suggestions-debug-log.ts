@@ -165,11 +165,27 @@ function rotate(filePath: string): void {
 }
 
 /**
+ * True while the process is a test runner (node --test / vitest). A criterion that forgets to
+ * inject a temp path must never write the operator's real `~/.cloudpit`; the writer becomes a
+ * no-op that names the mistake once.
+ */
+function isTestProcess(): boolean {
+  return process.env.NODE_TEST_CONTEXT !== undefined
+    || process.env.VITEST === 'true'
+    || process.env.NODE_ENV === 'test';
+}
+
+/**
  * Build a debug-ledger writer for one file.
  *
  * `filePath`/`maxBytes`/`homeDir`/`now`/`logger` are injected by the composition root (criteria
  * pass their own). The parent directory is created on the first write — and with mode 0700 —
  * so a disabled feature does no filesystem work at start-up.
+ *
+ * A TEST PROCESS WITH NO EXPLICIT PATH GETS A NO-OP. The production service builds its writer
+ * from `homeDir`; a criterion must build one from its temporary directory. The guard makes the
+ * accidental case (a test that enabled `debugLog` without injecting a path) write nothing rather
+ * than pollute the operator's real home.
  *
  * Consumers: `reply-suggestions.module.ts` (production), `reply-suggestions.service.ts` (the
  * default when a criterion does not inject one) and the debug-log criterion.
@@ -184,11 +200,19 @@ export function createReplySuggestionsDebugLog(
   } = {},
 ): ReplySuggestionsDebugLog {
   const homeDir = options.homeDir ?? os.homedir();
+  const now = options.now ?? Date.now;
+  const logger = options.logger ?? ((line: string) => console.warn(line));
+  if (options.filePath === undefined && options.homeDir === undefined && isTestProcess()) {
+    return {
+      path: '<test:unconfigured>',
+      record(): void {
+        logger('[reply-suggestions] debug log writer has no test path; refusing to write the real home');
+      },
+    };
+  }
   const filePath = options.filePath
     ?? path.join(defaultCloudpitDataRoot(homeDir), REPLY_SUGGESTIONS_DEBUG_LOG_FILE_NAME);
   const maxBytes = options.maxBytes ?? REPLY_SUGGESTIONS_DEBUG_LOG_MAX_BYTES;
-  const now = options.now ?? Date.now;
-  const logger = options.logger ?? ((line: string) => console.warn(line));
 
   return {
     path: filePath,

@@ -237,6 +237,31 @@ test('(e) tokens are omitted when the completion did not expose them', async (t)
   assert.equal('outputTokens' in row, false);
 });
 
+test('(m) a test process without an injected path never writes the real home', () => {
+  const saved = {
+    NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT,
+    VITEST: process.env.VITEST,
+    NODE_ENV: process.env.NODE_ENV,
+  };
+  process.env.NODE_TEST_CONTEXT = '1';
+  try {
+    const warnings: string[] = [];
+    const log = createReplySuggestionsDebugLog({ logger: (line) => warnings.push(line) });
+    assert.equal(log.path, '<test:unconfigured>');
+    log.record({
+      requestId: 'req-guard', outcome: 'ok', durationMs: 1, model: 'm', protocol: 'anthropic', version: 'v1',
+      input: 'a', output: 'b',
+    });
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].includes('refusing to write the real home'));
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 //---------------------------------------------------------------------------------------------
 // permissions and rotation
 //---------------------------------------------------------------------------------------------
