@@ -104,7 +104,8 @@ extra:
 ### 代码与提交
 
 - 实现提交：`9bc67023995ca7c08b02a1e366c74367847f40f1`（分支 `task/gap-reply-suggestions-composer-failure-silent-degrade`；19 files changed, 98 insertions(+), 381 deletions(-)）。
-- 主检出 `develop` **尚未 merge**；按用户指令等待所有者清理无关脏项（`docs/operations/cloudpit-v3.0.1-release-notes.md`、`docs/evidence/cloudpit-v3.0.1-distribution-check.txt`）。本任务未触碰这些文件。
+- 已 ff merge 到 `develop`：`65ebe1632`（任务分支先 `git merge --no-edit develop`）。merge 前主检出的无关脏项已由所有者提交 `4dee93e32 docs(release): retain v3.0.1 verification evidence`；本任务未触碰那些文件。
+- merge 后复跑定向判据：7 files / 130 tests passed；日志 `tmp/reply-suggestions-silent-tests-postmerge.log`（SHA256 `81b8d9b6c6b18c05bf17572ace46d459f56ba437e5f2dbd1a5764534322e22c3`）。
 
 ### AC 证据
 
@@ -146,5 +147,5 @@ c4db1c93813817f560e088a17f55252a9926043746f7ec844d6adbbbf90eb53b  tmp/reply-sugg
 
 - 只改 composer 展示层；服务端失败读数、ledger、控制器 episode、Settings/Diagnostics/log drawer 均保留。
 - 未修改已 done 任务 `gap-reply-suggestions-failure-reading-and-inline-notice` 的 AC。
-- 本任务分支未 merge；merge 等主检出所有者清理无关脏项。
+- 已 merge 到 develop `65ebe1632`；任务完成读数以该 tree 为准。
 - 隔离实例与 stub 为临时 DoD 环境，完成后已/将停止，不影响本机运行中的 Cloudpit。
