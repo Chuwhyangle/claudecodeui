@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-server-providers-claude-size-r
 title: "architecture-analysis: modules/providers/list/claude is 20 files / 53
   entities (fanIn 6, fanOut 361): the 2026-11-03 lifecycle split measured 19/49,
   then the G1 fix moved session-a"
-status: ready
+status: done
 labels:
   - gap
   - routine-filed
