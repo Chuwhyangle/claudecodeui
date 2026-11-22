@@ -3,7 +3,7 @@ id: gap-routine-architecture-analysis-god-package-src-shared-api
 title: "architecture-analysis: shared/api is 9 files / 50 entities (fanIn 64,
   fanOut 86) with reasons highFanIn/highFanOut/tooManyEntities: the 2026-11-10
   fix measured 49 entities, and rea"
-status: todo
+status: ready
 labels:
   - gap
   - routine-filed
