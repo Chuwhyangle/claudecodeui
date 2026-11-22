@@ -115,3 +115,6 @@ Nothing below changes a public API or a user-facing file format.
   scripts/cloudpit-distribution-check.mjs --release --version 3.0.1 --json`
   must exit 0 with `violations: []`; the checker's default version is now
   3.0.1, and historical releases remain readable via an explicit `--version`.
+- Verification evidence: the post-release reading is retained in
+  [`docs/evidence/cloudpit-v3.0.1-distribution-check.txt`](../evidence/cloudpit-v3.0.1-distribution-check.txt)
+  (command, capture time, exit code and the exact `--json` output).
