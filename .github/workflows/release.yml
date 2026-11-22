@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       increment:
-        description: "Version bump: patch, minor, major, or explicit (e.g. 3.0.1 for the v3.0.1 release)"
+        description: "Version bump: patch, minor, major, or explicit (e.g. 3.1.0 for the v3.1.0 release)"
         required: true
-        default: "3.0.1"
+        default: "3.1.0"
         type: string
       release_name:
-        description: 'Custom release name (optional, defaults to "Cloudpit v<version>"; the v3.0.1 release is named "Cloudpit v3.0.1")'
+        description: 'Custom release name (optional, defaults to "Cloudpit v<version>"; the v3.1.0 release is named "Cloudpit v3.1.0")'
         required: false
         type: string
 

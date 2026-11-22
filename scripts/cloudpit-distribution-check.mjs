@@ -12,7 +12,7 @@
  *     assets are downloadable;
  *
  * VERSIONED READING. The release being verified is a parameter, not a baked-in target:
- * `NEW_VERSION` (3.0.1) is the default, and `--version <x.y.z>` reads any other release
+ * `NEW_VERSION` (3.1.0) is the default, and `--version <x.y.z>` reads any other release
  * (for example the historical `--version 2.0.0` reading of AC-458's 2.0.0 release). The
  * npm version document, the packed-manifest lookup, the GitHub release tag and the
  * local-server asset prefix all derive from that one value.
@@ -44,7 +44,7 @@ export const OLD_VERSION = '1.42.0';
 /** The renamed package and the default version this verifier reads. */
 export const NEW_PACKAGE = '@yalehwang/cloudpit';
 /** The release the default reading targets; `--version` overrides it per invocation. */
-export const NEW_VERSION = '3.0.1';
+export const NEW_VERSION = '3.1.0';
 /** The repository the rename points every URL field at. */
 export const REPOSITORY = 'yaleh/cloudpit';
 /** The attribution token the upstream licence terms require the documents to keep. */

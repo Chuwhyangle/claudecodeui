@@ -16,7 +16,7 @@
  *   AC2e — the desktop/local-server assets are missing     → red names both asset prefixes.
  *   AC2f — the ownership notice is deleted from each doc   → red names `ownership`.
  *   AC4 — `--help` exits 0 and lists `--release`.
- *   AC5 — a 2.0.0 snapshot is red under the 3.0.1 default and green with
+ *   AC5 — a 2.0.0 snapshot is red under the 3.1.0 default and green with
  *         `--version 2.0.0`: the historical release stays readable without being
  *         mistaken for the current one.
  *
@@ -272,8 +272,8 @@ test('AC5: the historical 2.0.0 release is readable only through an explicit --v
     return snapshot;
   };
 
-  // Negative arm: under the 3.0.1 default the 2.0.0 snapshot is NOT read as the current
-  // release — the red names 3.0.1, so a stale 2.0.0 fixture cannot make the default green.
+  // Negative arm: under the 3.1.0 default the 2.0.0 snapshot is NOT read as the current
+  // release — the red names 3.1.0, so a stale 2.0.0 fixture cannot make the default green.
   const asCurrent = runFixture(historicalSnapshot('2.0.0'));
   assert.equal(asCurrent.status, 1, asCurrent.stderr);
   assert.ok(
