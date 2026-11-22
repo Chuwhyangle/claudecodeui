@@ -1,23 +1,24 @@
 import assert from 'node:assert/strict';
 
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import i18next from 'i18next';
 import React from 'react';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
-import { ChatComposer, SuggestionFailureNotice } from '@/modules/chat-composer';
+import { ChatComposer } from '@/modules/chat-composer';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import { resetChatDrafts } from '@/shared/api/chatDrafts';
 import type { ComposerChipStrip, ReplySuggestionsFailure } from '@/shared/types';
 
 /**
- * The inline reply-suggestions failure notice and its detail popover.
+ * The composer's reply-suggestions failure surface.
  *
- * The controller tests own the episode rules; this file owns the surface: the
- * status line appears without a click, the popover does NOT exist until the line
- * is activated, Escape / a second click closes it, retry and dismiss route to the
- * controller's own commands, and a healthy empty box renders nothing.
+ * The failure reading still exists in the controller (it drives the ledger and
+ * Diagnostics), but the composer no longer draws it: an automatic draw failure or
+ * a `misconfigured` setting is silent, and only a manual Suggest press shows the
+ * existing three-second control state. These cases pin that the removed overlay
+ * cannot block the empty textarea again.
  */
 
 vi.mock('@/shared/api', () => {
@@ -86,7 +87,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** The failure episode the notice renders. */
+/** The failure episode the controller would still hold. */
 const failure: ReplySuggestionsFailure = {
   at: '2026-11-18T10:00:00.000Z',
   code: 'REPLY_SUGGESTIONS_UPSTREAM_FAILED',
@@ -96,121 +97,6 @@ const failure: ReplySuggestionsFailure = {
   model: 'gateway-model',
   message: 'reply-suggestions upstream request failed (http)',
 };
-
-const noticeProps = (overrides: Partial<React.ComponentProps<typeof SuggestionFailureNotice>> = {}) => ({
-  failure,
-  failureCount: 3,
-  onRetry: vi.fn(),
-  onDismiss: vi.fn(),
-  ...overrides,
-});
-
-const renderNotice = (overrides: Partial<React.ComponentProps<typeof SuggestionFailureNotice>> = {}) => {
-  const props = noticeProps(overrides);
-  const view = render(React.createElement(SuggestionFailureNotice, props));
-  return { view, props };
-};
-
-describe('SuggestionFailureNotice', () => {
-  it('(a) shows the status line and does NOT mount the popover until activated', () => {
-    const { view } = renderNotice();
-
-    const line = view.container.querySelector('[data-slot="reply-suggestions-failure-notice"]');
-    assert.ok(line, 'the inline notice is rendered');
-    assert.equal(line.getAttribute('role'), 'status');
-    assert.equal(line.getAttribute('aria-live'), 'polite');
-    assert.ok(
-      view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]')?.textContent
-        ?.includes('returned an error'),
-      'the line names the upstream failure',
-    );
-    // Compared as a boolean: an assertion diff that inspects a jsdom node is
-    // pathologically slow when the RED path is exercised (the negative control).
-    assert.ok(
-      document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null,
-      'the popover must NOT be in the DOM before a click',
-    );
-  });
-
-  it('(b) a click mounts the popover with every correlation field', () => {
-    const { view } = renderNotice();
-    fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-
-    const popover = document.querySelector('[data-slot="reply-suggestions-failure-popover"]');
-    assert.ok(popover, 'the popover is mounted after activation');
-    assert.equal(popover.getAttribute('role'), 'dialog');
-    assert.equal(popover.querySelector('[data-field="code"]')?.textContent, failure.code);
-    assert.equal(popover.querySelector('[data-field="httpStatus"]')?.textContent, '502');
-    assert.equal(popover.querySelector('[data-field="at"]')?.textContent, failure.at);
-    assert.equal(popover.querySelector('[data-field="model"]')?.textContent, 'gateway-model');
-    assert.equal(popover.querySelector('[data-field="requestId"]')?.textContent, 'a1b2c3d4');
-    assert.equal(popover.querySelector('[data-field="failureCount"]')?.textContent, '3');
-  });
-
-  it('(c) a second click and Escape each close the popover', () => {
-    const { view } = renderNotice();
-    const trigger = view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element;
-
-    fireEvent.click(trigger);
-    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
-    fireEvent.click(trigger);
-    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
-
-    fireEvent.click(trigger);
-    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
-    fireEvent.keyDown(trigger, { key: 'Escape' });
-    assert.ok(
-      document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null,
-      'Escape closes the detail popover',
-    );
-  });
-
-  it('(d) Retry calls the injected draw command and keeps the notice on screen', () => {
-    const { view, props } = renderNotice();
-    fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    fireEvent.click(document.querySelector('[data-action="retry"]') as Element);
-
-    assert.equal((props.onRetry as ReturnType<typeof vi.fn>).mock.calls.length, 1);
-    assert.ok(
-      view.container.querySelector('[data-slot="reply-suggestions-failure-notice"]'),
-      'a retry press does not hide the reading before the answer arrives',
-    );
-  });
-
-  it('(e) the dismiss action calls its command and the close action only closes', () => {
-    const { view, props } = renderNotice();
-    fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-
-    fireEvent.click(document.querySelector('[data-action="close"]') as Element);
-    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
-    assert.equal((props.onDismiss as ReturnType<typeof vi.fn>).mock.calls.length, 0);
-
-    fireEvent.click(view.container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    fireEvent.click(document.querySelector('[data-action="dismiss"]') as Element);
-    assert.equal((props.onDismiss as ReturnType<typeof vi.fn>).mock.calls.length, 1);
-  });
-
-  it('(f) every state category picks its own line', () => {
-    for (const [category, fragment] of [
-      ['misconfigured', 'required setting'],
-      ['rate-limit', 'Too many'],
-      ['circuit-open', 'paused'],
-      ['network', 'Could not reach'],
-      ['unknown', 'could not be generated'],
-    ] as const) {
-      const { view } = renderNotice({ failure: { ...failure, category, code: 'X', httpStatus: null } });
-      assert.ok(
-        view.container.querySelector('[data-slot="reply-suggestions-failure-notice"]')?.textContent?.includes(fragment),
-        `${category} picks its own copy`,
-      );
-      view.unmount();
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Composer integration: the failed strip replaces the absent chips
-// ---------------------------------------------------------------------------
 
 const chipStripProps = (overrides: Partial<ComposerChipStrip> = {}): ComposerChipStrip => ({
   visible: false,
@@ -304,33 +190,76 @@ const renderComposer = (strip: ComposerChipStrip) => render(React.createElement(
   { ...composerBaseProps(), chipStrip: strip } as unknown as React.ComponentProps<typeof ChatComposer>,
 ));
 
-describe('composer failure notice integration', () => {
-  it('(g) draws the notice in the empty box and no popover until the line is clicked', () => {
+/** A composer whose draft is real state, so a change event can be observed. */
+function StatefulComposer({ strip }: { strip: ComposerChipStrip }) {
+  const [input, setInput] = React.useState('');
+  return React.createElement(ChatComposer, {
+    ...composerBaseProps(),
+    input,
+    onInputChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => setInput(event.target.value),
+    chipStrip: strip,
+  } as unknown as React.ComponentProps<typeof ChatComposer>);
+}
+
+describe('composer reply-suggestions failure surface', () => {
+  it('(a) an automatic failure renders no notice and no popover', () => {
     const { container } = renderComposer(chipStripProps());
-    assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-notice"]'));
+
+    assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-notice"]') === null);
     assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
-
-    fireEvent.click(container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]'));
   });
 
-  it('(h) retry routes to the strip command and dismiss to the strip dismissal', () => {
-    const strip = chipStripProps();
-    const { container } = renderComposer(strip);
-    fireEvent.click(container.querySelector('[data-slot="reply-suggestions-failure-trigger"]') as Element);
-    fireEvent.click(document.querySelector('[data-action="retry"]') as Element);
-    assert.equal((strip.onRequestSuggestions as ReturnType<typeof vi.fn>).mock.calls.length, 1);
+  it('(a2) a misconfigured failure is silent in the composer', () => {
+    const { container } = renderComposer(chipStripProps({
+      suggestionFailure: { ...failure, category: 'misconfigured', httpStatus: null, code: 'REPLY_SUGGESTIONS_MISCONFIGURED' },
+    }));
 
-    fireEvent.click(document.querySelector('[data-action="dismiss"]') as Element);
-    assert.equal((strip.onDismissSuggestionFailure as ReturnType<typeof vi.fn>).mock.calls.length, 1);
+    assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-notice"]') === null);
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
   });
 
-  it('(i) a dismissed failure and a healthy empty box both render no notice', () => {
-    const dismissed = renderComposer(chipStripProps({ suggestionFailureDismissed: true }));
-    assert.ok(dismissed.container.querySelector('[data-slot="reply-suggestions-failure-notice"]') === null);
-    dismissed.unmount();
+  it('(b) the empty textarea is focusable and accepts input while a failure is held', () => {
+    const { container } = render(React.createElement(StatefulComposer, { strip: chipStripProps() }));
+    const textarea = container.querySelector('textarea');
+    assert.ok(textarea, 'the composer textarea is rendered');
 
-    const healthy = renderComposer(chipStripProps({ suggestionFailure: null }));
-    assert.ok(healthy.container.querySelector('[data-slot="reply-suggestions-failure-notice"]') === null);
+    textarea.focus();
+    assert.equal(document.activeElement, textarea, 'the empty input line takes focus');
+
+    fireEvent.change(textarea, { target: { value: 'hello' } });
+    assert.equal(textarea.value, 'hello', 'typing reaches the draft');
+  });
+
+  it('(c) a manual Suggest failure shows the failed control state, then returns to idle', async () => {
+    const { container } = renderComposer(chipStripProps({
+      onRequestSuggestions: () => Promise.resolve(false),
+    }));
+    const button = container.querySelector('[data-slot="reply-suggest-button"]');
+    assert.ok(button, 'the Suggest control is rendered');
+    assert.equal(button.getAttribute('data-reply-suggest-state'), 'idle');
+
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        fireEvent.click(button);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      assert.equal(button.getAttribute('data-reply-suggest-state'), 'failed');
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      assert.equal(button.getAttribute('data-reply-suggest-state'), 'idle');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('(d) a healthy empty box renders no failure DOM', () => {
+    const { container } = renderComposer(chipStripProps({ suggestionFailure: null }));
+
+    assert.ok(container.querySelector('[data-slot="reply-suggestions-failure-notice"]') === null);
+    assert.ok(document.querySelector('[data-slot="reply-suggestions-failure-popover"]') === null);
   });
 });

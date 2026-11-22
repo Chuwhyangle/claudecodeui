@@ -25,7 +25,6 @@ const LOCALES_DIR = resolve(REPO_ROOT, 'src', 'modules', 'i18n', 'locales');
 const DRAWER_SOURCES = [
   resolve(REPO_ROOT, 'src', 'modules', 'diagnostics', 'LogDrawer.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'diagnostics', 'LogDrawerHost.tsx'),
-  resolve(REPO_ROOT, 'src', 'modules', 'chat-composer', 'composer', 'SuggestionFailureNotice.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'diagnostics', 'DiagnosticsHealthList.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'settings', 'tabs', 'DiagnosticsSettingsTab.tsx'),
 ];

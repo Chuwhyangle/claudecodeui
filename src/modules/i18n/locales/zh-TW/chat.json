@@ -142,6 +142,7 @@
     "suggestions": {
       "suggest": "建議",
       "suggesting": "產生中…",
+      "suggestFailed": "建議失敗",
       "suggestHint": "根據上下文建議回覆",
       "suggestForSelection": "用選段生成建議",
       "quoteChip": "引用：{{text}}",

@@ -168,6 +168,7 @@
       "listLabel": "常用输入",
       "suggest": "建议",
       "suggesting": "生成中…",
+      "suggestFailed": "建议失败",
       "suggestHint": "根据上下文建议回复",
       "suggestForSelection": "用选段生成建议",
       "quoteChip": "引用：{{text}}",

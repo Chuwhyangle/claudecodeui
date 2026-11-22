@@ -175,6 +175,7 @@
       "listLabel": "Frequent inputs",
       "suggest": "Suggest",
       "suggesting": "Suggesting…",
+      "suggestFailed": "Suggest failed",
       "suggestHint": "Suggest replies from the conversation so far",
       "suggestForSelection": "Suggest from selection",
       "quoteChip": "Quote: {{text}}",

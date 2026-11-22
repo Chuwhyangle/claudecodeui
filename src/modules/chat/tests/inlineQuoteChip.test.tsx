@@ -306,10 +306,13 @@ describe('locale key sets', () => {
   // the `input.suggestions.failure` block to every locale (task
   // gap-reply-suggestions-failure-reading-and-inline-notice). Re-measured again
   // 2026-11-21 for the composer's `input.draftRewrite` block (task
-  // gap-composer-draft-rewrite-shared-suggestion-runtime): the pin still catches
+  // gap-composer-draft-rewrite-shared-suggestion-runtime). Re-measured again
+  // 2026-11-22 when the silent-failure follow-up added the formal
+  // `input.suggestions.suggestFailed` key (task
+  // gap-reply-suggestions-composer-failure-silent-degrade): the pin still catches
   // any later accidental add.
-  const EN_KEY_SET_DIGEST = 'bf981989c3dd5f59677586b51cc196d46d69b4d1c092106473e956bb8361a66f';
-  const ZH_KEY_SET_DIGEST = '57caf24add5c81465c0102c99087503730516f83e9cf162a92e2300d180710f6';
+  const EN_KEY_SET_DIGEST = 'e3c05644ce275a49bc9e6dec9581b2c8f0ce4e60d45ff7d57f814db0dc3ab358';
+  const ZH_KEY_SET_DIGEST = 'ee123de7cdc00094ef8aa56f2dd692038a9d3f7d216ece19fea7cc3c324192e4';
 
   it('keeps the en and zh-CN key sets unchanged', () => {
     assert.equal(digestOf(enChat), EN_KEY_SET_DIGEST, 'en key set unchanged');

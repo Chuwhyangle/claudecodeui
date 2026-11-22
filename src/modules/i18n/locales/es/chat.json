@@ -153,6 +153,7 @@
     "suggestions": {
       "suggest": "Sugerir",
       "suggesting": "Sugiriendo…",
+      "suggestFailed": "Error al sugerir",
       "suggestHint": "Sugerir respuestas según la conversación",
       "suggestForSelection": "Sugerir desde la selección",
       "quoteChip": "Cita: {{text}}",

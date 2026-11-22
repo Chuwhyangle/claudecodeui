@@ -160,6 +160,7 @@
     "suggestions": {
       "suggest": "Saran",
       "suggesting": "Menyarankan…",
+      "suggestFailed": "Gagal menyarankan",
       "suggestHint": "Sarankan balasan dari percakapan sejauh ini",
       "suggestForSelection": "Saran dari pilihan",
       "quoteChip": "Kutipan: {{text}}",

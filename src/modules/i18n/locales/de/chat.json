@@ -142,6 +142,7 @@
     "suggestions": {
       "suggest": "Vorschlagen",
       "suggesting": "Wird vorgeschlagen…",
+      "suggestFailed": "Vorschlag fehlgeschlagen",
       "suggestHint": "Antworten aus dem bisherigen Gespräch vorschlagen",
       "suggestForSelection": "Aus Auswahl vorschlagen",
       "quoteChip": "Zitat: {{text}}",

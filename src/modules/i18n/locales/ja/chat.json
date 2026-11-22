@@ -142,6 +142,7 @@
     "suggestions": {
       "suggest": "提案",
       "suggesting": "提案中…",
+      "suggestFailed": "提案に失敗しました",
       "suggestHint": "これまでの会話から返信を提案",
       "suggestForSelection": "選択範囲から提案",
       "quoteChip": "引用：{{text}}",

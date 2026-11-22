@@ -142,6 +142,7 @@
     "suggestions": {
       "suggest": "Öner",
       "suggesting": "Öneriliyor…",
+      "suggestFailed": "Öneri başarısız",
       "suggestHint": "Konuşmaya göre yanıt öner",
       "suggestForSelection": "Seçimden öner",
       "quoteChip": "Alıntı: {{text}}",

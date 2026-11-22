@@ -1,19 +1,17 @@
 /**
- * The shared seam that lets a failure notice open the diagnostics log drawer.
+ * The shared seam that lets a diagnostic surface open the log drawer.
  *
- * WHY A PORT. `chat-composer` (the failure notice) and `settings` (the health
- * list) need to open a drawer owned by `diagnostics`. Importing the diagnostics
- * module from either would couple two feature modules and, worse, make
- * `chat-composer` import a module that imports the chat surface's neighbours.
- * The composition root mounts ONE `LogDrawerHost` and installs its opener here;
- * every producer reads this neutral accessor instead.
+ * WHY A PORT. `settings` (the health list) needs to open a drawer owned by
+ * `diagnostics`. Importing the diagnostics module from it would couple two
+ * feature modules. The composition root mounts ONE `LogDrawerHost` and installs
+ * its opener here; every producer reads this neutral accessor instead.
  *
  * FAIL CLOSED. Before the host mounts (a focused criterion, a page that does not
  * render the root) `openLogDrawer` returns false and `isLogDrawerAvailable` is
  * false, so a caller hides the entry instead of rendering a dead button.
  *
- * Consumers: `SuggestionFailureNotice` and `DiagnosticsHealthList` (the entry
- * points), `DiagnosticsSettingsTab` (the Settings action), `LogDrawerHost` (the
+ * Consumers: `DiagnosticsHealthList` (the entry point),
+ * `DiagnosticsSettingsTab` (the Settings action), `LogDrawerHost` (the
  * installer) and the port criterion. This file imports nothing.
  */
 

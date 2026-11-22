@@ -153,6 +153,7 @@
     "suggestions": {
       "suggest": "제안",
       "suggesting": "제안 중…",
+      "suggestFailed": "추천 실패",
       "suggestHint": "지금까지의 대화에서 답장을 제안",
       "suggestForSelection": "선택 영역에서 제안",
       "quoteChip": "인용: {{text}}",
