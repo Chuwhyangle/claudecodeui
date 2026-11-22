@@ -1,0 +1,31 @@
+Cloudpit v3.0.1 — post-release distribution verification reading
+
+Captured: 2026-11-22T16:01:10Z
+Command:  GITHUB_TOKEN="$(gh auth token)" node scripts/cloudpit-distribution-check.mjs --release --version 3.0.1 --json
+Release:  v3.0.1 / 860a4ac425f8731179ac6a218f6c21332d3f9a2f
+Checker:  scripts/cloudpit-distribution-check.mjs (NEW_VERSION = '3.0.1')
+Exit:     0
+
+The checker reads the published npm package and the GitHub release; the local
+HEAD below is recorded only to identify the reading environment, not the
+released tree.
+
+Local reading context:
+  HEAD      e15b6449cf45f38d7f65a6abe987d8e13b6d088d
+  describe  v3.0.1-464-ge15b6449c
+
+Output:
+{
+  "source": "release",
+  "version": "3.0.1",
+  "exitCode": 0,
+  "checks": [
+    "old-package",
+    "new-package",
+    "tarball-bin",
+    "repository",
+    "desktop-assets",
+    "ownership"
+  ],
+  "violations": []
+}

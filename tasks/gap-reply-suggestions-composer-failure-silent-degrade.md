@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-composer-failure-silent-degrade
 title: 回复建议失败静默降级：移除 composer 内的错误框与浮层，保留失败读数与 Diagnostics
-status: needs-human
+status: done
 labels:
   - gap
   - defect
@@ -48,11 +48,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 定向 UI 判据：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsFailureNotice.test.tsx --maxWorkers=1` 退出 0 且 `fail 0`。用例逐条断言：(a) `suggestionFailure` 非空且未 dismiss 时 `[data-slot="reply-suggestions-failure-notice"]` 与 `[data-slot="reply-suggestions-failure-popover"]` 均不存在；(b) 空 textarea 可聚焦，输入后 value 变为预期；(c) 手动点 Suggest 且 draw 返回 false 时按钮 `data-reply-suggest-state="failed"`，3 秒后回到 `idle`；(d) 正常空 chip 不渲染任何失败 DOM。
-- [ ] AC2 控制器/钩子 episode 判据保持绿：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsController.test.ts src/modules/chat/tests/useReplySuggestions.test.tsx --maxWorkers=1` 退出 0 且 `fail 0`；不改这些文件。
-- [ ] AC3 i18n：`input.suggestions.suggestFailed` 在 12 个 locale 均存在且非空；`inlineQuoteChip.test.tsx` 的 en/zh-CN key-set digest 按实测更新。命令：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/i18nChatSuggestionsCompleteness.test.ts src/modules/chat/tests/inlineQuoteChip.test.tsx --maxWorkers=1` 退出 0。
-- [ ] AC4 移除彻底：`grep -rn "SuggestionFailureNotice\|reply-suggestions-failure-notice\|reply-suggestions-failure-popover" src --include=*.ts --include=*.tsx` 只允许出现在 `replySuggestionsFailureNotice.test.tsx` 的“必须不存在”断言里；`SuggestionFailureNotice.tsx` 文件不存在；`src/modules/chat-composer/index.ts` 不再导出它。
-- [ ] AC5 仓库门：`npm run typecheck`、`npm run lint` 均退出 0；若删除测试文件导致既有 unknown/known pin 或 architecture-ratchet 计数变化，按实测更新相关 pin，并逐字贴改前/改后数字。
+- [x] AC1 定向 UI 判据：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsFailureNotice.test.tsx --maxWorkers=1` 退出 0 且 `fail 0`。用例逐条断言：(a) `suggestionFailure` 非空且未 dismiss 时 `[data-slot="reply-suggestions-failure-notice"]` 与 `[data-slot="reply-suggestions-failure-popover"]` 均不存在；(b) 空 textarea 可聚焦，输入后 value 变为预期；(c) 手动点 Suggest 且 draw 返回 false 时按钮 `data-reply-suggest-state="failed"`，3 秒后回到 `idle`；(d) 正常空 chip 不渲染任何失败 DOM。
+- [x] AC2 控制器/钩子 episode 判据保持绿：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsController.test.ts src/modules/chat/tests/useReplySuggestions.test.tsx --maxWorkers=1` 退出 0 且 `fail 0`；不改这些文件。
+- [x] AC3 i18n：`input.suggestions.suggestFailed` 在 12 个 locale 均存在且非空；`inlineQuoteChip.test.tsx` 的 en/zh-CN key-set digest 按实测更新。命令：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/i18nChatSuggestionsCompleteness.test.ts src/modules/chat/tests/inlineQuoteChip.test.tsx --maxWorkers=1` 退出 0。
+- [x] AC4 移除彻底：`grep -rn "SuggestionFailureNotice\|reply-suggestions-failure-notice\|reply-suggestions-failure-popover" src --include=*.ts --include=*.tsx` 只允许出现在 `replySuggestionsFailureNotice.test.tsx` 的“必须不存在”断言里；`SuggestionFailureNotice.tsx` 文件不存在；`src/modules/chat-composer/index.ts` 不再导出它。
+- [x] AC5 仓库门：`npm run typecheck`、`npm run lint` 均退出 0；若删除测试文件导致既有 unknown/known pin 或 architecture-ratchet 计数变化，按实测更新相关 pin，并逐字贴改前/改后数字。
 
 ## DoD
 
@@ -98,3 +98,53 @@ extra:
 本任务在 live fleet 运行期间立案。为避免 promotion/worker driver 与本次人工实现竞争同一 checkout/worktree，任务以 `needs-human` 状态立案作为 anti-dispatch claim；实现与证据完成后经 `task_write` 直接置 done（completeReason 记录人工授权与验证读数）。
 
 该轴仍暗,理由:本任务只移除 composer 内的失败展示，不涉及蒸馏/图学习产物，L_D/L_G 无新读数。
+
+## 完成记录（人工实现，2026-11-23）
+
+### 代码与提交
+
+- 实现提交：`9bc67023995ca7c08b02a1e366c74367847f40f1`（分支 `task/gap-reply-suggestions-composer-failure-silent-degrade`；19 files changed, 98 insertions(+), 381 deletions(-)）。
+- 主检出 `develop` **尚未 merge**；按用户指令等待所有者清理无关脏项（`docs/operations/cloudpit-v3.0.1-release-notes.md`、`docs/evidence/cloudpit-v3.0.1-distribution-check.txt`）。本任务未触碰这些文件。
+
+### AC 证据
+
+- AC1 ✅ `bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/replySuggestionsFailureNotice.test.tsx --maxWorkers=1` → exit 0，`1 file / 5 tests passed`。任务 acceptance gate 也通过：event `e91aca03-3238-45ca-9eda-dccb4a4bf01b`，`2026-11-22T16:20:48.792Z`，`acceptance passed (exit 0)`。
+- AC2 ✅ 同批 7 文件测试中 `replySuggestionsController.test.ts` 19 passed、`useReplySuggestions.test.tsx` 23 passed；整批 `7 files / 130 tests passed`。日志 `tmp/reply-suggestions-silent-tests.log`。
+- AC3 ✅ 12 个 locale 均有非空 `input.suggestions.suggestFailed`；`i18nChatSuggestionsCompleteness.test.ts` 37 passed、`inlineQuoteChip.test.tsx` 5 passed；en/zh key-set digest 与 pin MATCH（en `e3c05644ce275a49bc9e6dec9581b2c8f0ce4e60d45ff7d57f814db0dc3ab358`、zh `ee123de7cdc00094ef8aa56f2dd692038a9d3f7d216ece19fea7cc3c324192e4`）。
+- AC4 ✅ `SuggestionFailureNotice.tsx` 已删除；`src/modules/chat-composer/index.ts` 不再导出；`grep` 仅在 `replySuggestionsFailureNotice.test.tsx` 的“必须不存在”断言中出现 `reply-suggestions-failure-notice` / `reply-suggestions-failure-popover`。
+- AC5 ✅ `npm run lint` exit 0（仅既有 warning）；`npm run typecheck` exit 0（wall 28.87s，max RSS 1,554,476 KB）。上次 exit 137 未在单阶段复现：client/server/scripts 三段各自 exit 0；合并命令重跑 exit 0，判定为负载下的瞬时 SIGKILL，未改代码。
+- 构建 ✅ `bash scripts/with-memory-cap.sh npm run build` exit 0；日志 `tmp/reply-suggestions-silent-build.log`。
+
+### DoD 真实页面
+
+隔离实例 `http://127.0.0.1:3277`（dist-server/client 由本 worktree 构建；`REPLY_SUGGESTIONS_SETTINGS_PATH` 指向临时 settings；`CLOUDPIT_HOME` 指向临时 home；residentRestore disabled）+ stub 网关 `http://127.0.0.1:30171`（`/v1/messages` 返回 502）。会话 `9a04d66b-1f90-4320-802e-7e776c0b2b42`。
+
+- 自动失败：`/api/reply-suggestions/status` 的 `lastFailure={category:'http', httpStatus:502, requestId:'1880e521', at:'2026-11-22T16:19:17.512Z'}`；页面 `[data-slot="reply-suggestions-failure-notice"] === null`、`[data-slot="reply-suggestions-failure-popover"] === null`、textarea 可聚焦、input 为空、Suggest `idle`。截图 `tmp/reply-suggestions-silent-auto.png`。
+- 手动 Suggest：`data-reply-suggest-state` 从 `idle` → `failed`（点击后 400ms 读数）→ 3.5s 后 `idle`。截图 `tmp/reply-suggestions-silent-manual.png`。
+- 输入：textarea 聚焦后 `fill('hello')`，读数 `typing:"hello"`。
+- Diagnostics（正常配置）：`[data-diagnostics-feature="reply-suggestions"]` state=`degraded`，显示 `Last failure http · HTTP 502 · 2026-11-22T16:19:17.766Z`。截图 `tmp/reply-suggestions-silent-diagnostics.png`。
+- misconfigured：临时 settings 改空 `baseUrl`/`model`/`apiKeyFile` 后 `/status` 返回 `state:'misconfigured'`，problems 三条；composer 仍无 notice/popover，textarea 可聚焦；Diagnostics state=`misconfigured` 并显示三条 problems。截图 `tmp/reply-suggestions-silent-diagnostics-problems.png`。
+- 移动端 390×844：无 notice/popover，textarea 可聚焦；移动端新失败读数为 `circuit-open`（连续失败后熔断，httpStatus=null），仍证明失败态下无遮挡。截图 `tmp/reply-suggestions-silent-mobile.png`。
+- 读数文件：`tmp/reply-suggestions-silent-dod.json`。
+
+### 证据 SHA256
+
+```text
+e891689c96fa14ea29c30d018c3348c579616437c4752f783b7becd765d9b0be  tmp/reply-suggestions-silent-auto.png
+9f7349c9f083f674f19f029b9ff76949fba966b0fd408dbb688935a0e6043766  tmp/reply-suggestions-silent-build.log
+6b6528e22f90065cad0a91b6a4c971fd774c96b533592da4e428560a4419eba0  tmp/reply-suggestions-silent-diagnostics.png
+b4cbfad6bf011f48712ad9f6590aa7a8d57329005975f0240772aa92c2328c15  tmp/reply-suggestions-silent-diagnostics-problems.png
+7177d553d9a2fb26ace46d02beb0e7427cb0f65328802aa3d92ea8bc22f1cdfa  tmp/reply-suggestions-silent-dod.json
+89a0f90b4d0742df671a1614b43e2a4f48f4efbc469b5383cf014f00d4cad002  tmp/reply-suggestions-silent-lint.log
+6c22818ea659c9ad11915d2d2c0e102df8b136b3f7ed1d6c5c70af2bb575fca9  tmp/reply-suggestions-silent-manual.png
+c3fc061f0629c3cadcf00bb7c63b7935cc449b717ce5ede5788bd67b08432123  tmp/reply-suggestions-silent-mobile.png
+3abb787e50e79a1bf77e3cee7c0fdadb65db0b7ac7e264483f5f0b129bb66dc0  tmp/reply-suggestions-silent-tests.log
+c4db1c93813817f560e088a17f55252a9926043746f7ec844d6adbbbf90eb53b  tmp/reply-suggestions-silent-typecheck.log
+```
+
+### 诚实边界
+
+- 只改 composer 展示层；服务端失败读数、ledger、控制器 episode、Settings/Diagnostics/log drawer 均保留。
+- 未修改已 done 任务 `gap-reply-suggestions-failure-reading-and-inline-notice` 的 AC。
+- 本任务分支未 merge；merge 等主检出所有者清理无关脏项。
+- 隔离实例与 stub 为临时 DoD 环境，完成后已/将停止，不影响本机运行中的 Cloudpit。
