@@ -88,7 +88,7 @@ output tokens without lowering suggestion quality.
 `redrawTemperature` — redraw sampling temperature (0–2, default `1.0`); a higher
 value produces fewer near-duplicates.
 
-`maxOutputTokens` — `max_tokens` sent upstream (1–8192, default `400`).
+`maxOutputTokens` — `max_tokens` sent upstream (1–8192, default `2000`; the cap is shared with the draft rewrite, which needs room for a whole-message rewrite).
 
 `timeoutMs` — per-request timeout in milliseconds (1–120000, default `5000`).
 

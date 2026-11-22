@@ -793,7 +793,7 @@
     },
     "debugLog": {
       "title": "Journal de débogage du polissage de brouillon",
-      "description": "Lorsque cette option est activée, le brouillon et le texte du candidat sont écrits dans un journal local. Ce fichier reste local, n’est pas téléversé et ne fait pas partie de la télémétrie. Désactivé par défaut ; la rotation est la seule politique de conservation.",
+      "description": "L’activation écrit le brouillon actuel, le contexte récent de la conversation et le texte du candidat dans un journal local ; le fichier reste sur cette machine, n’est pas téléversé et ne fait pas partie de la télémétrie. Désactivé par défaut ; la rotation est la seule politique de conservation.",
       "label": "Écrire les tentatives de polissage dans le journal de débogage local",
       "saveFailed": "Échec de l’enregistrement — le réglage n’a pas été modifié."
     }

@@ -22,6 +22,7 @@ import type { ReplySuggestionsFailureState } from './reply-suggestions-failure-s
 import {
   createReplySuggestionsService,
   type LastAssistantMessage,
+  type RecentConversationMessage,
 } from './reply-suggestions.service.js';
 import {
   createReplySuggestionsSettingsSource,
@@ -43,6 +44,8 @@ import { createReplySuggestionsDebugLog, type ReplySuggestionsDebugLog } from '.
  */
 export type ReplySuggestionsModuleDeps = {
   readLastAssistantMessage: (sessionId: string) => Promise<LastAssistantMessage | null>;
+  /** Recent turns a rewrite may use as reference; absent means draft-only rewrites. */
+  readRecentConversation?: (sessionId: string, limit: number) => Promise<RecentConversationMessage[]>;
   settingsPath?: string | null;
   homeDir?: string;
   now?: () => number;
@@ -95,6 +98,9 @@ export function createReplySuggestionsModule(deps: ReplySuggestionsModuleDeps): 
     createReplySuggestionsService({
       readSettings: () => settings.read(),
       readLastAssistantMessage: deps.readLastAssistantMessage,
+      ...(deps.readRecentConversation === undefined
+        ? {}
+        : { readRecentConversation: deps.readRecentConversation }),
       usageLog,
       debugLog,
       writeDebugLog: (enabled) => settings.writeDebugLog(enabled),

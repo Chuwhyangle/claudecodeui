@@ -187,7 +187,7 @@ const DEFAULT_SETTINGS = {
   disableThinking: true,
   temperature: 0.3,
   redrawTemperature: 1.0,
-  maxOutputTokens: 400,
+  maxOutputTokens: 2000,
   timeoutMs: 5000,
   maxChips: 3,
   maxChipChars: 120,

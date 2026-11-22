@@ -179,7 +179,7 @@ test('(e) the inline warning names the behaviour and the fixed path; no clear ac
   assert.ok(text.includes(DESCRIPTION), 'the warning sentence is drawn');
   assert.ok(text.includes('~/.cloudpit/reply-suggestions-debug.jsonl'), 'the fixed path is drawn');
   assert.ok(
-    (ZH.diagnostics.debugLog.description as string).includes('开启后会把草稿与候选原文写入本机日志'),
+    (ZH.diagnostics.debugLog.description as string).includes('开启后会把当前草稿、最近对话上下文与候选原文写入本机日志'),
     'the Chinese warning states exactly what is written',
   );
 

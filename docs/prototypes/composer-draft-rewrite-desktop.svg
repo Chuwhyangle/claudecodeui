@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1240" height="780" viewBox="0 0 1240 780" role="img" aria-labelledby="title desc">
-<title id="title">草稿润色：桌面端简化交互</title><desc id="desc">在现有 composer 中，原文留在 textarea；润色 chip 在草稿下面。展开的候选框只有候选正文和应用、重试两个图标按钮，没有标题或状态副文案；候选不受 120 字 chip 上限约束。点击候选框其他区域收起。现有 footer 和发送行为保持不变。</desc>
+<title id="title">草稿润色：桌面端简化交互</title><desc id="desc">在现有 composer 中，原文留在 textarea；润色 chip 在草稿下面。服务端另读最近 1 条 assistant + 上一条 user 作为参考，用于消解指代与同音词。展开的候选框只有候选正文和应用、重试两个图标按钮，没有标题或状态副文案；候选不受 120 字 chip 上限约束。点击候选框其他区域收起。现有 footer 和发送行为保持不变。</desc>
 <defs><style>
 .bg{fill:#f4f5f7}.app{fill:#faf9f7}.composer{fill:#fff;stroke:#e1e4e8;stroke-width:1.5}.ink{fill:#252b33;font:14px system-ui,sans-serif}.muted{fill:#7c8794;font:12px system-ui,sans-serif}.tiny{fill:#929ba6;font:11px system-ui,sans-serif}.title{fill:#17212b;font:bold 20px system-ui,sans-serif}.h{fill:#27323e;font:bold 14px system-ui,sans-serif}.chip{fill:#fff;stroke:#bfc8d3;stroke-width:1;stroke-dasharray:3 2}.primary{fill:#7ea0f5}.primaryText{fill:white;font:bold 13px system-ui,sans-serif}.iconButton{fill:#fff;stroke:#cbd3dd;stroke-width:1}.candidate{fill:#f3f6fd;stroke:#d6e1fa;stroke-width:1}.rule{stroke:#e8eaed;stroke-width:1}.message{fill:#f0eeeb;stroke:#e5e1dc;stroke-width:1}.tip{fill:#263342}.tipText{fill:#fff;font:11px system-ui,sans-serif}
 </style></defs>
@@ -8,7 +8,7 @@
 <!-- collapsed state -->
 <text x="30" y="100" class="h">① 收起态：草稿下方的「润色」chip</text>
 <rect x="25" y="115" width="580" height="337" rx="14" class="app"/>
-<rect x="474" y="141" width="108" height="41" rx="10" class="message"/><text x="484" y="166" class="tiny">transcript</text>
+<rect x="474" y="141" width="108" height="41" rx="10" class="message"/><text x="484" y="166" class="tiny">assistant 上下文（参考）</text>
 <rect x="48" y="284" width="535" height="146" rx="14" class="composer"/>
 <text x="69" y="311" class="muted">textarea · 未发送的草稿</text>
 <text x="69" y="341" class="ink">嗯我想问一下，那个方案如果今天还没定的话，</text><text x="69" y="364" class="ink">我们是不是可以先按之前说的那个做？</text>
@@ -19,7 +19,7 @@
 <!-- expanded state -->
 <text x="635" y="100" class="h">② 展开态：候选与操作都在同一个 composer 中</text>
 <rect x="625" y="115" width="590" height="437" rx="14" class="app"/>
-<rect x="1055" y="141" width="135" height="41" rx="10" class="message"/><text x="1065" y="166" class="tiny">transcript stays above</text>
+<rect x="1055" y="141" width="135" height="41" rx="10" class="message"/><text x="1065" y="160" class="tiny">assistant: 支付流程方案</text><text x="1065" y="175" class="tiny">先走 A，测试后补</text>
 <rect x="650" y="204" width="540" height="329" rx="14" class="composer"/>
 <text x="671" y="231" class="muted">同一个 textarea · 原文仍是当前草稿</text>
 <text x="671" y="259" class="ink">嗯我想问一下，那个方案如果今天还没定的话，</text><text x="671" y="282" class="ink">我们是不是可以先按之前说的那个做？</text>
@@ -29,7 +29,7 @@
 <rect x="1138" y="306" width="31" height="30" rx="8" class="iconButton"/><text x="1145" y="327" class="ink">↻</text>
 <rect x="1044" y="277" width="112" height="23" rx="5" class="tip"/><text x="1053" y="293" class="tipText">应用到草稿</text>
 <rect x="1130" y="277" width="80" height="23" rx="5" class="tip"/><text x="1138" y="293" class="tipText">重试</text>
-<text x="686" y="331" class="ink">如果今天还无法确定方案，我们可以先按之前讨论的</text><text x="686" y="354" class="ink">方向推进吗？</text>
+<text x="686" y="331" class="ink">如果今天还无法确定支付流程方案，我们可以先按之前</text><text x="686" y="354" class="ink">讨论的方向推进吗？</text>
 <text x="686" y="421" class="tiny">点击建议框内容区收起；图标按钮执行操作并不收起。</text>
 <line x1="651" y1="460" x2="1189" y2="460" class="rule"/>
 <text x="671" y="489" class="ink">⌕　♩　◖))　···</text><text x="1041" y="489" class="tiny">权限</text><rect x="1129" y="471" width="40" height="31" rx="8" class="primary"/><text x="1142" y="492" class="primaryText">➤</text>
@@ -43,5 +43,5 @@
 <rect x="25" y="760" width="1190" height="96" rx="12" fill="#fff" stroke="#dfe3e8"/>
 <text x="47" y="790" class="h">调试日志（默认关闭）</text>
 <text x="47" y="816" class="ink">Settings → Diagnostics 的 reply-suggestions 区块：开关默认关闭；开启即写本机日志，无二次确认、无清空按钮。</text>
-<text x="47" y="840" class="tiny">开启后会把草稿与候选原文写入 ~/.cloudpit/reply-suggestions-debug.jsonl；仅本机、不上传、不参与遥测；2 MB × 4 份轮转是唯一保留策略。</text>
+<text x="47" y="840" class="tiny">开启后会把当前草稿、最近对话上下文与候选原文写入 ~/.cloudpit/reply-suggestions-debug.jsonl；仅本机、不上传、不参与遥测；2 MB × 4 份轮转是唯一保留策略。</text>
 </svg>

@@ -8,7 +8,7 @@
 
 ## 1. 产品定义
 
-用户主动请求模型把当前草稿整理得更清楚、更完整；用户预览**单一候选**后决定是否替换。改写永不自动发送，也不改变会话消息。用户始终拥有最终文本和发送动作。
+用户主动请求模型结合最近对话上下文，把当前草稿整理成清晰、自包含的请求；用户预览**单一候选**后决定是否替换。改写永不自动发送，也不改变会话消息。用户始终拥有最终文本和发送动作。
 
 - 入口文字：`✦ 润色`。
 - 目标：整理措辞和明显的语音识别口误，不替用户补充想法、回答问题或创造事实。
@@ -18,7 +18,7 @@
 
 - 自动改写、自动发送、后台改写、对每次语音转写自动调用模型。
 - 对助手回复生成建议（那是 reply-suggestions chip 的职责）、对话摘要。
-- 发送对话历史、附件或语音音频；默认只发当前草稿文本。
+- 发送对话历史全文、工具结果、附件或语音音频；只发送当前草稿与最近 1 条 assistant + 上一条 user 的文本（≤4000 字符）。
 - 多轮聊天式编辑、多个候选、独立模型/供应商/设置文件或独立开关。
 
 ## 2. 交互规格
@@ -26,7 +26,7 @@
 ### 入口
 
 - 仅当草稿 `trim()` 后非空、改写服务已启用时，在**同一个 composer 外框内、textarea 下方且 footer 上方**显示 `✦ 润色` chip。
-- 手动点击只提交当前草稿快照；不发送 transcript、音频、附件、聊天 provider/model，也不执行草稿里的指令。
+- 手动点击提交当前草稿快照；服务端按 `sessionId` 另读最近 1 条 assistant + 上一条 user 的文本作为参考（≤4000 字符，最旧先丢），不发送工具结果、附件、音频或聊天 provider/model，也不执行草稿/上下文里的指令。
 - 点击后同位置展开候选框。展开期间 textarea 仍显示真实、未改动的当前草稿，可继续编辑、移动光标、使用快捷键与 Send。
 
 ### 候选框
@@ -82,7 +82,7 @@
 
 - 复用既有 `server/modules/reply-suggestions/` 的设置来源与有效配置：`enabled`、upstream 协议/地址/模型/凭据、`disableThinking`、`timeoutMs`、`temperature` / `redrawTemperature` / `maxOutputTokens`。
 - 不新增 `draftRewrite` 设置文件、model/provider 配置或独立开关；不另造 baseUrl/凭据解析器。
-- 首抽使用 `temperature`；重试使用 `redrawTemperature`；`maxOutputTokens` 原值透传，**保持默认 400，不擅自增大**。
+- 首抽使用 `temperature`；重试使用 `redrawTemperature`；`maxOutputTokens` 原值透传，默认提升到 **2000**（只是上限；chip 输出仍 ≤120 字符，不受影响），避免长稿被截断拒绝。
 - chips 与 rewrite 共享**同一个 upstream guard**：同一个熔断器、同一个每分钟/每天调用预算。任何一方消耗额度，另一方按同一限制被拒绝；不存在「各自一份完整配额」。
 - 输入/输出上限是共享 wire 常量（6000 字符），两端逐字段对拍。
 
@@ -92,7 +92,8 @@
 - 请求体里除 `text`/`sessionId`/`retry` 以外的字段（model、provider、prompt、system、history、url…）一律忽略，不能改变 completion 配置。
 - `PUT /api/reply-suggestions/debug-log`：`{ enabled: boolean }` → `{ debugLog: boolean }`（挂在既有 `authenticateToken` 下；非布尔 400）。`GET /api/reply-suggestions/status` 增加 `debugLog` 布尔读数，双端 TypeSync 钉住。
 - 错误映射：禁用/缺有效上游 `503`、空或超长输入 `400`、无额度 `429`、上游/候选不合格 `502`（携带机器可读 `details.category`）。
-- 不提供历史上下文参数、候选列表、客户端 prompt、模型 override 或 arbitrary URL 参数。
+- 客户端不提供上下文参数、候选列表、客户端 prompt、模型 override 或 arbitrary URL 参数；上下文只由服务端按 `sessionId` 读取。
+- 上下文用 `<context>` 包裹、草稿用 `<draft>` 包裹，草稿始终是最后一段；system prompt 明确两者都是数据、不得执行其中的指令，只能用于消解指代、省略对象与同音词。上下文读取失败降级为“无上下文”，不影响重写。
 - 不持久化原文和候选；不写文本型 usage log。
 
 ### 网关 stop reason

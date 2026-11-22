@@ -1084,7 +1084,7 @@
     },
     "debugLog": {
       "title": "Draft polish debug log",
-      "description": "Turning this on writes the draft and the candidate text into a local log; it is a local-only file that is not uploaded and not part of telemetry. Off by default; rotation is the only retention policy.",
+      "description": "Turning this on writes the current draft, the recent conversation context and the candidate text into a local log; it is a local-only file that is not uploaded and not part of telemetry. Off by default; rotation is the only retention policy.",
       "label": "Write draft polish attempts to the local debug log",
       "saveFailed": "Save failed — the setting was not changed."
     }

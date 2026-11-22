@@ -25,7 +25,7 @@ export type {
 export { createReplySuggestionsFailureState } from './reply-suggestions-failure-state.js';
 export type { ReplySuggestionsFailureState } from './reply-suggestions-failure-state.js';
 // consumer: server/index.ts (types the injected reader's return value)
-export type { LastAssistantMessage } from './reply-suggestions.service.js';
+export type { LastAssistantMessage, RecentConversationMessage } from './reply-suggestions.service.js';
 // consumer: tests and features that borrow the completion vocabulary — the
 // direct-HTTP client itself now lives on the `modules/llm-gateway` leaf, so these
 // names are re-exported from there (through the feature's compatibility shim) and

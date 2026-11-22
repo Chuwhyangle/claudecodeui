@@ -28,7 +28,14 @@ import type {
   ReplySuggestionsCompletion,
   ReplySuggestionsCompletionRequest,
 } from './reply-suggestions-client.js';
-import { createDrawRunner, createDraftRewriteRunner, DRAFT_REWRITE_MAX_INPUT_CHARS } from './reply-suggestions-draw.js';
+import {
+  createDrawRunner,
+  createDraftRewriteRunner,
+  DRAFT_REWRITE_CONTEXT_MESSAGES,
+  DRAFT_REWRITE_MAX_CONTEXT_CHARS,
+  DRAFT_REWRITE_MAX_INPUT_CHARS,
+  type DraftRewriteConversation,
+} from './reply-suggestions-draw.js';
 import { createUpstreamGuard } from './reply-suggestions-guard.js';
 import { createDrawStore } from './reply-suggestions-draw-store.js';
 import {
@@ -59,6 +66,15 @@ export type { ReplySuggestionsStatus } from './reply-suggestions-failure-state.j
 /** The last assistant message, as the injected reader reports it.
  * Consumers: `reply-suggestions.module.ts` and `server/index.ts` (through the barrel). */
 export type LastAssistantMessage = { id: string; text: string };
+
+/**
+ * One recent transcript turn handed to a rewrite as reference. The reader returns the turns
+ * oldest-first; the service labels and bounds them before they reach the prompt.
+ *
+ * Consumers: `reply-suggestions.module.ts` (the injected reader's return type) and
+ * `server/index.ts` (the production reader).
+ */
+export type RecentConversationMessage = { role: 'user' | 'assistant'; text: string };
 
 /** Input the route has already parsed and validated.
  * Consumers: `reply-suggestions.routes.ts` and the service criterion. */
@@ -124,6 +140,13 @@ export type DraftRewriteResult = {
 export type ReplySuggestionsServiceDeps = {
   readSettings: () => ReplySuggestionsSettings;
   readLastAssistantMessage: (sessionId: string) => Promise<LastAssistantMessage | null>;
+  /**
+   * The recent transcript turns a rewrite may use as reference. OPTIONAL: a composition that
+   * does not bind it (or a request without a session id) rewrites the draft alone. A reader
+   * that throws is treated as "no context" — the rewrite must not fail because reference text
+   * could not be read.
+   */
+  readRecentConversation?: (sessionId: string, limit: number) => Promise<RecentConversationMessage[]>;
   complete?: (request: ReplySuggestionsCompletionRequest) => Promise<ReplySuggestionsCompletion>;
   now?: () => number;
   logger?: (line: string) => void;
@@ -298,6 +321,30 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
     }
   }
 
+  /**
+   * Assemble the reference context for one rewrite: the last assistant turn and the user turn
+   * before it, role-labeled and bounded (the oldest text is dropped first). Any reader failure
+   * degrades to "no context" — a rewrite must not fail because optional reference text could
+   * not be read.
+   */
+  async function readRewriteContext(sessionId: string | null): Promise<DraftRewriteConversation | null> {
+    const reader = deps.readRecentConversation;
+    if (sessionId === null || reader === undefined) return null;
+    try {
+      const messages = await reader(sessionId, DRAFT_REWRITE_CONTEXT_MESSAGES);
+      const selected = messages
+        .filter((message) => message.text.trim() !== '')
+        .slice(-DRAFT_REWRITE_CONTEXT_MESSAGES);
+      if (selected.length === 0) return null;
+      const joined = selected.map((message) => `${message.role}: ${message.text.trim()}`).join('\n\n');
+      return { text: tailCodePoints(joined, DRAFT_REWRITE_MAX_CONTEXT_CHARS), messages: selected.length };
+    } catch (failure) {
+      const reason = failure instanceof Error ? failure.name : 'unknown';
+      logger(`[reply-suggestions] rewrite context read failed: ${reason}`);
+      return null;
+    }
+  }
+
   return {
     status(): ReplySuggestionsStatus {
       return replySuggestionsStatus(deps.readSettings(), failures.lastFailure());
@@ -332,12 +379,15 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
       const text = input.text;
       if (text.trim() === '') throw invalidInputError('"text" must contain a non-blank draft');
       if (text.length > DRAFT_REWRITE_MAX_INPUT_CHARS) throw draftTooLongError();
+      const sessionId = input.sessionId === undefined || input.sessionId === '' ? null : input.sessionId;
+      const context = await readRewriteContext(sessionId);
       const result = await draftRewriteRunner.rewrite({
         settings,
         text,
         retry: input.retry === true,
         requestId: createReplySuggestionsRequestId(),
-        sessionId: input.sessionId === undefined || input.sessionId === '' ? null : input.sessionId,
+        sessionId,
+        context,
       });
       return { rewrittenText: result.rewrittenText };
     },

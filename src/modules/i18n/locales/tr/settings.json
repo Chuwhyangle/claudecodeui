@@ -742,7 +742,7 @@
     },
     "debugLog": {
       "title": "Taslak düzenleme hata ayıklama günlüğü",
-      "description": "Etkinleştirildiğinde taslak ve aday metni yerel bir günlüğe yazılır. Bu dosya yalnızca yerelde tutulur, yüklenmez ve telemetriye dahil edilmez. Varsayılan olarak kapalıdır; rotasyon tek saklama politikasıdır.",
+      "description": "Bu açıldığında geçerli taslak, son konuşma bağlamı ve aday metin yerel bir günlüğe yazılır; dosya yalnızca bu makinede kalır, yüklenmez ve telemetriye dahil edilmez. Varsayılan olarak kapalıdır; tek saklama politikası rotasyondur.",
       "label": "Düzenleme denemelerini yerel hata ayıklama günlüğüne yaz",
       "saveFailed": "Kaydedilemedi — ayar değiştirilmedi."
     }

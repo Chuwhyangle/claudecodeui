@@ -65,7 +65,7 @@ const EXPECTED_DEFAULTS = {
   generation: {
     temperature: 0.3,
     redrawTemperature: 1.0,
-    maxOutputTokens: 400,
+    maxOutputTokens: 2000,
     maxChips: 3,
     maxChipChars: 120,
     maxTailChars: 1500,

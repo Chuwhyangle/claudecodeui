@@ -71,6 +71,14 @@ export type ReplySuggestionsDebugAttempt = {
   outputTokens?: number | null;
   input: string;
   output: string;
+  /**
+   * The recent conversation used as reference for this attempt (role-labeled, already bounded
+   * by the service), or null/absent for a draft-only rewrite. Written under the same switch
+   * that authorizes the draft and candidate.
+   */
+  context?: string | null;
+  /** How many transcript turns the context text was assembled from. */
+  contextMessages?: number | null;
 };
 
 /** One line of the debug ledger, exactly as it is serialised. */
@@ -91,6 +99,9 @@ export type ReplySuggestionsDebugRow = {
   input: string;
   output: string;
   outputTruncatedForLog?: boolean;
+  context?: string;
+  contextChars?: number;
+  contextMessages?: number;
 };
 
 /**
@@ -128,6 +139,15 @@ function buildRow(attempt: ReplySuggestionsDebugAttempt, at: string): ReplySugge
     input: attempt.input,
     output,
     ...(outputTruncated ? { outputTruncatedForLog: true } : {}),
+    ...(attempt.context === undefined || attempt.context === null || attempt.context === ''
+      ? {}
+      : {
+        context: attempt.context,
+        contextChars: attempt.context.length,
+        ...(attempt.contextMessages === undefined || attempt.contextMessages === null
+          ? {}
+          : { contextMessages: attempt.contextMessages }),
+      }),
   };
 }
 

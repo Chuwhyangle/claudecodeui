@@ -2021,6 +2021,27 @@ app.use(
             }
             return null;
         },
+        // The rewrite's reference context: the last assistant turn and the user turn before
+        // it, oldest-first. Text messages only; tool results and attachments never reach the
+        // prompt. The service labels, bounds and truncates whatever this returns.
+        readRecentConversation: async (sessionId: string, limit: number) => {
+            const { messages } = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
+            const picked: { role: 'user' | 'assistant'; text: string }[] = [];
+            for (let index = messages.length - 1; index >= 0 && picked.length < limit; index -= 1) {
+                const message = messages[index];
+                const text = typeof message.text === 'string' && message.text.trim() !== ''
+                    ? message.text
+                    : (typeof message.content === 'string' ? message.content : '');
+                if (
+                    (message.role === 'user' || message.role === 'assistant')
+                    && message.kind === 'text'
+                    && text.trim() !== ''
+                ) {
+                    picked.push({ role: message.role, text });
+                }
+            }
+            return picked.reverse();
+        },
         settingsSource: replySuggestionsSettings,
         failureState: replySuggestionsFailures,
     }),

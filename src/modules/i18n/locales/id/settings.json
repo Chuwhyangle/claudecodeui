@@ -1035,7 +1035,7 @@
     },
     "debugLog": {
       "title": "Log debug pemolesan draf",
-      "description": "Mengaktifkannya akan menulis draf dan teks kandidat ke log lokal. File ini hanya tersimpan lokal, tidak diunggah, dan bukan bagian dari telemetri. Nonaktif secara bawaan; rotasi adalah satu-satunya kebijakan penyimpanan.",
+      "description": "Mengaktifkan ini akan menulis draf saat ini, konteks percakapan terbaru, dan teks kandidat ke log lokal; berkas hanya ada di mesin ini, tidak diunggah, dan bukan bagian dari telemetri. Nonaktif secara bawaan; rotasi adalah satu-satunya kebijakan penyimpanan.",
       "label": "Tulis percobaan pemolesan ke log debug lokal",
       "saveFailed": "Gagal menyimpan — pengaturan tidak diubah."
     }

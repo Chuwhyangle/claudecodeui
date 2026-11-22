@@ -735,7 +735,7 @@
     },
     "debugLog": {
       "title": "Debug-Protokoll für Entwurfsüberarbeitung",
-      "description": "Wenn dies aktiviert ist, werden Entwurf und Kandidatentext in ein lokales Protokoll geschrieben. Die Datei bleibt lokal, wird nicht hochgeladen und ist nicht Teil der Telemetrie. Standardmäßig aus; Rotation ist die einzige Aufbewahrungsrichtlinie.",
+      "description": "Wenn diese Option aktiviert ist, werden der aktuelle Entwurf, der letzte Gesprächskontext und der Kandidatentext in ein lokales Protokoll geschrieben; die Datei bleibt lokal, wird nicht hochgeladen und ist nicht Teil der Telemetrie. Standardmäßig aus; Rotation ist die einzige Aufbewahrungsrichtlinie.",
       "label": "Entwurfsüberarbeitungen im lokalen Debug-Protokoll speichern",
       "saveFailed": "Speichern fehlgeschlagen — die Einstellung wurde nicht geändert."
     }

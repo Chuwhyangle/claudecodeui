@@ -741,7 +741,7 @@
     },
     "debugLog": {
       "title": "Registro di debug della rifinitura della bozza",
-      "description": "Attivandolo, la bozza e il testo del candidato vengono scritti in un registro locale. Il file resta locale, non viene caricato e non fa parte della telemetria. Disattivato per impostazione predefinita; la rotazione è l’unica politica di conservazione.",
+      "description": "Attivandolo, la bozza corrente, il contesto recente della conversazione e il testo candidato vengono scritti in un log locale; il file resta su questa macchina, non viene caricato e non fa parte della telemetria. Disattivato per impostazione predefinita; la rotazione è l’unica politica di conservazione.",
       "label": "Scrivi i tentativi di rifinitura nel registro di debug locale",
       "saveFailed": "Salvataggio non riuscito — l’impostazione non è stata modificata."
     }

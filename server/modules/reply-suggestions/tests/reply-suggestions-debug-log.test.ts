@@ -201,6 +201,29 @@ test('(d) the line field set is exact, and an omitted sessionId is ABSENT (not n
   assert.equal(row.type, 'draftRewrite');
 });
 
+test('(d2) the context used for the attempt is recorded with its size and message count', async (t) => {
+  const writerDir = temporaryDirectory(t, 'debug-ledger-context-');
+  const filePath = path.join(writerDir, 'debug.jsonl');
+  const log = createReplySuggestionsDebugLog({ filePath });
+  const context = 'user: 上一轮的问题\n\nassistant: 上一轮的回答';
+  log.record({
+    requestId: 'req-context',
+    outcome: 'ok',
+    durationMs: 2,
+    model: 'm',
+    protocol: 'anthropic',
+    version: 'v1',
+    input: 'draft',
+    output: 'candidate',
+    context,
+    contextMessages: 2,
+  });
+  const row = readLines(filePath)[0];
+  assert.equal(row.context, context);
+  assert.equal(row.contextChars, context.length);
+  assert.equal(row.contextMessages, 2);
+});
+
 test('(e) tokens are omitted when the completion did not expose them', async (t) => {
   const writerDir = temporaryDirectory(t, 'debug-ledger-tokens-');
   const filePath = path.join(writerDir, 'debug.jsonl');
