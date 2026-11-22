@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-composer-failure-silent-degrade
 title: 回复建议失败静默降级：移除 composer 内的错误框与浮层，保留失败读数与 Diagnostics
-status: needs-human
+status: done
 labels:
   - gap
   - defect
