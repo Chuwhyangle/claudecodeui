@@ -149,6 +149,17 @@ const GATE_DIRECTORY_PIN: readonly string[] = [
   'modules/providers',
   'modules/providers/list/claude',
   'modules/providers/list/claude/lifecycle',
+  // TWENTY-SECOND RECORDED CHANGE (2026-11-22,
+  // gap-routine-architecture-analysis-god-package-server-providers-claude-size-retrigg):
+  // `modules/providers/list/claude/transcript` is registered as a KNOWN
+  // directory under AC-394 (c)'s escape hatch. It is the leaf the size
+  // retrigger's fix created by moving the Claude-specific transcript title
+  // reader out of `modules/providers/list/claude` (20 files / 53 entities ->
+  // 19 / 49). It imports only node builtins and the `modules/database` barrel,
+  // sits in no SCC, and its one inbound edge is the package root's re-export —
+  // the sanctioned extraction shape. The directory arm rises 106 -> 107; the
+  // utils line count is untouched.
+  'modules/providers/list/claude/transcript',
   // FIFTH RECORDED CHANGE (2026-11-06,
   // gap-routine-architecture-analysis-god-package-server-codex): the codex
   // provider god-package was split into three subpackages

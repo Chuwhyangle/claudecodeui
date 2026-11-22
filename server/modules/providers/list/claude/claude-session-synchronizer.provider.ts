@@ -16,7 +16,7 @@ import {
   readTranscriptWindow,
   TRANSCRIPT_TITLE_HEAD_MAX_WINDOW_BYTES,
   TRANSCRIPT_TITLE_TAIL_MAX_WINDOW_BYTES,
-} from '@/modules/providers/list/claude/session-ai-title.service.js';
+} from '@/modules/providers/list/claude/transcript/session-ai-title.service.js';
 
 type ParsedSession = {
   sessionId: string;

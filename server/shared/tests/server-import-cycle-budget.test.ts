@@ -363,6 +363,18 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/providers',
   'modules/providers/list/claude',
   'modules/providers/list/claude/lifecycle',
+  // TWENTY-THIRD RECORDED CHANGE (2026-11-22,
+  // gap-routine-architecture-analysis-god-package-server-providers-claude-size-retrigg):
+  // the size-retrigger finding's fix moved the Claude-specific transcript
+  // title reader (`session-ai-title.service.ts`, the last thing keeping the
+  // package at 20 files / 53 entities) into this leaf subpackage. Registered
+  // under AC-394 (c)'s escape hatch: its only out-edges are node builtins and
+  // the `modules/database` barrel (which never points back at providers), the
+  // package root imports it one-way, and it sits in no SCC — `sccs=[]` and
+  // every cycle group are untouched. `directoryManifest`/`nodeCount` rise
+  // 106 -> 107; the fileCount reading it lowers is
+  // `modules/providers/list/claude` 20 -> 19 (entityCount 53 -> 49).
+  'modules/providers/list/claude/transcript',
   // SIXTEENTH RECORDED CHANGE (2026-11-06,
   // gap-routine-architecture-analysis-god-package-server-codex): the god-package
   // finding's fix split `modules/providers/list/codex` into three subpackages.

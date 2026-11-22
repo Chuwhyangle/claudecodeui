@@ -54,7 +54,7 @@ export { sessionConversationsSearchService } from './services/session-conversati
 // readSessionAiTitle: used by the commands module's `/cost` handler to show the
 // title Claude generated for a session. Only the providers module knows a
 // transcript's shape, and only it owns the row that points at one.
-export { readSessionAiTitle } from './list/claude/session-ai-title.service.js';
+export { readSessionAiTitle } from './list/claude/transcript/session-ai-title.service.js';
 // buildCostView: the provider-agnostic `/cost` derivation, consumed by the
 // commands module's `/cost` handler as `data.cost`. It decides the dual-meaning
 // `used` once, derives the cache ratio and fresh remainder, and resolves the
