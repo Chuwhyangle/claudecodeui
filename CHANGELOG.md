@@ -3,6 +3,83 @@
 All notable changes to Cloudpit will be documented in this file.
 
 
+## [3.1.0](https://github.com/yaleh/cloudpit/compare/v3.0.1...v3.1.0) (2026-11-22)
+
+### New Features
+
+* **diagnostics:** escalate failed-outcome console lines to error in the log tee ([03f6d47](https://github.com/yaleh/cloudpit/commit/03f6d476a8b66efa60bc24b97111f2b8d73659a2))
+* **diagnostics:** process-local redacted log ring, logs API and global log drawer ([88f351f](https://github.com/yaleh/cloudpit/commit/88f351fdd69afbbb7925af015aabc6e196b738e2))
+* **reply-suggestions:** opt-in local draft-rewrite debug ledger ([49d629d](https://github.com/yaleh/cloudpit/commit/49d629ddd3b07c4a3d69adc728561e3e7ec43618))
+* **reply-suggestions:** preserve user facts in the draft rewrite (prompt v5b.2) ([b91878f](https://github.com/yaleh/cloudpit/commit/b91878fd1a8b899886c219cbf07a305c5c60e783))
+* **reply-suggestions:** rewrite drafts into self-contained requests (prompt v3) ([e189890](https://github.com/yaleh/cloudpit/commit/e189890f1788cc28081220fd4d09c76006f7593a))
+* **reply-suggestions:** rewrite the draft with recent conversation context ([ff5b10c](https://github.com/yaleh/cloudpit/commit/ff5b10c4633f12b9193a98c464f3d6a19ccf2269))
+* **settings:** diagnostics & logs tab with feature health, recent failures and a redacted bundle ([9db8d16](https://github.com/yaleh/cloudpit/commit/9db8d16565a64efbfa4bb8f6e655d14d8ded041b))
+
+### Bug Fixes
+
+* **architecture:** repoint minimapGeometry at the split layout/engine package ([d6449cc](https://github.com/yaleh/cloudpit/commit/d6449cc1a922fd09130b15acf0a528f60a9473eb))
+* **chat-composer:** silence reply-suggestion failures in the composer ([9bc6702](https://github.com/yaleh/cloudpit/commit/9bc67023995ca7c08b02a1e366c74367847f40f1))
+* **chat:** keep the resident pending prefix match at the oversize baseline ([2f8a17e](https://github.com/yaleh/cloudpit/commit/2f8a17e2b73f8c2c443495a32d876322fb533ec8))
+* **chat:** retire a resident pending row by its persisted turn's prefix ([7ab1acd](https://github.com/yaleh/cloudpit/commit/7ab1acdd74708e9f4cd03e12f1e723fb3730abe4))
+* keep reply-suggestion wire types out of shared/api and re-pin the locale digests ([f16a91b](https://github.com/yaleh/cloudpit/commit/f16a91b87a8900cc62319de87570ceb45653b34d))
+* **mcp:** advertise the Cloudpit identity and package version in initialize ([8c960f0](https://github.com/yaleh/cloudpit/commit/8c960f01e8cad9157e49c3e7b61815ecb3bca4be))
+* portal the failure popover so the transcript layer cannot intercept its actions ([e2b2220](https://github.com/yaleh/cloudpit/commit/e2b222074bda415d489591403b5df052d09826a4))
+* **voice:** one byte-merge helper for the TTS leaf and the narrator page ([5f486c4](https://github.com/yaleh/cloudpit/commit/5f486c46ba1b91d2c610410a515c1519fbdc3798))
+
+### Performance
+
+* **frontend:** pause hidden-tab timers behind one visibility seam ([f99bad9](https://github.com/yaleh/cloudpit/commit/f99bad9e9fae1c895ba4582c50aa4646d561d452))
+* **frontend:** split non-resident routes and heavy side entries out of the first chunk ([4f60422](https://github.com/yaleh/cloudpit/commit/4f60422e151f6f8434a3429c48f25fa9698654c9))
+* **sidebar:** bound the project-list render window at 50 rows ([322b69b](https://github.com/yaleh/cloudpit/commit/322b69b95f6e5f6e89593426ef40b22467ee4330))
+* **sidebar:** resume the display-rate activity spinner after the layer fix ([38506b6](https://github.com/yaleh/cloudpit/commit/38506b63e600f3280beb491a8a9626ec01b45d0c))
+* **sidebar:** step the activity spinner to fifteen updates per second ([4daaa98](https://github.com/yaleh/cloudpit/commit/4daaa988811c2d1ab4dde53407ebc8c29f5943ae))
+* **sidebar:** step the activity spinner to five updates per second ([5951fe7](https://github.com/yaleh/cloudpit/commit/5951fe7f2941192b8a25c9044489578917c430c8))
+* **sidebar:** stop live-turn animations re-blurring the sidebar ([e4764d0](https://github.com/yaleh/cloudpit/commit/e4764d062552f7b5b13bd2b11ff2dbfae857fc9d))
+
+### Refactoring
+
+* **architecture:** keep hooks unconditional and lower the oversize baseline ([95c89fe](https://github.com/yaleh/cloudpit/commit/95c89fe578faa68024f1f86c959fdb1e7c9fced8))
+* **architecture:** split ArchitecturePanel into an owner hook and leaf views ([52e5a74](https://github.com/yaleh/cloudpit/commit/52e5a74cad1bfeb25d6873234ff31beec31f2baa))
+* **architecture:** split dom/ and layout/ into concern leaf packages ([d3ae01a](https://github.com/yaleh/cloudpit/commit/d3ae01a6004250d92613ae2f4051a16dad92e1cb))
+* **architecture:** split PlantUmlGraph hook-wiring into leaf hooks ([d87c3a6](https://github.com/yaleh/cloudpit/commit/d87c3a6c4795935f3ef4e00590344bbb80e4c117))
+* **architecture:** split render/ god-package into viewport, inspector and curation leaves ([300c0ad](https://github.com/yaleh/cloudpit/commit/300c0adc7fb10d8f9c149c90abb55776be2b785e))
+* **asr:** move the contract into a leaf package so the directory graph is acyclic ([afff71e](https://github.com/yaleh/cloudpit/commit/afff71eb759ccf80cc39488977a4abb4029ef473))
+* **chat-composer:** extract menu/confirm primitives into composer/menus leaf ([f8b10b1](https://github.com/yaleh/cloudpit/commit/f8b10b1283b6c6a91f94bd9cc709f591a656c51d))
+* **database:** split repositories into sessions/auth/notifications/observation/providers subpackages ([d3e9d06](https://github.com/yaleh/cloudpit/commit/d3e9d066484577877e3954a6286916122a897ac1))
+* **notices:** share the severity rank table and comparator ([88ebf83](https://github.com/yaleh/cloudpit/commit/88ebf83abcf34d6eb0871ac2569092adaec8fe32))
+* **providers:** extract Claude transcript title reader into claude/transcript leaf ([49b57dd](https://github.com/yaleh/cloudpit/commit/49b57dd5f3640d5219aa1fd481dbb0022c6e1104))
+* **quay:** split the god package into cli/fleet/read/service/task subpackages ([38b7a60](https://github.com/yaleh/cloudpit/commit/38b7a602081a82a614b0232d7c27d03de537c871))
+* **reply-suggestions:** dedupe completion logging and failure mapping ([dfc01ae](https://github.com/yaleh/cloudpit/commit/dfc01ae5fc0b3c1d911265a5db7008778de4a75b))
+* **settings:** extract createServerSettingsSource for the shared factory ([937cd1c](https://github.com/yaleh/cloudpit/commit/937cd1cd4b99cedb1c67adaedf331375a7deb576))
+* **shared-api:** extract voiceEditLabels into shared/voice/labels ([fdb33d1](https://github.com/yaleh/cloudpit/commit/fdb33d11a691e581e94e05ddb98c532c00ca4ad5))
+* **ui:** extract the model library into its own feature module ([c286c10](https://github.com/yaleh/cloudpit/commit/c286c104a5e7a6a8225a87c6d51b5503f0eb05d9))
+* **voice-realtime:** split the connection contract family and TTS leaves out of the god package ([3cee056](https://github.com/yaleh/cloudpit/commit/3cee056054267e43d14054c8c53b5e07bdfe4f58))
+* **voice:** invert the client ASR factory→singleton edge ([2a47d75](https://github.com/yaleh/cloudpit/commit/2a47d7592a74a624fae5a2fafa7a2ac019746872))
+* **websocket:** split services god-package into transport/dispatch/ui ([424466c](https://github.com/yaleh/cloudpit/commit/424466c318026e479ba7ba5af07ec6e8800bdf53))
+
+### Documentation
+
+* **release:** retain v3.0.1 verification evidence ([4dee93e](https://github.com/yaleh/cloudpit/commit/4dee93e329aab8c8aacf5642bc3b8ef49a958199))
+
+### Maintenance
+
+* drop unrelated oxlint --fix collateral from the split branch ([2af8b4d](https://github.com/yaleh/cloudpit/commit/2af8b4d5bea9dc335657f6020a7f70cf780dd58a))
+* **gate:** record voice-realtime connection/ and core/ in the AC-455 directory ratchet ([c5c8388](https://github.com/yaleh/cloudpit/commit/c5c8388afeb5e78a289a46af4a0dab785c61a959))
+* **release:** prepare Cloudpit v3.1.0 ([ba1e4e2](https://github.com/yaleh/cloudpit/commit/ba1e4e29bc23cce19d99d77305e9a9cebf1d46ee))
+
+### Tests
+
+* **ac-459:** pin the standalone architecture send chain, not one leaf file ([02eacfb](https://github.com/yaleh/cloudpit/commit/02eacfbb31f49d9e69ec40859c092a23115b46c4))
+* **architecture:** adopt the rolling analysis-time fixture from the sibling branch ([2ae15aa](https://github.com/yaleh/cloudpit/commit/2ae15aa53c6097efda13d56632971f1586c427cd))
+* **architecture:** make the analysis-time fixture a rolling instant ([5d164e5](https://github.com/yaleh/cloudpit/commit/5d164e59dda63b878c92fe37fbce9383f6253e61))
+* **architecture:** re-key the ratchets and re-read the cycle provenance after the render split ([4d55c28](https://github.com/yaleh/cloudpit/commit/4d55c2831560f58d63a95485d8c118de94ca84f8))
+* **architecture:** re-read the merged tree's import-graph provenance counts ([b12e68e](https://github.com/yaleh/cloudpit/commit/b12e68ebc95c92a7ac37d83e1cbc165c7518e8f4))
+* compare popover absence as a boolean so the red path stays fast ([61dda6c](https://github.com/yaleh/cloudpit/commit/61dda6c269f1f950e70f4154c357bb3784260bfd))
+* **quay-contracts:** exempt the attention write lock from the AC3 home guard ([bc370f4](https://github.com/yaleh/cloudpit/commit/bc370f4f034f4658cf8c707239b9939fa7a3cf54))
+* **reply-suggestions:** include the new debugLog field in /status sibling fixtures ([aad8c76](https://github.com/yaleh/cloudpit/commit/aad8c764d3b469790d9e07d42bcacbe2787b0c79))
+* **reply-suggestions:** never write the real home from a test process ([1620312](https://github.com/yaleh/cloudpit/commit/1620312c21dac23664d1dd66bda686655f8fa753))
+* **scenario:** assert the debug ledger across switch on/off ([dc48357](https://github.com/yaleh/cloudpit/commit/dc483572c1c0a6229ac7d21de4bec725eebef7b2))
+
 ## [3.0.1](https://github.com/yaleh/cloudpit/compare/v3.0.0...v3.0.1) (2026-11-08)
 
 ### New Features
