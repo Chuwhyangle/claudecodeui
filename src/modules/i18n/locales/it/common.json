@@ -1228,5 +1228,25 @@
     "close": "Chiudi",
     "empty": "Nessun log negli ultimi 15 minuti",
     "error": "Impossibile leggere la finestra dei log"
+  },
+  "ncLease": {
+    "triggerLabel": "Occupazione istanze NC",
+    "header": "Occupazione istanze NC",
+    "refresh": "Aggiorna",
+    "busy": "Occupata",
+    "free": "Libera",
+    "exited": "Arrestata",
+    "unknown": "Sconosciuto",
+    "releasing": "Rilascio…",
+    "release": "Rilascia",
+    "heartbeatOk": "Heartbeat regolare",
+    "heartbeatOkHint": "Il lease invia regolarmente l'heartbeat; il titolare deve rilasciarlo nella CLI con ncres release",
+    "heartbeatAge": "heartbeat {{seconds}}s",
+    "builtAt": "Compilato il {{at}}",
+    "codeUnmarked": "Codice non marcato",
+    "codeAligned": "Codice {{sha}} ✓ uguale a pre",
+    "codeBehind": "Codice {{sha}} ↓{{behind}} indietro rispetto a pre",
+    "codeDiverged": "Codice {{sha}} ✗ non nella cronologia di pre",
+    "codeNoPreHead": "Codice {{sha}} ? pre sconosciuto"
   }
 }

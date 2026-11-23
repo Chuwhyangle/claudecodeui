@@ -341,6 +341,12 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/mcp-gateway/tools/sessions',
   'modules/mcp-gateway/tools/shared',
   'modules/mcp-gateway/tools/ui',
+  // TWENTY-SECOND RECORDED CHANGE (2026-11-23, nclease-sidebar-port): the sidebar
+  // NC-1/2/3 occupancy row's read-and-release surface over the `ncres` CLI. It is
+  // registered rather than left to the new-directory leaf rule because its
+  // composition root imports it inside `server/index.ts`; it imports only
+  // `server/shared/**` (its wire types) and itself, and sits in no SCC.
+  'modules/nclease',
   'modules/notices',
   'modules/notifications',
   'modules/notifications/services',

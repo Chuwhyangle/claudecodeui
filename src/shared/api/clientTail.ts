@@ -16,6 +16,7 @@ import type {
   LogSourcesResponse,
   LogsResponse,
 } from '@/shared/types';
+import type { NcReleaseRequest } from '@/shared/ncLeaseType';
 import type {
   DraftRewriteErrorCode,
   DraftRewriteFailure,
@@ -554,6 +555,16 @@ export const apiTail = {
     // account rather than the browser profile they were typed in.
     config: () => get('/api/voice/config'),
     saveConfig: (settings: VoiceConfig) => put('/api/voice/config', settings),
+  },
+
+  // The sidebar's NC-1/2/3 occupancy row. `status` answers the whole `ncres status`
+  // reading (including a `degraded` one); `release` is the panel's only mutation and
+  // the server refuses it for a lease whose holder is still heartbeating.
+  nclease: {
+    /** The three NC slots: lease, purpose and docker probe. */
+    status: () => get('/api/nclease/status'),
+    /** Releases one slot from the panel; the ledger records who and why. */
+    release: (input: NcReleaseRequest) => post('/api/nclease/release', input),
   },
 
   system: {

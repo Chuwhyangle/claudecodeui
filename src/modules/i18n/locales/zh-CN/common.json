@@ -1226,5 +1226,25 @@
     "close": "关闭",
     "empty": "最近 15 分钟没有日志",
     "error": "无法读取日志窗口"
+  },
+  "ncLease": {
+    "triggerLabel": "NC 实例占用",
+    "header": "NC 实例占用",
+    "refresh": "刷新",
+    "busy": "占用",
+    "free": "空闲",
+    "exited": "已停",
+    "unknown": "未知",
+    "releasing": "释放中",
+    "release": "释放",
+    "heartbeatOk": "心跳正常",
+    "heartbeatOkHint": "租约心跳正常，需由持有者在 CLI 执行 ncres release",
+    "heartbeatAge": "心跳 {{seconds}}s",
+    "builtAt": "构建于 {{at}}",
+    "codeUnmarked": "代码 未标记",
+    "codeAligned": "代码 {{sha}} ✓ 与 pre 一致",
+    "codeBehind": "代码 {{sha}} ↓{{behind}} 落后 pre",
+    "codeDiverged": "代码 {{sha}} ✗ 不在 pre 历史",
+    "codeNoPreHead": "代码 {{sha}} ? 未知 pre"
   }
 }

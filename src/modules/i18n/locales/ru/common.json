@@ -1199,5 +1199,25 @@
     "close": "Закрыть",
     "empty": "Нет журналов за последние 15 минут",
     "error": "Не удалось прочитать окно журналов"
+  },
+  "ncLease": {
+    "triggerLabel": "Занятость экземпляров NC",
+    "header": "Занятость экземпляров NC",
+    "refresh": "Обновить",
+    "busy": "Занято",
+    "free": "Свободно",
+    "exited": "Остановлен",
+    "unknown": "Неизвестно",
+    "releasing": "Освобождение…",
+    "release": "Освободить",
+    "heartbeatOk": "Heartbeat в норме",
+    "heartbeatOkHint": "Аренда получает heartbeat нормально; держатель должен освободить её в CLI командой ncres release",
+    "heartbeatAge": "heartbeat {{seconds}} с",
+    "builtAt": "Собрано {{at}}",
+    "codeUnmarked": "Код не отмечен",
+    "codeAligned": "Код {{sha}} ✓ совпадает с pre",
+    "codeBehind": "Код {{sha}} ↓{{behind}} отстаёт от pre",
+    "codeDiverged": "Код {{sha}} ✗ нет в истории pre",
+    "codeNoPreHead": "Код {{sha}} ? pre неизвестен"
   }
 }

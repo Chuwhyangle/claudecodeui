@@ -1309,5 +1309,25 @@
     "close": "Tutup",
     "empty": "Tidak ada log dalam 15 menit terakhir",
     "error": "Jendela log tidak dapat dibaca"
+  },
+  "ncLease": {
+    "triggerLabel": "Okupansi instans NC",
+    "header": "Okupansi instans NC",
+    "refresh": "Muat ulang",
+    "busy": "Dipakai",
+    "free": "Kosong",
+    "exited": "Berhenti",
+    "unknown": "Tidak diketahui",
+    "releasing": "Melepaskan",
+    "release": "Lepaskan",
+    "heartbeatOk": "Detak normal",
+    "heartbeatOkHint": "Sewa mengirim detak normal; pemegangnya harus melepaskannya di CLI dengan ncres release",
+    "heartbeatAge": "detak {{seconds}}d",
+    "builtAt": "Dibangun pada {{at}}",
+    "codeUnmarked": "Kode belum ditandai",
+    "codeAligned": "Kode {{sha}} ✓ sama dengan pre",
+    "codeBehind": "Kode {{sha}} ↓{{behind}} tertinggal dari pre",
+    "codeDiverged": "Kode {{sha}} ✗ tidak ada di riwayat pre",
+    "codeNoPreHead": "Kode {{sha}} ? pre tidak diketahui"
   }
 }

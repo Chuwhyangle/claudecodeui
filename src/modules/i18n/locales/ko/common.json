@@ -1226,5 +1226,25 @@
     "close": "닫기",
     "empty": "최근 15분 동안 로그가 없습니다",
     "error": "로그 창을 읽을 수 없습니다"
+  },
+  "ncLease": {
+    "triggerLabel": "NC 인스턴스 점유",
+    "header": "NC 인스턴스 점유",
+    "refresh": "새로 고침",
+    "busy": "사용 중",
+    "free": "유휴",
+    "exited": "중지됨",
+    "unknown": "알 수 없음",
+    "releasing": "해제 중",
+    "release": "해제",
+    "heartbeatOk": "하트비트 정상",
+    "heartbeatOkHint": "리스 하트비트가 정상입니다. CLI에서 ncres release를 실행해 해제하세요",
+    "heartbeatAge": "하트비트 {{seconds}}초",
+    "builtAt": "{{at}}에 빌드됨",
+    "codeUnmarked": "코드 미표시",
+    "codeAligned": "코드 {{sha}} ✓ pre와 일치",
+    "codeBehind": "코드 {{sha}} ↓{{behind}} pre보다 뒤짐",
+    "codeDiverged": "코드 {{sha}} ✗ pre 이력에 없음",
+    "codeNoPreHead": "코드 {{sha}} ? pre 알 수 없음"
   }
 }

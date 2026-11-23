@@ -1197,5 +1197,25 @@
     "close": "Schließen",
     "empty": "Keine Protokolle in den letzten 15 Minuten",
     "error": "Das Protokollfenster konnte nicht gelesen werden"
+  },
+  "ncLease": {
+    "triggerLabel": "NC-Instanzbelegung",
+    "header": "NC-Instanzbelegung",
+    "refresh": "Aktualisieren",
+    "busy": "Belegt",
+    "free": "Frei",
+    "exited": "Gestoppt",
+    "unknown": "Unbekannt",
+    "releasing": "Wird freigegeben",
+    "release": "Freigeben",
+    "heartbeatOk": "Heartbeat in Ordnung",
+    "heartbeatOkHint": "Der Lease sendet normal einen Heartbeat; der Halter muss ihn in der CLI mit ncres release freigeben",
+    "heartbeatAge": "Heartbeat {{seconds}}s",
+    "builtAt": "Gebaut am {{at}}",
+    "codeUnmarked": "Code nicht gestempelt",
+    "codeAligned": "Code {{sha}} ✓ entspricht pre",
+    "codeBehind": "Code {{sha}} ↓{{behind}} hinter pre",
+    "codeDiverged": "Code {{sha}} ✗ nicht in der pre-Historie",
+    "codeNoPreHead": "Code {{sha}} ? pre unbekannt"
   }
 }

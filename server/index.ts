@@ -116,6 +116,7 @@ import { createReplySuggestionsDiagnostics, createReplySuggestionsFailureState, 
 // The Settings → Diagnostics & Logs read surface. A leaf module: every feature
 // reading is adapted HERE and injected, so the module imports no sibling.
 import { createDiagnosticsModule } from './modules/diagnostics/index.js';
+import { createNcLeaseModule } from './modules/nclease/index.js';
 import { createLogRing, installConsoleLogTee } from '@/shared/log-ring.js';
 // The host-level context event stream (context-event-stream-and-shadow-predictor). ONE process
 // instance: chat control, the cockpit and the reply-suggestions observer all record through it,
@@ -1864,6 +1865,7 @@ app.use('/api/taskmaster', authenticateToken, taskmasterRoutes);
 
 // Quay display API Routes (protected, read-only)
 app.use('/api/quay', authenticateToken, quayRoutes);
+app.use('/api/nclease', authenticateToken, createNcLeaseModule().router);
 
 // Commands API Routes (protected)
 app.use('/api/commands', authenticateToken, commandsRoutes);

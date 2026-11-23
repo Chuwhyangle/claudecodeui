@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { IS_PLATFORM } from '@/shared/utils';
 import { BRAND } from '@/shared/constants';
 import type { ReleaseInfo } from '@/shared/types';
+import { NcLeaseIndicator } from '@/modules/nclease';
 
 const GITHUB_REPO_URL = 'https://github.com/yaleh/cloudpit';
 
@@ -92,6 +93,9 @@ export default function SidebarFooter({
           </div>
         </>
       )}
+
+      {/* NC slot occupancy: see which instance is busy and release a finished one. */}
+      <NcLeaseIndicator />
 
       {/* Desktop version brand line (OSS mode only) */}
       {!IS_PLATFORM && (

@@ -275,6 +275,52 @@ const ROWS: readonly SyncRow[] = [
     serverFile: path.join(repoRoot, 'server', 'shared', 'types', 'interfaces.ts'),
     reader: 'object',
   },
+  {
+    // The sidebar's NC-lease row reads `ncres status --json` through this shape,
+    // and a release sends `NcReleaseRequest` back. A field the CLI starts emitting
+    // and one end drops would make the row silently render an empty slot, so every
+    // nclease wire type is a row of its own.
+    client: 'NcLeaseProbe',
+    server: 'NcLeaseProbe',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'NcLease',
+    server: 'NcLease',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'NcLeaseInstance',
+    server: 'NcLeaseInstance',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'NcBuild',
+    server: 'NcBuild',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'NcBuildState',
+    server: 'NcBuildState',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'NcLeaseStatus',
+    server: 'NcLeaseStatus',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'NcReleaseRequest',
+    server: 'NcReleaseRequest',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
 ];
 
 /** Reads one row's type from an arbitrary source string (used for both ends). */

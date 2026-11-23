@@ -1228,5 +1228,25 @@
     "close": "Fermer",
     "empty": "Aucun journal dans les 15 dernières minutes",
     "error": "Impossible de lire la fenêtre des journaux"
+  },
+  "ncLease": {
+    "triggerLabel": "Occupation des instances NC",
+    "header": "Occupation des instances NC",
+    "refresh": "Actualiser",
+    "busy": "Occupée",
+    "free": "Libre",
+    "exited": "Arrêtée",
+    "unknown": "Inconnu",
+    "releasing": "Libération…",
+    "release": "Libérer",
+    "heartbeatOk": "Heartbeat normal",
+    "heartbeatOkHint": "Le bail envoie normalement son heartbeat ; son détenteur doit le libérer dans la CLI avec ncres release",
+    "heartbeatAge": "heartbeat {{seconds}} s",
+    "builtAt": "Compilé le {{at}}",
+    "codeUnmarked": "Code non estampillé",
+    "codeAligned": "Code {{sha}} ✓ identique à pre",
+    "codeBehind": "Code {{sha}} ↓{{behind}} derrière pre",
+    "codeDiverged": "Code {{sha}} ✗ absent de l'historique pre",
+    "codeNoPreHead": "Code {{sha}} ? pre inconnu"
   }
 }

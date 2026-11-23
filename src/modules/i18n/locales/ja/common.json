@@ -1226,5 +1226,25 @@
     "close": "閉じる",
     "empty": "直近 15 分間のログはありません",
     "error": "ログウィンドウを読み取れませんでした"
+  },
+  "ncLease": {
+    "triggerLabel": "NC インスタンスの使用状況",
+    "header": "NC インスタンスの使用状況",
+    "refresh": "更新",
+    "busy": "使用中",
+    "free": "空き",
+    "exited": "停止",
+    "unknown": "不明",
+    "releasing": "解放中",
+    "release": "解放",
+    "heartbeatOk": "ハートビート正常",
+    "heartbeatOkHint": "リースは正常にハートビートしています。CLI で ncres release を実行して解放してください",
+    "heartbeatAge": "ハートビート {{seconds}}s",
+    "builtAt": "{{at}} にビルド",
+    "codeUnmarked": "コード未登録",
+    "codeAligned": "コード {{sha}} ✓ pre と一致",
+    "codeBehind": "コード {{sha}} ↓{{behind}} pre より遅れ",
+    "codeDiverged": "コード {{sha}} ✗ pre の履歴にない",
+    "codeNoPreHead": "コード {{sha}} ? pre 不明"
   }
 }

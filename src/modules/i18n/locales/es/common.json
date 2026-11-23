@@ -1228,5 +1228,25 @@
     "close": "Cerrar",
     "empty": "No hay registros en los últimos 15 minutos",
     "error": "No se pudo leer la ventana de registros"
+  },
+  "ncLease": {
+    "triggerLabel": "Ocupación de instancias NC",
+    "header": "Ocupación de instancias NC",
+    "refresh": "Actualizar",
+    "busy": "Ocupada",
+    "free": "Libre",
+    "exited": "Detenida",
+    "unknown": "Desconocido",
+    "releasing": "Liberando",
+    "release": "Liberar",
+    "heartbeatOk": "Latido correcto",
+    "heartbeatOkHint": "El arrendamiento late con normalidad; su titular debe liberarlo en la CLI con ncres release",
+    "heartbeatAge": "latido {{seconds}}s",
+    "builtAt": "Compilado el {{at}}",
+    "codeUnmarked": "Código sin marcar",
+    "codeAligned": "Código {{sha}} ✓ coincide con pre",
+    "codeBehind": "Código {{sha}} ↓{{behind}} por detrás de pre",
+    "codeDiverged": "Código {{sha}} ✗ no está en el historial de pre",
+    "codeNoPreHead": "Código {{sha}} ? pre desconocido"
   }
 }

@@ -1318,5 +1318,25 @@
     "close": "Close",
     "empty": "No logs in the last 15 minutes",
     "error": "The log window could not be read"
+  },
+  "ncLease": {
+    "triggerLabel": "NC instance occupancy",
+    "header": "NC instance occupancy",
+    "refresh": "Refresh",
+    "busy": "Busy",
+    "free": "Free",
+    "exited": "Stopped",
+    "unknown": "Unknown",
+    "releasing": "Releasing",
+    "release": "Release",
+    "heartbeatOk": "Heartbeat healthy",
+    "heartbeatOkHint": "The lease is heartbeating normally; its holder must release it in the CLI with ncres release",
+    "heartbeatAge": "heartbeat {{seconds}}s",
+    "builtAt": "Built at {{at}}",
+    "codeUnmarked": "Code not stamped",
+    "codeAligned": "Code {{sha}} ✓ matches pre",
+    "codeBehind": "Code {{sha}} ↓{{behind}} behind pre",
+    "codeDiverged": "Code {{sha}} ✗ not in pre history",
+    "codeNoPreHead": "Code {{sha}} ? unknown pre"
   }
 }

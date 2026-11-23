@@ -1226,5 +1226,25 @@
     "close": "關閉",
     "empty": "最近 15 分鐘沒有日誌",
     "error": "無法讀取日誌視窗"
+  },
+  "ncLease": {
+    "triggerLabel": "NC 執行個體佔用",
+    "header": "NC 執行個體佔用",
+    "refresh": "重新整理",
+    "busy": "佔用",
+    "free": "空閒",
+    "exited": "已停止",
+    "unknown": "未知",
+    "releasing": "釋放中",
+    "release": "釋放",
+    "heartbeatOk": "心跳正常",
+    "heartbeatOkHint": "租約心跳正常，需由持有者在 CLI 執行 ncres release",
+    "heartbeatAge": "心跳 {{seconds}}s",
+    "builtAt": "建置於 {{at}}",
+    "codeUnmarked": "程式碼 未標記",
+    "codeAligned": "程式碼 {{sha}} ✓ 與 pre 一致",
+    "codeBehind": "程式碼 {{sha}} ↓{{behind}} 落後 pre",
+    "codeDiverged": "程式碼 {{sha}} ✗ 不在 pre 歷史",
+    "codeNoPreHead": "程式碼 {{sha}} ? 未知 pre"
   }
 }

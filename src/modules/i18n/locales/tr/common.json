@@ -1227,5 +1227,25 @@
     "close": "Kapat",
     "empty": "Son 15 dakikada günlük yok",
     "error": "Günlük penceresi okunamadı"
+  },
+  "ncLease": {
+    "triggerLabel": "NC örnek doluluğu",
+    "header": "NC örnek doluluğu",
+    "refresh": "Yenile",
+    "busy": "Meşgul",
+    "free": "Boş",
+    "exited": "Durdu",
+    "unknown": "Bilinmiyor",
+    "releasing": "Serbest bırakılıyor",
+    "release": "Serbest bırak",
+    "heartbeatOk": "Kalp atışı normal",
+    "heartbeatOkHint": "Kira normal şekilde kalp atışı gönderiyor; sahibi CLI'da ncres release ile serbest bırakmalı",
+    "heartbeatAge": "kalp atışı {{seconds}}sn",
+    "builtAt": "{{at}} tarihinde derlendi",
+    "codeUnmarked": "Kod damgalanmamış",
+    "codeAligned": "Kod {{sha}} ✓ pre ile aynı",
+    "codeBehind": "Kod {{sha}} ↓{{behind}} pre gerisinde",
+    "codeDiverged": "Kod {{sha}} ✗ pre geçmişinde yok",
+    "codeNoPreHead": "Kod {{sha}} ? pre bilinmiyor"
   }
 }
