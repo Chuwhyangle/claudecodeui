@@ -15,8 +15,10 @@ import type {
   LogSource,
   LogSourcesResponse,
   LogsResponse,
+  LLMProvider,
 } from '@/shared/types';
 import type { NcReleaseRequest } from '@/shared/ncLeaseType';
+import type { CreateGoalAcRequest, CreateGoalRequest } from '@/shared/goalLoopType';
 import type { ApiLatencyProbeRequest } from '@/shared/apiLatencyType';
 import type {
   DraftRewriteErrorCode,
@@ -566,6 +568,34 @@ export const apiTail = {
     status: () => get('/api/nclease/status'),
     /** Releases one slot from the panel; the ledger records who and why. */
     release: (input: NcReleaseRequest) => post('/api/nclease/release', input),
+  },
+
+  // The workspace's own goal loop (the Goals tab): goals belong to a project this
+  // server owns, unlike `quay*` above, which mirrors an external project read-only.
+  // Every read answers a success envelope; `activate` refusing (a criterion already
+  // passes) is a 200 carrying `{ refusal, greenAcIds }`, not an error status.
+  goals: {
+    /** The selected project's goals; the detail read below adds acs, rounds and evidence. */
+    list: (projectId: string) => get(`/api/goals${query({ project: projectId })}`),
+    /** One goal with its ACs, rounds and evidence — the panel's per-goal reading. */
+    detail: (goalId: string) => get(`/api/goals/${encodeURIComponent(goalId)}`),
+    create: (input: CreateGoalRequest) => post('/api/goals', input),
+    /** Adds one AC to a draft goal; the server mints its `<goalId>-AC-00N` id. */
+    addAc: (goalId: string, input: CreateGoalAcRequest) =>
+      post(`/api/goals/${encodeURIComponent(goalId)}/acs`, input),
+    /**
+     * Starts the loop. `provider` is the CLI the goal's own session is created with,
+     * chosen on the card. A refusal (a criterion already passes before the first round)
+     * is a 200 with `{ refusal }` in the body, not an error status.
+     */
+    activate: (goalId: string, provider: LLMProvider) =>
+      post(`/api/goals/${encodeURIComponent(goalId)}/activate`, { provider }),
+    pause: (goalId: string) => post(`/api/goals/${encodeURIComponent(goalId)}/pause`),
+    /** Restarts a paused/stalled goal; same envelope as the other lifecycle verbs. */
+    resume: (goalId: string) => post(`/api/goals/${encodeURIComponent(goalId)}/resume`),
+    abandon: (goalId: string) => post(`/api/goals/${encodeURIComponent(goalId)}/abandon`),
+    /** Runs one round now; the panel reloads afterwards rather than reading the payload. */
+    runRound: (goalId: string) => post(`/api/goals/${encodeURIComponent(goalId)}/run-round`),
   },
 
   // The workspace's "API speed" view: staged measurements of THIS machine's link to

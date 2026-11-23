@@ -1,4 +1,4 @@
-import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, Activity, Network, MonitorPlay, Gauge, ChevronDown, MoreHorizontal, type LucideIcon } from 'lucide-react';
+import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, Activity, Network, MonitorPlay, Gauge, Target, ChevronDown, MoreHorizontal, type LucideIcon } from 'lucide-react';
 import { Fragment, useId, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -160,6 +160,20 @@ const ARCHITECTURE_TAB: BuiltInTabSource = {
 };
 
 /**
+ * The goal loop's own write surface. Unlike Quay (an external project's read-only mirror), a goal
+ * belongs to THIS project, so the tab is not gated on a config file: an empty project offers it
+ * and the panel shows its empty state with the create entry. It sits with the file/history group,
+ * after them and before the optional extras — never inside the session's project-level views
+ * (Quay, Architecture), whose contents it is deliberately not.
+ */
+const GOALS_TAB: BuiltInTabSource = {
+  id: 'goals',
+  labelKey: 'tabs.goals',
+  defaultLabel: 'Goals',
+  icon: Target,
+};
+
+/**
  * The server's link to the model gateway, measured in stages.
  *
  * The view is NOT project-scoped — it measures this machine's connection to the
@@ -204,6 +218,9 @@ function useWorkspaceTabDefinitions({ shouldShowTasksTab, shouldShowQuayTab, sho
     // selected project or session (see API_SPEED_TAB).
     API_SPEED_TAB,
     ...BASE_TABS,
+    // The project's own goal loop: always offered, with the file/history group rather than
+    // between the session's project-level views (see GOALS_TAB).
+    GOALS_TAB,
     ...(shouldShowBrowserTab ? [BROWSER_TAB] : []),
     ...(shouldShowTasksTab ? [TASKS_TAB] : []),
     SHELL_TAB,

@@ -29,7 +29,8 @@
     "architecture": "架构",
     "apiSpeed": "API 速度",
     "shellResidentDisabled": "常驻会话不支持 Shell，关闭常驻模式后可用",
-    "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用"
+    "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用",
+    "goals": "目标"
   },
   "architecture": {
     "nav": {
@@ -1275,5 +1276,74 @@
     "colTime": "时间",
     "colMode": "模式",
     "colLink": "链路"
+  },
+  "goals": {
+    "title": "目标",
+    "refresh": "刷新",
+    "retry": "重试",
+    "loading": "正在加载目标…",
+    "create": "新建目标",
+    "formTitle": "新建目标",
+    "fieldTitle": "标题",
+    "fieldTitlePlaceholder": "这个目标叫什么？",
+    "fieldObjective": "目的",
+    "fieldObjectivePlaceholder": "完成时什么应当为真？",
+    "criterionNumber": "判据 {{index}}",
+    "acTitlePlaceholder": "判据标题",
+    "acCriterionPlaceholder": "判定它的命令，例如 npm test -- foo",
+    "acExpectPlaceholder": "什么会判它失败（绝不能出现的读数）",
+    "addCriterion": "添加判据",
+    "removeCriterion": "删除",
+    "createSubmit": "创建",
+    "createCancel": "取消",
+    "creating": "创建中…",
+    "formIncomplete": "标题、目的和每条判据都需要填写。",
+    "formBudgetInvalid": "预算上限必须是正数（轮次为整数）。",
+    "fieldMaxRounds": "最大轮次",
+    "fieldWallClockHours": "墙钟（小时）",
+    "fieldMaxNoProgress": "无进展轮次",
+    "budgetHint": "轮次上限 · 墙钟小时 · 无进展轮次。留空则使用默认值。",
+    "emptyTitle": "此项目还没有目标",
+    "emptyBody": "创建一个目标，至少给它一条可运行的验收判据，然后激活它开始循环。",
+    "acProgress": "{{passing}}/{{total}} 条判据通过",
+    "noCriteria": "没有验收判据",
+    "latestRound": "最新轮次：#{{seq}} · {{outcome}}",
+    "noRounds": "还没有轮次",
+    "activate": "激活",
+    "providerLabel": "激活方式",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "目标 ID",
+    "pause": "暂停",
+    "resume": "继续",
+    "abandon": "放弃",
+    "runRound": "运行一轮",
+    "expand": "详情",
+    "collapse": "收起",
+    "criteria": "验收判据",
+    "rounds": "轮次",
+    "expect": "期望",
+    "noReading": "尚无读数",
+    "verdict": {
+      "pass": "通过",
+      "fail": "失败"
+    },
+    "lastReading": "上次运行：{{verdict}}（退出码 {{code}}）",
+    "timedOut": "超时",
+    "budget": "预算：{{rounds}} 轮 · {{wallClock}} 分钟 · 无进展 {{noProgress}} 轮",
+    "outcomeRunning": "运行中",
+    "outcome": {
+      "green": "全绿",
+      "progress": "有进展",
+      "no-progress": "无进展",
+      "stalled": "停滞",
+      "budget-hit": "预算用尽",
+      "error": "错误"
+    },
+    "refusalGreenAcs": "已经通过的判据：{{ids}}"
   }
 }

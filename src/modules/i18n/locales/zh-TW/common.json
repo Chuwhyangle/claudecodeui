@@ -29,7 +29,8 @@
     "architecture": "架構",
     "apiSpeed": "API 速度",
     "shellResidentDisabled": "常駐工作階段不支援 Shell，關閉常駐模式後即可使用",
-    "shellResidentDisabledLabel": "常駐工作階段的 Shell 分頁無法使用"
+    "shellResidentDisabledLabel": "常駐工作階段的 Shell 分頁無法使用",
+    "goals": "目標"
   },
   "architecture": {
     "nav": {
@@ -1275,5 +1276,74 @@
     "colTime": "時間",
     "colMode": "模式",
     "colLink": "連線"
+  },
+  "goals": {
+    "title": "目標",
+    "refresh": "重新整理",
+    "retry": "重試",
+    "loading": "正在載入目標…",
+    "create": "新增目標",
+    "formTitle": "新增目標",
+    "fieldTitle": "標題",
+    "fieldTitlePlaceholder": "這個目標叫什麼？",
+    "fieldObjective": "目的",
+    "fieldObjectivePlaceholder": "完成時什麼應該為真？",
+    "criterionNumber": "判據 {{index}}",
+    "acTitlePlaceholder": "判據標題",
+    "acCriterionPlaceholder": "判定它的命令，例如 npm test -- foo",
+    "acExpectPlaceholder": "什麼會判它失敗（絕不能出現的讀數）",
+    "addCriterion": "新增判據",
+    "removeCriterion": "刪除",
+    "createSubmit": "建立",
+    "createCancel": "取消",
+    "creating": "建立中…",
+    "formIncomplete": "標題、目的和每條判據都需要填寫。",
+    "formBudgetInvalid": "預算上限必須是正數（輪次為整數）。",
+    "fieldMaxRounds": "最大輪次",
+    "fieldWallClockHours": "牆鐘（小時）",
+    "fieldMaxNoProgress": "無進展輪次",
+    "budgetHint": "輪次上限 · 牆鐘小時 · 無進展輪次。留空則使用預設值。",
+    "emptyTitle": "此專案還沒有目標",
+    "emptyBody": "建立一個目標，至少給它一條可執行的驗收判據，然後啟用它開始循環。",
+    "acProgress": "{{passing}}/{{total}} 條判據通過",
+    "noCriteria": "沒有驗收判據",
+    "latestRound": "最新輪次：#{{seq}} · {{outcome}}",
+    "noRounds": "還沒有輪次",
+    "activate": "啟用",
+    "providerLabel": "啟用方式",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "目標 ID",
+    "pause": "暫停",
+    "resume": "繼續",
+    "abandon": "放棄",
+    "runRound": "執行一輪",
+    "expand": "詳情",
+    "collapse": "收合",
+    "criteria": "驗收判據",
+    "rounds": "輪次",
+    "expect": "期望",
+    "noReading": "尚無讀數",
+    "verdict": {
+      "pass": "通過",
+      "fail": "失敗"
+    },
+    "lastReading": "上次執行：{{verdict}}（結束碼 {{code}}）",
+    "timedOut": "逾時",
+    "budget": "預算：{{rounds}} 輪 · {{wallClock}} 分鐘 · 無進展 {{noProgress}} 輪",
+    "outcomeRunning": "執行中",
+    "outcome": {
+      "green": "全綠",
+      "progress": "有進展",
+      "no-progress": "無進展",
+      "stalled": "停滯",
+      "budget-hit": "預算用盡",
+      "error": "錯誤"
+    },
+    "refusalGreenAcs": "已經通過的判據：{{ids}}"
   }
 }

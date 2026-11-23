@@ -29,7 +29,8 @@
     "architecture": "Архитектура",
     "apiSpeed": "Скорость API",
     "shellResidentDisabled": "Shell недоступен для резидентных сессий. Закройте резидентный режим, чтобы использовать его.",
-    "shellResidentDisabledLabel": "Shell недоступен для резидентных сессий"
+    "shellResidentDisabledLabel": "Shell недоступен для резидентных сессий",
+    "goals": "Цели"
   },
   "architecture": {
     "nav": {
@@ -1248,5 +1249,74 @@
     "colTime": "Время",
     "colMode": "Режим",
     "colLink": "Канал"
+  },
+  "goals": {
+    "title": "Цели",
+    "refresh": "Обновить",
+    "retry": "Повторить",
+    "loading": "Загрузка целей…",
+    "create": "Новая цель",
+    "formTitle": "Новая цель",
+    "fieldTitle": "Название",
+    "fieldTitlePlaceholder": "Как называется эта цель?",
+    "fieldObjective": "Задача",
+    "fieldObjectivePlaceholder": "Что должно быть верно по завершении?",
+    "criterionNumber": "Критерий {{index}}",
+    "acTitlePlaceholder": "Название критерия",
+    "acCriterionPlaceholder": "Команда, которая его решает, напр. npm test -- foo",
+    "acExpectPlaceholder": "Что заставляет его падать (показание, которого НЕ должно быть)",
+    "addCriterion": "Добавить критерий",
+    "removeCriterion": "Удалить",
+    "createSubmit": "Создать",
+    "createCancel": "Отмена",
+    "creating": "Создание…",
+    "formIncomplete": "Название, задача и каждый критерий требуют значения.",
+    "formBudgetInvalid": "Лимиты бюджета должны быть положительными числами (раунды — целые).",
+    "fieldMaxRounds": "Макс. раундов",
+    "fieldWallClockHours": "Время (ч)",
+    "fieldMaxNoProgress": "Раунды без прогресса",
+    "budgetHint": "Лимит раундов · время в часах · раунды без прогресса. Оставьте пустым, чтобы использовать значение по умолчанию.",
+    "emptyTitle": "В этом проекте пока нет целей",
+    "emptyBody": "Создайте цель, задайте хотя бы один исполнимый критерий приёмки и активируйте её, чтобы запустить цикл.",
+    "acProgress": "{{passing}}/{{total}} критериев пройдено",
+    "noCriteria": "Нет критериев приёмки",
+    "latestRound": "Последний раунд: #{{seq}} · {{outcome}}",
+    "noRounds": "Пока нет раундов",
+    "activate": "Активировать",
+    "providerLabel": "Активировать через",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "ID цели",
+    "pause": "Пауза",
+    "resume": "Возобновить",
+    "abandon": "Отменить",
+    "runRound": "Выполнить раунд",
+    "expand": "Подробности",
+    "collapse": "Скрыть",
+    "criteria": "Критерии приёмки",
+    "rounds": "Раунды",
+    "expect": "ожидается",
+    "noReading": "пока нет показаний",
+    "verdict": {
+      "pass": "пройден",
+      "fail": "провал"
+    },
+    "lastReading": "Последний запуск: {{verdict}} (код {{code}})",
+    "timedOut": "истекло время",
+    "budget": "Бюджет: {{rounds}} раундов · {{wallClock}} мин · {{noProgress}} раундов без прогресса",
+    "outcomeRunning": "выполняется",
+    "outcome": {
+      "green": "зелёный",
+      "progress": "прогресс",
+      "no-progress": "без прогресса",
+      "stalled": "застопорился",
+      "budget-hit": "бюджет исчерпан",
+      "error": "ошибка"
+    },
+    "refusalGreenAcs": "Уже проходящие критерии: {{ids}}"
   }
 }

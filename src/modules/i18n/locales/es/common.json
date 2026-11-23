@@ -29,7 +29,8 @@
     "architecture": "Arquitectura",
     "apiSpeed": "Velocidad de API",
     "shellResidentDisabled": "Shell no está disponible para las sesiones residentes. Cierra el modo residente para usarlo.",
-    "shellResidentDisabledLabel": "Shell no disponible para sesiones residentes"
+    "shellResidentDisabledLabel": "Shell no disponible para sesiones residentes",
+    "goals": "Objetivos"
   },
   "architecture": {
     "nav": {
@@ -1277,5 +1278,74 @@
     "colTime": "Hora",
     "colMode": "Modo",
     "colLink": "Enlace"
+  },
+  "goals": {
+    "title": "Objetivos",
+    "refresh": "Actualizar",
+    "retry": "Reintentar",
+    "loading": "Cargando objetivos…",
+    "create": "Nuevo objetivo",
+    "formTitle": "Nuevo objetivo",
+    "fieldTitle": "Título",
+    "fieldTitlePlaceholder": "¿Cómo se llama este objetivo?",
+    "fieldObjective": "Objetivo",
+    "fieldObjectivePlaceholder": "¿Qué debe cumplirse cuando esto esté hecho?",
+    "criterionNumber": "Criterio {{index}}",
+    "acTitlePlaceholder": "Título del criterio",
+    "acCriterionPlaceholder": "Comando que lo decide, p. ej. npm test -- foo",
+    "acExpectPlaceholder": "Qué lo hace fallar (la lectura que NO debe ocurrir)",
+    "addCriterion": "Añadir criterio",
+    "removeCriterion": "Eliminar",
+    "createSubmit": "Crear",
+    "createCancel": "Cancelar",
+    "creating": "Creando…",
+    "formIncomplete": "El título, el objetivo y cada criterio necesitan un valor.",
+    "formBudgetInvalid": "Los límites del presupuesto deben ser números positivos (las rondas son enteros).",
+    "fieldMaxRounds": "Rondas máx.",
+    "fieldWallClockHours": "Tiempo (h)",
+    "fieldMaxNoProgress": "Rondas sin progreso",
+    "budgetHint": "Límite de rondas · tiempo en horas · rondas sin progreso. Deja uno vacío para usar el valor por defecto.",
+    "emptyTitle": "Aún no hay objetivos en este proyecto",
+    "emptyBody": "Crea un objetivo, dale al menos un criterio de aceptación ejecutable y actívalo para iniciar el bucle.",
+    "acProgress": "{{passing}}/{{total}} criterios superados",
+    "noCriteria": "Sin criterios de aceptación",
+    "latestRound": "Última ronda: #{{seq}} · {{outcome}}",
+    "noRounds": "Aún no hay rondas",
+    "activate": "Activar",
+    "providerLabel": "Activar con",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "ID del objetivo",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "abandon": "Abandonar",
+    "runRound": "Ejecutar una ronda",
+    "expand": "Detalles",
+    "collapse": "Ocultar",
+    "criteria": "Criterios de aceptación",
+    "rounds": "Rondas",
+    "expect": "espera",
+    "noReading": "sin lectura todavía",
+    "verdict": {
+      "pass": "pasa",
+      "fail": "falla"
+    },
+    "lastReading": "Última ejecución: {{verdict}} (salida {{code}})",
+    "timedOut": "tiempo agotado",
+    "budget": "Presupuesto: {{rounds}} rondas · {{wallClock}} min · {{noProgress}} rondas sin progreso",
+    "outcomeRunning": "en curso",
+    "outcome": {
+      "green": "verde",
+      "progress": "progreso",
+      "no-progress": "sin progreso",
+      "stalled": "estancado",
+      "budget-hit": "presupuesto agotado",
+      "error": "error"
+    },
+    "refusalGreenAcs": "Criterios que ya pasan: {{ids}}"
   }
 }

@@ -29,7 +29,8 @@
     "architecture": "아키텍처",
     "apiSpeed": "API 속도",
     "shellResidentDisabled": "상주 세션에서는 Shell을 사용할 수 없습니다. 상주 모드를 종료하면 사용할 수 있습니다.",
-    "shellResidentDisabledLabel": "상주 세션에서는 Shell을 사용할 수 없습니다"
+    "shellResidentDisabledLabel": "상주 세션에서는 Shell을 사용할 수 없습니다",
+    "goals": "목표"
   },
   "architecture": {
     "nav": {
@@ -1275,5 +1276,74 @@
     "colTime": "시간",
     "colMode": "모드",
     "colLink": "링크"
+  },
+  "goals": {
+    "title": "목표",
+    "refresh": "새로 고침",
+    "retry": "다시 시도",
+    "loading": "목표 불러오는 중…",
+    "create": "새 목표",
+    "formTitle": "새 목표",
+    "fieldTitle": "제목",
+    "fieldTitlePlaceholder": "이 목표의 이름은?",
+    "fieldObjective": "목적",
+    "fieldObjectivePlaceholder": "완료되면 무엇이 참이어야 합니까?",
+    "criterionNumber": "기준 {{index}}",
+    "acTitlePlaceholder": "기준 제목",
+    "acCriterionPlaceholder": "판정하는 명령, 예: npm test -- foo",
+    "acExpectPlaceholder": "무엇이 실패시키는가 (일어나면 안 되는 판독값)",
+    "addCriterion": "기준 추가",
+    "removeCriterion": "삭제",
+    "createSubmit": "생성",
+    "createCancel": "취소",
+    "creating": "생성 중…",
+    "formIncomplete": "제목, 목적, 모든 기준에 값이 필요합니다.",
+    "formBudgetInvalid": "예산 한도는 양수여야 합니다(라운드는 정수).",
+    "fieldMaxRounds": "최대 라운드",
+    "fieldWallClockHours": "실시간(시간)",
+    "fieldMaxNoProgress": "진전 없는 라운드",
+    "budgetHint": "라운드 상한 · 실시간(시간) · 진전 없는 라운드. 비워 두면 기본값을 사용합니다.",
+    "emptyTitle": "이 프로젝트에는 아직 목표가 없습니다",
+    "emptyBody": "목표를 만들고 실행 가능한 인수 기준을 하나 이상 부여한 뒤 활성화하여 루프를 시작하세요.",
+    "acProgress": "{{passing}}/{{total}} 기준 통과",
+    "noCriteria": "인수 기준 없음",
+    "latestRound": "최근 라운드: #{{seq}} · {{outcome}}",
+    "noRounds": "아직 라운드 없음",
+    "activate": "활성화",
+    "providerLabel": "다음으로 활성화",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "목표 ID",
+    "pause": "일시 중지",
+    "resume": "재개",
+    "abandon": "포기",
+    "runRound": "라운드 실행",
+    "expand": "세부 정보",
+    "collapse": "숨기기",
+    "criteria": "인수 기준",
+    "rounds": "라운드",
+    "expect": "기대",
+    "noReading": "아직 판독값 없음",
+    "verdict": {
+      "pass": "통과",
+      "fail": "실패"
+    },
+    "lastReading": "마지막 실행: {{verdict}} (종료 {{code}})",
+    "timedOut": "시간 초과",
+    "budget": "예산: {{rounds}} 라운드 · {{wallClock}} 분 · 진전 없음 {{noProgress}} 라운드",
+    "outcomeRunning": "실행 중",
+    "outcome": {
+      "green": "통과",
+      "progress": "진전",
+      "no-progress": "진전 없음",
+      "stalled": "정체",
+      "budget-hit": "예산 초과",
+      "error": "오류"
+    },
+    "refusalGreenAcs": "이미 통과한 기준: {{ids}}"
   }
 }

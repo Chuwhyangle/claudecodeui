@@ -29,7 +29,8 @@
     "architecture": "アーキテクチャ",
     "apiSpeed": "API 速度",
     "shellResidentDisabled": "常駐セッションでは Shell を利用できません。常駐モードを解除すると利用できます。",
-    "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません"
+    "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません",
+    "goals": "目標"
   },
   "architecture": {
     "nav": {
@@ -1275,5 +1276,74 @@
     "colTime": "時刻",
     "colMode": "モード",
     "colLink": "接続"
+  },
+  "goals": {
+    "title": "目標",
+    "refresh": "更新",
+    "retry": "再試行",
+    "loading": "目標を読み込み中…",
+    "create": "新しい目標",
+    "formTitle": "新しい目標",
+    "fieldTitle": "タイトル",
+    "fieldTitlePlaceholder": "この目標の名前は？",
+    "fieldObjective": "目的",
+    "fieldObjectivePlaceholder": "完了したとき何が真であるべきか？",
+    "criterionNumber": "基準 {{index}}",
+    "acTitlePlaceholder": "基準のタイトル",
+    "acCriterionPlaceholder": "判定するコマンド（例: npm test -- foo）",
+    "acExpectPlaceholder": "何が失敗させるか（起きてはならない読み取り）",
+    "addCriterion": "基準を追加",
+    "removeCriterion": "削除",
+    "createSubmit": "作成",
+    "createCancel": "キャンセル",
+    "creating": "作成中…",
+    "formIncomplete": "タイトル・目的・各基準には値が必要です。",
+    "formBudgetInvalid": "予算の上限は正の数でなければなりません（ラウンドは整数）。",
+    "fieldMaxRounds": "最大ラウンド",
+    "fieldWallClockHours": "実時間（時間）",
+    "fieldMaxNoProgress": "進展なしラウンド",
+    "budgetHint": "ラウンド上限 · 実時間 · 進展なしラウンド。空欄にすると既定値を使います。",
+    "emptyTitle": "このプロジェクトにはまだ目標がありません",
+    "emptyBody": "目標を作成し、実行可能な受け入れ基準を少なくとも1つ与え、有効化してループを開始します。",
+    "acProgress": "{{passing}}/{{total}} 基準が合格",
+    "noCriteria": "受け入れ基準なし",
+    "latestRound": "最新ラウンド: #{{seq}} · {{outcome}}",
+    "noRounds": "まだラウンドなし",
+    "activate": "有効化",
+    "providerLabel": "次で有効化",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "目標 ID",
+    "pause": "一時停止",
+    "resume": "再開",
+    "abandon": "放棄",
+    "runRound": "ラウンドを実行",
+    "expand": "詳細",
+    "collapse": "隠す",
+    "criteria": "受け入れ基準",
+    "rounds": "ラウンド",
+    "expect": "期待",
+    "noReading": "まだ読み取りなし",
+    "verdict": {
+      "pass": "合格",
+      "fail": "不合格"
+    },
+    "lastReading": "最終実行: {{verdict}}（終了 {{code}}）",
+    "timedOut": "タイムアウト",
+    "budget": "予算: {{rounds}} ラウンド · {{wallClock}} 分 · 進展なし {{noProgress}} ラウンド",
+    "outcomeRunning": "実行中",
+    "outcome": {
+      "green": "合格",
+      "progress": "進展",
+      "no-progress": "進展なし",
+      "stalled": "停滞",
+      "budget-hit": "予算超過",
+      "error": "エラー"
+    },
+    "refusalGreenAcs": "すでに合格している基準: {{ids}}"
   }
 }

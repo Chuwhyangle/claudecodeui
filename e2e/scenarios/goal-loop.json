@@ -1,0 +1,10 @@
+{
+  "name": "goal-loop-panel",
+  "description": "The Goals view opens and finishes loading. The judgement is the step itself: the `goals-panel` opener only succeeds once the tab has been clicked and `[data-testid=\"goal-panel-loaded\"]` is visible, so a green step means the panel mounted with its data rather than merely appeared. No expectation key is asserted because the reading vocabulary (`expectationFailures` in scripts/ui-scenario.mjs) has no goals field yet — inventing one would fail every run for the wrong reason. No goal is created, so the scenario cannot pollute the store.",
+  "steps": [
+    {
+      "open": "goals-panel",
+      "checkpoint": true
+    }
+  ]
+}

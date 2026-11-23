@@ -29,7 +29,8 @@
     "architecture": "Architektur",
     "apiSpeed": "API-Geschwindigkeit",
     "shellResidentDisabled": "Shell ist für dauerhafte Sitzungen nicht verfügbar. Beenden Sie den dauerhaften Modus, um es zu nutzen.",
-    "shellResidentDisabledLabel": "Shell für dauerhafte Sitzungen nicht verfügbar"
+    "shellResidentDisabledLabel": "Shell für dauerhafte Sitzungen nicht verfügbar",
+    "goals": "Ziele"
   },
   "architecture": {
     "nav": {
@@ -1246,5 +1247,74 @@
     "colTime": "Zeit",
     "colMode": "Modus",
     "colLink": "Verbindung"
+  },
+  "goals": {
+    "title": "Ziele",
+    "refresh": "Aktualisieren",
+    "retry": "Erneut versuchen",
+    "loading": "Ziele werden geladen…",
+    "create": "Neues Ziel",
+    "formTitle": "Neues Ziel",
+    "fieldTitle": "Titel",
+    "fieldTitlePlaceholder": "Wie heißt dieses Ziel?",
+    "fieldObjective": "Zielsetzung",
+    "fieldObjectivePlaceholder": "Was soll erfüllt sein, wenn dies erledigt ist?",
+    "criterionNumber": "Kriterium {{index}}",
+    "acTitlePlaceholder": "Titel des Kriteriums",
+    "acCriterionPlaceholder": "Befehl, der es entscheidet, z. B. npm test -- foo",
+    "acExpectPlaceholder": "Was es scheitern lässt (der Nachweis, der NICHT eintreten darf)",
+    "addCriterion": "Kriterium hinzufügen",
+    "removeCriterion": "Entfernen",
+    "createSubmit": "Erstellen",
+    "createCancel": "Abbrechen",
+    "creating": "Wird erstellt…",
+    "formIncomplete": "Titel, Zielsetzung und jedes Kriterium brauchen einen Wert.",
+    "formBudgetInvalid": "Budgetgrenzen müssen positive Zahlen sein (Runden sind ganze Zahlen).",
+    "fieldMaxRounds": "Max. Runden",
+    "fieldWallClockHours": "Laufzeit (Std.)",
+    "fieldMaxNoProgress": "Runden ohne Fortschritt",
+    "budgetHint": "Rundenlimit · Laufzeit in Stunden · Runden ohne Fortschritt. Ein Feld leer lassen, um den Standard zu nutzen.",
+    "emptyTitle": "Noch keine Ziele in diesem Projekt",
+    "emptyBody": "Erstelle ein Ziel, gib ihm mindestens ein ausführbares Akzeptanzkriterium und aktiviere es, um die Schleife zu starten.",
+    "acProgress": "{{passing}}/{{total}} Kriterien bestanden",
+    "noCriteria": "Keine Akzeptanzkriterien",
+    "latestRound": "Letzte Runde: #{{seq}} · {{outcome}}",
+    "noRounds": "Noch keine Runden",
+    "activate": "Aktivieren",
+    "providerLabel": "Aktivieren mit",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "Ziel-ID",
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "abandon": "Aufgeben",
+    "runRound": "Eine Runde ausführen",
+    "expand": "Details",
+    "collapse": "Ausblenden",
+    "criteria": "Akzeptanzkriterien",
+    "rounds": "Runden",
+    "expect": "erwartet",
+    "noReading": "noch kein Nachweis",
+    "verdict": {
+      "pass": "bestanden",
+      "fail": "fehlgeschlagen"
+    },
+    "lastReading": "Letzte Ausführung: {{verdict}} (Exit {{code}})",
+    "timedOut": "Zeitüberschreitung",
+    "budget": "Budget: {{rounds}} Runden · {{wallClock}} Min · {{noProgress}} Runden ohne Fortschritt",
+    "outcomeRunning": "läuft",
+    "outcome": {
+      "green": "grün",
+      "progress": "Fortschritt",
+      "no-progress": "kein Fortschritt",
+      "stalled": "blockiert",
+      "budget-hit": "Budget erreicht",
+      "error": "Fehler"
+    },
+    "refusalGreenAcs": "Bereits bestandene Kriterien: {{ids}}"
   }
 }

@@ -56,6 +56,7 @@ const LazyArchitecturePanel = lazy(() =>
 const LazyApiSpeedPanel = lazy(() =>
   import('@/modules/api-speed').then((module) => ({ default: module.ApiSpeedPanel })),
 );
+const LazyGoalPanel = lazy(() => import('@/modules/goals').then((module) => ({ default: module.GoalPanel })));
 const LazyEditorSidebar = lazy(() =>
   import('@/modules/code-editor').then((module) => ({ default: module.EditorSidebar })),
 );
@@ -578,6 +579,21 @@ function WorkspaceMain({
             <div className="h-full overflow-hidden" data-workspace-view="api-speed">
               <Suspense fallback={<TabLoadingFallback />}>
                 <LazyApiSpeedPanel />
+              </Suspense>
+            </div>
+          )}
+
+          {/* The goal loop is the project's own write surface (not the read-only Quay mirror);
+              activation resolves the project directory into a goal worktree, so `fullPath` is the
+              fallback when the listing row carries no `path`. The route rejects an empty path. */}
+          {activeTab === 'goals' && (
+            <div className="h-full overflow-hidden" data-workspace-view="goals">
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyGoalPanel
+                  projectId={selectedProject.projectId}
+                  projectPath={selectedProject.path ?? selectedProject.fullPath}
+                  isActive={activeTab === 'goals'}
+                />
               </Suspense>
             </div>
           )}

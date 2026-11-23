@@ -29,7 +29,8 @@
     "architecture": "Architecture",
     "apiSpeed": "Vitesse de l'API",
     "shellResidentDisabled": "Shell n'est pas disponible pour les sessions résidentes. Fermez le mode résident pour l'utiliser.",
-    "shellResidentDisabledLabel": "Shell indisponible pour les sessions résidentes"
+    "shellResidentDisabledLabel": "Shell indisponible pour les sessions résidentes",
+    "goals": "Objectifs"
   },
   "architecture": {
     "nav": {
@@ -1277,5 +1278,74 @@
     "colTime": "Heure",
     "colMode": "Mode",
     "colLink": "Lien"
+  },
+  "goals": {
+    "title": "Objectifs",
+    "refresh": "Actualiser",
+    "retry": "Réessayer",
+    "loading": "Chargement des objectifs…",
+    "create": "Nouvel objectif",
+    "formTitle": "Nouvel objectif",
+    "fieldTitle": "Titre",
+    "fieldTitlePlaceholder": "Comment s’appelle cet objectif ?",
+    "fieldObjective": "Objectif",
+    "fieldObjectivePlaceholder": "Que doit-il être vrai une fois terminé ?",
+    "criterionNumber": "Critère {{index}}",
+    "acTitlePlaceholder": "Titre du critère",
+    "acCriterionPlaceholder": "Commande qui le juge, p. ex. npm test -- foo",
+    "acExpectPlaceholder": "Ce qui le fait échouer (la lecture qui ne doit PAS se produire)",
+    "addCriterion": "Ajouter un critère",
+    "removeCriterion": "Supprimer",
+    "createSubmit": "Créer",
+    "createCancel": "Annuler",
+    "creating": "Création…",
+    "formIncomplete": "Le titre, l’objectif et chaque critère doivent avoir une valeur.",
+    "formBudgetInvalid": "Les limites de budget doivent être des nombres positifs (les tours sont entiers).",
+    "fieldMaxRounds": "Tours max.",
+    "fieldWallClockHours": "Durée (h)",
+    "fieldMaxNoProgress": "Tours sans progrès",
+    "budgetHint": "Plafond de tours · durée en heures · tours sans progrès. Laissez un champ vide pour la valeur par défaut.",
+    "emptyTitle": "Aucun objectif dans ce projet pour l’instant",
+    "emptyBody": "Créez un objectif, donnez-lui au moins un critère d’acceptation exécutable, puis activez-le pour lancer la boucle.",
+    "acProgress": "{{passing}}/{{total}} critères réussis",
+    "noCriteria": "Aucun critère d’acceptation",
+    "latestRound": "Dernier tour : #{{seq}} · {{outcome}}",
+    "noRounds": "Aucun tour pour l’instant",
+    "activate": "Activer",
+    "providerLabel": "Activer avec",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "ID de l’objectif",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "abandon": "Abandonner",
+    "runRound": "Exécuter un tour",
+    "expand": "Détails",
+    "collapse": "Masquer",
+    "criteria": "Critères d’acceptation",
+    "rounds": "Tours",
+    "expect": "attendu",
+    "noReading": "aucune lecture pour l’instant",
+    "verdict": {
+      "pass": "réussi",
+      "fail": "échoué"
+    },
+    "lastReading": "Dernière exécution : {{verdict}} (code {{code}})",
+    "timedOut": "délai dépassé",
+    "budget": "Budget : {{rounds}} tours · {{wallClock}} min · {{noProgress}} tours sans progrès",
+    "outcomeRunning": "en cours",
+    "outcome": {
+      "green": "vert",
+      "progress": "progrès",
+      "no-progress": "sans progrès",
+      "stalled": "bloqué",
+      "budget-hit": "budget atteint",
+      "error": "erreur"
+    },
+    "refusalGreenAcs": "Critères déjà réussis : {{ids}}"
   }
 }

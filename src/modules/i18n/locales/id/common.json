@@ -29,7 +29,8 @@
     "architecture": "Arsitektur",
     "apiSpeed": "Kecepatan API",
     "shellResidentDisabled": "Shell tidak tersedia untuk sesi residen. Tutup mode residen untuk menggunakannya.",
-    "shellResidentDisabledLabel": "Shell tidak tersedia untuk sesi residen"
+    "shellResidentDisabledLabel": "Shell tidak tersedia untuk sesi residen",
+    "goals": "Tujuan"
   },
   "architecture": {
     "nav": {
@@ -1358,5 +1359,74 @@
     "colTime": "Waktu",
     "colMode": "Mode",
     "colLink": "Tautan"
+  },
+  "goals": {
+    "title": "Tujuan",
+    "refresh": "Muat ulang",
+    "retry": "Coba lagi",
+    "loading": "Memuat tujuan…",
+    "create": "Tujuan baru",
+    "formTitle": "Tujuan baru",
+    "fieldTitle": "Judul",
+    "fieldTitlePlaceholder": "Apa nama tujuan ini?",
+    "fieldObjective": "Sasaran",
+    "fieldObjectivePlaceholder": "Apa yang harus benar saat ini selesai?",
+    "criterionNumber": "Kriteria {{index}}",
+    "acTitlePlaceholder": "Judul kriteria",
+    "acCriterionPlaceholder": "Perintah yang menilainya, mis. npm test -- foo",
+    "acExpectPlaceholder": "Apa yang membuatnya gagal (pembacaan yang TIDAK boleh terjadi)",
+    "addCriterion": "Tambah kriteria",
+    "removeCriterion": "Hapus",
+    "createSubmit": "Buat",
+    "createCancel": "Batal",
+    "creating": "Membuat…",
+    "formIncomplete": "Judul, sasaran, dan setiap kriteria perlu nilai.",
+    "formBudgetInvalid": "Batas anggaran harus bilangan positif (ronde adalah bilangan bulat).",
+    "fieldMaxRounds": "Ronde maks.",
+    "fieldWallClockHours": "Waktu (jam)",
+    "fieldMaxNoProgress": "Ronde tanpa kemajuan",
+    "budgetHint": "Batas ronde · waktu dalam jam · ronde tanpa kemajuan. Kosongkan satu untuk memakai bawaan.",
+    "emptyTitle": "Belum ada tujuan di proyek ini",
+    "emptyBody": "Buat tujuan, beri setidaknya satu kriteria penerimaan yang dapat dijalankan, lalu aktifkan untuk memulai perulangan.",
+    "acProgress": "{{passing}}/{{total}} kriteria lulus",
+    "noCriteria": "Tidak ada kriteria penerimaan",
+    "latestRound": "Ronde terakhir: #{{seq}} · {{outcome}}",
+    "noRounds": "Belum ada ronde",
+    "activate": "Aktifkan",
+    "providerLabel": "Aktifkan dengan",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "ID tujuan",
+    "pause": "Jeda",
+    "resume": "Lanjutkan",
+    "abandon": "Tinggalkan",
+    "runRound": "Jalankan satu ronde",
+    "expand": "Detail",
+    "collapse": "Sembunyikan",
+    "criteria": "Kriteria penerimaan",
+    "rounds": "Ronde",
+    "expect": "harapan",
+    "noReading": "belum ada pembacaan",
+    "verdict": {
+      "pass": "lulus",
+      "fail": "gagal"
+    },
+    "lastReading": "Jalan terakhir: {{verdict}} (keluar {{code}})",
+    "timedOut": "waktu habis",
+    "budget": "Anggaran: {{rounds}} ronde · {{wallClock}} mnt · {{noProgress}} ronde tanpa kemajuan",
+    "outcomeRunning": "berjalan",
+    "outcome": {
+      "green": "hijau",
+      "progress": "kemajuan",
+      "no-progress": "tanpa kemajuan",
+      "stalled": "macet",
+      "budget-hit": "anggaran habis",
+      "error": "galat"
+    },
+    "refusalGreenAcs": "Kriteria yang sudah lulus: {{ids}}"
   }
 }

@@ -59,6 +59,11 @@ const PASSWORD = 'e2epassword';
 const SCENARIO_FILE = path.join(REPO_ROOT, 'e2e', 'scenarios', 'quay-wall-focus-pin-utter.json');
 /** The cockpit's navigation scenario: session → cockpit → back to the same session. */
 const COCKPIT_SCENARIO_FILE = path.join(REPO_ROOT, 'e2e', 'scenarios', 'cockpit-mode-switch.json');
+/**
+ * The Goals view scenario: project → Goals tab, judged by the panel's own `goal-panel-loaded`
+ * handle. Project-scoped, so it selects no session and creates nothing.
+ */
+const GOAL_SCENARIO_FILE = path.join(REPO_ROOT, 'e2e', 'scenarios', 'goal-loop.json');
 const RUNNER = path.join(REPO_ROOT, 'scripts', 'ui-scenario.mjs');
 
 /** Where the arms write their reports and checkpoint screenshots. */
@@ -68,6 +73,7 @@ const COCKPIT_MAIN_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-cockpi
 const COCKPIT_CONTROL_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-cockpit-control');
 const ZERO_WIDTH_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-zero-width');
 const NO_SURFACE_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-no-surface');
+const GOAL_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-goal');
 
 /**
  * The runner's own boot budget (`BOOT_TIMEOUT_MS` in `scripts/ui-scenario.mjs`).
@@ -581,6 +587,31 @@ test.describe('the UI scenario runner on the Quay wall', () => {
 
     // The step before the mutation still passed, so the red is the mutated reading itself.
     expect(controlReport.steps[0]?.ok, `control step 1 must pass: ${JSON.stringify(controlReport.steps[0])}`).toBe(true);
+  });
+
+  test('runs the goals-panel scenario green: the Goals view mounts with its data', async () => {
+    test.setTimeout(180_000);
+    const { token } = await prepareFixture();
+
+    fs.rmSync(GOAL_OUT, { recursive: true, force: true });
+
+    const run = runRunner(GOAL_SCENARIO_FILE, GOAL_OUT, token);
+    expect(run.stderr, `the runner must print only its report on stdout\nstdout=${run.stdout}`).toContain('ui-scenario:');
+    expect(run.status, `goals arm must exit 0\nstdout=${run.stdout}\nstderr=${run.stderr}`).toBe(0);
+    expect(run.report, `goals arm must print a JSON report\nstdout=${run.stdout}\nstderr=${run.stderr}`).not.toBeNull();
+    const report = run.report as RunnerReport;
+
+    // The judgement IS the step: `goals-panel` only succeeds once the tab is clicked and
+    // `goal-panel-loaded` is visible, so a green step means the panel mounted with its data.
+    expect(report.ok, `goals report must be ok: ${JSON.stringify(report.steps)}`).toBe(true);
+    expect(report.failedStep).toBeNull();
+    expect(report.stepCount).toBe(1);
+    expect(report.steps.every((step) => step.ok), JSON.stringify(report.steps)).toBe(true);
+    expect(report.checkpoints.length).toBe(1);
+    for (const checkpoint of report.checkpoints) {
+      expect(fs.existsSync(checkpoint.file), `checkpoint screenshot ${checkpoint.file} must exist`).toBe(true);
+      expect(fs.statSync(checkpoint.file).size, `checkpoint screenshot ${checkpoint.file} must be non-empty`).toBeGreaterThan(0);
+    }
   });
 });
 

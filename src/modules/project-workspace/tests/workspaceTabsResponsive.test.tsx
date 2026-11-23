@@ -128,13 +128,13 @@ Element.prototype.scrollIntoView = () => {};
  * The API-speed view is unconditional (it measures this machine's gateway link, not the
  * selected project), so it is present in both switch states, right after the session's views.
  */
-const BUILT_IN_NAMES = ['Chat', 'API speed', 'Files', 'Source Control', 'Browser', 'Tasks', 'Shell'];
+const BUILT_IN_NAMES = ['Chat', 'API speed', 'Files', 'Source Control', 'Goals', 'Browser', 'Tasks', 'Shell'];
 const ENABLED_PLUGIN_NAMES = Array.from({ length: ENABLED_PLUGIN_COUNT }, (_, i) => `Probe Workspace ${i + 1}`);
 const DISABLED_PLUGIN_NAMES = ['Probe Workspace 13', 'Probe Workspace 14'];
 
 /** The tab ids the mocks produce, in their built-in group, for the two switch states. */
-const BUILT_IN_IDS = ['chat', 'api-speed', 'files', 'git', 'browser', 'tasks', 'shell'];
-const BUILT_IN_IDS_WITH_QUAY_AND_ARCHITECTURE = ['chat', 'quay', 'architecture', 'api-speed', 'files', 'git', 'browser', 'tasks', 'shell'];
+const BUILT_IN_IDS = ['chat', 'api-speed', 'files', 'git', 'goals', 'browser', 'tasks', 'shell'];
+const BUILT_IN_IDS_WITH_QUAY_AND_ARCHITECTURE = ['chat', 'quay', 'architecture', 'api-speed', 'files', 'git', 'goals', 'browser', 'tasks', 'shell'];
 const PLUGIN_IDS = Array.from({ length: ENABLED_PLUGIN_COUNT }, (_, i) => `plugin:probe-${i + 1}`);
 
 const PROJECT: Project = {
@@ -307,8 +307,8 @@ function installStripWidthStubs(widths: { spacer: number; room: number; tabWidth
 }
 
 /**
- * Seven built-in tabs of 100px (word 60px, icon-only 34px): all spelled = 720px of strip
- * (8px chrome + 700px of tabs + 6 gaps of 2px), all icons = 258px.
+ * Eight built-in tabs of 100px (word 60px, icon-only 34px): all spelled = 822px of strip
+ * (8px chrome + 800px of tabs + 7 gaps of 2px), all icons = 294px.
  */
 const TAB_WIDTHS = { tabWidth: 100, labelWidth: 60 };
 
@@ -500,20 +500,20 @@ test('mobile dialog lists the same order as desktop', () => {
 // off-screen full-label copy is what makes the decision stable, so this case also reads that
 // copy across the two switches: its width and its labels must not change with the mode.
 test('tab strip drops labels in priority order when the room is short, and returns to full when it fits', () => {
-  // 200 + 300 = 500px of room (496 after the 4px slack) for a 720px full strip: Chat (active)
-  // plus the highest-priority tabs that still fit keep their word (Chat, Files, Git = 456px);
-  // Tasks would need 522px, so it and everything below it are icons.
+  // 200 + 300 = 500px of room (496 after the 4px slack) for an 822px full strip: Chat (active)
+  // plus the highest-priority tabs that still fit keep their word (Chat, Files, Git = 492px);
+  // Goals would need 558px, so it and everything below it are icons.
   const widths = { spacer: 200, room: 300, ...TAB_WIDTHS };
   const stubs = installStripWidthStubs(widths);
 
   try {
     render(<HeaderHarness isMobile={false} shouldShowTasksTab shouldShowBrowserTab />);
 
-    assert.equal(stripMode(), 'partial', 'a 500px room for a 720px full strip must keep some labels');
+    assert.equal(stripMode(), 'partial', 'a 500px room for an 822px full strip must keep some labels');
     for (const id of ['chat', 'files', 'git']) {
       assert.ok(tabLabel(id)?.classList.contains('inline'), `"${id}" ranks high enough to keep its label`);
     }
-    for (const id of ['tasks', 'browser', 'shell', 'api-speed']) {
+    for (const id of ['tasks', 'browser', 'shell', 'api-speed', 'goals']) {
       assert.ok(tabLabel(id)?.classList.contains('hidden'), `"${id}" ranks lower and must drop its label`);
     }
 
@@ -528,7 +528,7 @@ test('tab strip drops labels in priority order when the room is short, and retur
     });
 
     assert.equal(stripMode(), 'full', 'a room wider than the full strip must return to full labels');
-    for (const id of ['chat', 'api-speed', 'files', 'git', 'browser', 'tasks', 'shell']) {
+    for (const id of ['chat', 'api-speed', 'files', 'git', 'goals', 'browser', 'tasks', 'shell']) {
       assert.ok(tabLabel(id)?.classList.contains('inline'), `every tab must show its label in full mode; "${id}" did not`);
     }
     // The off-screen copy is a property of the tab set and the language, not of the layout.
@@ -539,11 +539,11 @@ test('tab strip drops labels in priority order when the room is short, and retur
 });
 
 // The decision reads the SUM of the two flex children that share the strip's room. The full
-// boundary is `720 + 4px slack`; one pixel less downgrades at once, but coming back up needs a
+// boundary is `822 + 4px slack`; one pixel less downgrades at once, but coming back up needs a
 // further 12px margin so a window drag across the boundary does not flicker. Redistributing a
 // fixed sum between the two children must not change the layout.
 test('the layout decision reads spacer + room, downgrades at the boundary and upgrades only past a margin', () => {
-  const FULL_BOUNDARY = 720 + 4;
+  const FULL_BOUNDARY = 822 + 4;
   const widths = { spacer: 400, room: FULL_BOUNDARY - 400, ...TAB_WIDTHS };
   const stubs = installStripWidthStubs(widths);
   const resize = (total: number, spacer = widths.spacer) => {
@@ -599,11 +599,11 @@ test('tabs that do not fit even as icons move to a named overflow menu, lowest p
     const items = within(document.querySelector('[role="menu"]') as HTMLElement).getAllByRole('menuitem');
     assert.deepEqual(
       items.map((item) => (item.textContent ?? '').trim()),
-      ['API speed', 'Source Control', 'Browser', 'Tasks', 'Shell'],
+      ['API speed', 'Source Control', 'Goals', 'Browser', 'Tasks', 'Shell'],
       'every hidden view stays reachable by its full name, in display order',
     );
 
-    fireEvent.click(items[4]);
+    fireEvent.click(items[5]);
     assert.equal(
       document.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('data-workspace-tab'),
       'shell',
@@ -716,7 +716,9 @@ test('tab tooltip follows the label mode, not the breakpoint', () => {
   }
   full.unmount();
 
-  const widths = { spacer: 150, room: 250, ...TAB_WIDTHS };
+  // 150 + 300 = 450px of room (446 after the 4px slack): Chat and Files keep their words
+  // (100 + 66 of strip over the all-icon 360), Git would need 492px, so the rest are icons.
+  const widths = { spacer: 150, room: 300, ...TAB_WIDTHS };
   const stubs = installStripWidthStubs(widths);
   try {
     render(<HeaderHarness isMobile={false} shouldShowTasksTab shouldShowBrowserTab />);
@@ -1049,7 +1051,7 @@ test('tab tooltip only when the label is hidden', async () => {
 
   // Icon mode: only the icon is drawn, so an inactive tab earns a bubble.
   // The ACTIVE tab still spells its own name and must not get one.
-  const stubs = installStripWidthStubs({ spacer: 150, room: 250, ...TAB_WIDTHS });
+  const stubs = installStripWidthStubs({ spacer: 150, room: 300, ...TAB_WIDTHS });
   try {
     render(<HeaderHarness isMobile={false} shouldShowTasksTab shouldShowBrowserTab />);
     assert.equal(stripMode(), 'partial', 'the narrow room must drop the lowest-priority labels');

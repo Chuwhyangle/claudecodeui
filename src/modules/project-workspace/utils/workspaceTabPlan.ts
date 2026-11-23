@@ -22,7 +22,7 @@
  * menu. Listing it explicitly (rather than leaving it as an unknown id) keeps
  * that rank from being decided by its display position among the plugin tabs.
  */
-const BUILT_IN_PRIORITY: readonly string[] = ['chat', 'quay', 'files', 'git', 'architecture', 'tasks', 'browser', 'shell', 'api-speed'];
+const BUILT_IN_PRIORITY: readonly string[] = ['chat', 'quay', 'files', 'git', 'goals', 'architecture', 'tasks', 'browser', 'shell', 'api-speed'];
 
 /** Gap `PillBar` draws between two neighbouring pills. */
 const GAP_PX = 2;

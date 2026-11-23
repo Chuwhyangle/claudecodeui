@@ -15,6 +15,7 @@
  *     only step that touches the DOM. An opener may name its own `project`/`session`, which is
  *     how one scenario switches between two sessions. The vocabulary is explicit and closed:
  *       `quay-panel` — a project's Quay view (sidebar project → session → Quay tab);
+ *       `goals-panel`— a project's Goals view (sidebar project only, then the Goals tab);
  *       `session`    — one session's workspace (the sidebar project → session rows);
  *       `cockpit`    — the cockpit stage, entered through the same mode switch a person uses, so
  *                      the return path a later `session` step lands on is the product's own;
@@ -34,6 +35,13 @@
  *                      picking the menu's own row; it waits for the panel to declare itself
  *                      mounted, so the first reading is a drawn panel, not a command in flight.
  *     An unknown opener fails its step rather than being ignored.
+ *
+ * SURFACE REQUIREMENT. A page served from a production `dist/` build has no semantic surface.
+ * A scenario that READS it (`drive` / `expect` / `waitFor` / a reload leg that waits for fetched
+ * rows) is refused before its first step with a named reason (exit 2, no report), rather than
+ * timing out once per step. A navigation-and-screenshot scenario — openers plus checkpoints —
+ * runs on such a page: each reading there is `null`, and a step with no `expect` is satisfied by
+ * that reading, while one WITH an `expect` fails with "semantic surface unavailable".
  *   · `reload`: reload the current page and wait for the surface again. The refresh leg of a
  *     continuity scenario is a real browser reload, not a re-navigation through the sidebar.
  *     With `waitForChat: true` it also waits until the reloaded page has drawn non-empty
@@ -254,6 +262,15 @@ function expectationFailures(expect, reading, previous = {}) {
   const previousChatMessageCount = typeof previous.chatMessageCount === 'number' ? previous.chatMessageCount : null;
   /** @type {string[]} */
   const failures = [];
+  // No semantic surface (a production build): there is nothing to read. A step that expects
+  // nothing is still satisfied; one that expects something fails with the reason instead of
+  // throwing on `reading.route`. The run-level check is `scenarioNeedsSurface`, so a scenario
+  // that reaches here without a surface is the navigation-only kind.
+  if (reading === null) {
+    return Object.keys(expect).length === 0
+      ? []
+      : ['semantic surface unavailable in this build; the expectations cannot be evaluated'];
+  }
   /** @type {(key: string, expected: unknown, actual: unknown) => void} */
   const fail = (key, expected, actual) => {
     failures.push(`${key}: expected ${JSON.stringify(expected)}, read ${JSON.stringify(actual)}`);
@@ -955,6 +972,7 @@ function expectationFailures(expect, reading, previous = {}) {
  * Node's lib only (the callback runs in the page, but its source is checked here).
  *
  * @param {import('playwright').Page} page
+ * @returns {Promise<boolean>} whether the surface mounted within the boot budget
  */
 async function waitForSurface(page) {
   try {
@@ -963,28 +981,57 @@ async function waitForSurface(page) {
       undefined,
       { timeout: BOOT_TIMEOUT_MS },
     );
+    return true;
   } catch (error) {
-    // A timeout here has ONE dominant cause, and it is worth naming: the surface is gated on a
-    // development build. Without this the run dies on a generic `waitForFunction` timeout that
-    // reads like a broken app or a bad scenario, when the page was simply never drivable.
+    // The surface is installed only by a development build (main.tsx gates it on
+    // `import.meta.env.DEV` plus localStorage['ui-scenario']='on'). A production `dist/`
+    // page therefore has none. That is a READING, not a broken run: a scenario made only
+    // of openers and checkpoints can still navigate and screenshot, so this reports `false`
+    // and lets the run decide (see `scenarioNeedsSurface`). A scenario that actually needs
+    // the surface is refused up front with a named reason, rather than each step failing on
+    // an indistinguishable timeout.
     if (error instanceof Error && error.name === 'TimeoutError') {
-      throw new Error(
-        `the semantic surface (window.__cloudpitScenario) was not mounted within ${BOOT_TIMEOUT_MS}ms. `
-        + 'It is installed only by a development build: main.tsx gates it on import.meta.env.DEV '
-        + "plus localStorage['ui-scenario']='on'. A page served from a production dist/ build (for "
-        + 'example an instance started by scripts/isolated-instance.sh) has no semantic surface to '
-        + 'drive. Point --base-url at the Vite dev server instead (`npm run client`, or `npm run dev`).',
-      );
+      return false;
     }
     throw error;
   }
 }
 
-/** Reads the surface's structured state in one round trip.
+/** Reads the surface's structured state in one round trip; `null` when the page has no surface.
  * @param {import('playwright').Page} page
  */
 async function readSurface(page) {
-  return page.evaluate(() => /** @type {any} */ (globalThis).__cloudpitScenario.read());
+  return page.evaluate(() => {
+    const surface = /** @type {any} */ (globalThis).__cloudpitScenario;
+    return surface ? surface.read() : null;
+  });
+}
+
+/** The one message an unusable run carries: what was missing, why, and how to fix it. */
+const SURFACE_MISSING_MESSAGE =
+  `the semantic surface (window.__cloudpitScenario) was not mounted within ${BOOT_TIMEOUT_MS}ms. `
+  + 'It is installed only by a development build: main.tsx gates it on import.meta.env.DEV '
+  + "plus localStorage['ui-scenario']='on'. A page served from a production dist/ build (for "
+  + 'example an instance started by scripts/isolated-instance.sh) has no semantic surface to '
+  + 'drive. Point --base-url at the Vite dev server instead (`npm run client`, or `npm run dev`).';
+
+/**
+ * Whether any step in the scenario reads the page's semantic surface.
+ *
+ * ONLY navigation-and-screenshot scenarios may run against a page without one. A `drive`,
+ * `expect`, `waitFor`, or a reload leg that waits for fetched rows all read `read()`; running
+ * them on a production `dist/` page would either fail with a meaningless timeout or silently
+ * assert nothing, so the run is refused up front instead.
+ *
+ * @param {Scenario} scenario
+ * @returns {boolean}
+ */
+function scenarioNeedsSurface(scenario) {
+  return scenario.steps.some((step) => step.drive !== undefined
+    || (isRecord(step.expect) && Object.keys(step.expect).length > 0)
+    || typeof step.waitFor === 'string'
+    || step.waitForChat === true
+    || step.waitForCards === true);
 }
 
 /**
@@ -1091,20 +1138,30 @@ async function waitForClickTarget(page, text, timeout) {
  * no longer exists.
  *
  * @param {import('playwright').Page} page
- * @param {{ project: string, session: string }} target
+ * @param {string} project
  */
-async function selectProjectSession(page, target) {
+async function selectProject(page, project) {
   await page.goto('/');
-  let projectRow = await waitForClickTarget(page, target.project, 10_000);
+  let projectRow = await waitForClickTarget(page, project, 10_000);
   for (let attempt = 0; projectRow === null && attempt < 2; attempt += 1) {
     await page.reload().catch(() => undefined);
-    projectRow = await waitForClickTarget(page, target.project, 6_000);
+    projectRow = await waitForClickTarget(page, project, 6_000);
   }
   if (projectRow === null) {
-    throw new Error(`the fixture project "${target.project}" never appeared in the sidebar`);
+    throw new Error(`the fixture project "${project}" never appeared in the sidebar`);
   }
 
   await projectRow.click();
+}
+
+/**
+ * Selects a project's session from the sidebar after {@link selectProject} has opened it.
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ project: string, session: string }} target
+ */
+async function selectProjectSession(page, target) {
+  await selectProject(page, target.project);
   let sessionRow = await waitForClickTarget(page, target.session, 10_000);
   if (sessionRow === null) {
     // A project that is already expanded — the selected project auto-expands on
@@ -1318,6 +1375,53 @@ async function openQuayPanel(page, target) {
 
   await page.locator('[data-testid="quay-panel-loaded"]').waitFor({ state: 'visible', timeout: PANEL_TIMEOUT_MS });
   await waitForPublishedView(page);
+}
+
+/** The two handles a Goals tab may carry; the panel and this runner ship independently. */
+const GOALS_TAB = '[data-testid="workspace-tab-goals"], [data-workspace-tab="goals"]';
+
+/**
+ * Navigates the app to one project's Goals view.
+ *
+ * TWO HANDLES, ONE TAB. This opener accepts either the dedicated
+ * `data-testid="workspace-tab-goals"` handle or the `data-workspace-tab="goals"` contract every
+ * workspace tab already carries — and it never helps the panel choose. The tab is clicked from
+ * the sidebar selection a person makes, exactly as the Quay opener does it.
+ *
+ * GOALS ARE PROJECT-SCOPED, so this opener selects the project only: requiring a session first
+ * would make a project with no conversations unaddressable.
+ *
+ * The load is judged by the panel's own `goal-panel-loaded` handle, the same shape
+ * `quay-panel-loaded` uses: a view that mounted but has not published its data is not loaded, and
+ * a screenshot of it would hide that.
+ *
+ * THE QUAY OPENER'S `waitForPublishedView` IS DELIBERATELY OMITTED. The Goals panel publishes no
+ * `__cloudpitScenario` view of its own, and its tab is a mutually-exclusive switch in the
+ * workspace, so the previous view's publication is unmounted — waiting for `views.length > 0`
+ * would time out on a perfectly loaded panel and report a lie about it. This also keeps the
+ * opener usable on a production `dist/` page, where no semantic surface exists at all.
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ project: string, session: string }} target
+ */
+async function openGoalsPanel(page, target) {
+  await selectProject(page, target.project);
+
+  const tab = page.locator(GOALS_TAB).first();
+  const tabVisible = await tab.isVisible().catch(() => false);
+  if (tabVisible) {
+    await tab.click();
+  } else {
+    // Compact layouts (a phone) put the tablist behind the header's selector dialog.
+    const selector = page.locator('header [aria-haspopup="dialog"]').first();
+    await selector.waitFor({ state: 'visible', timeout: 10_000 });
+    await selector.click();
+    const dialogTab = page.getByRole('dialog').locator(GOALS_TAB).first();
+    await dialogTab.waitFor({ state: 'visible', timeout: 10_000 });
+    await dialogTab.click();
+  }
+
+  await page.locator('[data-testid="goal-panel-loaded"]').waitFor({ state: 'visible', timeout: PANEL_TIMEOUT_MS });
 }
 
 /**
@@ -1621,8 +1725,8 @@ async function runScenario(browser, scenario, options) {
         screenshot,
         reading,
       });
-      if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
-      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
+      if (typeof reading?.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading?.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
     }
     batch = [];
   };
@@ -1631,6 +1735,16 @@ async function runScenario(browser, scenario, options) {
   let appReady = false;
 
   try {
+    // A scenario that READS the surface cannot run on a page that has none. Decide that once,
+    // before the first step, so the run ends with a named reason (exit 2, no report) instead of
+    // hitting the boot budget again per step. A navigation-only scenario — openers plus
+    // checkpoints, no `drive`/`expect`/`waitFor` — is allowed through and simply reads `null`.
+    if (scenarioNeedsSurface(scenario)) {
+      await page.goto('/');
+      if (!(await waitForSurface(page))) throw new Error(SURFACE_MISSING_MESSAGE);
+      appReady = true;
+    }
+
     for (let index = 0; index < scenario.steps.length; index += 1) {
       const step = scenario.steps[index];
       if (!appReady && step.open === undefined && step.reload !== true) {
@@ -1685,6 +1799,7 @@ async function runScenario(browser, scenario, options) {
           /** @type {Record<string, (() => Promise<void>) | undefined>} */
           const openers = {
             'quay-panel': () => openQuayPanel(page, target),
+            'goals-panel': () => openGoalsPanel(page, target),
             session: () => openSession(page, target, options.authToken),
             cockpit: () => openCockpit(page),
             'cockpit-cards': () => openCockpitCards(page),
@@ -1727,8 +1842,8 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
-        if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
-      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
+        if (typeof reading?.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading?.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
         continue;
       }
 
@@ -1775,8 +1890,8 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
-        if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
-      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
+        if (typeof reading?.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading?.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
         continue;
       }
 
@@ -1823,8 +1938,8 @@ async function runScenario(browser, scenario, options) {
           screenshot,
           reading,
         });
-        if (typeof reading.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
-      if (Array.isArray(reading.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
+        if (typeof reading?.debugLogLines === 'number') previousReading.debugLogLines = reading.debugLogLines;
+      if (Array.isArray(reading?.chat?.messages)) previousReading.chatMessageCount = reading.chat.messages.length;
         continue;
       }
 

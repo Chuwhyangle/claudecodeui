@@ -29,7 +29,8 @@
     "architecture": "Architecture",
     "apiSpeed": "API speed",
     "shellResidentDisabled": "Shell is unavailable for resident sessions. Close resident mode to use it.",
-    "shellResidentDisabledLabel": "Shell unavailable for resident sessions"
+    "shellResidentDisabledLabel": "Shell unavailable for resident sessions",
+    "goals": "Goals"
   },
   "architecture": {
     "nav": {
@@ -1367,5 +1368,74 @@
     "colTime": "Time",
     "colMode": "Mode",
     "colLink": "Link"
+  },
+  "goals": {
+    "title": "Goals",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "loading": "Loading goals…",
+    "create": "New goal",
+    "formTitle": "New goal",
+    "fieldTitle": "Title",
+    "fieldTitlePlaceholder": "What is this goal called?",
+    "fieldObjective": "Objective",
+    "fieldObjectivePlaceholder": "What should be true when this is done?",
+    "criterionNumber": "Criterion {{index}}",
+    "acTitlePlaceholder": "Criterion title",
+    "acCriterionPlaceholder": "Command that judges it, e.g. npm test -- foo",
+    "acExpectPlaceholder": "What fails it (the reading that must NOT happen)",
+    "addCriterion": "Add criterion",
+    "removeCriterion": "Remove",
+    "createSubmit": "Create",
+    "createCancel": "Cancel",
+    "creating": "Creating…",
+    "formIncomplete": "Title, objective and every criterion need a value.",
+    "formBudgetInvalid": "Budget limits must be positive numbers (rounds are whole numbers).",
+    "fieldMaxRounds": "Max rounds",
+    "fieldWallClockHours": "Wall clock (h)",
+    "fieldMaxNoProgress": "No-progress rounds",
+    "budgetHint": "Round cap · wall-clock hours · rounds without progress. Leave one blank to use the default.",
+    "emptyTitle": "No goals in this project yet",
+    "emptyBody": "Create a goal, give it at least one runnable acceptance criterion, then activate it to start looping.",
+    "acProgress": "{{passing}}/{{total}} criteria passing",
+    "noCriteria": "No acceptance criteria",
+    "latestRound": "Latest round: #{{seq}} · {{outcome}}",
+    "noRounds": "No rounds yet",
+    "activate": "Activate",
+    "providerLabel": "Activate with",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "Goal id",
+    "pause": "Pause",
+    "resume": "Resume",
+    "abandon": "Abandon",
+    "runRound": "Run a round",
+    "expand": "Details",
+    "collapse": "Hide",
+    "criteria": "Acceptance criteria",
+    "rounds": "Rounds",
+    "expect": "expect",
+    "noReading": "no reading yet",
+    "verdict": {
+      "pass": "pass",
+      "fail": "fail"
+    },
+    "lastReading": "Last run: {{verdict}} (exit {{code}})",
+    "timedOut": "timed out",
+    "budget": "Budget: {{rounds}} rounds · {{wallClock}} min · {{noProgress}} no-progress rounds",
+    "outcomeRunning": "running",
+    "outcome": {
+      "green": "green",
+      "progress": "progress",
+      "no-progress": "no progress",
+      "stalled": "stalled",
+      "budget-hit": "budget hit",
+      "error": "error"
+    },
+    "refusalGreenAcs": "Criteria already passing: {{ids}}"
   }
 }

@@ -115,7 +115,7 @@ export type ProviderModelActions = {
 //----------------- PROJECTS AND SESSIONS ------------
 
 /** Identifies the workspace pane the user is looking at; plugin panes are namespaced by plugin id. */
-export type AppTab = 'chat' | 'files' | 'shell' | 'git' | 'tasks' | 'quay' | 'architecture' | 'api-speed' | 'browser' | `plugin:${string}`;
+export type AppTab = 'chat' | 'files' | 'shell' | 'git' | 'tasks' | 'quay' | 'architecture' | 'goals' | 'api-speed' | 'browser' | `plugin:${string}`;
 
 /**
  * How a session's provider process is owned for the session's lifetime.

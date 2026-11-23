@@ -29,7 +29,8 @@
     "architecture": "Mimari",
     "apiSpeed": "API hızı",
     "shellResidentDisabled": "Shell kalıcı oturumlarda kullanılamaz. Kullanmak için kalıcı modu kapatın.",
-    "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz"
+    "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz",
+    "goals": "Hedefler"
   },
   "architecture": {
     "nav": {
@@ -1276,5 +1277,74 @@
     "colTime": "Saat",
     "colMode": "Mod",
     "colLink": "Bağlantı"
+  },
+  "goals": {
+    "title": "Hedefler",
+    "refresh": "Yenile",
+    "retry": "Yeniden dene",
+    "loading": "Hedefler yükleniyor…",
+    "create": "Yeni hedef",
+    "formTitle": "Yeni hedef",
+    "fieldTitle": "Başlık",
+    "fieldTitlePlaceholder": "Bu hedefin adı ne?",
+    "fieldObjective": "Amaç",
+    "fieldObjectivePlaceholder": "Bu tamamlandığında ne doğru olmalı?",
+    "criterionNumber": "Kriter {{index}}",
+    "acTitlePlaceholder": "Kriter başlığı",
+    "acCriterionPlaceholder": "Onu yargılayan komut, ör. npm test -- foo",
+    "acExpectPlaceholder": "Onu başarısız kılan şey (olmaması gereken okuma)",
+    "addCriterion": "Kriter ekle",
+    "removeCriterion": "Kaldır",
+    "createSubmit": "Oluştur",
+    "createCancel": "İptal",
+    "creating": "Oluşturuluyor…",
+    "formIncomplete": "Başlık, amaç ve her kriter bir değer gerektirir.",
+    "formBudgetInvalid": "Bütçe sınırları pozitif sayı olmalıdır (turlar tam sayıdır).",
+    "fieldMaxRounds": "Azami tur",
+    "fieldWallClockHours": "Süre (sa)",
+    "fieldMaxNoProgress": "İlerlemesiz tur",
+    "budgetHint": "Tur sınırı · saat cinsinden süre · ilerlemesiz tur. Varsayılanı kullanmak için birini boş bırakın.",
+    "emptyTitle": "Bu projede henüz hedef yok",
+    "emptyBody": "Bir hedef oluşturun, en az bir çalıştırılabilir kabul kriteri verin, sonra döngüyü başlatmak için etkinleştirin.",
+    "acProgress": "{{passing}}/{{total}} kriter geçti",
+    "noCriteria": "Kabul kriteri yok",
+    "latestRound": "Son tur: #{{seq}} · {{outcome}}",
+    "noRounds": "Henüz tur yok",
+    "activate": "Etkinleştir",
+    "providerLabel": "Şununla etkinleştir",
+    "provider": {
+      "claude": "Claude",
+      "codex": "Codex",
+      "cursor": "Cursor",
+      "opencode": "OpenCode"
+    },
+    "goalId": "Hedef kimliği",
+    "pause": "Duraklat",
+    "resume": "Sürdür",
+    "abandon": "Bırak",
+    "runRound": "Bir tur çalıştır",
+    "expand": "Ayrıntılar",
+    "collapse": "Gizle",
+    "criteria": "Kabul kriterleri",
+    "rounds": "Turlar",
+    "expect": "beklenen",
+    "noReading": "henüz okuma yok",
+    "verdict": {
+      "pass": "geçti",
+      "fail": "başarısız"
+    },
+    "lastReading": "Son çalıştırma: {{verdict}} (çıkış {{code}})",
+    "timedOut": "zaman aşımı",
+    "budget": "Bütçe: {{rounds}} tur · {{wallClock}} dk · {{noProgress}} ilerlemesiz tur",
+    "outcomeRunning": "çalışıyor",
+    "outcome": {
+      "green": "yeşil",
+      "progress": "ilerleme",
+      "no-progress": "ilerleme yok",
+      "stalled": "durdu",
+      "budget-hit": "bütçe doldu",
+      "error": "hata"
+    },
+    "refusalGreenAcs": "Zaten geçen kriterler: {{ids}}"
   }
 }

@@ -392,6 +392,63 @@ const ROWS: readonly SyncRow[] = [
     serverFile: path.join(repoRoot, 'server', 'shared', 'types', 'provider-launch.ts'),
     reader: 'object',
   },
+  {
+    // The Goals panel renders the loop the server assembled and the MCP tools
+    // write. A status or outcome the panel does not know would draw an
+    // unlabelled row; a field one end drops would leave a blank slot.
+    client: 'GoalStatus',
+    server: 'GoalStatus',
+    serverFile: SERVER_TYPES,
+    reader: 'union',
+  },
+  {
+    client: 'GoalAcStatus',
+    server: 'GoalAcStatus',
+    serverFile: SERVER_TYPES,
+    reader: 'union',
+  },
+  {
+    client: 'GoalRoundOutcome',
+    server: 'GoalRoundOutcome',
+    serverFile: SERVER_TYPES,
+    reader: 'union',
+  },
+  {
+    client: 'GoalEvidenceVerdict',
+    server: 'GoalEvidenceVerdict',
+    serverFile: SERVER_TYPES,
+    reader: 'union',
+  },
+  {
+    client: 'GoalBudget',
+    server: 'GoalBudget',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'Goal',
+    server: 'Goal',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'GoalAc',
+    server: 'GoalAc',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'GoalEvidence',
+    server: 'GoalEvidence',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'GoalRound',
+    server: 'GoalRound',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
 ];
 
 /** Reads one row's type from an arbitrary source string (used for both ends). */
