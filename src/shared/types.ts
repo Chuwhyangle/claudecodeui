@@ -3597,8 +3597,8 @@ export type SidebarProjectListProps = SessionRowActions & {
 /** The ordering applied to the project list, either alphabetically by name or by most recent activity, persisted alongside the user's appearance settings. */
 export type ProjectSortOrder = 'name' | 'date';
 
-/** Which list the sidebar is currently showing: projects, conversation search results, running sessions or archived items. */
-export type SidebarSearchMode = 'projects' | 'conversations' | 'running' | 'archived';
+/** Which list the sidebar is currently showing: projects, conversation search results, running sessions, the sessions waiting on the user, or archived items. */
+export type SidebarSearchMode = 'projects' | 'conversations' | 'running' | 'awaiting-reply' | 'archived';
 
 /** A Project narrowed to the archived state so archived entries can be listed and restored without being mistaken for active projects. */
 export type ArchivedProjectListItem = Project & { isArchived: true };

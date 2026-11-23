@@ -376,6 +376,22 @@ const ROWS: readonly SyncRow[] = [
     serverFile: SERVER_TYPES,
     reader: 'object',
   },
+  {
+    // The sidebar's awaiting-reply inbox draws rows the server assembled and the
+    // header badge counts the same list. A reason the server starts storing and
+    // the client does not know would render an unlabelled row; a field one end
+    // drops would make the row draw a blank slot.
+    client: 'AwaitingReplyReason',
+    server: 'AwaitingReplyReason',
+    serverFile: path.join(repoRoot, 'server', 'shared', 'types', 'provider-launch.ts'),
+    reader: 'union',
+  },
+  {
+    client: 'AwaitingReplyListItem',
+    server: 'AwaitingReplyListItem',
+    serverFile: path.join(repoRoot, 'server', 'shared', 'types', 'provider-launch.ts'),
+    reader: 'object',
+  },
 ];
 
 /** Reads one row's type from an arbitrary source string (used for both ends). */

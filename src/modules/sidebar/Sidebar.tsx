@@ -8,7 +8,8 @@ import { useSidebarController } from '@/modules/sidebar/hooks/useSidebarControll
 import { useTaskMaster, useTasksSettings } from '@/modules/task-master';
 import { usePaletteOps } from '@/modules/command-palette';
 import { useBusySessionIdSet } from '@/shared/context/SessionProtectionContext';
-import type { LLMProvider, LoadingProgress, MCPServerStatus, Project, ProjectSession, SessionHiddenByProjectFilter, SidebarProjectListProps } from '@/shared/types';
+import type { LLMProvider, LoadingProgress, MCPServerStatus, Project, ProjectSession, SessionHiddenByProjectFilter, SessionWithProvider, SidebarProjectListProps } from '@/shared/types';
+import type { AwaitingReplyListItem } from '@/shared/awaitingReplyType';
 import SidebarCollapsed from '@/modules/sidebar/SidebarCollapsed';
 import SidebarContent from '@/modules/sidebar/SidebarContent';
 import SidebarModals from '@/modules/sidebar/SidebarModals';
@@ -116,6 +117,7 @@ function Sidebar({
     searchProgress,
     clearConversationResults,
     runningSessionsCount,
+    awaitingReply,
     deletingProjects,
     pendingDeletion,
     showVersionModal,
@@ -214,6 +216,32 @@ function Sidebar({
     [updateSessionSummary],
   );
 
+  // Opening a wait answers it: the row leaves the inbox and the session opens,
+  // whether or not its project page was ever loaded here. The payload is built
+  // from the inbox row alone (the row is drawable without the project list), and
+  // the project is selected first when the sidebar holds it so the workspace's
+  // own context matches the session it is about to show.
+  const handleOpenAwaitingReply = useCallback(
+    (awaiting: AwaitingReplyListItem) => {
+      const project = awaiting.projectId
+        ? projects.find((candidate) => candidate.projectId === awaiting.projectId) ?? null
+        : null;
+      const sessionPayload: SessionWithProvider = {
+        id: awaiting.sessionId,
+        summary: awaiting.sessionTitle,
+        __provider: awaiting.provider,
+        __projectId: awaiting.projectId ?? undefined,
+      };
+
+      if (project) {
+        handleProjectSelect(project);
+      }
+      handleSessionClick(sessionPayload, awaiting.projectId ?? '');
+      void awaitingReply.dismiss(awaiting.sessionId);
+    },
+    [awaitingReply, handleProjectSelect, handleSessionClick, projects],
+  );
+
   const projectListProps: SidebarProjectListProps = {
     projects,
     filteredProjects,
@@ -304,6 +332,8 @@ function Sidebar({
             projects={projects}
             onGoHome={onGoHome}
             runningSessionsCount={runningSessionsCount}
+            awaitingReply={awaitingReply}
+            onOpenAwaitingReply={handleOpenAwaitingReply}
             archivedProjects={archivedProjects}
             archivedSessions={archivedSessions}
             archivedSessionsCount={archivedSessionsCount}

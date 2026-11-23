@@ -9,6 +9,7 @@ import type {
 } from '@/shared/types';
 import { useSidebarConversationSearch } from '@/modules/sidebar/hooks/useSidebarConversationSearch';
 import { useSidebarDialogs } from '@/modules/sidebar/hooks/useSidebarDialogs';
+import { useAwaitingReplySessions } from '@/modules/sidebar/hooks/useAwaitingReplySessions';
 import { useSidebarProjectsConcern } from '@/modules/sidebar/hooks/useSidebarProjectsConcern';
 import { useSidebarSessionsConcern } from '@/modules/sidebar/hooks/useSidebarSessionsConcern';
 
@@ -116,6 +117,11 @@ export function useSidebarController({
   const busySessionIds = useBusySessionIdSet();
   const runningSessionsCount = useMemo(() => busySessionIds.size, [busySessionIds]);
 
+  // The sessions waiting on the user, read once here and handed to both the
+  // header badge and the inbox view: one instance, so the badge and the rows
+  // cannot describe two different lists.
+  const awaitingReply = useAwaitingReplySessions();
+
   return {
     isSidebarCollapsed: dialogs.isSidebarCollapsed,
     isProjectExpanded: projectsConcern.isProjectExpanded,
@@ -131,6 +137,7 @@ export function useSidebarController({
     showVersionModal: dialogs.showVersionModal,
     filteredProjects: projectsConcern.filteredProjects,
     runningSessionsCount,
+    awaitingReply,
     archivedProjects: sessionsConcern.filteredArchivedProjects,
     archivedSessions: sessionsConcern.filteredArchivedSessions,
     archivedSessionsCount: sessionsConcern.archivedProjects.length + sessionsConcern.archivedSessions.length,

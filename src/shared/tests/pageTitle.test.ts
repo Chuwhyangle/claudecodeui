@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import type { Project, ProjectSession } from '@/shared/types';
-import { getPageTitle } from '@/shared/utils';
+import { getPageTitle, syncAwaitingReplyTitleIndicator } from '@/shared/utils';
 
 const project: Project = {
   projectId: 'project-1',
@@ -37,4 +37,26 @@ test('falls back to the project title when no session is selected', () => {
 
 test('falls back to the app title when no project or session is selected', () => {
   assert.equal(getPageTitle(null, null), 'Cloudpit');
+});
+
+test('the awaiting-reply marker counts the list and is replaced, not stacked', () => {
+  document.title = 'Cloudpit';
+
+  syncAwaitingReplyTitleIndicator(2);
+  assert.equal(document.title, '[待回复 2] Cloudpit');
+
+  syncAwaitingReplyTitleIndicator(5);
+  assert.equal(document.title, '[待回复 5] Cloudpit', 'one marker, always the newest count');
+
+  syncAwaitingReplyTitleIndicator(0);
+  assert.equal(document.title, 'Cloudpit', 'an empty list takes the marker away');
+});
+
+test('the awaiting-reply marker is inserted after the completion marker, so its strip still works', () => {
+  document.title = '[Done] Cloudpit';
+
+  syncAwaitingReplyTitleIndicator(1);
+
+  assert.equal(document.title, '[Done] [待回复 1] Cloudpit');
+  assert.ok(document.title.startsWith('[Done] '), 'pageTitleNotification strips by this prefix');
 });
