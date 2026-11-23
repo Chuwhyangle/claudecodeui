@@ -210,6 +210,12 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- normally. Informational only: a fork is a fully independent provider
     -- session, and deleting the source does not affect it.
     forked_from_session_id TEXT,
+    -- The user's own position for this session inside its project's list, or
+    -- NULL when the session has never been part of a manual order. Rows with a
+    -- value sort by it; rows without one sit above them in recency order, so a
+    -- session created after the user arranged the list appears at the top
+    -- instead of being buried at the bottom.
+    session_order INTEGER,
     -- When this session stopped and started waiting on the user, or NULL when
     -- it is not waiting. Written by the provider runtimes when a turn ends on
     -- success or on an error, and when a tool approval is outstanding, so the

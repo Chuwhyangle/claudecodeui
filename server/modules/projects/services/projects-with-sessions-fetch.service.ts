@@ -27,6 +27,13 @@ type SessionSummary = {
    * pair into two rows that read as unrelated duplicates.
    */
   forkedFromSessionId: string | null;
+  /**
+   * The position the user dragged this session to inside its project's list, or
+   * null when the list has never been arranged by hand. The sidebar sorts
+   * arranged rows by it and lets unarranged ones sit above them in recency
+   * order, so a session created after the list was arranged appears at the top.
+   */
+  sessionOrder: number | null;
 };
 
 type SessionRepositoryRow = {
@@ -36,6 +43,7 @@ type SessionRepositoryRow = {
   updated_at?: string | null;
   created_at?: string | null;
   forked_from_session_id?: string | null;
+  session_order?: number | null;
 };
 
 export type ProjectListItem = {
@@ -168,6 +176,7 @@ function mapSessionRowToSummary(row: SessionRepositoryRow): SessionSummary {
     messageCount: 0,
     lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
     forkedFromSessionId: row.forked_from_session_id ?? null,
+    sessionOrder: typeof row.session_order === 'number' ? row.session_order : null,
   };
 }
 

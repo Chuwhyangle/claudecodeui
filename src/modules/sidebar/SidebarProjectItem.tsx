@@ -48,6 +48,8 @@ export type SidebarProjectItemProps = {
   onDeleteProject: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
   onDeleteSession: (sessionId: string, sessionTitle: string) => void;
+  /** Stores the order a drag produced; absent where the list is read-only. */
+  onReorderSessions?: (projectId: string, sessionIds: string[]) => void;
   onForkSession?: (session: SessionWithProvider) => void;
   onLoadMoreSessions: (projectId: string) => void;
   activeSessions: ReadonlySet<string>;
@@ -155,6 +157,7 @@ function SidebarProjectItem({
   onDeleteProject,
   onSessionSelect,
   onDeleteSession,
+  onReorderSessions,
   onForkSession,
   onLoadMoreSessions,
   activeSessions,
@@ -640,6 +643,7 @@ function SidebarProjectItem({
         onProjectSelect={onProjectSelect}
         onSessionSelect={onSessionSelect}
         onDeleteSession={onDeleteSession}
+        onReorderSessions={onReorderSessions}
         onForkSession={onForkSession}
         onLoadMoreSessions={onLoadMoreSessions}
         onNewSession={onNewSession}

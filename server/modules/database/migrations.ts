@@ -865,6 +865,23 @@ const addSessionAwaitingReplyColumns = (db: Database): void => {
 };
 
 /**
+ * Adds `session_order`: the position the user dragged this session to inside its
+ * project's list.
+ *
+ * Nullable with no default, which is the truthful state for every existing row:
+ * a session that predates manual ordering has never been part of an arrangement,
+ * and NULL is exactly what makes it keep sorting by recency above the arranged
+ * block instead of being pinned at an inherited position.
+ *
+ * Runs after every sessions-table rebuild, for the same reason as the columns
+ * above: their copies use an explicit column list, so a column added earlier
+ * would be dropped again.
+ */
+const addSessionOrderColumn = (db: Database): void => {
+  ensureColumns(db, 'sessions', [['session_order', 'INTEGER']]);
+};
+
+/**
  * Adds the `lifecycle_mode` column: how long a session's process is meant to
  * live ('per-run' or 'resident').
  *
@@ -1128,6 +1145,9 @@ export const runMigrations = (db: Database) => {
     // The sidebar's awaiting-reply pair; placed after every rebuild for the same
     // reason as the column above.
     addSessionAwaitingReplyColumns(db);
+    // Manual session ordering (the position a drag stores). After the awaiting
+    // pair for the same rebuild reason as every column above.
+    addSessionOrderColumn(db);
     ensureProjectsForSessionPaths(db);
     db.exec(SCHEDULED_MESSAGES_TABLE_SCHEMA_SQL);
     // OAuth storage (mcp-gateway-SPEC stage 5, AC-258). Order matters: the

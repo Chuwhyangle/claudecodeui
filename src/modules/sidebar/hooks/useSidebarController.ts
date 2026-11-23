@@ -160,6 +160,7 @@ export function useSidebarController({
     toggleStarProject: projectsConcern.toggleStarProject,
     isProjectStarred: projectsConcern.isProjectStarred,
     getProjectSessions: projectsConcern.getProjectSessions,
+    reorderSessions: projectsConcern.reorderSessions,
     loadMoreSessionsForProject: projectsConcern.loadMoreSessionsForProject,
     startEditingProject: projectsConcern.startEditingProject,
     startEditingSession: sessionsConcern.startEditingSession,
