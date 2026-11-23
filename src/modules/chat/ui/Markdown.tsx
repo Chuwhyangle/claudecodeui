@@ -116,6 +116,13 @@ const lineFromRef = (value: string): number | null => {
 // Strip a trailing `:line` / `:line:col` suffix (e.g. `src/foo.ts:130`).
 const stripLineSuffix = (value: string): string => value.replace(/:\d+(?::\d+)?$/, '');
 
+// 说明：markdown 解析器会把非 ASCII 链接目标做 percent-encoding，
+// 文件 API 需要磁盘路径，因此解码；畸形转义保持原样，让路由回诚实 404。
+const decodeFileHref = (value: string): string => {
+  if (!value.includes('%')) return value;
+  try { return decodeURIComponent(value); } catch { return value; }
+};
+
 // A usable file path contains a separator or a filename with an extension.
 const looksLikeFilePath = (value?: string): value is string => {
   if (!value) {
@@ -510,12 +517,13 @@ function MarkdownBodyRenderer({ children, breaks = false, replyItems }: Omit<Mar
         // Prefer the href when it is a real path; otherwise fall back to the
         // link text, since models often emit `[src/foo.ts]()` with an empty href.
         const linkText = childrenToText(linkChildren);
-        const fileRef = looksLikeFilePath(href) ? href : looksLikeFilePath(linkText) ? linkText : undefined;
+        const decodedHref = decodeFileHref(href ?? '');
+        const fileRef = looksLikeFilePath(decodedHref) ? decodedHref : looksLikeFilePath(linkText) ? linkText : undefined;
 
         if (fileRef && !isExternalHref(href)) {
           return (
             <a
-              href={href || fileRef}
+              href={decodedHref || fileRef}
               className="cursor-pointer text-blue-600 hover:underline dark:text-blue-400"
               onClick={(event) => {
                 event.preventDefault();
