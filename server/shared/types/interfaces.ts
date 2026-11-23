@@ -1,5 +1,7 @@
 import type { Dirent } from 'node:fs';
 
+import type { TurnTokenUsage } from './turn-usage.js';
+
 import type {
   AnyRecord,
   CockpitCard,
@@ -282,6 +284,13 @@ export type ProviderTokenUsageReading = {
    * lets the client keep the newer one instead of adopting whichever arrived last.
    */
   observedAt?: string;
+  /**
+   * The current turn's spend, measured from the last human prompt. Absent when
+   * the transcript carries no turn to measure (older transcripts, or a turn
+   * still in flight) — absence means "render the session reading only", not
+   * "a turn that spent zero".
+   */
+  turn?: TurnTokenUsage;
   breakdown: {
     input: number;
     output: number;

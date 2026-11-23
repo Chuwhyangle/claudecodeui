@@ -1,4 +1,4 @@
-import type { ProviderTokenUsageCounts } from '@/shared/interfaces.js';
+import type { ProviderTokenUsageCounts, TurnTokenUsage } from '@/shared/interfaces.js';
 
 //----------------- COST VIEW ------------
 
@@ -84,6 +84,12 @@ export type CostView = {
   context?: CostViewContext;
   /** Newest single request, as the provider reported it; only a context estimate. */
   lastRequest?: ProviderTokenUsageCounts;
+  /**
+   * The current turn's own spend, passed through from the provider reading
+   * unchanged: the panel renders these values and derives nothing, the same
+   * contract the session block follows.
+   */
+  turn?: TurnTokenUsage;
   /** The provider's own cache-accounting statement, resolved server-side. */
   accountingNote: string;
 };
@@ -104,6 +110,8 @@ export type CostViewReading = {
   contextOccupancy?: { used?: unknown; total?: unknown };
   /** Newest single request in the counts shape, for the detail row. */
   lastRequest?: unknown;
+  /** The current turn's spend, passed through to the panel untouched. */
+  turn?: unknown;
   /** @deprecated Never consumed; the dual-meaning legacy number. */
   used?: unknown;
   /** @deprecated Never consumed; legacy window field. */
@@ -199,6 +207,38 @@ const isRecordLike = (value: unknown): value is { used?: unknown; total?: unknow
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 /**
+ * Passes a turn block through only when it carries its required quantities.
+ *
+ * The turn is measured server-side (in the provider reader) and the panel
+ * renders it untouched, so this copies the optional detail fields as reported
+ * — absent stays absent — rather than re-deriving any of them.
+ */
+const readTurn = (value: unknown): TurnTokenUsage | undefined => {
+  if (!isRecordLike(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const required = ['totalTokens', 'inputTokens', 'outputTokens', 'elapsedMs', 'calls'] as const;
+  if (!required.every((field) => readQuantity(record[field]) !== undefined)) {
+    return undefined;
+  }
+  const turn: TurnTokenUsage = {
+    totalTokens: readQuantity(record.totalTokens) as number,
+    inputTokens: readQuantity(record.inputTokens) as number,
+    outputTokens: readQuantity(record.outputTokens) as number,
+    elapsedMs: readQuantity(record.elapsedMs) as number,
+    calls: readQuantity(record.calls) as number,
+  };
+  for (const field of ['cacheReadTokens', 'cacheWriteTokens', 'cacheHitRatio', 'fresh', 'apiMs', 'tps', 'costUsd'] as const) {
+    const quantity = readQuantity(record[field]);
+    if (quantity !== undefined) {
+      turn[field] = quantity;
+    }
+  }
+  return turn;
+};
+
+/**
  * Derives the unified `/cost` view from one provider reading.
  *
  * The two meanings are read from their own fields, never inferred from one
@@ -221,6 +261,7 @@ export function buildCostView(
   const occupancyUsed = readQuantity(occupancy?.used);
   const window = readQuantity(occupancy?.total);
   const lastRequest = readCounts(reading.lastRequest);
+  const turn = readTurn(reading.turn);
 
   const input = spend?.inputTokens;
   const output = spend?.outputTokens;
@@ -255,6 +296,7 @@ export function buildCostView(
     ...(Object.keys(session).length > 0 ? { session } : {}),
     ...(Object.keys(context).length > 0 ? { context } : {}),
     ...(lastRequest ? { lastRequest } : {}),
+    ...(turn ? { turn } : {}),
     accountingNote:
       COST_ACCOUNTING_NOTES[provider ?? ''] ?? FALLBACK_COST_ACCOUNTING_NOTE,
   };

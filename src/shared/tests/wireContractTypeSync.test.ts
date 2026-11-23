@@ -230,6 +230,15 @@ const ROWS: readonly SyncRow[] = [
     reader: 'object',
   },
   {
+    // The current-turn usage block the composer chip and `/cost` panel render.
+    // The server measures it; the browser reads the same fields to display it,
+    // so a field added on one end without the other would silently drop it.
+    client: 'TurnTokenUsage',
+    server: 'TurnTokenUsage',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
     // The project-owned Codex upstream provider registry: the settings UI renders this shape and
     // a save sends the same fields back, so a field added on one end without the other would make
     // the form silently drop or invent configuration. The server's copy lives in shared/types.ts

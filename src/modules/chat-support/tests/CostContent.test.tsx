@@ -123,6 +123,49 @@ describe('CostContent', () => {
     assert.equal(note.textContent?.includes('Server-owned statement for this provider.'), true);
   });
 
+  it('renders a "This turn" group from data.cost.turn and derives nothing', () => {
+    // The server measured the turn; the panel draws each reported value as its
+    // own row with the same `data-cost-*` surface a scenario step reads.
+    render(
+      <CostContent
+        data={costPayload(fullSession, {
+          turn: {
+            totalTokens: 1_234,
+            inputTokens: 1_000,
+            outputTokens: 234,
+            cacheReadTokens: 800,
+            cacheHitRatio: 0.8,
+            fresh: 200,
+            elapsedMs: 65_000,
+            apiMs: 40_000,
+            tps: 58.5,
+            costUsd: 0.0042,
+            calls: 3,
+          },
+        })}
+      />,
+    );
+
+    assert.ok(screen.getByText('This turn'));
+    const rows = screen.getAllByTestId('cost-usage-row');
+    const valueOf = (label: string) =>
+      rows.find((row) => row.getAttribute('data-cost-label') === label)?.getAttribute('data-cost-value');
+
+    assert.equal(valueOf('This turn — tokens'), '1,234');
+    assert.equal(valueOf('This turn — output'), '234');
+    assert.equal(valueOf('This turn — cache hit'), '80.0%');
+    assert.equal(valueOf('This turn — duration'), '1m05s');
+    assert.equal(valueOf('This turn — speed'), '59 t/s');
+    assert.equal(valueOf('This turn — cost'), '$0.0042');
+  });
+
+  it('draws no turn rows and no cost row when the server omitted the turn', () => {
+    render(<CostContent data={costPayload(fullSession)} />);
+
+    assert.equal(screen.queryByText('This turn'), null);
+    assert.equal(screen.queryByText('This turn — cost'), null);
+  });
+
   it('renders the context block from data.cost.context', () => {
     render(
       <CostContent

@@ -251,8 +251,11 @@ test('ChatInterface prefers the live counter frame, falls back to the reading, a
   );
 
   // c0fb922 deliberately added the authoritative fallback before a live frame
-  // arrives. Once a frame exists it must still take priority for the counter.
-  assert.match(source, /tokenBudget=\{liveFrame \?\? authoritativeReading\}/);
+  // arrives. Once a frame exists it still takes priority for the counter, but
+  // the merged reading carries the authoritative turn so the chip can show
+  // "this turn" without the frame shadowing it.
+  assert.match(source, /tokenBudget=\{tokenBudgetReading\}/);
+  assert.match(source, /authoritativeReading\?\.turn/);
 
   // ...and the composer state is handed only the authoritative reading: the
   // live frame is not one of its arguments.

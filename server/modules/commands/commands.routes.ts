@@ -120,7 +120,16 @@ const readAuthoritativeTokenUsage = async (tokenUsageService, context) => {
       console.error("Error reading the session token usage:", error);
     }
   }
-  return context?.tokenUsage || {};
+  // The fallback is the browser's own last reading. It carries the composer's
+  // current-turn block, so keep that block when attaching it — rebuilding the
+  // reading without it would drop "This turn" from the panel exactly when the
+  // service read failed.
+  const fallback = context?.tokenUsage;
+  if (!fallback) {
+    return {};
+  }
+  const turn = fallback.turn;
+  return turn ? { ...fallback, turn } : fallback;
 };
 
 const executeModelsCommand = async (args, context, modelsService) => {

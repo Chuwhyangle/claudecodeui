@@ -694,6 +694,23 @@ function ChatInterface({
     return null;
   }, [chatMessages]);
 
+  // The composer counter wants the live frame when one exists, but that frame
+  // carries only the newest-turn occupancy — the current-turn block
+  // (`turn`) lives on the authoritative reading. Merge the two so the chip can
+  // show this turn's speed/time/cost while `/cost` still receives the reading
+  // alone (the live frame never leaks into it).
+  const tokenBudgetReading = useMemo(() => {
+    if (!liveFrame) {
+      return authoritativeReading;
+    }
+    const turn = authoritativeReading?.turn ?? liveFrame.turn;
+    return {
+      ...(authoritativeReading ?? {}),
+      ...liveFrame,
+      ...(turn ? { turn } : {}),
+    };
+  }, [liveFrame, authoritativeReading]);
+
   const {
     input,
     setInput,
@@ -1391,7 +1408,7 @@ function ChatInterface({
           availableModelOptions={currentProviderModelOptions}
           onSelectModel={handleSelectComposerModel}
           modelsLoading={providerModelsLoading}
-          tokenBudget={liveFrame ?? authoritativeReading}
+          tokenBudget={tokenBudgetReading}
           onShowTokenUsage={showCostModal}
           isEditingSentMessage={Boolean(editingAnchorId)}
           onCancelEditMessage={cancelEditMessage}

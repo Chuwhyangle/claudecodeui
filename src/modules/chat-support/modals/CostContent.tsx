@@ -1,7 +1,8 @@
 import { Fragment } from 'react';
-import { Activity, Coins, Gauge, Layers, Sparkles, TerminalSquare } from 'lucide-react';
+import { Activity, Coins, Gauge, Layers, Sparkles, TerminalSquare, Timer } from 'lucide-react';
 
 import type { CostCommandData, CostViewSession, TokenUsageCounts } from '@/shared/types';
+import type { TurnTokenUsage } from '@/shared/turnTokenUsageType';
 import { getProviderLabel } from '@/shared/utils';
 
 /**
@@ -128,6 +129,53 @@ const buildCountRows = (counts: TokenUsageCounts | undefined, includeTotal = fal
   const total = readTokenQuantity(counts.totalTokens);
   if (includeTotal && total !== undefined) {
     rows.push({ label: 'Total tokens', value: formatNumber(total), icon: Activity });
+  }
+  return rows;
+};
+
+/** `2m03s` — the turn's wall-clock, matching the composer chip's formatter. */
+const formatTurnDuration = (milliseconds: number): string => {
+  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m${String(seconds % 60).padStart(2, '0')}s`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h${String(minutes % 60).padStart(2, '0')}m`;
+};
+
+/**
+ * Renders the server-measured current turn as its own usage lines.
+ *
+ * Every value is read from `cost.turn` as reported; nothing is re-derived. An
+ * optional field the server omitted (an unreported cache read, an unconfigured
+ * cost) draws no row rather than a zero.
+ */
+const buildTurnRows = (turn: TurnTokenUsage | undefined): UsageRow[] => {
+  if (!turn) {
+    return [];
+  }
+  const rows: UsageRow[] = [
+    { label: 'This turn — tokens', value: formatNumber(turn.totalTokens), icon: Activity },
+    { label: 'This turn — output', value: formatNumber(turn.outputTokens), icon: Coins },
+  ];
+  if (turn.cacheHitRatio !== undefined) {
+    rows.push({
+      label: 'This turn — cache hit',
+      value: `${(turn.cacheHitRatio * 100).toFixed(1)}%`,
+      icon: Gauge,
+      hint: 'cache read ÷ turn input',
+    });
+  }
+  rows.push({ label: 'This turn — duration', value: formatTurnDuration(turn.elapsedMs), icon: Timer });
+  if (turn.tps !== undefined) {
+    rows.push({ label: 'This turn — speed', value: `${Math.round(turn.tps)} t/s`, icon: Timer });
+  }
+  if (turn.costUsd !== undefined) {
+    rows.push({ label: 'This turn — cost', value: `$${turn.costUsd.toFixed(4)}`, icon: Coins });
   }
   return rows;
 };
@@ -337,6 +385,11 @@ export function CostContent({ data }: { data: CostCommandData }) {
       note: 'Whole-session spend. Cached input, cache writes and reasoning output are already inside input and output.',
       rows: buildSessionRows(session),
       ...(cacheSegments ? { cacheSegments } : {}),
+    },
+    {
+      title: 'This turn',
+      note: 'Everything since your last prompt: token spend, speed, wall-clock time, cache share and cost.',
+      rows: buildTurnRows(cost?.turn),
     },
     {
       title: 'Latest request (context estimate)',

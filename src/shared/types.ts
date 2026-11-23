@@ -7,6 +7,8 @@ import type { NavigateFunction } from 'react-router-dom';
 
 import type { AsrCapabilities, AsrRuntimeStatus } from '@shared/asr/asrRegistry';
 
+import type { TurnTokenUsage } from '@/shared/turnTokenUsageType';
+
 //----------------- LLM PROVIDER MODEL CATALOG ------------
 
 /** Identifies which coding-agent CLI backs a session, project selection or model list. */
@@ -2496,6 +2498,8 @@ export type CostCommandData = {
     session?: CostViewSession;
     context?: CostViewContext;
     lastRequest?: TokenUsageCounts;
+    /** This turn's own spend, measured server-side; absent when the transcript has no turn to measure. */
+    turn?: TurnTokenUsage;
     accountingNote: string;
   };
   provider?: string;

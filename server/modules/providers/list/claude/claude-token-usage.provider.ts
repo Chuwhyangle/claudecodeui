@@ -8,9 +8,15 @@ import type {
   ProviderTokenUsageSession,
 } from '@/shared/interfaces.js';
 import type { AnyRecord } from '@/shared/types.js';
-import { AppError } from '@/shared/utils.js';
+import { AppError, readReportedUsageNumber, readUsageNumber } from '@/shared/utils.js';
 import { resolveContextWindow } from '@/modules/providers/services/runtime/launch-spec.service.js';
 import { resolveModelContextWindowRow } from '@/modules/providers/services/runtime/model-launch-spec.service.js';
+import { withClaudeTurn } from './claude-turn-usage.js';
+
+// Re-exported so the existing `claude-token-usage.provider.js` import path keeps
+// serving `summarizeClaudeTurnUsage`; the implementation lives in the sibling
+// leaf and the provider only wires it in.
+export { summarizeClaudeTurnUsage } from './claude-turn-usage.js';
 
 /**
  * The newest-turn (context-occupancy) read only needs the row at or near the
@@ -20,22 +26,6 @@ import { resolveModelContextWindowRow } from '@/modules/providers/services/runti
  * transcripts, where it is the whole file.
  */
 const TOKEN_USAGE_TAIL_BYTES = 4 * 1024 * 1024;
-
-function readUsageNumber(value: unknown): number {
-  const parsedValue = Number(value);
-  return Number.isFinite(parsedValue) ? parsedValue : 0;
-}
-
-/**
- * Reads an optional quantity, keeping "the source reported a number" distinct
- * from "the source did not report this quantity". Used for the cache subset
- * reads so an absent field stays absent in the counts shape instead of being
- * fabricated as zero.
- */
-function readReportedUsageNumber(value: unknown): number | null {
-  const parsedValue = Number(value);
-  return Number.isFinite(parsedValue) ? parsedValue : null;
-}
 
 /**
  * Model id of the newest main-thread assistant turn; its library entry's env
@@ -68,7 +58,10 @@ export function summarizeClaudeHistoryTokenUsage(
 ): ProviderTokenUsageReading {
   const modelId = sessionModelId || findNewestClaudeModelId(entries);
   const modelContextWindow = modelId ? resolveModelContextWindowRow('claude', modelId) : undefined;
-  return summarizeClaudeTokenUsage(entries, process.env.CONTEXT_WINDOW, modelContextWindow);
+  return withClaudeTurn(
+    summarizeClaudeTokenUsage(entries, process.env.CONTEXT_WINDOW, modelContextWindow),
+    entries,
+  );
 }
 
 /** One assistant row's usage, with its cache detail kept separate. */
@@ -315,6 +308,9 @@ export class ClaudeTokenUsageProvider implements IProviderTokenUsage {
       : parseClaudeUsageEntries(await dependencies.readTextFile(sessionFilePath));
     const modelId = session.model || findNewestClaudeModelId(entries);
     const modelRow = modelId ? dependencies.getClaudeModelContextWindow?.(modelId) : undefined;
-    return summarizeClaudeTokenUsage(entries, dependencies.getClaudeContextWindow(), modelRow);
+    return withClaudeTurn(
+      summarizeClaudeTokenUsage(entries, dependencies.getClaudeContextWindow(), modelRow),
+      entries,
+    );
   }
 }

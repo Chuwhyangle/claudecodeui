@@ -445,3 +445,60 @@ test('cost command reads the authoritative session reading, never the injected l
   assert.equal(cost.context.used, 437_000);
   assert.equal(cost.context.window, 917_000);
 });
+
+test('cost passes the provider reading\'s current turn through to the panel untouched', async () => {
+  const turn = {
+    totalTokens: 1_234,
+    inputTokens: 1_000,
+    outputTokens: 234,
+    cacheReadTokens: 800,
+    cacheHitRatio: 0.8,
+    fresh: 200,
+    elapsedMs: 5_000,
+    apiMs: 4_000,
+    tps: 58.5,
+    costUsd: 0.0042,
+    calls: 3,
+  };
+  const tokenUsage = {
+    sessionSpend: { inputTokens: 2_000, outputTokens: 400, totalTokens: 2_400 },
+    contextOccupancy: { used: 1_234, total: 200_000 },
+    turn,
+  };
+
+  const result = await executeCommand(
+    '/cost',
+    { provider: 'claude', sessionId: 'session-1' },
+    {},
+    noAiTitle,
+    { getSessionTokenUsage: async () => tokenUsage },
+  );
+  const cost = (result.data as Record<string, any>).cost;
+
+  assert.deepEqual(cost.turn, turn, 'the turn block is rendered, not re-derived');
+});
+
+test('a failed authoritative read keeps the browser turn from the fallback', async () => {
+  const turn = { totalTokens: 500, inputTokens: 400, outputTokens: 100, elapsedMs: 2_000, tps: 50, calls: 1 };
+  const failing = {
+    getSessionTokenUsage: async () => {
+      throw new Error('transcript unreadable');
+    },
+  };
+
+  const result = await executeCommand(
+    '/cost',
+    {
+      provider: 'claude',
+      sessionId: 'session-1',
+      // The composer's last reading, delivered by the browser.
+      tokenUsage: { used: 500, total: 200_000, turn },
+    },
+    {},
+    noAiTitle,
+    failing,
+  );
+  const cost = (result.data as Record<string, any>).cost;
+
+  assert.deepEqual(cost.turn, turn, 'the fallback keeps the turn the browser carried');
+});

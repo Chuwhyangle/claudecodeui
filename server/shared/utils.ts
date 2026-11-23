@@ -112,5 +112,33 @@ export function readInstalledVoiceRuntimeConfig(): VoiceRuntimeConfigReading | n
   return installedVoiceRuntimeConfigReader === null ? null : installedVoiceRuntimeConfigReader();
 }
 
+//----------------- NUMERIC USAGE READS ------------
+
+/**
+ * Reads a numeric quantity, collapsing a missing or non-finite value to 0.
+ *
+ * Consumed by the Claude token-usage reader (`claude-token-usage.provider.ts`)
+ * and the current-turn aggregator (`claude-turn-usage.ts`). Use
+ * {@link readReportedUsageNumber} instead when "the source reported nothing"
+ * must stay distinct from "the source reported zero".
+ */
+export function readUsageNumber(value: unknown): number {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
+}
+
+/**
+ * Reads an optional quantity, keeping "the source reported a number" distinct
+ * from "the source did not report this quantity" (`null`).
+ *
+ * Used for the cache subset reads so an absent field stays absent in a counts
+ * shape instead of being fabricated as zero. Consumed by the same two Claude
+ * usage readers as {@link readUsageNumber}.
+ */
+export function readReportedUsageNumber(value: unknown): number | null {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
 export * from './utils/index.js';
 export { readLastTranscriptRecord } from '@/shared/transcript-activity.js';
