@@ -27,6 +27,7 @@
     "computer": "Computer",
     "quay": "Quay",
     "architecture": "Architektur",
+    "apiSpeed": "API-Geschwindigkeit",
     "shellResidentDisabled": "Shell ist für dauerhafte Sitzungen nicht verfügbar. Beenden Sie den dauerhaften Modus, um es zu nutzen.",
     "shellResidentDisabledLabel": "Shell für dauerhafte Sitzungen nicht verfügbar"
   },
@@ -1217,5 +1218,33 @@
     "codeBehind": "Code {{sha}} ↓{{behind}} hinter pre",
     "codeDiverged": "Code {{sha}} ✗ nicht in der pre-Historie",
     "codeNoPreHead": "Code {{sha}} ? pre unbekannt"
+  },
+  "apiSpeed": {
+    "title": "API-Geschwindigkeit",
+    "loadingTarget": "Gateway-Konfiguration wird gelesen…",
+    "targetLine": "{{host}} · Modell {{model}} · Anmeldedaten: {{source}}",
+    "noCredentialShort": "keine",
+    "probePing": "Ping",
+    "probeUpload": "Upload testen (300 KB)",
+    "autoOn": "Alle 30 s",
+    "autoOff": "Auto aus",
+    "noCredential": "Keine Gateway-Anmeldedaten gefunden. Setzen Sie ANTHROPIC_AUTH_TOKEN in der Dienstumgebung oder in der CLI-Einstellungsdatei.",
+    "loading": "Wird geladen…",
+    "empty": "Noch keine Messwerte. Klicken Sie auf Ping, um die erste Messung zu starten.",
+    "firstToken": "erstes Token",
+    "stageConnect": "Verbindung + TLS",
+    "stageUpload": "Upload",
+    "stageGateway": "Warte auf Relay",
+    "stageDownload": "Download",
+    "reused": "wiederverwendet",
+    "total": "Gesamt",
+    "statTotalP50": "Gesamt p50",
+    "statTotalP90": "Gesamt p90",
+    "statGatewayP50": "Relay p50",
+    "statUploadP50": "Upload p50",
+    "trend": "Gesamtzeit, letzte {{count}} Messwerte",
+    "colTime": "Zeit",
+    "colMode": "Modus",
+    "colLink": "Verbindung"
   }
 }

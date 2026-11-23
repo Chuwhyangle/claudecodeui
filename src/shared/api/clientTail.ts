@@ -17,6 +17,7 @@ import type {
   LogsResponse,
 } from '@/shared/types';
 import type { NcReleaseRequest } from '@/shared/ncLeaseType';
+import type { ApiLatencyProbeRequest } from '@/shared/apiLatencyType';
 import type {
   DraftRewriteErrorCode,
   DraftRewriteFailure,
@@ -565,6 +566,17 @@ export const apiTail = {
     status: () => get('/api/nclease/status'),
     /** Releases one slot from the panel; the ledger records who and why. */
     release: (input: NcReleaseRequest) => post('/api/nclease/release', input),
+  },
+
+  // The workspace's "API speed" view: staged measurements of THIS machine's link to
+  // the model gateway. Both answers are bare JSON (not an envelope) — a probe result
+  // is a reading rather than a command result.
+  apiLatency: {
+    /** The recent staged probes plus the gateway this server measures. */
+    series: (limit?: number) =>
+      get(`/api/api-latency/series${limit === undefined ? '' : `?limit=${limit}`}`),
+    /** Takes one measurement now, stores it and answers it. */
+    probe: (input: ApiLatencyProbeRequest) => post('/api/api-latency/probe', input),
   },
 
   system: {

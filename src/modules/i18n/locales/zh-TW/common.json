@@ -27,6 +27,7 @@
     "computer": "電腦",
     "quay": "Quay",
     "architecture": "架構",
+    "apiSpeed": "API 速度",
     "shellResidentDisabled": "常駐工作階段不支援 Shell，關閉常駐模式後即可使用",
     "shellResidentDisabledLabel": "常駐工作階段的 Shell 分頁無法使用"
   },
@@ -1246,5 +1247,33 @@
     "codeBehind": "程式碼 {{sha}} ↓{{behind}} 落後 pre",
     "codeDiverged": "程式碼 {{sha}} ✗ 不在 pre 歷史",
     "codeNoPreHead": "程式碼 {{sha}} ? 未知 pre"
+  },
+  "apiSpeed": {
+    "title": "API 速度",
+    "loadingTarget": "正在讀取閘道設定…",
+    "targetLine": "{{host}} · 模型 {{model}} · 憑證：{{source}}",
+    "noCredentialShort": "無",
+    "probePing": "Ping",
+    "probeUpload": "測試上傳（300 KB）",
+    "autoOn": "每 30 秒",
+    "autoOff": "自動關閉",
+    "noCredential": "找不到閘道憑證。請在服務環境或 CLI 設定檔中設定 ANTHROPIC_AUTH_TOKEN。",
+    "loading": "載入中…",
+    "empty": "尚無樣本，點選 Ping 進行第一次量測。",
+    "firstToken": "首個權杖",
+    "stageConnect": "連線 + TLS",
+    "stageUpload": "上傳",
+    "stageGateway": "等待中繼",
+    "stageDownload": "下載",
+    "reused": "重複使用",
+    "total": "總計",
+    "statTotalP50": "總計 p50",
+    "statTotalP90": "總計 p90",
+    "statGatewayP50": "中繼 p50",
+    "statUploadP50": "上傳 p50",
+    "trend": "總耗時，最近 {{count}} 個樣本",
+    "colTime": "時間",
+    "colMode": "模式",
+    "colLink": "連線"
   }
 }

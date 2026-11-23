@@ -27,6 +27,7 @@
     "computer": "计算机",
     "quay": "Quay",
     "architecture": "架构",
+    "apiSpeed": "API 速度",
     "shellResidentDisabled": "常驻会话不支持 Shell，关闭常驻模式后可用",
     "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用"
   },
@@ -1246,5 +1247,33 @@
     "codeBehind": "代码 {{sha}} ↓{{behind}} 落后 pre",
     "codeDiverged": "代码 {{sha}} ✗ 不在 pre 历史",
     "codeNoPreHead": "代码 {{sha}} ? 未知 pre"
+  },
+  "apiSpeed": {
+    "title": "API 速度",
+    "loadingTarget": "正在读取网关配置…",
+    "targetLine": "{{host}} · 模型 {{model}} · 凭据：{{source}}",
+    "noCredentialShort": "无",
+    "probePing": "Ping",
+    "probeUpload": "测试上传（300 KB）",
+    "autoOn": "每 30 秒",
+    "autoOff": "自动关闭",
+    "noCredential": "未找到网关凭据。请在服务环境或 CLI 配置文件中设置 ANTHROPIC_AUTH_TOKEN。",
+    "loading": "加载中…",
+    "empty": "暂无样本，点击 Ping 进行第一次测量。",
+    "firstToken": "首个令牌",
+    "stageConnect": "建连 + TLS",
+    "stageUpload": "上传",
+    "stageGateway": "等待中转",
+    "stageDownload": "下载",
+    "reused": "复用连接",
+    "total": "总计",
+    "statTotalP50": "总计 p50",
+    "statTotalP90": "总计 p90",
+    "statGatewayP50": "中转 p50",
+    "statUploadP50": "上传 p50",
+    "trend": "总耗时，最近 {{count}} 个样本",
+    "colTime": "时间",
+    "colMode": "模式",
+    "colLink": "链路"
   }
 }

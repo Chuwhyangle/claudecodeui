@@ -27,6 +27,7 @@
     "computer": "Компьютер",
     "quay": "Quay",
     "architecture": "Архитектура",
+    "apiSpeed": "Скорость API",
     "shellResidentDisabled": "Shell недоступен для резидентных сессий. Закройте резидентный режим, чтобы использовать его.",
     "shellResidentDisabledLabel": "Shell недоступен для резидентных сессий"
   },
@@ -1219,5 +1220,33 @@
     "codeBehind": "Код {{sha}} ↓{{behind}} отстаёт от pre",
     "codeDiverged": "Код {{sha}} ✗ нет в истории pre",
     "codeNoPreHead": "Код {{sha}} ? pre неизвестен"
+  },
+  "apiSpeed": {
+    "title": "Скорость API",
+    "loadingTarget": "Чтение конфигурации шлюза…",
+    "targetLine": "{{host}} · модель {{model}} · учётные данные: {{source}}",
+    "noCredentialShort": "нет",
+    "probePing": "Ping",
+    "probeUpload": "Проверить отправку (300 КБ)",
+    "autoOn": "Каждые 30 с",
+    "autoOff": "Авто выкл.",
+    "noCredential": "Учётные данные шлюза не найдены. Задайте ANTHROPIC_AUTH_TOKEN в окружении службы или в файле настроек CLI.",
+    "loading": "Загрузка…",
+    "empty": "Замеров пока нет. Нажмите Ping, чтобы выполнить первый замер.",
+    "firstToken": "первый токен",
+    "stageConnect": "Соединение + TLS",
+    "stageUpload": "Отправка",
+    "stageGateway": "Ожидание релея",
+    "stageDownload": "Загрузка",
+    "reused": "переиспользовано",
+    "total": "Итого",
+    "statTotalP50": "Итого p50",
+    "statTotalP90": "Итого p90",
+    "statGatewayP50": "Релей p50",
+    "statUploadP50": "Отправка p50",
+    "trend": "Общее время, последние {{count}} замеров",
+    "colTime": "Время",
+    "colMode": "Режим",
+    "colLink": "Канал"
   }
 }

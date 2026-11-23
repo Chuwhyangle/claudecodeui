@@ -283,6 +283,12 @@ const CYCLE_GROUPS: readonly string[][] = [
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
+  // TWENTY-FIFTH RECORDED CHANGE (2026-11-23, api-latency-observation-view): the
+  // workspace's "API speed" view measures this server's link to the model gateway.
+  // Registered rather than left to the new-directory leaf rule because the
+  // composition root (`server/index.ts`) mounts its router; it imports only node
+  // builtins and `server/shared/**` and itself, and sits in no SCC.
+  'modules/api-latency',
   'modules/architecture',
   'modules/assets',
   'modules/assets/services',

@@ -27,6 +27,7 @@
     "computer": "Computer",
     "quay": "Quay",
     "architecture": "Architecture",
+    "apiSpeed": "API speed",
     "shellResidentDisabled": "Shell is unavailable for resident sessions. Close resident mode to use it.",
     "shellResidentDisabledLabel": "Shell unavailable for resident sessions"
   },
@@ -1338,5 +1339,33 @@
     "codeBehind": "Code {{sha}} ↓{{behind}} behind pre",
     "codeDiverged": "Code {{sha}} ✗ not in pre history",
     "codeNoPreHead": "Code {{sha}} ? unknown pre"
+  },
+  "apiSpeed": {
+    "title": "API speed",
+    "loadingTarget": "Reading the gateway configuration…",
+    "targetLine": "{{host}} · model {{model}} · credential: {{source}}",
+    "noCredentialShort": "none",
+    "probePing": "Ping",
+    "probeUpload": "Test upload (300 KB)",
+    "autoOn": "Every 30 s",
+    "autoOff": "Auto off",
+    "noCredential": "No gateway credential found. Set ANTHROPIC_AUTH_TOKEN in the service environment or in the CLI settings file.",
+    "loading": "Loading…",
+    "empty": "No samples yet. Press Ping to take the first measurement.",
+    "firstToken": "first token",
+    "stageConnect": "Connect + TLS",
+    "stageUpload": "Upload",
+    "stageGateway": "Waiting on relay",
+    "stageDownload": "Download",
+    "reused": "reused",
+    "total": "Total",
+    "statTotalP50": "Total p50",
+    "statTotalP90": "Total p90",
+    "statGatewayP50": "Relay p50",
+    "statUploadP50": "Upload p50",
+    "trend": "Total time, last {{count}} samples",
+    "colTime": "Time",
+    "colMode": "Mode",
+    "colLink": "Link"
   }
 }

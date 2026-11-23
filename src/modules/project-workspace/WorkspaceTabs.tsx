@@ -1,4 +1,4 @@
-import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, Activity, Network, MonitorPlay, ChevronDown, MoreHorizontal, type LucideIcon } from 'lucide-react';
+import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, Activity, Network, MonitorPlay, Gauge, ChevronDown, MoreHorizontal, type LucideIcon } from 'lucide-react';
 import { Fragment, useId, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -160,6 +160,21 @@ const ARCHITECTURE_TAB: BuiltInTabSource = {
 };
 
 /**
+ * The server's link to the model gateway, measured in stages.
+ *
+ * The view is NOT project-scoped — it measures this machine's connection to the
+ * gateway every project shares — so it has no `shouldShow…` switch and is always
+ * offered. It sits after the session's own views (Quay, Architecture) and before
+ * the file/history group.
+ */
+const API_SPEED_TAB: BuiltInTabSource = {
+  id: 'api-speed',
+  labelKey: 'tabs.apiSpeed',
+  defaultLabel: 'API speed',
+  icon: Gauge,
+};
+
+/**
  * The single source of truth for the workspace view list: the four built-in tabs,
  * the conditionally enabled Browser/Tasks tabs and every enabled plugin tab, each
  * carrying its already-translated label. Both the desktop pill bar and the mobile
@@ -185,6 +200,9 @@ function useWorkspaceTabDefinitions({ shouldShowTasksTab, shouldShowQuayTab, sho
     // Right of Quay, as ADR-005 asks: the architecture view is about the
     // session's own files, so it sits after the project-level Quay dashboard.
     ...(shouldShowArchitectureTab ? [ARCHITECTURE_TAB] : []),
+    // Unconditional: the gateway link is a property of this machine, not of the
+    // selected project or session (see API_SPEED_TAB).
+    API_SPEED_TAB,
     ...BASE_TABS,
     ...(shouldShowBrowserTab ? [BROWSER_TAB] : []),
     ...(shouldShowTasksTab ? [TASKS_TAB] : []),

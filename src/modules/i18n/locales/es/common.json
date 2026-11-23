@@ -27,6 +27,7 @@
     "computer": "Equipo",
     "quay": "Quay",
     "architecture": "Arquitectura",
+    "apiSpeed": "Velocidad de API",
     "shellResidentDisabled": "Shell no está disponible para las sesiones residentes. Cierra el modo residente para usarlo.",
     "shellResidentDisabledLabel": "Shell no disponible para sesiones residentes"
   },
@@ -1248,5 +1249,33 @@
     "codeBehind": "Código {{sha}} ↓{{behind}} por detrás de pre",
     "codeDiverged": "Código {{sha}} ✗ no está en el historial de pre",
     "codeNoPreHead": "Código {{sha}} ? pre desconocido"
+  },
+  "apiSpeed": {
+    "title": "Velocidad de API",
+    "loadingTarget": "Leyendo la configuración de la puerta de enlace…",
+    "targetLine": "{{host}} · modelo {{model}} · credencial: {{source}}",
+    "noCredentialShort": "ninguna",
+    "probePing": "Ping",
+    "probeUpload": "Probar subida (300 KB)",
+    "autoOn": "Cada 30 s",
+    "autoOff": "Auto desactivado",
+    "noCredential": "No se encontró ninguna credencial de la puerta de enlace. Defina ANTHROPIC_AUTH_TOKEN en el entorno del servicio o en el archivo de configuración de la CLI.",
+    "loading": "Cargando…",
+    "empty": "Aún no hay muestras. Pulse Ping para tomar la primera medición.",
+    "firstToken": "primer token",
+    "stageConnect": "Conexión + TLS",
+    "stageUpload": "Subida",
+    "stageGateway": "Esperando al relay",
+    "stageDownload": "Descarga",
+    "reused": "reutilizada",
+    "total": "Total",
+    "statTotalP50": "Total p50",
+    "statTotalP90": "Total p90",
+    "statGatewayP50": "Relay p50",
+    "statUploadP50": "Subida p50",
+    "trend": "Tiempo total, últimas {{count}} muestras",
+    "colTime": "Hora",
+    "colMode": "Modo",
+    "colLink": "Enlace"
   }
 }

@@ -27,6 +27,7 @@
     "computer": "Computer",
     "quay": "Quay",
     "architecture": "アーキテクチャ",
+    "apiSpeed": "API 速度",
     "shellResidentDisabled": "常駐セッションでは Shell を利用できません。常駐モードを解除すると利用できます。",
     "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません"
   },
@@ -1246,5 +1247,33 @@
     "codeBehind": "コード {{sha}} ↓{{behind}} pre より遅れ",
     "codeDiverged": "コード {{sha}} ✗ pre の履歴にない",
     "codeNoPreHead": "コード {{sha}} ? pre 不明"
+  },
+  "apiSpeed": {
+    "title": "API 速度",
+    "loadingTarget": "ゲートウェイ構成を読み込み中…",
+    "targetLine": "{{host}} · モデル {{model}} · 認証情報: {{source}}",
+    "noCredentialShort": "なし",
+    "probePing": "Ping",
+    "probeUpload": "アップロードをテスト (300 KB)",
+    "autoOn": "30 秒ごと",
+    "autoOff": "自動オフ",
+    "noCredential": "ゲートウェイの認証情報が見つかりません。サービスの環境変数または CLI 設定ファイルで ANTHROPIC_AUTH_TOKEN を設定してください。",
+    "loading": "読み込み中…",
+    "empty": "まだ測定値がありません。[Ping] を押して最初の測定を行ってください。",
+    "firstToken": "最初のトークン",
+    "stageConnect": "接続 + TLS",
+    "stageUpload": "アップロード",
+    "stageGateway": "リレー待ち",
+    "stageDownload": "ダウンロード",
+    "reused": "再利用",
+    "total": "合計",
+    "statTotalP50": "合計 p50",
+    "statTotalP90": "合計 p90",
+    "statGatewayP50": "リレー p50",
+    "statUploadP50": "アップロード p50",
+    "trend": "合計時間 (直近 {{count}} 件)",
+    "colTime": "時刻",
+    "colMode": "モード",
+    "colLink": "接続"
   }
 }

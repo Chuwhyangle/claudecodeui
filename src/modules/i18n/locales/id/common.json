@@ -27,6 +27,7 @@
     "computer": "Komputer",
     "quay": "Quay",
     "architecture": "Arsitektur",
+    "apiSpeed": "Kecepatan API",
     "shellResidentDisabled": "Shell tidak tersedia untuk sesi residen. Tutup mode residen untuk menggunakannya.",
     "shellResidentDisabledLabel": "Shell tidak tersedia untuk sesi residen"
   },
@@ -1329,5 +1330,33 @@
     "codeBehind": "Kode {{sha}} ↓{{behind}} tertinggal dari pre",
     "codeDiverged": "Kode {{sha}} ✗ tidak ada di riwayat pre",
     "codeNoPreHead": "Kode {{sha}} ? pre tidak diketahui"
+  },
+  "apiSpeed": {
+    "title": "Kecepatan API",
+    "loadingTarget": "Membaca konfigurasi gateway…",
+    "targetLine": "{{host}} · model {{model}} · kredensial: {{source}}",
+    "noCredentialShort": "tidak ada",
+    "probePing": "Ping",
+    "probeUpload": "Uji unggah (300 KB)",
+    "autoOn": "Setiap 30 dtk",
+    "autoOff": "Otomatis mati",
+    "noCredential": "Kredensial gateway tidak ditemukan. Setel ANTHROPIC_AUTH_TOKEN di lingkungan layanan atau di berkas pengaturan CLI.",
+    "loading": "Memuat…",
+    "empty": "Belum ada sampel. Tekan Ping untuk mengambil pengukuran pertama.",
+    "firstToken": "token pertama",
+    "stageConnect": "Koneksi + TLS",
+    "stageUpload": "Unggah",
+    "stageGateway": "Menunggu relay",
+    "stageDownload": "Unduh",
+    "reused": "digunakan ulang",
+    "total": "Total",
+    "statTotalP50": "Total p50",
+    "statTotalP90": "Total p90",
+    "statGatewayP50": "Relay p50",
+    "statUploadP50": "Unggah p50",
+    "trend": "Waktu total, {{count}} sampel terakhir",
+    "colTime": "Waktu",
+    "colMode": "Mode",
+    "colLink": "Tautan"
   }
 }

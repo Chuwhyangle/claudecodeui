@@ -27,6 +27,7 @@
     "computer": "Ordinateur",
     "quay": "Quay",
     "architecture": "Architecture",
+    "apiSpeed": "Vitesse de l'API",
     "shellResidentDisabled": "Shell n'est pas disponible pour les sessions résidentes. Fermez le mode résident pour l'utiliser.",
     "shellResidentDisabledLabel": "Shell indisponible pour les sessions résidentes"
   },
@@ -1248,5 +1249,33 @@
     "codeBehind": "Code {{sha}} ↓{{behind}} derrière pre",
     "codeDiverged": "Code {{sha}} ✗ absent de l'historique pre",
     "codeNoPreHead": "Code {{sha}} ? pre inconnu"
+  },
+  "apiSpeed": {
+    "title": "Vitesse de l'API",
+    "loadingTarget": "Lecture de la configuration de la passerelle…",
+    "targetLine": "{{host}} · modèle {{model}} · identifiant : {{source}}",
+    "noCredentialShort": "aucun",
+    "probePing": "Ping",
+    "probeUpload": "Tester l'envoi (300 Ko)",
+    "autoOn": "Toutes les 30 s",
+    "autoOff": "Auto désactivé",
+    "noCredential": "Aucun identifiant de passerelle trouvé. Définissez ANTHROPIC_AUTH_TOKEN dans l'environnement du service ou dans le fichier de configuration de la CLI.",
+    "loading": "Chargement…",
+    "empty": "Aucun échantillon. Cliquez sur Ping pour effectuer la première mesure.",
+    "firstToken": "premier jeton",
+    "stageConnect": "Connexion + TLS",
+    "stageUpload": "Envoi",
+    "stageGateway": "Attente du relais",
+    "stageDownload": "Réception",
+    "reused": "réutilisée",
+    "total": "Total",
+    "statTotalP50": "Total p50",
+    "statTotalP90": "Total p90",
+    "statGatewayP50": "Relais p50",
+    "statUploadP50": "Envoi p50",
+    "trend": "Temps total, {{count}} derniers échantillons",
+    "colTime": "Heure",
+    "colMode": "Mode",
+    "colLink": "Lien"
   }
 }

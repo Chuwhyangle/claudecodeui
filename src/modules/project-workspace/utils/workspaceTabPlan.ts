@@ -13,8 +13,16 @@
  * Priority is fixed (not usage-ranked) so the strip does not rearrange itself while it is used.
  */
 
-/** Tab ids from most to least important; plugin tabs (any id not listed) rank after all of them. */
-const BUILT_IN_PRIORITY: readonly string[] = ['chat', 'quay', 'files', 'git', 'architecture', 'tasks', 'browser', 'shell'];
+/**
+ * Tab ids from most to least important; plugin tabs (any id not listed) rank after all of them.
+ *
+ * `api-speed` is registered LAST deliberately: it is a diagnostic view of this
+ * machine's gateway link rather than a place work happens, so it is the first
+ * label to lose its word and the first tab to leave the strip for the overflow
+ * menu. Listing it explicitly (rather than leaving it as an unknown id) keeps
+ * that rank from being decided by its display position among the plugin tabs.
+ */
+const BUILT_IN_PRIORITY: readonly string[] = ['chat', 'quay', 'files', 'git', 'architecture', 'tasks', 'browser', 'shell', 'api-speed'];
 
 /** Gap `PillBar` draws between two neighbouring pills. */
 const GAP_PX = 2;

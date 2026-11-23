@@ -330,6 +330,52 @@ const ROWS: readonly SyncRow[] = [
     serverFile: SERVER_TYPES,
     reader: 'object',
   },
+  {
+    // The API-speed view reads one staged probe's timings and sends a probe request
+    // back. The two ends state these shapes by hand (the browser bundle never
+    // imports `server/`), so every latency wire type is a row of its own: a leg the
+    // server measures and one end drops would make the breakdown silently wrong.
+    client: 'ApiLatencyStageTimings',
+    server: 'ApiLatencyStageTimings',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'ApiLatencyProbeMode',
+    server: 'ApiLatencyProbeMode',
+    serverFile: SERVER_TYPES,
+    reader: 'union',
+  },
+  {
+    client: 'ApiLatencyCredentialSource',
+    server: 'ApiLatencyCredentialSource',
+    serverFile: SERVER_TYPES,
+    reader: 'union',
+  },
+  {
+    client: 'ApiLatencyProbeResult',
+    server: 'ApiLatencyProbeResult',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'ApiLatencyGatewayTarget',
+    server: 'ApiLatencyGatewayTarget',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'ApiLatencySeries',
+    server: 'ApiLatencySeries',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
+  {
+    client: 'ApiLatencyProbeRequest',
+    server: 'ApiLatencyProbeRequest',
+    serverFile: SERVER_TYPES,
+    reader: 'object',
+  },
 ];
 
 /** Reads one row's type from an arbitrary source string (used for both ends). */

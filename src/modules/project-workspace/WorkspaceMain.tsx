@@ -53,6 +53,9 @@ const LazyTaskMasterPanel = lazy(() =>
 const LazyArchitecturePanel = lazy(() =>
   import('@/modules/architecture').then((module) => ({ default: module.ArchitecturePanel })),
 );
+const LazyApiSpeedPanel = lazy(() =>
+  import('@/modules/api-speed').then((module) => ({ default: module.ApiSpeedPanel })),
+);
 const LazyEditorSidebar = lazy(() =>
   import('@/modules/code-editor').then((module) => ({ default: module.EditorSidebar })),
 );
@@ -564,6 +567,17 @@ function WorkspaceMain({
                   // the architecture module never imports the chat module.
                   onOpenChat={() => setActiveTab('chat')}
                 />
+              </Suspense>
+            </div>
+          )}
+
+          {/* The API-speed view measures THIS machine's link to the gateway, so it is
+              not gated on the project or session; the outer marker is what the layout
+              criteria read to tell which view is on screen. */}
+          {activeTab === 'api-speed' && (
+            <div className="h-full overflow-hidden" data-workspace-view="api-speed">
+              <Suspense fallback={<TabLoadingFallback />}>
+                <LazyApiSpeedPanel />
               </Suspense>
             </div>
           )}

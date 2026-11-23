@@ -27,6 +27,7 @@
     "computer": "Bilgisayar",
     "quay": "Quay",
     "architecture": "Mimari",
+    "apiSpeed": "API hızı",
     "shellResidentDisabled": "Shell kalıcı oturumlarda kullanılamaz. Kullanmak için kalıcı modu kapatın.",
     "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz"
   },
@@ -1247,5 +1248,33 @@
     "codeBehind": "Kod {{sha}} ↓{{behind}} pre gerisinde",
     "codeDiverged": "Kod {{sha}} ✗ pre geçmişinde yok",
     "codeNoPreHead": "Kod {{sha}} ? pre bilinmiyor"
+  },
+  "apiSpeed": {
+    "title": "API hızı",
+    "loadingTarget": "Ağ geçidi yapılandırması okunuyor…",
+    "targetLine": "{{host}} · model {{model}} · kimlik bilgisi: {{source}}",
+    "noCredentialShort": "yok",
+    "probePing": "Ping",
+    "probeUpload": "Yüklemeyi test et (300 KB)",
+    "autoOn": "Her 30 sn",
+    "autoOff": "Otomatik kapalı",
+    "noCredential": "Ağ geçidi kimlik bilgisi bulunamadı. ANTHROPIC_AUTH_TOKEN değerini servis ortamında veya CLI ayar dosyasında tanımlayın.",
+    "loading": "Yükleniyor…",
+    "empty": "Henüz örnek yok. İlk ölçümü almak için Ping'e basın.",
+    "firstToken": "ilk jeton",
+    "stageConnect": "Bağlantı + TLS",
+    "stageUpload": "Yükleme",
+    "stageGateway": "Aktarım bekleniyor",
+    "stageDownload": "İndirme",
+    "reused": "yeniden kullanıldı",
+    "total": "Toplam",
+    "statTotalP50": "Toplam p50",
+    "statTotalP90": "Toplam p90",
+    "statGatewayP50": "Aktarım p50",
+    "statUploadP50": "Yükleme p50",
+    "trend": "Toplam süre, son {{count}} örnek",
+    "colTime": "Saat",
+    "colMode": "Mod",
+    "colLink": "Bağlantı"
   }
 }
