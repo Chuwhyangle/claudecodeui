@@ -271,6 +271,33 @@ export const MCP_TOOL_ERROR_CODES: Record<McpGatewayToolName, readonly McpErrorC
   cockpit_card: [...WRAPPER_CODES],
   cockpit_card_brief: [...WRAPPER_CODES],
   cockpit_card_confirm: [...WRAPPER_CODES],
+
+  // -- goal tools (Cloudpit's own goal loop) ---------------------------------
+  // `goal_list` names its project through AC-246's `project` reference, so its
+  // gate adds the project target codes; `goal_status` takes only a goal id and
+  // asks the service, which answers a goal owned by somebody else exactly as a
+  // missing one — both render as `INVALID_ARGUMENT` with
+  // `details.reason: 'GOAL_NOT_FOUND'`, already the wrapper's code. `goal_create`
+  // adds the same gate codes for the project it names.
+  goal_list: [...WRAPPER_CODES, ...PROJECT_TARGET_CODES],
+  goal_status: [...WRAPPER_CODES],
+  goal_create: [...WRAPPER_CODES, ...PROJECT_TARGET_CODES],
+  // `goal_add_ac` mints only the wrapper's `INVALID_ARGUMENT`, carrying the
+  // service's own state refusal in `details.reason` (`GOAL_NOT_DRAFT` /
+  // `GOAL_ACS_CLOSED` / `GOAL_NOT_FOUND`).
+  goal_add_ac: [...WRAPPER_CODES],
+  // Activation resolves the goal's project directory through the service; a
+  // project row that no longer exists answers `PROJECT_NOT_FOUND`. Every other
+  // state refusal (`GOAL_NOT_DRAFT`, `GOAL_HAS_NO_ACTIVE_AC`,
+  // `GOAL_AC_CRITERION_REQUIRED`) arrives as `INVALID_ARGUMENT` with its reason.
+  goal_activate: [...WRAPPER_CODES, 'PROJECT_NOT_FOUND'],
+  goal_pause: [...WRAPPER_CODES],
+  goal_resume: [...WRAPPER_CODES],
+  goal_abandon: [...WRAPPER_CODES],
+  // The round runner's refusals (`GOAL_NOT_ACTIVE`, `GOAL_WORKTREE_MISSING`,
+  // `GOAL_HAS_NO_ACTIVE_AC`) are state conflicts translated to `INVALID_ARGUMENT`
+  // with the service code in `details.reason`.
+  goal_run_round: [...WRAPPER_CODES],
 };
 
 /**

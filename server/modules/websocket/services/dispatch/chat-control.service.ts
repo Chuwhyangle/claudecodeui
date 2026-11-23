@@ -43,7 +43,7 @@ import { residentRunIsTurn } from '@/shared/utils.js';
  */
 type ControlCaller = {
   userId: string | number | null;
-  via: 'websocket' | 'mcp' | 'scheduled' | 'voice';
+  via: 'websocket' | 'mcp' | 'scheduled' | 'voice' | 'goal';
 };
 
 /**
@@ -66,6 +66,8 @@ const SOURCE_BY_VIA: Record<ControlCaller['via'], ChatRunSource> = {
   // recorded as an `mcp` command — the origin a client draws a withdrawable
   // pending row from. See `ActivityDeliverySource`'s `voice` member.
   voice: 'voice',
+  // The goals module's driver prompt: nobody is connected, so an unattended run.
+  goal: 'unattended',
 };
 
 /**

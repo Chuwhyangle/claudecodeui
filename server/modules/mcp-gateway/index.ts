@@ -733,6 +733,9 @@ export {
 } from './tools/cockpit/mcp-cockpit-tools.js';
 export type { McpCockpitToolDeps } from './tools/cockpit/mcp-cockpit-tools.js';
 
+// Goal tools — Cloudpit's own loop, not the read-only `QuayGoal*` snapshot.
+export { MCP_GOAL_TOOLS, registerMcpGoalTools, type McpGoalToolDeps, type McpGoalToolName, type McpGoalToolRegistration, type McpGoalToolSeam } from './tools/goals/mcp-goal-tools.js';
+
 // The tool annotations (AC1–AC7). `MCP_TOOL_ANNOTATIONS` is the ONE table a
 // `tools/list` hint is written down in — every name the gateway can register,
 // with the `readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint`

@@ -111,3 +111,13 @@ export { voiceSettingsDb } from '@/modules/database/repositories/providers/voice
 export { voiceUserIdentifiersDb } from '@/modules/database/repositories/providers/voice-user-identifiers.db.js';
 export { scheduledMessagesDb } from './repositories/sessions/scheduled-messages.db.js';
 export type { ScheduledMessageRow, ScheduledMessageStatus } from './repositories/sessions/scheduled-messages.db.js';
+// goalsDb: the goals module's store — a goal, its acceptance criteria, one row
+// per loop round and one row per criterion run. It lives in its own `goals`
+// subpackage because a goal belongs to the project domain, not to sessions.
+export { goalsDb } from './repositories/goals/goals.db.js';
+export type {
+  GoalAcRow,
+  GoalEvidenceRow,
+  GoalRow,
+  GoalRoundRow,
+} from './repositories/goals/goals.db.js';

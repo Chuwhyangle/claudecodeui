@@ -87,6 +87,7 @@ import type { McpStage3ReadToolName } from './tools/read/mcp-gateway.read-tools.
 import type { McpStage6ResidentToolName } from './mcp-gateway.resident-tools.js';
 import type { McpStage4WriteToolName } from './mcp-gateway.write-tools.js';
 import type { McpCockpitToolName } from './tools/cockpit/mcp-cockpit-tools.js';
+import type { McpGoalToolName } from './tools/goals/mcp-goal-tools.js';
 
 /**
  * Every tool name the gateway can register, derived from the three tables so a
@@ -141,7 +142,11 @@ export type McpGatewayToolName =
   // their own deps bag (`McpGatewayDeps.cockpitTools`) rather than by growing a
   // tool table — the three reads share `cloudcli:read` while the confirm carries
   // its own scope, so they cannot share a table row either.
-  | McpCockpitToolName;
+  | McpCockpitToolName
+  // Cloudpit's OWN goal loop (distinct from the read-only `QuayGoal*`). The nine
+  // `goal_*` tools register through their own deps bag (`McpGatewayDeps.goalTools`)
+  // rather than by growing a tool table, so their names are derived here.
+  | McpGoalToolName;
 
 /**
  * The annotation every registered tool declares, keyed by tool name.
@@ -295,6 +300,41 @@ export const MCP_TOOL_ANNOTATIONS: Record<McpGatewayToolName, ToolAnnotations> =
   // missing one loses work. A repeat of the same (card, revision) finds the
   // accepted ledger and executes nothing further, so it is idempotent.
   cockpit_card_confirm: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+
+  // -- goal tools (Cloudpit's own goal loop) ---------------------------------
+  // The two reads answer from the goals store; nothing is mutated, and a repeat
+  // over an unchanged store reads the same rows, so the world stays closed.
+  goal_list: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  goal_status: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // Additive: a new draft goal row; a repeat is a second goal, never a no-op. It
+  // drives no provider agent — the effect is this server's own store.
+  goal_create: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  // Additive: appends one acceptance criterion to a draft goal; a repeat adds a
+  // second AC. Stored state only.
+  goal_add_ac: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  // Activation creates the goal worktree and the bound session and RUNS every
+  // criterion once (red-first): the criteria are arbitrary shell commands and a
+  // session is started for a provider agent, so the world opens. Nothing existing
+  // is discarded — the goal was a draft — so it is not destructive.
+  goal_activate: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  // Flips a running goal to paused; a repeat finds it paused (the driver opens no
+  // further round), so the second call has no further effect. Works on this
+  // server's store alone.
+  goal_pause: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // Flips a paused/stalled goal back to active AND restarts its wall clock, so
+  // repeating it against a goal it already resumed is refused rather than a
+  // no-op. Stored state only.
+  goal_resume: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  // Ends a goal that is not already achieved/abandoned: the loop's remaining work
+  // is discarded (the worktree is left in place), so it is destructive. A repeat
+  // is refused, not a no-op. Stored state only.
+  goal_abandon: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  // Runs one round: every active criterion executes as an arbitrary shell command
+  // in the goal worktree, and an all-green round MERGES the goal branch into the
+  // project checkout. The world opens (processes run, a branch lands) and the
+  // merge can rewrite the main worktree, so it is marked destructive — the
+  // conservative side.
+  goal_run_round: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
 };
 
 /**

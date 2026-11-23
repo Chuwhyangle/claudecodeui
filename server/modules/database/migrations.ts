@@ -6,6 +6,10 @@ import { isSelfAssignedSessionName, stripSelfAssignedSuffix } from '@/modules/da
 import {
   ACCESS_TOKENS_TABLE_SCHEMA_SQL,
   APP_CONFIG_TABLE_SCHEMA_SQL,
+  GOAL_ACS_TABLE_SCHEMA_SQL,
+  GOAL_EVIDENCE_TABLE_SCHEMA_SQL,
+  GOAL_ROUNDS_TABLE_SCHEMA_SQL,
+  GOALS_TABLE_SCHEMA_SQL,
   LAST_SCANNED_AT_SQL,
   MCP_AUDIT_LOG_TABLE_SCHEMA_SQL,
   NOTIFICATION_CHANNEL_ENDPOINTS_TABLE_SCHEMA_SQL,
@@ -1150,6 +1154,14 @@ export const runMigrations = (db: Database) => {
     addSessionOrderColumn(db);
     ensureProjectsForSessionPaths(db);
     db.exec(SCHEDULED_MESSAGES_TABLE_SCHEMA_SQL);
+    // The goal loop's four tables (Cloudpit's own goals, not the read-only
+    // `QuayGoal*` snapshot). `CREATE TABLE IF NOT EXISTS` makes a second startup
+    // a no-op; the order is goals -> ACs/rounds -> evidence so the rows a later
+    // table points at exist first, even though no foreign key enforces it.
+    db.exec(GOALS_TABLE_SCHEMA_SQL);
+    db.exec(GOAL_ACS_TABLE_SCHEMA_SQL);
+    db.exec(GOAL_ROUNDS_TABLE_SCHEMA_SQL);
+    db.exec(GOAL_EVIDENCE_TABLE_SCHEMA_SQL);
     // OAuth storage (mcp-gateway-SPEC stage 5, AC-258). Order matters: the
     // access_tokens.grant_id foreign key points at oauth_grants, so the grant
     // (and the client it references) must exist before the token table.
@@ -1205,6 +1217,12 @@ export const runMigrations = (db: Database) => {
     // The due-message poll runs on a timer; without this it table-scans.
     db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_messages_due ON scheduled_messages(status, scheduled_for)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_messages_session ON scheduled_messages(session_id)');
+    // The goal loop reads by project (the listing) and resolves a goal's rows by
+    // their goal/round id. Without these every detail read table-scans.
+    db.exec('CREATE INDEX IF NOT EXISTS idx_goals_project ON goals(project_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_goal_acs_goal ON goal_acs(goal_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_goal_rounds_goal_seq ON goal_rounds(goal_id, seq)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_goal_evidence_round ON goal_evidence(round_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_is_archived ON sessions(isArchived)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_projects_is_starred ON projects(isStarred)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_projects_is_archived ON projects(isArchived)');

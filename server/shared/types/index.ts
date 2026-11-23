@@ -17,3 +17,4 @@ export * from './session-ask.js';
 export * from './nclease.js';
 export * from './api-latency.js';
 export * from './turn-usage.js';
+export * from './goals.js';

@@ -201,8 +201,14 @@ export function isDesktopAlertEnabled(): boolean {
   return desktopAlertChannel.isEnabled();
 }
 
-/** Sends one alert through the process channel; see {@link DesktopAlertChannel.send}. */
-function sendDesktopAlert(alert: DesktopAlert): boolean {
+/**
+ * Sends one alert through the process channel; see {@link DesktopAlertChannel.send}.
+ *
+ * Consumers: `sendAwaitingReplyDesktopAlert` below and the goals module's
+ * resident driver (through the module barrel), which reports a goal's terminal
+ * transition so a loop that finishes while nobody is looking is not silent.
+ */
+export function sendDesktopAlert(alert: DesktopAlert): boolean {
   return desktopAlertChannel.send(alert);
 }
 

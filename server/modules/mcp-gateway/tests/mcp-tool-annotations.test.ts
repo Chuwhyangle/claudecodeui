@@ -60,6 +60,7 @@ import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type {
   McpCockpitToolDeps,
   McpGatewayToolName,
+  McpGoalToolDeps,
   McpReadToolDeps,
   McpResidentToolDeps,
   McpWriteToolDeps,
@@ -151,6 +152,10 @@ const residentTools = { reconfigure: {}, background: {}, approvals: {} } as unkn
 // bag. `tools/list` never enters a handler, so the three members are the empty
 // placeholder — their presence alone installs all four names.
 const cockpitTools = {} as unknown as McpCockpitToolDeps;
+// Cloudpit's own goal loop registers its nine names through a separate bag.
+// `tools/list` never enters a handler, so the empty placeholder's presence alone
+// installs them and keeps the listed name set equal to the annotation table's keys.
+const goalTools = {} as unknown as McpGoalToolDeps;
 
 // --------------------------- HTTP: a node:http based fetch ---------------------------
 
@@ -216,6 +221,7 @@ async function withGateway(run: (client: Client) => Promise<void>): Promise<void
     writeTools,
     residentTools,
     cockpitTools,
+    goalTools,
   });
 
   const server = app.listen(0, '127.0.0.1');
@@ -293,6 +299,9 @@ test('(c) the read-only set is the read tools plus approvals_list and draft_get;
     'cockpit_cards',
     'cockpit_card',
     'cockpit_card_brief',
+    // The goal loop's two reads answer from the goals store and mutate nothing.
+    'goal_list',
+    'goal_status',
   ].sort();
   assert.deepEqual(readOnly, expectedReadOnly, 'exactly the read tools, approvals_list, draft_get and the cockpit reads may be read-only');
 
@@ -320,7 +329,7 @@ test('(d) destructive tools are marked destructive, additive writes are not', as
   const destructive = (name: string): boolean | undefined =>
     listed.tools.find((tool) => tool.name === name)?.annotations?.destructiveHint;
 
-  for (const name of ['session_interrupt', 'session_close', 'session_cancel_queued', 'session_background', 'draft_set']) {
+  for (const name of ['session_interrupt', 'session_close', 'session_cancel_queued', 'session_background', 'draft_set', 'goal_abandon', 'goal_run_round']) {
     assert.equal(destructive(name), true, `${name} terminates/discards held work and must be destructive`);
   }
   for (const name of ['session_send', 'session_create', 'session_reconfigure', 'approval_answer', 'draft_submit']) {

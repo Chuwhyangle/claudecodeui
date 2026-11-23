@@ -122,6 +122,72 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
 );
 `;
 
+// The goal loop (Cloudpit's own, distinct from the read-only `QuayGoal*`): a
+// goal, its acceptance criteria, rounds and per-run evidence. No foreign keys —
+// the goals module owns the lifecycle, and a goal outlives a removed project.
+export const GOALS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS goals (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    project_id TEXT NOT NULL,
+    session_id TEXT,
+    worktree_path TEXT,
+    branch TEXT,
+    title TEXT NOT NULL,
+    objective TEXT NOT NULL,
+    exit_conditions TEXT NOT NULL,
+    -- draft | active | paused | stalled | achieved | abandoned
+    status TEXT NOT NULL,
+    budget TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    activated_at TEXT,
+    achieved_at TEXT
+);
+`;
+
+export const GOAL_ACS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS goal_acs (
+    id TEXT PRIMARY KEY,
+    goal_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    criterion TEXT NOT NULL,
+    expect TEXT NOT NULL,
+    -- active | achieved | superseded
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+`;
+
+export const GOAL_ROUNDS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS goal_rounds (
+    id TEXT PRIMARY KEY,
+    goal_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    -- green | progress | no-progress | stalled | budget-hit | error
+    outcome TEXT,
+    diff_digest TEXT,
+    prompt_digest TEXT
+);
+`;
+
+export const GOAL_EVIDENCE_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS goal_evidence (
+    id TEXT PRIMARY KEY,
+    round_id TEXT NOT NULL,
+    ac_id TEXT NOT NULL,
+    exit_code INTEGER,
+    -- SQLite has no boolean: 1/0.
+    timed_out INTEGER NOT NULL DEFAULT 0,
+    output_digest TEXT NOT NULL,
+    output_excerpt TEXT NOT NULL,
+    -- pass | fail
+    verdict TEXT NOT NULL,
+    at TEXT NOT NULL
+);
+`;
+
 export const SESSIONS_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT NOT NULL,

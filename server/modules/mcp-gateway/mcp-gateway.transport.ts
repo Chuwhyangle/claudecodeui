@@ -39,6 +39,12 @@ import { MCP_GATEWAY_PATH, readMcpGatewayGate } from './mcp-gateway.gate.js';
 import { createMcpLoopbackGuard } from './tools/shared/mcp-gateway.loopback.js';
 import { registerMcpCockpitTools } from './tools/cockpit/mcp-cockpit-tools.js';
 import type { McpCockpitToolDeps, McpCockpitToolSeam } from './tools/cockpit/mcp-cockpit-tools.js';
+// The goal tools (Cloudpit's own goal loop). A separate table and a separate
+// deps bag from every other family: `server/index.ts` hands in the goals
+// module's own service and round runner so the MCP face and the `/api/goals`
+// router read one store.
+import { registerMcpGoalTools } from './tools/goals/mcp-goal-tools.js';
+import type { McpGoalToolDeps, McpGoalToolSeam } from './tools/goals/mcp-goal-tools.js';
 import { registerMcpReadTools } from './mcp-read-tools-registry.js';
 import type { McpReadToolDeps } from './mcp-read-tools-registry.js';
 import type { McpReadToolSeam, McpRunningRun, McpRunSummary } from './tools/shared/mcp-read-contract.js';
@@ -168,6 +174,7 @@ function createMcpServer(
   writeTools: McpWriteToolDeps | undefined,
   residentTools: McpResidentToolDeps | undefined,
   cockpitTools: McpCockpitToolDeps | undefined,
+  goalTools: McpGoalToolDeps | undefined,
   resolveDeps: McpResolveDeps | undefined,
   selfTarget: SelfTargetDeps | undefined,
   writeNotifications: McpWriteNotification | undefined
@@ -180,7 +187,7 @@ function createMcpServer(
     installMcpCallDispatcher(server);
     return server;
   }
-  if (!readTools && !writeTools && !residentTools && !cockpitTools) {
+  if (!readTools && !writeTools && !residentTools && !cockpitTools && !goalTools) {
     server.server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [] }));
     return server;
   }
@@ -298,6 +305,31 @@ function createMcpServer(
     registerMcpResidentTools(register, residentTools);
   }
 
+  if (goalTools) {
+    // Cloudpit's own goal loop (NOT the read-only `QuayGoal*` snapshot). The
+    // goals module's lifecycle service and round runner are handed in whole by
+    // `server/index.ts`, so an MCP call and the `/api/goals` router share one
+    // store. Every handler answers as the token's principal; a null principal is
+    // unreachable because `withMcpAudit` denies it first.
+    const register: McpGoalToolSeam = (registration) =>
+      audited(
+        registration.name,
+        registration.description,
+        registration.requiredScope,
+        registration.inputSchema,
+        registration.outputSchema,
+        (args) => {
+          if (principal === null) {
+            // Unreachable: `withMcpAudit` denies a null principal before the
+            // handler is reached.
+            throw new Error(`${registration.name} requires an authenticated principal.`);
+          }
+          return registration.handler(args, { principal });
+        },
+      );
+    registerMcpGoalTools(register, goalTools);
+  }
+
   if (cockpitTools) {
     // The cockpit card tools (gap-mcp-cockpit-card-tools): three reads under
     // `cloudcli:read` and one confirm under `cloudcli:cockpit:act`. They take no
@@ -342,6 +374,7 @@ function attachTransport(
   writeTools: McpWriteToolDeps | undefined,
   residentTools: McpResidentToolDeps | undefined,
   cockpitTools: McpCockpitToolDeps | undefined,
+  goalTools: McpGoalToolDeps | undefined,
   resolveDeps: McpResolveDeps | undefined,
   selfTarget: SelfTargetDeps | undefined,
   writeNotifications: McpWriteNotification | undefined
@@ -358,6 +391,7 @@ function attachTransport(
       writeTools,
       residentTools,
       cockpitTools,
+      goalTools,
       resolveDeps,
       selfTarget,
       writeNotifications,
@@ -494,6 +528,16 @@ export type McpGatewayDeps = {
    */
   cockpitTools?: McpCockpitToolDeps;
   /**
+   * The goal tools' deps (Cloudpit's own goal loop — `goal_list`, `goal_status`,
+   * `goal_create`, `goal_add_ac`, `goal_activate`, `goal_pause`, `goal_resume`,
+   * `goal_abandon`, `goal_run_round`). The goals module's OWN lifecycle service
+   * and round runner are handed over whole by `server/index.ts`, so the MCP face
+   * and the `/api/goals` router read one store. Supplying it registers the nine
+   * names through the SAME audited seam as every other tool; absent keeps a
+   * mount without goals registering exactly what it did.
+   */
+  goalTools?: McpGoalToolDeps;
+  /**
    * The active project/session entries AC-246's target gate resolves a
    * `project` / `session` argument against. Supplying it turns on the gate for
    * every tool this mount registers: the reference is rewritten to an id before
@@ -558,6 +602,7 @@ export function mountMcpGateway(app: Express, deps: McpGatewayDeps = {}): McpGat
     deps.writeTools,
     deps.residentTools,
     deps.cockpitTools,
+    deps.goalTools,
     deps.resolveDeps,
     deps.selfTarget,
     deps.writeNotifications
@@ -593,6 +638,13 @@ export type McpGatewayModuleDeps = {
    * the HTTP face read one registry, one action channel and one brief path.
    */
   cockpitTools?: McpGatewayDeps['cockpitTools'];
+  /**
+   * The goal tools' deps (Cloudpit's own goal loop). Flows straight through to
+   * the mount; `server/index.ts` derives it from the one `createGoalsModule`
+   * instance it already builds for the `/api/goals` router, so both faces read
+   * one store and one round runner.
+   */
+  goalTools?: McpGatewayDeps['goalTools'];
   /** AC-303's write-call notification seam; flows straight through to the mount. */
   writeNotifications?: McpGatewayDeps['writeNotifications'];
   /** The single chat control service every front end shares (AC-233/AC-253). */

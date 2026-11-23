@@ -71,6 +71,12 @@ import { locateQuayFleetCli, quayFleetRegistry, quayRoutes, quayService } from '
 // through exists, and handed to the websocket gateway. The module itself is a leaf (it imports
 // no sibling module), which is why the two seams it needs are bound here.
 import { createCockpitCardsModule, createCockpitModule } from './modules/cockpit/index.js';
+// The goal loop's composition entry. Built below, after the one chat control
+// service it sends through exists; its router is mounted at `/api/goals`, its
+// resident driver starts and stops with the server, and its service + round
+// runner are handed to the MCP gateway's `goal_*` tools so both faces read one
+// store. Cloudpit's own goals — unrelated to the read-only quay snapshot.
+import { createGoalsModule } from './modules/goals/index.js';
 import { createCockpitBriefDeps } from './cockpit-brief-wiring.js';
 import { createCockpitCardExecutors } from './cockpit-executors-wiring.js';
 import { createCockpitFleetProvider } from './cockpit-fleet-wiring.js';
@@ -405,6 +411,24 @@ const chatControl = createChatControlService({
     // and contained on both sides, so a stream failure never reaches the send.
     recordContextEvent: (event) => {
         void contextEvents.record(event);
+    },
+});
+
+// The goal loop's composition entry. It is built here — after the ONE chat
+// control service above — because its resident driver prompts a goal's bound
+// session through that same instance, exactly as a person's composer does; a
+// second control plane would make a goal's turn invisible to the UI. The module
+// owns its router, its service (also handed to the MCP gateway's `goal_*` tools)
+// and the driver this server starts and stops.
+const goalsModule = createGoalsModule({
+    sendToSession: async ({ userId, sessionId, content }) => {
+        const result = await chatControl.send(
+            { userId, via: 'goal' },
+            { sessionId, content },
+        );
+        return result.ok
+            ? { ok: true }
+            : { ok: false, code: result.code, message: result.message };
     },
 });
 
@@ -1869,6 +1893,9 @@ app.use('/api/git', authenticateToken, gitRoutes);
 // Git worktree management (protected)
 app.use('/api/worktrees', authenticateToken, worktreesRoutes);
 
+// The goal loop (Cloudpit's own goals — project-scoped, owner-private).
+app.use('/api/goals', authenticateToken, goalsModule.router);
+
 // TaskMaster API Routes (protected)
 app.use('/api/taskmaster', authenticateToken, taskmasterRoutes);
 
@@ -2570,6 +2597,13 @@ const mcpGateway = mountMcpGateway(
             actions: cockpitCards.actions,
             briefForCard: cockpitCards.briefForCard,
         },
+        // The goal tools (Cloudpit's own goal loop). The deps are the SAME
+        // instance the `/api/goals` router serves above — one store, one round
+        // runner — so an MCP call and the UI cannot drift apart.
+        goalTools: {
+            service: goalsModule.service,
+            runRound: goalsModule.runRound,
+        },
         // AC-303: a SUCCESSFUL external write call pushes the token's owner a
         // notification through the EXISTING notification path (no new setting or
         // channel). The production assembly reads the OAuth client / session rows
@@ -2849,6 +2883,9 @@ async function startServer() {
             // then keeps polling. Handed the same control service the WebSocket
             // gateway uses, so a scheduled turn is a run the UI can watch.
             initializeScheduledMessageDispatcher(chatControl);
+            // Start polling the active goals: a goal left `active` by a previous
+            // process resumes looping on the first tick. Idempotent while running.
+            goalsModule.startDriver();
 
             // Start server-side plugin processes for enabled plugins
             startEnabledPluginServers().catch(err => {
@@ -2858,6 +2895,10 @@ async function startServer() {
 
         await closeSessionsWatcher();
         closeScheduledMessageDispatcher();
+        // Stop the goal driver before the runtime services it drives are closed:
+        // a round already in flight finishes on its own, but no new tick may open
+        // one against a runtime that is going away.
+        goalsModule.stopDriver();
         // Clean up plugin processes on shutdown
         const shutdownRuntimeServices = async () => {
             // Hosts first, scopes second, and the order is load-bearing rather

@@ -66,6 +66,7 @@ import type { TurnState } from '@/modules/providers/index.js';
 import type {
   McpCockpitToolDeps,
   McpErrorCode,
+  McpGoalToolDeps,
   McpGatewayToolName,
   McpReadToolDeps,
   McpResidentToolDeps,
@@ -549,6 +550,10 @@ async function startGateway(scopes: readonly string[]): Promise<Mount> {
     // DECLARED code set off `tools/list`, and the cockpit tools' own criterion
     // drives their handlers — so the bag is the empty placeholder.
     cockpitTools: {} as unknown as McpCockpitToolDeps,
+    // The nine `goal_*` names register through their own bag. This sweep reads
+    // each tool's DECLARED code set off `tools/list` (their handlers are driven by
+    // `mcp-goal-tools.test.ts`), so the bag is the empty placeholder.
+    goalTools: {} as unknown as McpGoalToolDeps,
     resolveDeps,
     selfTarget,
   });

@@ -321,6 +321,12 @@ const MANIFEST_PIN: readonly string[] = [
   // `modules/database/core`, `server/shared/**` and node builtins); the direction
   // is one-way, so no SCC is added. `directoryManifest` and `nodeCount` rise 90 -> 95.
   'modules/database/repositories/auth',
+  // TWENTY-SIXTH RECORDED CHANGE (2026-11-23, goal-loop-backend port): Cloudpit's
+  // own goal loop's store subpackage. A goal belongs to the project domain, so it
+  // is its own subpackage rather than a file inside `repositories/sessions`. It
+  // imports `modules/database/core` and `server/shared/**` only, the barrel imports
+  // it one-way, and it sits in no SCC.
+  'modules/database/repositories/goals',
   'modules/database/repositories/notifications',
   'modules/database/repositories/observation',
   'modules/database/repositories/providers',
@@ -329,6 +335,13 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/diagnostics',
   'modules/file-tree',
   'modules/git',
+  // TWENTY-SIXTH RECORDED CHANGE (2026-11-23, goal-loop-backend port): Cloudpit's
+  // own goal loop — a feature module distinct from the read-only `QuayGoal*`
+  // snapshot. Registered rather than left to the new-directory leaf rule because
+  // it imports the `modules/database`, `modules/notifications` and
+  // `modules/websocket` barrels and the composition root mounts its router; none
+  // of those modules points back, so no SCC is added.
+  'modules/goals',
   'modules/liaison',
   'modules/llm-gateway',
   'modules/logging',
@@ -343,6 +356,11 @@ const MANIFEST_PIN: readonly string[] = [
   // added). `directoryManifest` and `nodeCount` rise by six.
   'modules/mcp-gateway/tools/approvals',
   'modules/mcp-gateway/tools/cockpit',
+  // TWENTY-SIXTH RECORDED CHANGE (2026-11-23, goal-loop-backend port): the nine
+  // `goal_*` tools of Cloudpit's own goal loop, in their own family directory.
+  // The package root registers them one-way and the family points only at
+  // `tools/shared`, so no SCC is added.
+  'modules/mcp-gateway/tools/goals',
   'modules/mcp-gateway/tools/read',
   'modules/mcp-gateway/tools/sessions',
   'modules/mcp-gateway/tools/shared',

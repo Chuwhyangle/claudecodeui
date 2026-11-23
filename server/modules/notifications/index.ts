@@ -26,6 +26,12 @@ export { isDesktopAlertEnabled } from '@/modules/notifications/services/desktop-
 // browser is not on.
 export { sendAwaitingReplyDesktopAlert } from '@/modules/notifications/services/desktop-alert.service.js';
 export type { AwaitingReplyDesktopAlert } from '@/modules/notifications/services/desktop-alert.service.js';
+// sendDesktopAlert: the generic entry the goals module's resident driver uses
+// to report a goal's terminal transition (achieved / stalled / paused) on the
+// same off-browser channel, so a loop that finishes while nobody is looking is
+// not silent. Only this module may construct alerts; nothing else may mint one.
+export { sendDesktopAlert } from '@/modules/notifications/services/desktop-alert.service.js';
+export type { DesktopAlert } from '@/modules/notifications/services/desktop-alert.service.js';
 export { handleDesktopNotificationsConnection } from '@/modules/notifications/websocket/desktop-notifications-websocket.service.js';
 // getPublicKey: used by Settings to expose the Web Push subscription key.
 export { getPublicKey } from './vapid-keys.service.js';
