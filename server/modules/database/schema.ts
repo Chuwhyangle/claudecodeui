@@ -210,6 +210,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- normally. Informational only: a fork is a fully independent provider
     -- session, and deleting the source does not affect it.
     forked_from_session_id TEXT,
+    -- When this session stopped and started waiting on the user, or NULL when
+    -- it is not waiting. Written by the provider runtimes when a turn ends on
+    -- success or on an error, and when a tool approval is outstanding, so the
+    -- sidebar can say how long a session has been waiting. Cleared when the
+    -- session's next turn starts, when a queued permission is answered, or when
+    -- the user removes the row from the list by hand.
+    awaiting_reply_at TEXT,
+    -- Why the session is waiting: 'completed' (the turn finished), 'failed' (it
+    -- ended on an error) or 'permission' (a tool approval is outstanding). Kept
+    -- beside the timestamp so the list can say which, and overwritten on each
+    -- new reason while the timestamp keeps the instant the wait began.
+    awaiting_reply_reason TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

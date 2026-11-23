@@ -846,6 +846,25 @@ const addSessionModelProviderIdColumn = (db: Database): void => {
 };
 
 /**
+ * Adds the two columns behind the sidebar's "awaiting reply" list: when a
+ * session started waiting on the user, and why.
+ *
+ * Both are nullable and default to NULL, which is the truthful value for every
+ * existing row: a session that predates the list is not waiting on anything the
+ * app recorded.
+ *
+ * Runs after every sessions-table rebuild, for the same reason as the columns
+ * above: their copies use an explicit column list, so a column added earlier
+ * would be dropped again.
+ */
+const addSessionAwaitingReplyColumns = (db: Database): void => {
+  ensureColumns(db, 'sessions', [
+    ['awaiting_reply_at', 'TEXT'],
+    ['awaiting_reply_reason', 'TEXT'],
+  ]);
+};
+
+/**
  * Adds the `lifecycle_mode` column: how long a session's process is meant to
  * live ('per-run' or 'resident').
  *
@@ -1106,6 +1125,9 @@ export const runMigrations = (db: Database) => {
     // After every rebuild for the same reason: this column is appended, so a
     // rebuild that copies an explicit column list would drop it.
     addSessionModelProviderIdColumn(db);
+    // The sidebar's awaiting-reply pair; placed after every rebuild for the same
+    // reason as the column above.
+    addSessionAwaitingReplyColumns(db);
     ensureProjectsForSessionPaths(db);
     db.exec(SCHEDULED_MESSAGES_TABLE_SCHEMA_SQL);
     // OAuth storage (mcp-gateway-SPEC stage 5, AC-258). Order matters: the

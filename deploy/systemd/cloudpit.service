@@ -1,0 +1,58 @@
+# systemd **user** unit — the Cloudpit server as a resident process
+#
+# Install this file at `%h/.config/systemd/user/cloudpit.service` (i.e.
+# `~/.config/systemd/user/cloudpit.service` for the account that should run it),
+# then:
+#
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now cloudpit
+#   systemctl --user status cloudpit
+#   journalctl --user -u cloudpit -f
+#
+# Why a user unit rather than nohup/setsid: a background process started from an
+# SSH session dies with the session's process tree. A user unit is held by the
+# user manager (a sibling of PID 1, outside any login session), so the server
+# really outlives the shell. With `loginctl enable-linger <you>` it also survives
+# logout.
+#
+# Portability: the paths below use systemd's `%h` (the installing user's home)
+# rather than a literal path, and every site-specific value — bind address,
+# port, any API key the deployment needs, and the desktop-alert command — lives
+# in the environment file. Copy `config/cloudpit.env.example` to
+# `%h/.config/cloudpit/cloudpit.env` and edit it.
+#
+# Credentials: this unit deliberately sets no model-provider API key. Cloudpit
+# runs the Claude Code / Codex CLIs, which read their own credential files
+# (`~/.claude/settings.json`, `~/.codex/`), so switching gateways is an edit
+# there and needs no change to this unit.
+#
+# No `MemoryMax=`: the server should not be the first thing the kernel kills
+# under pressure. The `NODE_OPTIONS` cap below is a process-level ceiling the
+# server can trip itself, and `Restart=` brings it back.
+#
+# PATH is stated minimally and explicitly: the user manager's PATH may not
+# include `~/.local/bin`, where the `claude` / `codex` CLIs usually live.
+
+[Unit]
+Description=Cloudpit server (web UI for Claude Code / Codex)
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+
+# Run the built entrypoint directly (no npx/npm, whose staging directory npm is
+# free to prune). `%h/cloudpit` is the recommended install root; adjust the one
+# path if the package lives elsewhere.
+ExecStart=/usr/bin/env node %h/cloudpit/node_modules/@yalehwang/cloudpit/dist-server/server/modules/cli/cli.js start --port 3001
+
+EnvironmentFile=-%h/.config/cloudpit/cloudpit.env
+Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_OPTIONS=--max-old-space-size=2048
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

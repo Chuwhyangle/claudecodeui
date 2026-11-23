@@ -33,6 +33,13 @@ export { providerModelsService } from './services/provider-models.service.js';
 // sessionsService: used by the websocket module's chat gateway to resolve an
 // edited message's resume point, which only the providers module can read.
 export { sessionsService } from './services/sessions.service.js';
+// sessionAwaitingReplyService: the sidebar's awaiting-reply list and its two
+// transitions. The routes in this module read the list; the websocket module's
+// chat dispatch clears it when a new turn starts (a queued turn ends whatever
+// wait the session was on). The codex host runtime does NOT import it — it reads
+// the shared awaiting-reply port instead, which keeps that group out of the
+// providers/services import cycle.
+export { sessionAwaitingReplyService } from './services/session-awaiting-reply.service.js';
 // uiLastOpenedSessionService: the browser's last-opened-session pointer. The
 // routes in this module write it; `server/index.ts` binds its reader into the
 // MCP gateway so `ui_last_opened_session` answers from the same one store.

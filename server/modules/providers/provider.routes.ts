@@ -6,6 +6,7 @@ import { providerMcpService } from '@/modules/providers/services/mcp.service.js'
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { providerTokenUsageService } from '@/modules/providers/services/provider-token-usage.service.js';
 import { providerSkillsService } from '@/modules/providers/services/skills.service.js';
+import { sessionAwaitingReplyService } from '@/modules/providers/services/session-awaiting-reply.service.js';
 import { sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
 import { uiLastOpenedSessionService } from '@/modules/providers/services/sessions/ui-last-opened-session.service.js';
@@ -977,6 +978,25 @@ router.get(
   }),
 );
 
+/**
+ * The sidebar's awaiting-reply list: sessions that have stopped and are waiting
+ * on the user to say something (a finished turn, a failed turn, an unanswered
+ * tool approval).
+ *
+ * Registered beside the other static `/sessions/...` routes and before the
+ * generic `/sessions/:sessionId` below, so the literal is never parsed as a
+ * session id. The whole list is returned in one read: it is short by
+ * construction, and a client that groups it by project would otherwise have to
+ * page a queue it can draw from one response.
+ */
+router.get(
+  '/sessions/awaiting-reply',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const sessions = sessionAwaitingReplyService.listAwaitingReplySessions();
+    res.json(createApiSuccessResponse({ sessions }));
+  }),
+);
+
 router.get(
   '/sessions/archived',
   asyncHandler(async (_req: Request, res: Response) => {
@@ -1025,6 +1045,25 @@ router.delete(
       deletedFromDisk,
     });
     res.json(createApiSuccessResponse(result));
+  }),
+);
+
+/**
+ * Removes one session from the awaiting-reply list by hand.
+ *
+ * The other two ways off the list are automatic (replying, or answering the
+ * pending approval). This one exists because reading a session and deciding it
+ * needs no answer is the user's own judgement — the queue is an inbox, and an
+ * inbox nobody can empty is one people stop reading. The response reports
+ * whether a wait was actually cleared, so the caller's own list is about to
+ * agree with it.
+ */
+router.delete(
+  '/sessions/:sessionId/awaiting-reply',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    const removed = sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId);
+    res.json(createApiSuccessResponse({ sessionId, removed }));
   }),
 );
 

@@ -22,7 +22,7 @@ import type {
   NormalizedMessage,
   SessionLaunchSelection,
 } from '@/shared/types.js';
-import { AppError, sliceAroundIndex, sliceTailPage } from '@/shared/utils.js';
+import { AppError, resolveProjectDisplayName, sliceAroundIndex, sliceTailPage } from '@/shared/utils.js';
 
 type CreateAppSessionResult = {
   sessionId: string;
@@ -318,28 +318,6 @@ async function writeRenameToProviderTranscript(
     );
   }
   return { outcome: 'written', reportedName };
-}
-
-/**
- * Archive rows need a stable project label even when the owning project is not
- * part of the active sidebar payload. This lightweight resolver keeps the
- * archive API self-contained while still matching the project's stored display
- * name when one exists.
- */
-function resolveProjectDisplayName(
-  projectPath: string | null,
-  customProjectName: string | null | undefined,
-): string {
-  const trimmedCustomName = typeof customProjectName === 'string' ? customProjectName.trim() : '';
-  if (trimmedCustomName.length > 0) {
-    return trimmedCustomName;
-  }
-
-  if (!projectPath) {
-    return 'Unknown Project';
-  }
-
-  return path.basename(projectPath) || projectPath;
 }
 
 /**

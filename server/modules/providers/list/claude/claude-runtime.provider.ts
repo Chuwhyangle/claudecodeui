@@ -40,6 +40,7 @@ import { resolveModelContextWindowRow, resolveModelLaunchSpec } from '@/modules/
 import { resolveContextWindow } from '@/modules/providers/services/runtime/launch-spec.service.js';
 import { createClaudeSessionScopeSpawn } from '@/modules/providers/services/claude-activity/claude-session-scope.service.js';
 import { createClaudeTurnTracker } from '@/modules/providers/services/claude-activity/claude-turn-phase.service.js';
+import { readSessionAwaitingReplyPort } from '@/shared/ports/session-awaiting-reply.port.js';
 import {
   approvalRequests,
   TOOL_APPROVAL_TIMEOUT_MS,
@@ -1857,6 +1858,15 @@ async function queryClaudeSDK(
             sessionName: sessionSummary,
             stopReason: 'completed'
           });
+          // The turn is over and the next actor is the user: put the session on
+          // the sidebar's awaiting-reply list. Marked here rather than only at
+          // the terminal `complete` because a resident run keeps its process
+          // open and the user should see the row as soon as the answer is
+          // finished, not when the process is released.
+          readSessionAwaitingReplyPort()?.markSessionAwaitingReply(
+            sessionId || capturedSessionId || null,
+            'completed'
+          );
         } else if (heldForBackgroundWork && !abortPending) {
           // A result after the turn already reported complete means the work we
           // held the process open for has finished and pushed a follow-up turn.
@@ -1913,6 +1923,18 @@ async function queryClaudeSDK(
         sessionName: sessionSummary,
         stopReason: wasAborted ? 'aborted' : 'completed'
       });
+      // A run the user stopped themselves leaves nothing waiting: the user was
+      // present when it ended, and an earlier permission mark on the same run
+      // has to go with it. A run that ended normally is the ordinary case the
+      // awaiting-reply list exists for.
+      if (wasAborted) {
+        readSessionAwaitingReplyPort()?.clearSessionAwaitingReply(sessionId || capturedSessionId || null);
+      } else {
+        readSessionAwaitingReplyPort()?.markSessionAwaitingReply(
+          sessionId || capturedSessionId || null,
+          'completed'
+        );
+      }
     }
     // Complete
 
@@ -1934,7 +1956,9 @@ async function queryClaudeSDK(
     const wasAborted = sessionKey() ? runtimeState.consumeSessionAborted(sessionKey()) : false;
     if (wasAborted) {
       // The abort already produced the terminal complete; a generator throw
-      // caused by interrupt() is expected noise, not a user-facing error.
+      // caused by interrupt() is expected noise, not a user-facing error. The
+      // user stopped it, so nothing is left waiting on them.
+      readSessionAwaitingReplyPort()?.clearSessionAwaitingReply(sessionId || capturedSessionId || null);
       return;
     }
 
@@ -1958,6 +1982,13 @@ async function queryClaudeSDK(
       sessionName: sessionSummary,
       error
     });
+    // A turn that ended on an error is just as stopped as one that finished:
+    // the user is the next actor, and the reason is what tells the list to say
+    // so rather than "finished".
+    readSessionAwaitingReplyPort()?.markSessionAwaitingReply(
+      sessionId || capturedSessionId || null,
+      'failed'
+    );
   } finally {
     // Always close stdin — otherwise an aborted or failed run leaves the CLI
     // process (and its MCP servers) alive until the server exits.

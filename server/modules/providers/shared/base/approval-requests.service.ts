@@ -31,6 +31,7 @@ import {
   MAX_REMEMBERED_APPROVALS,
 } from '@/shared/bounded-approval-ledger.js';
 import { createNotificationEvent } from '@/modules/notifications/index.js';
+import { readSessionAwaitingReplyPort } from '@/shared/ports/session-awaiting-reply.port.js';
 import { createNormalizedMessage } from '@/shared/utils.js';
 import type {
   AnyRecord,
@@ -241,6 +242,15 @@ export class ApprovalRequestsService {
       dedupeKey: `${provider}:permission:${sessionId || 'none'}:${requestId}`,
     } as unknown as Parameters<typeof createNotificationEvent>[0]));
 
+    // The permission prompt is a wait the USER owes an answer to, so the
+    // session belongs on the sidebar's awaiting-reply list while the prompt is
+    // outstanding. Marked after the notification so the two cannot disagree
+    // about whether the request was ever shown, and read through the shared port
+    // rather than importing the providers service: this file is a leaf of the
+    // providers component (see the header), and the codex half of it must not
+    // pull `providers/services` into the codex group's import graph.
+    readSessionAwaitingReplyPort()?.markSessionAwaitingReply(sessionId, 'permission');
+
     let decision: AnyRecord | null = null;
     try {
       decision = await this.waitForToolApproval(requestId, {
@@ -270,6 +280,12 @@ export class ApprovalRequestsService {
       // observer must leave its waiting phase in every one of those cases.
       if (sessionId) {
         onPermissionPhase?.(sessionId, { kind: 'permission_resolved', requestId });
+        // The awaiting-reply row follows the same rule: answering the prompt
+        // means the turn is moving again. A turn that then fails or finishes
+        // re-marks the row with its own reason, so clearing here cannot lose the
+        // later state; it only prevents a settled prompt from leaving the row
+        // saying "permission" for a turn that is already running on.
+        readSessionAwaitingReplyPort()?.clearSessionAwaitingReply(sessionId);
       }
     }
     if (!decision) {

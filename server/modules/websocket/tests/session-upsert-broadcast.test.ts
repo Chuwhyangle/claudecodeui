@@ -7,6 +7,7 @@ import test from 'node:test';
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
 import { ClaudeSessionSynchronizer, sessionsService } from '@/modules/providers/index.js';
 import {
+  broadcastAwaitingReplyChanged,
   broadcastSessionUpserted,
   broadcastSessionUpsertedBatch,
   connectedClients,
@@ -220,5 +221,42 @@ test('a closed socket is skipped', async () => {
 
     assert.equal(open.frames.length, 1);
     assert.deepEqual(closing.frames, []);
+  });
+});
+
+test('the awaiting-reply snapshot reaches only OPEN clients, as one whole-list frame', async () => {
+  await withIsolatedDatabase(async () => {
+    const open = new FakeConnection();
+    const closing = new FakeConnection();
+    closing.readyState = 2; // WS_CLOSING
+    connectedClients.add(open as never);
+    connectedClients.add(closing as never);
+
+    const snapshot = [
+      {
+        sessionId: 'await-1',
+        provider: 'claude' as const,
+        projectId: null,
+        projectPath: '/workspace/demo',
+        projectDisplayName: 'demo',
+        sessionTitle: 'demo 会话',
+        awaitingSince: '2026-11-23T00:00:00.000Z',
+        reason: 'completed' as const,
+      },
+    ];
+
+    broadcastAwaitingReplyChanged(snapshot);
+
+    assert.equal(closing.frames.length, 0, 'a closing client must not be written to');
+    assert.equal(open.frames.length, 1);
+
+    const frame = open.frames[0] as {
+      kind: string;
+      sessions: unknown[];
+      timestamp: string;
+    };
+    assert.equal(frame.kind, 'awaiting_reply_changed');
+    assert.deepEqual(frame.sessions, snapshot, 'the whole list travels as sent, not a delta');
+    assert.ok(!Number.isNaN(Date.parse(frame.timestamp)));
   });
 });

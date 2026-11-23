@@ -23,13 +23,16 @@
  * `projects-session-fetch.port.ts` take. Production always installs the real
  * broadcaster, so the fallback never speaks for the product.
  *
- * Consumers: `modules/providers/services/sessions.service.ts` and
+ * Consumers: `modules/providers/services/sessions.service.ts` (upserts, renames,
+ * forks, and the awaiting-reply snapshot) and
  * `modules/providers/services/sessions-watcher.service.ts` (readers), and
- * `server/index.ts` (the assembly that installs it). This file imports nothing.
+ * `server/index.ts` (the assembly that installs it). Its only import is a type.
  */
 
+import type { AwaitingReplyListItem } from '@/shared/types.js';
+
 /**
- * The two broadcast verbs the providers services need and nothing more.
+ * The broadcast verbs the providers services need and nothing more.
  *
  * Declared structurally rather than as `typeof broadcastSessionUpserted` so the
  * shared layer does not name a module-local implementation. Their signatures are
@@ -41,6 +44,15 @@ export type SessionBroadcastPort = {
   broadcastSessionUpserted(sessionIdOrProviderSessionId: string): Promise<void>;
   /** Announces a batch of session upserts, walking the client set once for the whole batch. */
   broadcastSessionUpsertedBatch(sessionIds: Iterable<string>): Promise<void>;
+  /**
+   * Announces the sidebar's full "awaiting reply" snapshot.
+   *
+   * A snapshot rather than a delta for the reason the event type states: the
+   * list is short, and a client that missed a frame simply gets corrected by the
+   * next one. The rows are assembled by the providers service that owns them;
+   * there is nothing for the broadcaster to read.
+   */
+  broadcastAwaitingReplyChanged(sessions: AwaitingReplyListItem[]): void;
 };
 
 /**

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 
 import { sessionsDb } from '@/modules/database/index.js';
-import { providerModelsService } from '@/modules/providers/index.js';
+import { providerModelsService, sessionAwaitingReplyService } from '@/modules/providers/index.js';
 import { voiceLexicon } from '@/modules/voice/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/dispatch/chat-run-registry.service.js';
 import { filterAttachmentsToUploadStore } from '@/modules/websocket/services/dispatch/chat-attachment-filter.service.js';
@@ -224,6 +224,14 @@ export async function dispatchRun(
     onRefuse?.({ code: 'RUN_IN_PROGRESS', message });
     return { started: false, error: 'A run is already in progress for this session.' };
   }
+
+  // A turn is starting, so whatever wait this session was on is over: the user
+  // has said something, which is the first of the three ways an awaiting-reply
+  // row ends (the other two are answering an approval, and dismissing the row).
+  // Placed after the refusal above — a turn that was never accepted must not
+  // silently empty a row the user still owes an answer to — and before the
+  // provider is entered, so the row is gone for every path that opens a run.
+  sessionAwaitingReplyService.clearSessionAwaitingReply(sessionId);
 
   const rawClientOptions = (data.options ?? {}) as AnyRecord;
   const clientOptions = (dependencies.dropClientEnv ?? withoutClientEnv)(rawClientOptions);

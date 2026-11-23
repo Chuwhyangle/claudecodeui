@@ -25,6 +25,7 @@ import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index
 import { compileCodexProviderOptions } from '@/modules/providers/list/codex/app-server/codex-provider-injection.js';
 import { readCodexSessionTokenUsage } from '@/modules/providers/list/codex/sessions/codex-token-usage-files.js';
 import { approvalRequests } from '@/modules/providers/shared/base/approval-requests.service.js';
+import { readSessionAwaitingReplyPort } from '@/shared/ports/session-awaiting-reply.port.js';
 import type { AnyRecord, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/index.js';
 
 type ActiveCodexSession = {
@@ -534,7 +535,25 @@ async function queryCodex(
           sessionName: sessionSummary,
           stopReason: 'completed'
         });
+        // The turn is over and the user is the next actor: the sidebar's
+        // awaiting-reply list says so, for codex exactly as for claude. Read
+        // through the shared port so the codex group never imports the
+        // providers services directory (that edge would close a directory cycle).
+        readSessionAwaitingReplyPort()?.markSessionAwaitingReply(
+          sessionId || capturedSessionId || null,
+          'completed'
+        );
+      } else {
+        // A turn that ended on `turn.failed` is stopped just the same; the
+        // reason is what makes the row say "failed" rather than "finished".
+        readSessionAwaitingReplyPort()?.markSessionAwaitingReply(
+          sessionId || capturedSessionId || null,
+          'failed'
+        );
       }
+    } else {
+      // Aborted by the user: nothing is waiting on them.
+      readSessionAwaitingReplyPort()?.clearSessionAwaitingReply(sessionId || capturedSessionId || null);
     }
 
   } catch (error) {
@@ -571,6 +590,16 @@ async function queryCodex(
           error
         });
       }
+      // Reached from the throw as well as from `turn.failed`: whatever made the
+      // run stop, the user is the next actor.
+      readSessionAwaitingReplyPort()?.markSessionAwaitingReply(
+        sessionId || capturedSessionId || null,
+        'failed'
+      );
+    } else {
+      // The user stopped it, so nothing is waiting on them — including a mark an
+      // outstanding tool approval left on the same session before the abort.
+      readSessionAwaitingReplyPort()?.clearSessionAwaitingReply(sessionId || capturedSessionId || null);
     }
 
   } finally {

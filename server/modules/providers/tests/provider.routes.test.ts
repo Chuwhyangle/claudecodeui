@@ -9,9 +9,31 @@ import test from 'node:test';
 import express, { type NextFunction, type Request, type Response } from 'express';
 
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
-import { providerModelsService } from '@/modules/providers/index.js';
+import { providerModelsService, sessionAwaitingReplyService } from '@/modules/providers/index.js';
 import providerRouter from '@/modules/providers/provider.routes.js';
 import { AppError } from '@/shared/utils.js';
+
+/**
+ * Clears the off-browser alert command for the duration of `body`.
+ *
+ * Marking a session is exactly the event that spawns a desktop alert, and a
+ * developer machine may export the notify command; a route test must exercise
+ * the HTTP contract without raising a toast on somebody's workstation.
+ */
+async function withDesktopAlertsOff(body: () => Promise<void>): Promise<void> {
+  const saved = {
+    canonical: process.env.CLOUDPIT_DESKTOP_NOTIFY_CMD,
+    legacy: process.env.CLOUDCLI_DESKTOP_NOTIFY_CMD,
+  };
+  delete process.env.CLOUDPIT_DESKTOP_NOTIFY_CMD;
+  delete process.env.CLOUDCLI_DESKTOP_NOTIFY_CMD;
+  try {
+    await body();
+  } finally {
+    if (saved.canonical !== undefined) process.env.CLOUDPIT_DESKTOP_NOTIFY_CMD = saved.canonical;
+    if (saved.legacy !== undefined) process.env.CLOUDCLI_DESKTOP_NOTIFY_CMD = saved.legacy;
+  }
+}
 
 async function withProviderServer(
   run: (baseUrl: string, workspacePath: string) => Promise<void>,
@@ -372,4 +394,80 @@ test('model routes expose immutable defaults and full custom model CRUD', async 
       false,
     );
   });
+});
+
+test('the awaiting-reply list route serves the snapshot without being read as a session id', async () => {
+  await withDesktopAlertsOff(async () => withProviderServer(async (baseUrl, workspacePath) => {
+    const emptyResponse = await fetch(`${baseUrl}/api/providers/sessions/awaiting-reply`);
+    const emptyPayload = await emptyResponse.json() as {
+      success: boolean;
+      data: { sessions: unknown[] };
+    };
+    assert.equal(emptyResponse.status, 200);
+    assert.equal(emptyPayload.success, true);
+    assert.deepEqual(emptyPayload.data.sessions, []);
+
+    const sessionId = sessionsDb.createAppSession('waiting-session', 'codex', workspacePath, '等待中的会话');
+    sessionAwaitingReplyService.markSessionAwaitingReply(sessionId, 'completed');
+
+    const response = await fetch(`${baseUrl}/api/providers/sessions/awaiting-reply`);
+    const payload = await response.json() as {
+      data: {
+        sessions: Array<{
+          sessionId: string;
+          provider: string;
+          projectPath: string | null;
+          projectDisplayName: string;
+          sessionTitle: string;
+          awaitingSince: string;
+          reason: string;
+        }>;
+      };
+    };
+    assert.equal(response.status, 200);
+    assert.equal(payload.data.sessions.length, 1);
+
+    const row = payload.data.sessions[0];
+    assert.equal(row.sessionId, sessionId);
+    assert.equal(row.provider, 'codex');
+    assert.equal(row.sessionTitle, '等待中的会话');
+    assert.equal(row.reason, 'completed');
+    assert.equal(row.projectPath, workspacePath);
+    assert.ok(row.projectDisplayName, 'a row always carries a project label');
+    assert.ok(
+      !Number.isNaN(Date.parse(row.awaitingSince)),
+      'awaitingSince is an ISO-8601 instant the client can format',
+    );
+  }));
+});
+
+test('dismissing one awaiting-reply row clears it, reports whether a wait ended, and validates the id', async () => {
+  await withDesktopAlertsOff(async () => withProviderServer(async (baseUrl, workspacePath) => {
+    const sessionId = sessionsDb.createAppSession('dismiss-session', 'codex', workspacePath, '可移除');
+    sessionAwaitingReplyService.markSessionAwaitingReply(sessionId, 'permission');
+
+    const first = await fetch(`${baseUrl}/api/providers/sessions/${sessionId}/awaiting-reply`, {
+      method: 'DELETE',
+    });
+    const firstPayload = await first.json() as { data: { sessionId: string; removed: boolean } };
+    assert.equal(first.status, 200);
+    assert.equal(firstPayload.data.sessionId, sessionId);
+    assert.equal(firstPayload.data.removed, true);
+    assert.equal(sessionsDb.getSessionById(sessionId)?.awaiting_reply_at, null);
+
+    // Nothing was waiting the second time, so the caller is told a no-op, not an error.
+    const second = await fetch(`${baseUrl}/api/providers/sessions/${sessionId}/awaiting-reply`, {
+      method: 'DELETE',
+    });
+    const secondPayload = await second.json() as { data: { removed: boolean } };
+    assert.equal(second.status, 200);
+    assert.equal(secondPayload.data.removed, false);
+
+    const refused = await fetch(`${baseUrl}/api/providers/sessions/${encodeURIComponent('bad id!')}/awaiting-reply`, {
+      method: 'DELETE',
+    });
+    const refusedPayload = await refused.json() as { error: { code: string } };
+    assert.equal(refused.status, 400);
+    assert.equal(refusedPayload.error.code, 'INVALID_SESSION_ID');
+  }));
 });

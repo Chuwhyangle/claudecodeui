@@ -19,6 +19,7 @@ import { installConnectedClientsPort } from '@/shared/ports/connected-clients.po
 import { installInitiativeAuditRatioPort } from '@/shared/ports/initiative-audit-ratio.port.js';
 import { installProjectsSessionFetchPort } from '@/shared/ports/projects-session-fetch.port.js';
 import { installProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
+import { installSessionAwaitingReplyPort } from '@/shared/ports/session-awaiting-reply.port.js';
 import { installSessionAskEventWriterPort } from '@/shared/ports/session-ask-events.port.js';
 import { installSessionBlockedEventWriterPort } from '@/shared/ports/session-blocked-events.port.js';
 import { installSessionBroadcastPort } from '@/shared/ports/session-broadcast.port.js';
@@ -36,6 +37,7 @@ import {
     providerRuntimeService,
     readClaudeSessionOccupancy,
     resolveResidentScopeSweepEnabled,
+    sessionAwaitingReplyService,
     sessionConversationsSearchService,
     sessionSynchronizerService,
     sessionsService,
@@ -44,7 +46,7 @@ import {
     sweepOrphanClaudeSessionScopes,
     uiLastOpenedSessionService,
 } from '@/modules/providers/index.js';
-import { activityStore, BOOT_ID, broadcastHostsChanged, broadcastSessionUpserted, broadcastSessionUpsertedBatch, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
+import { activityStore, BOOT_ID, broadcastAwaitingReplyChanged, broadcastHostsChanged, broadcastSessionUpserted, broadcastSessionUpsertedBatch, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import { createResidentRestoreService, createSessionHostsRouter, sessionHostManager } from '@/modules/session-hosts/index.js';
 
 import { getConnectableHost } from '../shared/networkHosts.js';
@@ -189,7 +191,7 @@ import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSess
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, noticeDismissalsDb, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
-import { configureWebPush } from './modules/notifications/index.js';
+import { configureWebPush, isDesktopAlertEnabled } from './modules/notifications/index.js';
 
 // --------------------------- composition-root port wiring ---------------------------
 //
@@ -223,7 +225,12 @@ import { configureWebPush } from './modules/notifications/index.js';
 // next to the composition root it belongs to.
 installProviderRegistryPort(providerRegistry);
 installChatRunRegistryPort(chatRunRegistry);
-installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch });
+installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch, broadcastAwaitingReplyChanged });
+// The awaiting-reply transitions, installed for the provider runtimes. The
+// providers service also installs itself at the bottom of its module body; this
+// line is the composition root's explicit statement that the claude and codex
+// runtime hooks resolve to that one service.
+installSessionAwaitingReplyPort(sessionAwaitingReplyService);
 installConnectedClientsPort({ count: () => connectedClients.size });
 installVoiceRulesPort({ isSessionActive: isVoiceSessionActive, rulesFor });
 installVoiceRuntimeConfigReader(() => {
@@ -2765,6 +2772,14 @@ async function startServer() {
 
         // Configure Web Push (VAPID keys)
         configureWebPush();
+
+        // Say which off-browser alert channel is wired. This deployment is usually served
+        // over plain HTTP, where the browser itself cannot notify once the page is closed,
+        // so an unconfigured external command is a real (if common) reason for waiting
+        // sessions to go unnoticed; the startup log should not leave that to be inferred.
+        if (!isDesktopAlertEnabled()) {
+            console.log(`${terminalTextStyles.info('[INFO]')} Awaiting-reply desktop alerts are off (CLOUDPIT_DESKTOP_NOTIFY_CMD is unset)`);
+        }
 
         // Check if running in production mode (dist folder exists)
         const distIndexPath = path.join(APP_ROOT, 'dist', 'index.html');

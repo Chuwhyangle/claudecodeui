@@ -12,6 +12,7 @@ import type { Writable } from 'node:stream';
 import type { SpawnOptions as SdkSpawnOptions, SpawnedProcess } from '@anthropic-ai/claude-agent-sdk';
 
 import { notifyUserIfEnabled } from '@/modules/notifications/index.js';
+import { readSessionAwaitingReplyPort } from '@/shared/ports/session-awaiting-reply.port.js';
 import type { SessionHostManager } from '@/modules/session-hosts/index.js';
 import type { IProviderHostDriverSink } from '@/shared/interfaces.js';
 import type {
@@ -538,5 +539,22 @@ export abstract class ClaudeResidentReadingsBase extends ClaudeResidentHostState
       sessionName: typeof sessionName === 'string' ? sessionName : null,
       stopReason,
     });
+
+    // The same turn boundary, recorded for the sidebar: a resident process
+    // never reaches the per-run runtime's terminal block, so this is where a
+    // completed resident round puts the session on the awaiting-reply list. A
+    // round the user stopped themselves leaves nothing waiting — the user was
+    // present when it ended — and clears any mark an earlier permission prompt
+    // put on the same session. Read through the shared port rather than
+    // importing the providers service: this package already sits in a
+    // directory-level cycle with `providers/services`, and a direct edge from
+    // the lifecycle sink would join it.
+    const sessionId = round.appSessionId || providerSessionId;
+    const awaitingReplyPort = readSessionAwaitingReplyPort();
+    if (stopReason === 'aborted') {
+      awaitingReplyPort?.clearSessionAwaitingReply(sessionId);
+    } else {
+      awaitingReplyPort?.markSessionAwaitingReply(sessionId, 'completed');
+    }
   }
 }
